@@ -1,0 +1,374 @@
+---
+title: CLI Reference
+description: Complete command-line reference for TUIOS
+icon: Terminal
+---
+
+Complete command-line interface reference for TUIOS.
+
+## Installation
+
+See [Getting Started](/docs/getting-started) for installation instructions.
+
+## Basic Usage
+
+```bash
+tuios [flags]
+tuios [command] [flags]
+```
+
+## Global Flags
+
+### --theme
+
+Set the color theme.
+
+```bash
+tuios --theme dracula
+tuios --theme nord
+tuios --theme tokyonight
+```
+
+### --list-themes
+
+List all available themes (300+).
+
+```bash
+tuios --list-themes
+```
+
+### --preview-theme
+
+Preview a theme's colors.
+
+```bash
+tuios --preview-theme dracula
+```
+
+Combine with fzf for interactive selection:
+
+```bash
+tuios --theme $(tuios --list-themes | fzf --preview 'tuios --preview-theme {}')
+```
+
+### --debug
+
+Enable debug logging.
+
+```bash
+tuios --debug
+```
+
+### --ascii-only
+
+Use ASCII characters instead of Nerd Font icons.
+
+```bash
+tuios --ascii-only
+```
+
+### --show-keys
+
+Show pressed keys overlay (for demos and recordings).
+
+```bash
+tuios --show-keys
+```
+
+### --border-style
+
+Set window border style.
+
+**Values:** `rounded`, `normal`, `thick`, `double`, `hidden`, `block`, `ascii`, `outer-half-block`, `inner-half-block`
+
+```bash
+tuios --border-style thick
+tuios --border-style hidden
+```
+
+### --dockbar-position
+
+Set dockbar position.
+
+**Values:** `bottom`, `top`, `hidden`
+
+```bash
+tuios --dockbar-position top
+tuios --dockbar-position hidden
+```
+
+### --hide-window-buttons
+
+Hide window control buttons.
+
+```bash
+tuios --hide-window-buttons
+```
+
+### --scrollback-lines
+
+Set scrollback buffer size (100-1000000).
+
+```bash
+tuios --scrollback-lines 20000
+```
+
+### --cpuprofile
+
+Write CPU profile to file (for development).
+
+```bash
+tuios --cpuprofile cpu.prof
+```
+
+## Commands
+
+### ssh
+
+Run TUIOS as an SSH server.
+
+```bash
+tuios ssh [flags]
+```
+
+**Flags:**
+- `--port` - SSH server port (default: 2222)
+- `--host` - SSH server host (default: localhost)
+- `--key-path` - Path to SSH host key (auto-generated if not specified)
+
+**Examples:**
+
+```bash
+# Start on default port
+tuios ssh
+
+# Custom port
+tuios ssh --port 8022
+
+# Listen on all interfaces
+tuios ssh --host 0.0.0.0 --port 2222
+
+# Connect from another machine
+ssh -p 2222 user@hostname
+```
+
+### config
+
+Manage TUIOS configuration.
+
+#### config path
+
+Print configuration file path.
+
+```bash
+tuios config path
+```
+
+#### config edit
+
+Edit configuration in $EDITOR.
+
+```bash
+tuios config edit
+```
+
+#### config reset
+
+Reset configuration to defaults.
+
+```bash
+tuios config reset
+```
+
+### keybinds
+
+View keybinding configuration.
+
+#### keybinds list
+
+List all keybindings.
+
+```bash
+tuios keybinds list
+```
+
+#### keybinds list-custom
+
+List only customized keybindings.
+
+```bash
+tuios keybinds list-custom
+```
+
+### tape
+
+Manage and run tape automation scripts.
+
+#### tape play
+
+Run a tape file in interactive mode.
+
+```bash
+tuios tape play <file.tape>
+```
+
+**Flags:**
+- `-v`, `--visible` - Show TUI during playback (default: true)
+
+#### tape validate
+
+Validate tape file syntax.
+
+```bash
+tuios tape validate <file.tape>
+```
+
+#### tape list
+
+List all saved tape recordings.
+
+```bash
+tuios tape list
+```
+
+#### tape dir
+
+Show tape recordings directory path.
+
+```bash
+tuios tape dir
+```
+
+#### tape show
+
+Display contents of a tape file.
+
+```bash
+tuios tape show <name>
+```
+
+#### tape delete
+
+Delete a tape recording.
+
+```bash
+tuios tape delete <name>
+```
+
+### completion
+
+Generate shell completion scripts.
+
+```bash
+tuios completion [bash|zsh|fish|powershell]
+```
+
+**Examples:**
+
+```bash
+# Bash
+tuios completion bash > /etc/bash_completion.d/tuios
+
+# Zsh
+tuios completion zsh > "${fpath[1]}/_tuios"
+
+# Fish
+tuios completion fish > ~/.config/fish/completions/tuios.fish
+
+# PowerShell
+tuios completion powershell > tuios.ps1
+```
+
+## Environment Variables
+
+### TUIOS_DEBUG_INTERNAL
+
+Enable internal debug logging (same as --debug flag).
+
+```bash
+export TUIOS_DEBUG_INTERNAL=1
+tuios
+```
+
+### EDITOR / VISUAL
+
+Set editor for `tuios config edit`.
+
+```bash
+export EDITOR=vim
+tuios config edit
+```
+
+### XDG_CONFIG_HOME
+
+Override config directory location.
+
+```bash
+export XDG_CONFIG_HOME=~/.custom_config
+tuios config path
+```
+
+### COLORTERM
+
+Enable true color support (usually set automatically).
+
+```bash
+export COLORTERM=truecolor
+```
+
+## Exit Codes
+
+- `0` - Success
+- `1` - Error (command failed, invalid arguments, etc.)
+
+## Examples
+
+### Run with custom theme and border
+
+```bash
+tuios --theme dracula --border-style thick
+```
+
+### Start SSH server for remote access
+
+```bash
+tuios ssh --host 0.0.0.0 --port 2222
+```
+
+### Run tape automation
+
+```bash
+tuios tape play examples/demo.tape
+```
+
+### Edit configuration
+
+```bash
+tuios config edit
+```
+
+### List custom keybindings
+
+```bash
+tuios keybinds list-custom
+```
+
+## Related Documentation
+
+<Cards>
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="Configure TUIOS settings"
+  />
+  <Card
+    title="Tape Scripting"
+    href="/docs/tape-scripting"
+    description="Automate workflows with tapes"
+  />
+  <Card
+    title="Keybindings"
+    href="/docs/keybindings"
+    description="Keyboard shortcuts reference"
+  />
+</Cards>

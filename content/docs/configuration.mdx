@@ -1,0 +1,366 @@
+---
+title: Configuration
+description: Customize TUIOS keybindings and appearance
+icon: Settings
+---
+
+TUIOS supports user-configurable keybindings and appearance through a TOML configuration file, following the XDG Base Directory specification.
+
+## Quick Start
+
+### Find Your Configuration
+
+```bash
+tuios config path
+```
+
+### Edit Configuration
+
+```bash
+tuios config edit
+```
+
+### View Current Keybindings
+
+```bash
+# View all keybindings
+tuios keybinds list
+
+# View only your customizations
+tuios keybinds list-custom
+```
+
+### Reset to Defaults
+
+```bash
+tuios config reset
+```
+
+## Configuration File Location
+
+**Default path:** `~/.config/tuios/config.toml`
+
+On first launch, TUIOS automatically creates a default configuration file. The exact location follows the XDG Base Directory specification:
+
+- Linux/macOS: `~/.config/tuios/config.toml`
+- Custom: `$XDG_CONFIG_HOME/tuios/config.toml` (if `XDG_CONFIG_HOME` is set)
+
+## Configuration Structure
+
+The configuration file uses TOML format with the following structure:
+
+```toml
+[keybindings]
+leader_key = "ctrl+b"
+
+[keybindings.window_management]
+new_window = ["n"]
+close_window = ["w", "x"]
+# ... more keybindings
+
+[keybindings.workspaces]
+switch_workspace_1 = ["alt+1"]
+# ... more workspaces
+
+[keybindings.layout]
+snap_left = ["h"]
+# ... more layouts
+
+[appearance]
+border_style = "rounded"
+dockbar_position = "bottom"
+hide_window_buttons = false
+scrollback_lines = 10000
+```
+
+### Minimal Configuration (Recommended)
+
+You only need to specify what you want to customize. TUIOS automatically fills in missing keybindings with defaults:
+
+```toml
+# ~/.config/tuios/config.toml
+# Only customize what you need!
+
+[keybindings.window_management]
+new_window = ["ctrl+t"]
+close_window = ["ctrl+w"]
+
+# Everything else uses defaults automatically
+```
+
+**Benefits:**
+- Shorter, cleaner configuration
+- Automatic updates when new features are added
+- Easy to see what you've customized
+- Less maintenance required
+
+## Appearance Configuration
+
+The `[appearance]` section controls the visual presentation of TUIOS.
+
+```toml
+[appearance]
+border_style = "rounded"
+dockbar_position = "bottom"
+hide_window_buttons = false
+scrollback_lines = 10000
+```
+
+### border_style
+
+Controls the style of window borders.
+
+**Valid values:**
+- `"rounded"` - Rounded corners (default)
+- `"normal"` - Standard straight borders
+- `"thick"` - Bold/thick borders
+- `"double"` - Double-line borders
+- `"hidden"` - No borders (automatically hides window buttons)
+- `"block"` - Block-style borders
+- `"ascii"` - ASCII-only characters for compatibility
+- `"outer-half-block"` - Half-block style (outer)
+- `"inner-half-block"` - Half-block style (inner)
+
+**CLI override:** `--border-style <style>`
+
+### dockbar_position
+
+Controls the position of the dockbar.
+
+**Valid values:**
+- `"bottom"` - Position dockbar at the bottom (default)
+- `"top"` - Position dockbar at the top
+- `"hidden"` - Hide dockbar
+
+**CLI override:** `--dockbar-position <position>`
+
+### hide_window_buttons
+
+Controls whether window control buttons (minimize, maximize, close) are displayed in the title bar.
+
+**Default:** `false`
+
+**CLI override:** `--hide-window-buttons`
+
+### scrollback_lines
+
+Controls the number of lines stored in the scrollback buffer for each terminal window.
+
+**Valid values:** Integer between 100 and 1,000,000
+
+**Default:** `10000`
+
+**CLI override:** `--scrollback-lines <number>`
+
+## Keybindings Configuration
+
+### leader_key
+
+Controls the prefix key for window management commands (the tmux-style leader key).
+
+**Default:** `"ctrl+b"`
+
+**Examples:**
+```toml
+[keybindings]
+# Use Ctrl+A instead of Ctrl+B (like GNU Screen)
+leader_key = "ctrl+a"
+
+# Use Alt+Space
+leader_key = "alt+space"
+
+# Use Ctrl+Space
+leader_key = "ctrl+space"
+```
+
+### Keybinding Sections
+
+#### window_management
+
+Window creation, navigation, and control.
+
+**Available actions:**
+- `new_window` - Create new terminal window
+- `close_window` - Close focused window
+- `rename_window` - Rename focused window
+- `minimize_window` - Minimize focused window
+- `restore_all` - Restore all minimized windows
+- `next_window` - Focus next window
+- `prev_window` - Focus previous window
+- `select_window_1` through `select_window_9` - Select window by number
+
+#### workspaces
+
+Workspace switching and window movement.
+
+**Available actions:**
+- `switch_workspace_1` through `switch_workspace_9` - Switch to workspace N
+- `move_and_follow_1` through `move_and_follow_9` - Move window to workspace N and follow
+
+#### layout
+
+Window positioning and tiling.
+
+**Available actions:**
+- `snap_left`, `snap_right`, `snap_fullscreen`, `unsnap`
+- `snap_corner_1` through `snap_corner_4` - Snap to corners
+- `toggle_tiling` - Toggle automatic tiling mode
+- `swap_left`, `swap_right`, `swap_up`, `swap_down` - Swap windows
+- Resize commands for tiling mode
+
+#### mode_control
+
+Mode switching and application control.
+
+**Available actions:**
+- `enter_terminal_mode` - Enter terminal mode
+- `enter_window_mode` - Enter window management mode
+- `toggle_help` - Toggle help overlay
+- `quit` - Quit TUIOS
+
+## Key Syntax
+
+### Modifier Keys
+
+**Supported modifiers:**
+- `ctrl+` - Control key
+- `alt+` - Alt key
+- `shift+` - Shift key
+- `opt+`, `option+` - Option key (macOS only)
+
+**Not supported:**
+- `cmd+`, `super+` - Not supported (typically captured by OS)
+
+### Special Keys
+
+- `enter`, `return`, `esc`, `escape`, `tab`, `space`
+- `backspace`, `delete`
+- `up`, `down`, `left`, `right`
+- `home`, `end`, `pgup`, `pgdown`
+- `f1` through `f12`
+
+### Key Combinations
+
+```toml
+"ctrl+shift+t"  # Control + Shift + T
+"alt+enter"     # Alt + Enter
+"shift+tab"     # Shift + Tab
+"opt+1"         # Option + 1 (macOS only)
+```
+
+### Multiple Keybindings
+
+Bind multiple keys to the same action:
+
+```toml
+new_window = ["n", "ctrl+n", "ctrl+t"]
+```
+
+### Removing Keybindings
+
+Use an empty array to disable a keybinding:
+
+```toml
+close_window = []  # Disables this action
+```
+
+## Platform-Specific Configuration
+
+### macOS
+
+On macOS, TUIOS supports the Option key.
+
+**Default workspace switching:**
+```toml
+[keybindings.workspaces]
+switch_workspace_1 = ["opt+1"]
+switch_workspace_2 = ["opt+2"]
+# ... etc
+```
+
+**Equivalent notations:**
+- `opt+1` - Recommended (Mac-friendly)
+- `option+1` - Also supported
+- `alt+1` - Works but less intuitive for Mac users
+
+### Linux/Other Platforms
+
+Use standard modifiers only:
+- `alt+1`, `ctrl+1`, etc.
+- `opt+` and `option+` are not valid
+
+## Example Configurations
+
+### Browser-Style
+
+```toml
+[keybindings.window_management]
+new_window = ["ctrl+t"]
+close_window = ["ctrl+w"]
+next_window = ["ctrl+tab"]
+prev_window = ["ctrl+shift+tab"]
+```
+
+### Vim-Style
+
+```toml
+[keybindings.mode_control]
+enter_terminal_mode = ["i", "a"]
+enter_window_mode = ["esc"]
+
+[keybindings.window_management]
+new_window = ["ctrl+t"]
+close_window = ["ctrl+w"]
+```
+
+### Custom Leader Key
+
+```toml
+[keybindings]
+# Use Ctrl+A like GNU Screen
+leader_key = "ctrl+a"
+```
+
+## Troubleshooting
+
+### Configuration Not Loading
+
+1. Check file location:
+```bash
+tuios config path
+```
+
+2. Verify TOML syntax
+3. Check startup logs:
+```bash
+tuios --debug
+```
+
+### Invalid Key Syntax
+
+Common errors:
+- `"cmd+t"` - cmd/super not supported
+- `"opt+1"` on Linux - opt only valid on macOS
+- `"ctrl+"` - incomplete combination
+
+### Applying Changes
+
+Configuration is loaded on startup. To apply changes:
+1. Edit configuration
+2. Quit TUIOS
+3. Restart TUIOS
+
+## Related Documentation
+
+<Cards>
+  <Card
+    title="Keybindings Reference"
+    href="/docs/keybindings"
+    description="Complete keyboard shortcut reference"
+  />
+  <Card
+    title="CLI Reference"
+    href="/docs/cli-reference"
+    description="Command-line options and flags"
+  />
+</Cards>

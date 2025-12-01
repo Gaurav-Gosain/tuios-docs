@@ -1,0 +1,522 @@
+---
+title: Tape Scripting
+description: Automate TUIOS workflows with tape files
+icon: FileCode
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+# Tape Scripting
+
+TUIOS Tape is a domain-specific language (DSL) for automating terminal window management workflows. Tape scripts allow you to record, replay, and test complex TUIOS interactions programmatically.
+
+<Callout title="Perfect for..." type="info">
+- Recording and replaying terminal workflows
+- Automated testing
+- Demo recording
+- CI/CD automation
+- Documenting workflows
+</Callout>
+
+## Running Tape Scripts
+
+```bash
+# Interactive mode (visible TUI) - watch automation happen
+tuios tape play demo.tape
+
+# Validate syntax
+tuios tape validate demo.tape
+
+# List saved recordings
+tuios tape list
+
+# Show a tape file
+tuios tape show my-recording
+```
+
+## Basic Syntax
+
+### Comments
+
+Lines starting with `#` are comments:
+
+```bash
+# This is a comment
+NewWindow  # Create a window
+```
+
+### Commands
+
+Commands are case-sensitive:
+
+```bash
+NewWindow
+Sleep 500ms
+TerminalMode
+Type "echo hello"
+Enter
+```
+
+### String Literals
+
+```bash
+Type "hello world"
+Type 'hello world'
+Type `hello world`
+```
+
+### Durations
+
+```bash
+Sleep 500ms     # Milliseconds
+Sleep 2s        # Seconds
+Sleep 1.5s      # Decimal seconds
+```
+
+## Mode Management
+
+<Callout title="Important" type="warn">
+TUIOS has two modes: **Window Management Mode** and **Terminal Mode**. Always switch modes explicitly before mode-specific commands!
+</Callout>
+
+### WindowManagementMode
+
+Switch to window management mode for managing windows.
+
+```bash
+WindowManagementMode
+```
+
+### TerminalMode
+
+Switch to terminal mode to send input to the focused window.
+
+```bash
+TerminalMode
+```
+
+**Example workflow:**
+
+```bash
+WindowManagementMode
+NewWindow
+TerminalMode
+Type "ls -la"
+Enter
+WindowManagementMode
+```
+
+## Window Operations
+
+### NewWindow
+
+Create a new terminal window.
+
+```bash
+NewWindow
+Sleep 500ms  # Give time for creation
+```
+
+### CloseWindow
+
+Close the currently focused window.
+
+```bash
+CloseWindow
+```
+
+### NextWindow / PrevWindow
+
+Navigate between windows.
+
+```bash
+NextWindow
+Sleep 200ms
+```
+
+### RenameWindow
+
+Rename the focused window.
+
+```bash
+RenameWindow "My Terminal"
+```
+
+### MinimizeWindow / RestoreWindow
+
+Minimize and restore windows.
+
+```bash
+MinimizeWindow
+Sleep 300ms
+RestoreWindow
+```
+
+## Tiling and Layout
+
+### ToggleTiling
+
+Toggle tiling mode.
+
+```bash
+ToggleTiling
+```
+
+### EnableTiling / DisableTiling
+
+Explicitly control tiling mode.
+
+```bash
+EnableTiling
+Sleep 300ms
+```
+
+### Snap Commands
+
+Snap windows to positions.
+
+```bash
+SnapLeft
+SnapRight
+SnapFullscreen
+```
+
+## Workspace Management
+
+TUIOS supports 9 workspaces (1-9).
+
+### SwitchWorkspace
+
+Switch to a workspace.
+
+```bash
+SwitchWorkspace 2
+Sleep 400ms
+```
+
+### MoveToWorkspace
+
+Move window to workspace.
+
+```bash
+MoveToWorkspace 3
+```
+
+### MoveAndFollowWorkspace
+
+Move and follow.
+
+```bash
+MoveAndFollowWorkspace 2
+```
+
+## Keyboard Input
+
+<Callout title="Terminal Mode Required" type="warn">
+Keyboard commands only work in **Terminal Mode**!
+</Callout>
+
+### Type
+
+Type text into terminal.
+
+```bash
+TerminalMode
+Type "echo 'Hello, World!'"
+```
+
+### Basic Keys
+
+```bash
+Enter
+Space
+Tab
+Backspace
+Delete
+Escape
+```
+
+### Navigation Keys
+
+```bash
+Up
+Down
+Left
+Right
+Home
+End
+```
+
+### Key Combinations
+
+```bash
+Ctrl+c
+Ctrl+b
+Alt+1
+Shift+Tab
+Ctrl+Alt+t
+```
+
+## Timing
+
+### Sleep
+
+Pause execution.
+
+```bash
+Sleep 500ms
+Sleep 1s
+```
+
+### WaitUntilRegex
+
+Wait for terminal output to match a pattern.
+
+```bash
+TerminalMode
+Type "ls -la"
+Enter
+WaitUntilRegex "\$" 3000  # Wait for prompt
+```
+
+## Example Scripts
+
+### Basic Workflow
+
+```bash
+# Create a new window and run commands
+WindowManagementMode
+NewWindow
+Sleep 500ms
+
+TerminalMode
+Type "ls -la"
+Enter
+Sleep 1s
+
+Type "echo 'Done'"
+Enter
+```
+
+### Multi-Workspace Setup
+
+```bash
+# Setup workspace 1 - development
+WindowManagementMode
+NewWindow
+Sleep 500ms
+TerminalMode
+Type "cd ~/project"
+Enter
+
+# Switch to workspace 2 - monitoring
+WindowManagementMode
+SwitchWorkspace 2
+Sleep 400ms
+
+NewWindow
+Sleep 500ms
+TerminalMode
+Type "htop"
+Enter
+```
+
+### Tiling Demo
+
+```bash
+# Create tiled layout
+WindowManagementMode
+EnableTiling
+
+NewWindow
+Sleep 500ms
+NewWindow
+Sleep 500ms
+NewWindow
+Sleep 500ms
+
+# Navigate and type in each
+TerminalMode
+Type "echo 'Window 1'"
+Enter
+
+WindowManagementMode
+NextWindow
+TerminalMode
+Type "echo 'Window 2'"
+Enter
+```
+
+### Development Environment Setup
+
+<Steps>
+
+<Step>
+
+```bash
+# Create development workspace
+WindowManagementMode
+EnableTiling
+```
+
+</Step>
+
+<Step>
+
+```bash
+# Window 1: Editor
+NewWindow
+Sleep 500ms
+TerminalMode
+Type "nvim ."
+Enter
+```
+
+</Step>
+
+<Step>
+
+```bash
+# Window 2: Server
+WindowManagementMode
+NewWindow
+Sleep 500ms
+TerminalMode
+Type "npm run dev"
+Enter
+```
+
+</Step>
+
+<Step>
+
+```bash
+# Window 3: Tests
+WindowManagementMode
+NewWindow
+Sleep 500ms
+TerminalMode
+Type "npm test -- --watch"
+Enter
+```
+
+</Step>
+
+<Step>
+
+```bash
+# Window 4: Git
+WindowManagementMode
+NewWindow
+Sleep 500ms
+TerminalMode
+Type "git status"
+Enter
+```
+
+</Step>
+
+</Steps>
+
+## Recording Tapes
+
+You can record your interactions:
+
+<Steps>
+
+<Step>
+
+Press <kbd>Ctrl+B</kbd> <kbd>T</kbd> <kbd>r</kbd> to **start recording**
+
+</Step>
+
+<Step>
+
+Perform your workflow normally
+
+</Step>
+
+<Step>
+
+Press <kbd>Ctrl+B</kbd> <kbd>T</kbd> <kbd>s</kbd> to **stop recording**
+
+</Step>
+
+<Step>
+
+Tape is saved to `~/.local/share/tuios/tapes/`
+
+</Step>
+
+</Steps>
+
+View your recordings:
+
+```bash
+tuios tape list
+tuios tape show my-recording
+```
+
+## Best Practices
+
+<Callout title="Always Add Delays" type="tip">
+Give TUIOS time to process animations and state changes
+</Callout>
+
+```bash
+NewWindow
+Sleep 500ms  # Wait for creation (GOOD)
+
+NewWindow
+# No sleep - next command might execute too soon (BAD)
+```
+
+<Callout title="Explicit Mode Switching" type="tip">
+Always switch modes explicitly before mode-specific actions
+</Callout>
+
+```bash
+# GOOD
+WindowManagementMode
+NewWindow
+TerminalMode
+Type "ls"
+
+# BAD (mode might be wrong)
+NewWindow
+Type "ls"
+```
+
+<Callout title="Use Comments" type="tip">
+Document complex workflows
+</Callout>
+
+```bash
+# Setup development environment
+WindowManagementMode
+EnableTiling
+
+# Create editor window
+NewWindow
+Sleep 500ms
+
+# Create terminal window
+NewWindow
+Sleep 500ms
+```
+
+## Related Documentation
+
+<Cards>
+  <Card
+    title="CLI Reference"
+    href="/docs/cli-reference"
+    description="Tape command-line usage"
+  />
+  <Card
+    title="Keybindings"
+    href="/docs/keybindings"
+    description="Keybindings for manual control"
+  />
+</Cards>

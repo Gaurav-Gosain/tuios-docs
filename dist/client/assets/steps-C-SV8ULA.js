@@ -1,0 +1,1 @@
+import{j as e}from"./main-PoOGVlt9.js";function r({children:s}){return e.jsx("div",{className:"fd-steps",children:s})}function n({children:s}){return e.jsx("div",{className:"fd-step",children:s})}export{r as S,n as a};
