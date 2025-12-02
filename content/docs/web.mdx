@@ -1,6 +1,6 @@
 ---
 title: Web Terminal
-description: Access TUIOS from any browser with WebGL rendering
+description: Access TUIOS from any browser with WebGL rendering (separate tuios-web binary)
 icon: Globe
 ---
 
@@ -10,6 +10,32 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Access TUIOS from any modern web browser with hardware-accelerated rendering and low-latency connections.
 
+<Callout type="warn" title="Separate Binary">
+The web terminal functionality is provided as a separate `tuios-web` binary for security isolation. This prevents the web server from being used as a potential backdoor in the main TUIOS binary.
+</Callout>
+
+## Installation
+
+<Tabs items={['Homebrew', 'AUR', 'Go Install']}>
+<Tab value="Homebrew">
+```bash
+brew install tuios-web
+```
+</Tab>
+<Tab value="AUR">
+```bash
+yay -S tuios-web-bin
+# or
+paru -S tuios-web-bin
+```
+</Tab>
+<Tab value="Go Install">
+```bash
+go install github.com/Gaurav-Gosain/tuios/cmd/tuios-web@latest
+```
+</Tab>
+</Tabs>
+
 ## Quick Start
 
 <Steps>
@@ -17,7 +43,7 @@ Access TUIOS from any modern web browser with hardware-accelerated rendering and
 ### Start the web server
 
 ```bash
-tuios web
+tuios-web
 ```
 
 This starts:
@@ -49,7 +75,7 @@ The browser will automatically connect using the best available transport (WebTr
 ## Command Reference
 
 ```bash
-tuios web [flags]
+tuios-web [flags]
 ```
 
 ### Flags
@@ -67,13 +93,13 @@ All TUIOS flags are forwarded to the spawned instance:
 
 ```bash
 # With theme
-tuios web --theme dracula
+tuios-web --theme dracula
 
 # With show-keys overlay
-tuios web --show-keys
+tuios-web --show-keys
 
 # Multiple flags
-tuios web --theme nord --ascii-only --debug
+tuios-web --theme nord --ascii-only --debug
 ```
 
 ## Client Settings
@@ -200,7 +226,7 @@ ingress:
 
 ```bash
 # Terminal 1: Start TUIOS web server
-tuios web --host 127.0.0.1
+tuios-web --host 127.0.0.1
 
 # Terminal 2: Start tunnel
 cloudflared tunnel run tuios
@@ -311,9 +337,9 @@ By default, TUIOS generates a self-signed certificate for WebTransport:
 
 <Callout title="Security Tips" type="warn">
 1. **Always use a reverse proxy** with proper TLS for production
-2. **Bind to localhost**: `tuios web --host 127.0.0.1`
-3. **Limit connections**: `tuios web --max-connections 10`
-4. **Use read-only for demos**: `tuios web --read-only`
+2. **Bind to localhost**: `tuios-web --host 127.0.0.1`
+3. **Limit connections**: `tuios-web --max-connections 10`
+4. **Use read-only for demos**: `tuios-web --read-only`
 5. **Add authentication** at the reverse proxy level
 </Callout>
 
@@ -394,7 +420,7 @@ When TUIOS quits (pressing `q`), the web session should close automatically. If 
 ### Debug Mode
 
 ```bash
-tuios web --debug
+tuios-web --debug
 ```
 
 Server logs include:
@@ -410,7 +436,7 @@ Server logs include:
 
 ```bash
 # Read-only with connection limit
-tuios web \
+tuios-web \
   --host 0.0.0.0 \
   --port 7681 \
   --read-only \
@@ -422,7 +448,7 @@ tuios web \
 
 ```bash
 # With debug logging
-tuios web --debug --show-keys
+tuios-web --debug --show-keys
 ```
 
 ### Docker Deployment
@@ -446,7 +472,7 @@ After=network.target
 [Service]
 Type=simple
 User=tuios
-ExecStart=/usr/local/bin/tuios web --host 127.0.0.1 --port 7681
+ExecStart=/usr/local/bin/tuios-web --host 127.0.0.1 --port 7681
 Restart=always
 RestartSec=5
 
