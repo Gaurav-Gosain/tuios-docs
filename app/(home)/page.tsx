@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export default function HomePage() {
   return (
@@ -12,15 +12,12 @@ export default function HomePage() {
           Terminal UI Operating System
         </div>
 
-        <div
-          className="mb-6 animate-fadeInUp stagger-1"
-          style={{ opacity: 0 }}
-        >
+        <div className="mb-6 animate-fadeInUp stagger-1" style={{ opacity: 0 }}>
           <TuiosAsciiArt />
         </div>
 
         <p
-          className="text-xl md:text-2xl text-fd-muted-foreground mb-8 leading-relaxed animate-fadeInUp stagger-2"
+          className="text-base md:text-xl text-fd-muted-foreground mb-8 leading-relaxed animate-fadeInUp stagger-2"
           style={{ opacity: 0 }}
         >
           A modern terminal window manager with vim-like controls.
@@ -139,9 +136,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <kbd>Ctrl</kbd>+<kbd>B</kbd>+<kbd>?</kbd>
-                  <span className="text-fd-muted-foreground">
-                    → Show help
-                  </span>
+                  <span className="text-fd-muted-foreground">→ Show help</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <kbd>t</kbd>
@@ -254,9 +249,8 @@ function TuiosAsciiArt() {
     >
       <pre
         style={{
-          fontFamily:
-            'ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace',
-          fontSize: "0.75rem",
+          fontFamily: "monospace",
+          fontSize: "0.65rem",
           lineHeight: "1.2",
           margin: 0,
           padding: 0,
