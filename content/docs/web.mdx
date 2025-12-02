@@ -103,34 +103,24 @@ Adjustable from 10px to 24px. Settings persist in localStorage.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Browser                               │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐  │
-│  │  xterm.js   │◄──►│ terminal.js │◄──►│ WebTransport/WS │  │
-│  │  (WebGL)    │    │  (client)   │    │   (transport)   │  │
-│  └─────────────┘    └─────────────┘    └────────┬────────┘  │
-└─────────────────────────────────────────────────┼───────────┘
-                                                  │
-                                    ┌─────────────┴─────────────┐
-                                    │     QUIC (UDP:7682)       │
-                                    │  or WebSocket (TCP:7681)  │
-                                    └─────────────┬─────────────┘
-                                                  │
-┌─────────────────────────────────────────────────┼───────────┐
-│                     Server                      │           │
-├─────────────────────────────────────────────────┼───────────┤
-│  ┌──────────────┐    ┌──────────────┐    ┌─────┴─────┐     │
-│  │ HTTP Server  │    │  WT Server   │    │  Session  │     │
-│  │  (static)    │    │   (QUIC)     │    │  Manager  │     │
-│  │  :7681       │    │   :7682      │    └─────┬─────┘     │
-│  └──────────────┘    └──────────────┘          │           │
-│                                          ┌─────┴─────┐     │
-│                                          │    PTY    │     │
-│                                          │  (TUIOS)  │     │
-│                                          └───────────┘     │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Browser
+        xterm["xterm.js<br/>(WebGL)"]
+        client["terminal.js<br/>(client)"]
+        transport["WebTransport/WS<br/>(transport)"]
+        xterm <--> client <--> transport
+    end
+
+    transport <-->|"QUIC (UDP:7682)<br/>or WebSocket (TCP:7681)"| session
+
+    subgraph Server
+        http["HTTP Server<br/>(static) :7681"]
+        wt["WT Server<br/>(QUIC) :7682"]
+        session["Session<br/>Manager"]
+        pty["PTY<br/>(TUIOS)"]
+        session --> pty
+    end
 ```
 
 ### Message Protocol
