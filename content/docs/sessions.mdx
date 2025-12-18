@@ -4,10 +4,13 @@ description: Persistent terminal sessions with detach and reattach
 icon: Layers
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
 TUIOS supports persistent sessions through a daemon process, similar to tmux or screen. Sessions continue running in the background even when you disconnect, allowing you to reattach later with all windows and terminal content preserved.
 
-<Callout type="warning">
-**Platform Support:** Daemon mode currently requires Unix sockets and is only available on **Linux** and **macOS**. Windows support is not available yet.
+<Callout type="info">
+**Platform Support:** Daemon mode is available on **Linux**, **macOS**, and **Windows** (Windows 10 build 17063+ with Unix socket support).
 </Callout>
 
 ## Quick Start
@@ -75,6 +78,9 @@ tuios attach work
 
 # Attach to most recent session (if only one)
 tuios attach
+
+# Attach and create if session doesn't exist
+tuios attach work -c
 ```
 
 <Callout type="info">
@@ -179,20 +185,9 @@ stateDiagram-v2
 ### Daemon Location
 
 The daemon socket is located at:
-- Linux: `$XDG_RUNTIME_DIR/tuios/daemon.sock` or `/tmp/tuios-$UID/daemon.sock`
-- macOS: `/tmp/tuios-$UID/daemon.sock`
-
-## Alt-Screen Applications
-
-Applications that use the alternate screen buffer (vim, htop, btop, etc.) are handled specially:
-
-- When you detach, TUIOS saves that the window was in alt-screen mode
-- When you reattach, TUIOS sends a resize signal to trigger a redraw
-- The application refreshes itself automatically
-
-<Callout type="info">
-You may see a brief moment of rendering while alt-screen applications refresh. This is normal and happens almost instantly.
-</Callout>
+- **Linux**: `$XDG_RUNTIME_DIR/tuios/tuios.sock` or `/tmp/tuios-$UID/tuios.sock`
+- **macOS**: `/tmp/tuios-$UID/tuios.sock`
+- **Windows**: `%LOCALAPPDATA%\tuios\tuios.sock`
 
 ## Best Practices
 
@@ -247,19 +242,6 @@ If a session becomes unresponsive:
 tuios kill-session stuck-session
 tuios new fresh-session
 ```
-
-## Comparison with tmux
-
-| Feature | TUIOS | tmux |
-|---------|-------|------|
-| Persistent sessions | ✓ | ✓ |
-| Detach/attach | ✓ | ✓ |
-| Multiple windows | ✓ | ✓ |
-| Mouse support | ✓ (full) | ✓ (limited) |
-| True color | ✓ | ✓ |
-| Modal editing | ✓ (vim-like) | via config |
-| Window tiling | ✓ (BSP) | Panes |
-| Workspaces | ✓ (9) | Sessions |
 
 ## Related
 
