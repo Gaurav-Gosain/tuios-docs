@@ -1,0 +1,426 @@
+---
+title: Showkeys Overlay
+description: Display pressed keys on screen for presentations and screencasts
+icon: Keyboard
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+# Showkeys Overlay
+
+The showkeys overlay displays your keyboard input on screen in real-time, making TUIOS ideal for presentations, screencasts, and live coding demos. When enabled, every key you press appears in a clean overlay at the bottom of the screen.
+
+<Callout type="info">
+Showkeys solves a common problem in terminal screencasts: viewers can't see what keys you're pressing. Without visual feedback, audiences miss important keyboard shortcuts.
+</Callout>
+
+## Quick Start
+
+### At Startup
+
+```bash
+tuios --show-keys
+```
+
+### During Runtime
+
+Toggle showkeys while TUIOS is running:
+
+```
+Ctrl+B D k           # Via debug prefix menu
+```
+
+### With Sessions
+
+```bash
+tuios new demo --show-keys
+tuios attach demo
+```
+
+Showkeys state persists for the current session.
+
+## What Gets Displayed
+
+<Cards>
+  <Card title="Basic Keys">
+    Single keystrokes: `a`, `j`, `x`, `1`, `Space`, `Enter`, `Esc`
+  </Card>
+  <Card title="Modifier Combinations">
+    Combined keys: `Ctrl+C`, `Shift+Tab`, `Alt+1`, `Ctrl+Shift+T`
+  </Card>
+  <Card title="Action Names">
+    What the key does: `n → new_window`, `t → toggle_tiling`
+  </Card>
+  <Card title="Key Repeats">
+    Repeat counts: `j ×3`, `Down ×5`
+  </Card>
+</Cards>
+
+### Special Keys Display
+
+Common special keys show with readable names:
+
+```
+Tab    Enter    Esc    Backspace    Delete
+Up     Down     Left   Right        Home    End
+F1     F2       ...    F12
+PgUp   PgDn     Insert
+```
+
+### Action Names
+
+When a key triggers a TUIOS action, the action name appears:
+
+```
+n → new_window
+t → toggle_tiling
+Alt+2 → switch_workspace_2
+Ctrl+B c → prefix_new_window
+```
+
+<Callout type="tip">
+This helps viewers understand not just **what key** was pressed, but **what it did**.
+</Callout>
+
+## Display Format
+
+### Overlay Position
+
+The showkeys overlay appears at the bottom-center of the screen, above the status bar but below any windows.
+
+### Ring Buffer
+
+TUIOS shows the last 5 keystrokes by default. Older keys slide out as new ones arrive:
+
+```
+[Ctrl+B] [c] [i] [l] [s]
+```
+
+The history limit prevents clutter while providing enough context.
+
+### Visual Styling
+
+Keys appear in rounded boxes with theming that matches your current TUIOS theme. The overlay uses semi-transparent backgrounds to avoid completely obscuring terminal content.
+
+## Use Cases
+
+### Screencasting and Tutorials
+
+Perfect for creating terminal tutorials where viewers need to see exactly what you're typing:
+
+<Steps>
+
+<Step>
+
+Start TUIOS with showkeys:
+
+```bash
+tuios --show-keys
+```
+
+</Step>
+
+<Step>
+
+Start your screen capture tool (OBS, asciinema, etc.)
+
+</Step>
+
+<Step>
+
+Perform your demo - viewers see both output and keystrokes
+
+</Step>
+
+</Steps>
+
+###  Live Presentations
+
+During conference talks or live coding sessions, showkeys lets audience members see your shortcuts:
+
+```bash
+tuios new presentation --show-keys --theme nord
+```
+
+Attendees can take notes on the specific keys you use without constantly asking "what did you just press?"
+
+### Teaching and Onboarding
+
+When teaching new developers how to use TUIOS or terminal workflows:
+
+```bash
+tuios --show-keys --theme github
+```
+
+Students see exactly how to navigate, create windows, and execute commands.
+
+### Recording Demos
+
+Capture animated demos for README files or documentation:
+
+```bash
+# Record with showkeys
+tuios --show-keys
+asciinema rec demo.cast
+
+# Perform demo
+# ...
+
+exit
+```
+
+The resulting recording includes visible keystrokes, making it self-documenting.
+
+### Debugging Keybindings
+
+When troubleshooting keybinding conflicts or testing custom configurations:
+
+```bash
+tuios --show-keys --debug
+```
+
+Watch the overlay to confirm TUIOS receives the correct key events and resolves them to the expected actions.
+
+## Configuration
+
+### Theme Integration
+
+Showkeys automatically adapts to your current theme. The overlay colors derive from your terminal's ANSI palette:
+
+```bash
+tuios --theme dracula --show-keys      # Purple/pink theme
+tuios --theme nord --show-keys         # Blue/arctic theme
+tuios --theme github --show-keys       # Light theme
+```
+
+No additional configuration needed - it just works.
+
+### Hiding Sensitive Input
+
+There's no filter to hide specific keys (e.g., passwords). If you're typing sensitive information, toggle showkeys off temporarily:
+
+```
+Ctrl+B D k               # Toggle off
+# Type sensitive data
+Ctrl+B D k               # Toggle back on
+```
+
+## Platform Support
+
+Showkeys works identically across all platforms:
+
+- **Linux**: Full support
+- **macOS**: Full support (Option key shows as Alt)
+- **Windows**: Full support
+- **SSH**: Full support
+- **Web Terminal**: Full support (tuios-web --show-keys)
+
+## Technical Details
+
+### Performance Impact
+
+Showkeys has minimal overhead:
+
+- **Memory**: ~1KB for key history
+- **CPU**: < 0.1% per keystroke
+- **Rendering**: No performance impact
+
+Recording does not slow down terminal performance or increase latency.
+
+### History Buffer
+
+The default ring buffer shows 5 keys. This is currently hardcoded but may become configurable in future versions.
+
+## Troubleshooting
+
+### Overlay Not Appearing
+
+<Steps>
+
+<Step>
+
+Check if enabled - status bar should show indicator
+
+</Step>
+
+<Step>
+
+Toggle it:
+
+```
+Ctrl+B D k
+```
+
+</Step>
+
+<Step>
+
+Verify at startup:
+
+```bash
+tuios --show-keys
+```
+
+</Step>
+
+</Steps>
+
+### Keys Not Showing
+
+**Modifier key issues**: Some terminals don't send all modifier combinations. For example, `Ctrl+Shift+letter` might arrive as just `Ctrl+letter`.
+
+**Solution**: Use a terminal with proper keyboard protocol support (kitty, wezterm, alacritty).
+
+**Key captured but no action name**: Not all keys map to TUIOS actions. Only keybindings configured in your config file show action names.
+
+### Terminal Too Small
+
+Showkeys needs at least 3 rows of vertical space. On very small terminals (< 20 rows), the overlay might be cut off.
+
+**Solution**: Resize your terminal to at least 24 rows.
+
+### Overlay Hard to Read
+
+The overlay uses transparency. If it's hard to read over busy terminal output:
+
+**Solution**: Toggle it off temporarily, or use a theme with higher contrast.
+
+## Examples
+
+### Example 1: Recording a Tutorial
+
+<Steps>
+
+<Step>
+
+Start TUIOS with showkeys:
+
+```bash
+tuios --show-keys --theme github
+```
+
+</Step>
+
+<Step>
+
+Start recording:
+
+```bash
+asciinema rec tuios-demo.cast
+```
+
+</Step>
+
+<Step>
+
+Perform demo:
+- Create windows with <kbd>n</kbd>
+- Enable tiling with <kbd>t</kbd>
+- Navigate with <kbd>Tab</kbd>
+- Switch workspaces with <kbd>Alt</kbd>+<kbd>1</kbd>, <kbd>Alt</kbd>+<kbd>2</kbd>
+
+</Step>
+
+<Step>
+
+Stop recording:
+
+```bash
+exit
+```
+
+</Step>
+
+</Steps>
+
+Result: A recording where viewers see every keystroke and its corresponding action.
+
+### Example 2: Live Presentation
+
+<Steps>
+
+<Step>
+
+Before audience arrives:
+
+```bash
+tuios new workshop --show-keys --theme nord
+```
+
+</Step>
+
+<Step>
+
+Maximize terminal window and adjust font size for visibility
+
+</Step>
+
+<Step>
+
+Detach and prepare:
+
+```
+Ctrl+B d
+```
+
+</Step>
+
+<Step>
+
+When ready to present:
+
+```bash
+tuios attach workshop
+```
+
+Showkeys state persists in the session.
+
+</Step>
+
+</Steps>
+
+### Example 3: Teaching Workflow
+
+Instructor demonstrates TUIOS to students:
+
+```bash
+tuios --show-keys --theme dracula
+```
+
+Students watch and see:
+
+```
+n → new_window
+i → enter_terminal_mode
+Ctrl+B d → enter_window_mode
+t → toggle_tiling
+```
+
+Students can follow along precisely.
+
+## Related Documentation
+
+<Cards>
+  <Card
+    title="Keybindings"
+    href="/docs/keybindings"
+    description="See what actions your keys trigger"
+  />
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="Customize keybindings"
+  />
+  <Card
+    title="Tape Recording"
+    href="/docs/tape-recording"
+    description="Record demos with visible keystrokes"
+  />
+  <Card
+    title="CLI Reference"
+    href="/docs/cli-reference"
+    description="Command-line flags"
+  />
+</Cards>

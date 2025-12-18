@@ -1,0 +1,565 @@
+---
+title: BSP Tiling
+description: Advanced window tiling with Binary Space Partitioning
+icon: Grid3x3
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+# Binary Space Partitioning Tiling
+
+TUIOS implements automatic window tiling using Binary Space Partitioning (BSP), an algorithm that recursively divides screen space to fit windows efficiently. Unlike rigid grid-based tiling, BSP adapts to any number of windows and allows fine-grained control over splits.
+
+<Callout type="info">
+**Key Advantage**: BSP works with any number of windows (not limited to 2, 4, 6, etc.), and each window can have a different size.
+</Callout>
+
+## Enable Tiling
+
+In Window Management Mode, press <kbd>t</kbd> to toggle tiling on/off.
+
+Or using prefix commands:
+
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Space</kbd> - Alternative
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>t</kbd> <kbd>t</kbd> - Via tiling prefix menu
+
+The status bar shows "TILING" when enabled.
+
+## Auto-Tiling Behavior
+
+When tiling is enabled, TUIOS automatically positions new windows:
+
+<Steps>
+
+<Step>
+
+### First Window
+
+Takes full screen
+
+</Step>
+
+<Step>
+
+### Second Window
+
+Splits vertically (side-by-side)
+
+</Step>
+
+<Step>
+
+### Third Window
+
+Splits horizontally (top/bottom on right side)
+
+</Step>
+
+<Step>
+
+### Fourth+ Windows
+
+Spiral pattern (alternating V/H splits)
+
+</Step>
+
+</Steps>
+
+This spiral layout balances screen space naturally as you add windows.
+
+## BSP Concepts
+
+### The Split Tree
+
+Internally, TUIOS maintains a binary tree for each workspace:
+
+<pre className="monospace">
+Root Split (Vertical)
+├── Window 1 (left half)
+└── Split (Horizontal)
+<span className="tab"/> ├── Window 2 (top-right quarter)
+<span className="tab"/> └── Window 3 (bottom-right quarter)
+</pre>
+
+Each split has a direction (vertical or horizontal) and a ratio determining how space is divided.
+
+### Split Direction Indicators
+
+The dock shows the next split direction when tiling is active:
+
+- `V` - Next window splits vertically (left/right)
+- `H` - Next window splits horizontally (top/bottom)
+
+<Callout type="tip">
+This helps you predict where the next window will appear.
+</Callout>
+
+## Manual Split Control
+
+Rather than relying on automatic placement, you can manually split the focused window.
+
+### Create Splits
+
+In Window Management Mode with a window focused:
+
+| Key | Action |
+|-----|--------|
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> | Split horizontally (top/bottom) |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>\|</kbd> or <kbd>\\</kbd> | Split vertically (left/right) |
+
+This divides the focused window's space in half, placing the focused window in one half and preparing space for a new window in the other half.
+
+<Callout type="info">
+**Workflow**: Create a split, then create a new window with <kbd>n</kbd>. The new window appears in the prepared space.
+</Callout>
+
+### Rotate Split Direction
+
+To change an existing split's direction:
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>R</kbd> to rotate the split at the focused window.
+
+This toggles the split containing the focused window between vertical and horizontal.
+
+**Example**: Side-by-side windows become stacked, and vice versa.
+
+## Preselection
+
+Preselection lets you control where the next window spawns relative to the focused window.
+
+### Preselection Commands
+
+| Key | Action |
+|-----|--------|
+| <kbd>Alt</kbd>+<kbd>h</kbd> | Next window appears left |
+| <kbd>Alt</kbd>+<kbd>l</kbd> | Next window appears right |
+| <kbd>Alt</kbd>+<kbd>k</kbd> | Next window appears above |
+| <kbd>Alt</kbd>+<kbd>j</kbd> | Next window appears below |
+
+After preselecting, create a window normally with <kbd>n</kbd>. The preselection is consumed and resets.
+
+<Callout type="info">
+Preselection only works when tiling mode is enabled. Press <kbd>t</kbd> to enable tiling first.
+</Callout>
+
+<Callout type="tip">
+**Use Case**: Creating sidebar layouts, asymmetric designs, or inserting windows into specific locations in complex layouts.
+</Callout>
+
+### Preselection Example
+
+<Steps>
+
+<Step>
+
+Start with one window
+
+Press <kbd>n</kbd> to create it
+
+</Step>
+
+<Step>
+
+Preselect left
+
+Press <kbd>Alt</kbd>+<kbd>h</kbd>
+
+</Step>
+
+<Step>
+
+Create sidebar
+
+Press <kbd>n</kbd> - New window appears on the left
+
+</Step>
+
+<Step>
+
+Resize sidebar
+
+Press <kbd>&lt;</kbd> multiple times to make it narrower
+
+</Step>
+
+</Steps>
+
+Result: Narrow sidebar on left, main area on right.
+
+## Window Swapping
+
+Rearrange tiled windows without changing the split structure.
+
+### Swap Commands
+
+| Key | Action |
+|-----|--------|
+| <kbd>Shift</kbd>+<kbd>H</kbd> or <kbd>Ctrl</kbd>+<kbd>←</kbd> | Swap with window to the left |
+| <kbd>Shift</kbd>+<kbd>L</kbd> or <kbd>Ctrl</kbd>+<kbd>→</kbd> | Swap with window to the right |
+| <kbd>Shift</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>↑</kbd> | Swap with window above |
+| <kbd>Shift</kbd>+<kbd>J</kbd> or <kbd>Ctrl</kbd>+<kbd>↓</kbd> | Swap with window below |
+
+<Callout type="info">
+**Difference**: <kbd>h</kbd>/<kbd>j</kbd>/<kbd>k</kbd>/<kbd>l</kbd> move focus. <kbd>Shift</kbd> + those keys swap windows.
+</Callout>
+
+### Drag to Swap
+
+Mouse users can drag windows in tiling mode. Dragging a window onto another swaps them.
+
+## Resizing in BSP Mode
+
+### Master Ratio Adjustment
+
+Control the size of the main window area:
+
+| Key | Action |
+|-----|--------|
+| <kbd>&gt;</kbd> or <kbd>Shift</kbd>+<kbd>.</kbd> | Grow master area (from right edge) |
+| <kbd>&lt;</kbd> or <kbd>Shift</kbd>+<kbd>,</kbd> | Shrink master area (from right edge) |
+| <kbd>.</kbd> (period) | Grow master area (from left edge) |
+| <kbd>,</kbd> (comma) | Shrink master area (from left edge) |
+
+Adjustment increment: 5% per keypress.
+
+### Height Adjustment
+
+Control the vertical split ratio:
+
+| Key | Action |
+|-----|--------|
+| <kbd>{'}'}</kbd> or <kbd>Shift</kbd>+<kbd>]</kbd> | Grow height (from bottom edge) |
+| <kbd>{'{'}</kbd> or <kbd>Shift</kbd>+<kbd>[</kbd> | Shrink height (from bottom edge) |
+| <kbd>]</kbd> | Grow height (from top edge) |
+| <kbd>[</kbd> | Shrink height (from top edge) |
+
+<Callout type="tip">
+**Edge Control**: The distinction between left/right and top/bottom edge resizing gives you precise control in complex layouts.
+</Callout>
+
+## Advanced Operations
+
+### Equalize Splits
+
+Reset all splits to equal proportions:
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd> to equalize all splits.
+
+This sets all split ratios to 50/50 throughout the entire tree, giving all windows equal space based on their position.
+
+<Callout type="info">
+Useful when you've made many resize adjustments and want to start fresh with balanced spacing.
+</Callout>
+
+## Practical Workflows
+
+### Workflow 1: Development Environment
+
+Classic three-pane layout (editor + terminal + docs).
+
+<Steps>
+
+<Step>
+
+Enable tiling:
+
+Press <kbd>t</kbd>
+
+</Step>
+
+<Step>
+
+Create editor window:
+
+Press <kbd>n</kbd> to create window, then <kbd>i</kbd> to enter terminal mode
+
+```bash
+vim main.go
+```
+
+</Step>
+
+<Step>
+
+Preselect right for terminal:
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> to return to window mode
+
+Press <kbd>Alt</kbd>+<kbd>l</kbd> to preselect right
+
+Press <kbd>n</kbd> to create terminal window, then <kbd>i</kbd> to enter it
+
+```bash
+go run .
+```
+
+</Step>
+
+<Step>
+
+Preselect below for logs:
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> then <kbd>Tab</kbd> to focus terminal
+
+Press <kbd>Alt</kbd>+<kbd>j</kbd> to preselect below
+
+Press <kbd>n</kbd> then <kbd>i</kbd> to create logs window
+
+```bash
+tail -f logs/app.log
+```
+
+</Step>
+
+</Steps>
+
+Result:
+
+<pre className="monospace">
+┌──────────┬──────────┐
+│          │ Terminal │
+│  Editor  ├──────────┤
+│          │   Logs   │
+└──────────┴──────────┘
+</pre>
+
+### Workflow 2: Dashboard Grid
+
+Four equal quadrants for monitoring.
+
+<Steps>
+
+<Step>
+
+Enable tiling and create first window:
+
+Press <kbd>t</kbd> to enable tiling
+
+Press <kbd>n</kbd> to create first window (full screen)
+
+</Step>
+
+<Step>
+
+Split vertically for left/right:
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>|</kbd> to split vertically
+
+Press <kbd>n</kbd> to create second window (right side)
+
+</Step>
+
+<Step>
+
+Focus left and split horizontally:
+
+Press <kbd>Tab</kbd> to focus left window
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> to split horizontally
+
+Press <kbd>n</kbd> to create third window (bottom-left)
+
+</Step>
+
+<Step>
+
+Focus top-right and split horizontally:
+
+Press <kbd>Tab</kbd> twice to focus right side
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> to split horizontally
+
+Press <kbd>n</kbd> to create fourth window (bottom-right)
+
+</Step>
+
+<Step>
+
+Equalize all splits for perfect quadrants:
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd>
+
+</Step>
+
+</Steps>
+
+Result:
+
+<pre className="monospace">
+┌─────┬─────┐
+│  1  │  2  │
+├─────┼─────┤
+│  3  │  4  │
+└─────┴─────┘
+</pre>
+
+### Workflow 3: Ultrawide Layout
+
+Three-column layout for ultrawide monitors.
+
+<Steps>
+
+<Step>
+
+Enable tiling and split vertically:
+
+Press <kbd>t</kbd> to enable tiling
+
+Press <kbd>n</kbd> to create first window (full screen)
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>|</kbd> to split vertically
+
+Press <kbd>n</kbd> to create second window (right)
+
+</Step>
+
+<Step>
+
+Split left side for third column:
+
+Press <kbd>Tab</kbd> to focus first (left) window
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>|</kbd> to split left side vertically
+
+Press <kbd>n</kbd> to create third window (middle)
+
+</Step>
+
+<Step>
+
+Adjust widths for 1:2:1 ratio:
+
+Press <kbd>Tab</kbd> twice to focus rightmost
+
+Press <kbd>&lt;</kbd> twice to shrink right column
+
+Press <kbd>Tab</kbd> twice to focus leftmost
+
+Press <kbd>.</kbd> twice to shrink left column
+
+</Step>
+
+</Steps>
+
+Result: Left sidebar, main area, right sidebar.
+
+### Workflow 4: Presenter Layout
+
+Main presentation area with hidden notes.
+
+<Steps>
+
+<Step>
+
+Create main presentation window:
+
+Press <kbd>t</kbd> to enable tiling
+
+Press <kbd>n</kbd> to create main window
+
+Press <kbd>Alt</kbd>+<kbd>j</kbd> to preselect below
+
+Press <kbd>n</kbd> to create notes window
+
+</Step>
+
+<Step>
+
+Shrink notes to minimal height:
+
+Press <kbd>{'{'}</kbd> five times to shrink notes area
+
+</Step>
+
+</Steps>
+
+Result: Full screen presentation with a thin strip of notes at bottom.
+
+## Technical Details
+
+### BSP Tree Structure
+
+Each workspace maintains a `BSPTree` with nodes of two types:
+
+- **Leaf nodes**: Contain a window ID
+- **Internal nodes**: Contain split direction (H/V), ratio (0.0-1.0), and two child nodes
+
+### Split Ratio Storage
+
+Each internal node stores a ratio (default 0.5) representing the fraction of space given to the left/top child. Ratio range: 0.3 to 0.7 (enforced to prevent unusable layouts).
+
+### Layout Application
+
+After tree modifications, TUIOS walks the tree recursively, calculating rectangles:
+
+1. Start with workspace dimensions
+2. At each split node, divide rectangle by ratio and direction
+3. At each leaf node, assign rectangle to corresponding window
+4. Apply all window geometry in a single batch
+
+This prevents flicker and ensures atomic layout updates.
+
+## Troubleshooting
+
+### Windows Not Tiling
+
+Check tiling is enabled - status bar should show "TILING". Press <kbd>t</kbd> to toggle.
+
+Each workspace has independent tiling state. Switching workspaces may land you on a workspace with tiling disabled.
+
+### Unexpected Layout After Resize
+
+Reset to balanced layout by pressing <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd> to equalize all splits.
+
+Verify the correct window is focused. Resize operations affect the split containing the focused window.
+
+### Swap Not Working
+
+Swap commands are directional. If there's no window in the specified direction, nothing happens.
+
+Try mouse drag: Dragging one window onto another always swaps.
+
+### Preselection Not Applied
+
+Preselection is one-time. After creating a window, preselection resets. You need to preselect again for the next window.
+
+Press <kbd>Esc</kbd> in Window Management Mode to cancel a preselection without creating a window.
+
+## Related Documentation
+
+<Cards>
+  <Card
+    title="Keybindings"
+    href="/docs/keybindings"
+    description="Complete keybinding list for tiling"
+  />
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="Customize keybindings"
+  />
+  <Card
+    title="Architecture"
+    href="/docs/architecture"
+    description="Technical details on BSP implementation"
+  />
+</Cards>
+
+## Comparison with Grid Tiling
+
+### BSP Advantages
+
+- Works with any number of windows (not limited to grid cells)
+- No wasted space with odd numbers of windows
+- Full control over layout
+- Each window can have different size
+
+### Grid Tiling
+
+- Fixed positions (1, 2, 3, 4 windows fit in grid cells)
+- Wasted space with odd numbers
+- Predictable but inflexible
+
+TUIOS chose BSP for flexibility and space efficiency.
