@@ -189,6 +189,100 @@ The daemon socket is located at:
 - **macOS**: `/tmp/tuios-$UID/tuios.sock`
 - **Windows**: `%LOCALAPPDATA%\tuios\tuios.sock`
 
+## Remote Control
+
+One of the most powerful features of daemon sessions is the ability to control them from external scripts and tools. TUIOS provides CLI commands to send keystrokes, execute commands, and query state.
+
+### Send Keystrokes
+
+Send input to a running session:
+
+```bash
+# Enter terminal mode
+tuios send-keys i
+
+# Send key combo
+tuios send-keys "ctrl+b q"
+
+# Send to specific session
+tuios send-keys -s mysession Escape
+
+# Send literal text to terminal
+tuios send-keys --literal "echo hello"
+```
+
+### Run Commands
+
+Execute TUIOS commands remotely:
+
+```bash
+# Create a new window
+tuios run-command NewWindow "my-terminal"
+
+# Get JSON output with window ID
+tuios run-command --json NewWindow "dev"
+
+# Switch workspace
+tuios run-command SwitchWorkspace 2
+
+# Toggle tiling
+tuios run-command ToggleTiling
+
+# Target specific session
+tuios run-command -s mysession NewWindow "dev"
+```
+
+### Query State
+
+Inspect session state for scripting:
+
+```bash
+# List all windows
+tuios list-windows --json
+
+# Get focused window info
+tuios get-window --json
+
+# Get session state
+tuios session-info --json
+```
+
+### Example: Development Layout Script
+
+```bash
+#!/bin/bash
+# Create a development environment
+
+# Create windows and capture IDs
+EDITOR=$(tuios run-command --json NewWindow "editor" | jq -r '.data.window_id')
+TERM=$(tuios run-command --json NewWindow "terminal" | jq -r '.data.window_id')
+LOGS=$(tuios run-command --json NewWindow "logs" | jq -r '.data.window_id')
+
+# Enable tiling
+tuios run-command ToggleTiling
+
+# Start applications
+tuios send-keys "nvim ." Enter
+tuios run-command FocusWindow "$TERM"
+tuios run-command FocusWindow "$LOGS"
+tuios send-keys "tail -f app.log" Enter
+```
+
+### Example: Window Selector with fzf
+
+```bash
+#!/bin/bash
+WINDOW=$(tuios list-windows --json | \
+    jq -r '.windows[] | "\(.display_name)\t\(.id)"' | \
+    fzf --with-nth=1 | cut -f2)
+
+[ -n "$WINDOW" ] && tuios run-command FocusWindow "$WINDOW"
+```
+
+<Callout type="info">
+For the complete list of remote control commands, see the [CLI Reference](/docs/cli-reference#remote-control-commands).
+</Callout>
+
 ## Best Practices
 
 ### Naming Conventions

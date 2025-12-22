@@ -35,6 +35,83 @@ tuios tape list
 tuios tape show my-recording
 ```
 
+## Remote Execution {#remote-execution}
+
+The `tuios tape exec` command allows you to run tape scripts against an already running TUIOS session. This is perfect for automation workflows where TUIOS is running in daemon mode.
+
+```bash
+# Execute against current session
+tuios tape exec script.tape
+
+# Execute against a specific session
+tuios tape exec -s mysession script.tape
+```
+
+### Progress Display
+
+Remote execution shows a progress indicator:
+
+<pre className="monospace">
+Executing script.tape...
+Progress: 5/12 [███████░░░░░░░░░░░░░] 41%
+</pre>
+
+### Use Cases
+
+**Automation pipelines:**
+
+```bash
+#!/bin/bash
+# Start a session
+tuios new automation &
+sleep 2
+
+# Execute scripts
+tuios tape exec -s automation setup.tape
+tuios tape exec -s automation test-workflow.tape
+
+# Cleanup
+tuios kill-session automation
+```
+
+**Development workflows:**
+
+```bash
+# Terminal 1: Start TUIOS
+tuios new dev
+
+# Terminal 2: Send scripts
+tuios tape exec -s dev environment-setup.tape
+```
+
+### Differences from `tape play`
+
+| Feature | `tape play` | `tape exec` |
+|---------|-------------|-------------|
+| Starts TUIOS | Yes | No (requires running session) |
+| Shows TUI | Yes | No (progress bar only) |
+| Interactive | Yes | No |
+| For automation | No | Yes |
+| Session persistence | No | Yes (works with daemon) |
+
+### Combining with CLI Commands
+
+Remote tape execution works seamlessly with other CLI commands:
+
+```bash
+# Execute script then query state
+tuios tape exec setup.tape
+tuios session-info --json | jq '.total_windows'
+
+# Create window via command, then run tape
+tuios run-command NewWindow "dev"
+tuios tape exec dev-setup.tape
+```
+
+<Callout type="info">
+See [Sessions & Remote Control](/docs/sessions#remote-control) for more about controlling TUIOS from external scripts.
+</Callout>
+
 ## Basic Syntax
 
 ### Comments
