@@ -167,6 +167,47 @@ graph TB
 3. **PTY Persistence**: Terminal PTYs are owned by the daemon, not the client, so they survive disconnection
 4. **State Sync**: Window positions, workspace layout, and terminal content sync continuously
 
+## Multi-Client Support
+
+Multiple clients can connect to the same session simultaneously. All clients see synchronized state in real-time.
+
+### How It Works
+
+When you attach multiple terminals to the same session:
+- All clients share the same windows and workspaces
+- Actions from one client are reflected on all others
+- The effective terminal size is the minimum of all connected clients
+
+### Notifications
+
+TUIOS displays notifications for multi-client events:
+
+| Event | Notification |
+|-------|--------------|
+| Client joins | "Client joined (N connected)" |
+| Client leaves | "Client left (N connected)" |
+| Mode change | "Switched to Terminal/Window mode" |
+| Window created | "Window created (N total)" |
+| Window closed | "Window closed (N remaining)" |
+| Workspace switch | "Switched to workspace N" |
+
+### Example: Pair Programming
+
+```bash
+# Terminal 1: Create session
+tuios new pairing
+
+# Terminal 2: Attach to same session
+tuios attach pairing
+
+# Both terminals now show the same TUIOS instance
+# Actions in either terminal are reflected in both
+```
+
+<Callout type="info">
+Multi-client mode uses thread-safe channels to prevent race conditions when synchronizing state between clients.
+</Callout>
+
 ### Session Lifecycle
 
 ```mermaid
