@@ -1,0 +1,138 @@
+---
+title: Using TUIOS as a Library
+description: Embed TUIOS terminal multiplexer in your Go applications
+icon: Code
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+TUIOS can be used as a Go library to embed terminal multiplexing functionality into your applications.
+
+## Installation
+
+```bash
+go get github.com/Gaurav-Gosain/tuios/pkg/tuios
+```
+
+## Basic Usage
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    
+    "github.com/Gaurav-Gosain/tuios/pkg/tuios"
+)
+
+func main() {
+    config := tuios.DefaultConfig()
+    config.Theme = "dracula"
+    config.ShowKeys = false
+    
+    if err := tuios.Run(context.Background(), config); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+## Configuration Options
+
+The `Config` struct provides extensive customization:
+
+```go
+type Config struct {
+    // Visual settings
+    Theme            string
+    BorderStyle      string
+    DockbarPosition  string
+    ShowKeys         bool
+    ASCIIOnly        bool
+    
+    // Performance
+    NoAnimations     bool
+    
+    // Session management  
+    SessionName      string
+    DaemonMode       bool
+    
+    // Behavior
+    ConfigPath       string
+    Debug            bool
+}
+```
+
+## Running in Daemon Mode
+
+For persistent sessions:
+
+```go
+config := tuios.DefaultConfig()
+config.DaemonMode = true
+config.SessionName = "my-session"
+
+err := tuios.Run(ctx, config)
+```
+
+## SSH Server Mode
+
+Serve TUIOS over SSH:
+
+```go
+sshConfig := tuios.SSHConfig{
+    Host:     "0.0.0.0",
+    Port:     "2222",
+    KeyPath:  "/path/to/host/key",
+}
+
+err := tuios.RunSSH(ctx, config, sshConfig)
+```
+
+## Custom Themes
+
+Load custom color themes:
+
+```go
+config.Theme = "custom-theme"
+config.ConfigPath = "/path/to/config.toml"
+```
+
+See [Configuration](/docs/configuration) for theme format.
+
+## Web Server Mode
+
+Note: Web terminal functionality is in a separate binary (`tuios-web`) for security isolation.
+
+For programmatic web serving, use the sip library:
+
+```go
+import "github.com/Gaurav-Gosain/sip"
+
+// See sip documentation
+```
+
+## Architecture
+
+TUIOS uses the Bubble Tea framework:
+
+- **Model**: Terminal multiplexer state
+- **View**: Rendering with Lipgloss
+- **Update**: Event handling for keyboard, mouse, PTY I/O
+
+The library exposes the full Bubble Tea program, allowing integration into larger TUI applications.
+
+## Examples
+
+See `/examples` directory for:
+- Basic embedding
+- Custom keybindings
+- Integration with other Bubble Tea components
+
+## API Stability
+
+The `pkg/tuios` package API is stable. Breaking changes will be accompanied by major version bumps.
+
+<Callout type="info">
+For advanced customization, import internal packages at your own risk. Internal APIs may change without notice.
+</Callout>
