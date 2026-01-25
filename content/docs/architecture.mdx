@@ -4,6 +4,8 @@ description: Technical architecture and design of TUIOS
 icon: Boxes
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout';
+
 TUIOS is built on the Bubble Tea v2 framework following the Model-View-Update (MVU) pattern.
 
 ## Tech Stack
@@ -36,6 +38,34 @@ Custom ANSI/VT100 emulator:
 - Bidirectional Unicode support
 - SGR (color/style) attribute handling
 - Alternative screen buffer (for vim, less, etc.)
+- Cursor shape rendering (block, bar, underline) with blink support
+- DECSCUSR sequence support for vi-mode cursor changes
+
+### Graphics Protocols (Experimental)
+
+<Callout title="Experimental Feature" type="warn">
+Graphics support is experimental. Bugs are expected and functionality may change in future releases.
+</Callout>
+
+TUIOS supports terminal graphics protocols for inline image display:
+
+**Kitty Graphics Protocol** (`app/kitty_*.go`, `vt/kitty_*.go`):
+- Passthrough forwarding from guest terminals to host
+- Image transmission (PNG, RGB, RGBA formats)
+- Placement tracking with viewport clipping
+- Multi-window support with ID mapping
+- Automatic capability detection
+
+**Sixel Graphics** (`app/sixel_*.go`, `vt/sixel_*.go`):
+- Legacy graphics protocol support
+- DCS sequence parsing
+- Currently disabled pending raster clipping implementation
+
+**Supported terminals**: Kitty, WezTerm, Ghostty, iTerm2, Foot, Contour, and other Kitty-protocol-compatible terminals.
+
+**Environment variables:**
+- `TUIOS_KITTY_GRAPHICS=1/0` - Force enable/disable Kitty graphics
+- `TUIOS_SIXEL_GRAPHICS=1/0` - Force enable/disable Sixel graphics
 
 ### Rendering Engine (app/render.go)
 
