@@ -33,13 +33,18 @@ The central `OS` struct manages:
 ### Terminal Emulation (vt/)
 
 Custom ANSI/VT100 emulator:
-- Full CSI, OSC, ESC sequence support
+- Full CSI, OSC, ESC, DCS sequence support
 - 10,000 line scrollback buffer
 - Bidirectional Unicode support
 - SGR (color/style) attribute handling
 - Alternative screen buffer (for vim, less, etc.)
 - Cursor shape rendering (block, bar, underline) with blink support
 - DECSCUSR sequence support for vi-mode cursor changes
+- Kitty keyboard protocol (CSI u) with push/pop/query/set
+- Mode 2026 (synchronized output) and mode 2027 (unicode core)
+- OSC 4 (palette colors), OSC 10-12 (default colors), OSC 52 (clipboard)
+- OSC 133 (shell integration / semantic zones)
+- Cell size reporting (CSI 14t, 16t, 18t)
 
 ### Graphics Protocols (Experimental)
 
@@ -51,15 +56,20 @@ TUIOS supports terminal graphics protocols for inline image display:
 
 **Kitty Graphics Protocol** (`app/kitty_*.go`, `vt/kitty_*.go`):
 - Passthrough forwarding from guest terminals to host
-- Image transmission (PNG, RGB, RGBA formats)
+- Image transmission (PNG, RGB, RGBA formats) with raw passthrough (no re-encoding)
+- Flicker-free video via image ID reuse (frames replace in-place)
 - Placement tracking with viewport clipping
 - Multi-window support with ID mapping
-- Automatic capability detection
+- Shared memory support (`t=s` for mpv `--vo-kitty-use-shm`)
+- File path forwarding (`t=f`) to avoid read+encode overhead
+- Mode 2026 synchronized output wrapping
+- Animation protocol (a=f, a=a, a=c) not supported due to ID remapping constraints
 
 **Sixel Graphics** (`app/sixel_*.go`, `vt/sixel_*.go`):
-- Legacy graphics protocol support
-- DCS sequence parsing
-- Currently disabled pending raster clipping implementation
+- Sixel image passthrough with raw data forwarding
+- DCS sequence parsing and dimension calculation
+- Window boundary awareness (hides images that don't fit)
+- Experimental: pixel-level clipping not yet implemented (requires stream-level sixel cropping)
 
 **Supported terminals**: Kitty, WezTerm, Ghostty, iTerm2, Foot, Contour, and other Kitty-protocol-compatible terminals.
 

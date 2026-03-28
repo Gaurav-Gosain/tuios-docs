@@ -22,12 +22,21 @@ Think of TUIOS as a **tiling window manager for your terminal**. Instead of mana
 - **Modal Interface** - Vim-inspired modes for window management and terminal interaction
 - **9 Workspaces** - Virtual desktops for organizing your terminal windows
 - **Automatic Tiling** - Smart layouts that adapt as you create/close windows
+- **Command Palette** - Quick access to all commands with <kbd>Ctrl</kbd>+<kbd>P</kbd>
+- **Pane Zoom** - Temporarily fullscreen any pane with <kbd>Prefix</kbd>+<kbd>z</kbd>
+- **Session Switcher** - Browse and switch sessions in-app with <kbd>Prefix</kbd>+<kbd>S</kbd>
+- **Layout Templates** - Save and load window arrangements for repeatable workflows
+- **Shared Borders** - Compact tiling with `--shared-borders` for maximum screen space
 - **Vim Copy Mode** - Navigate 10,000 lines of scrollback with vim motions
+- **Interactive Scrollbar** - Click or drag the right border to scroll through history
+- **Mouse Wheel Scrollback** - Scroll up with the mouse wheel to enter copy mode automatically
 - **Theming** - 300+ built-in color themes
 - **SSH Server** - Remote access with per-connection isolation
 - **Web Terminal** - Browser access with WebGL rendering and WebTransport
-- **Graphics Support** - Kitty graphics protocol for inline image display (experimental)
+- **Graphics Support** - Kitty graphics protocol with flicker-free video, sixel passthrough, and synchronized output
+- **Modern Protocols** - Kitty keyboard protocol (CSI u), mode 2026/2027, OSC 4/10-12/52/133
 - **Cursor Shapes** - Native vi-mode cursor rendering (block, bar, underline)
+- **Event-driven Rendering** - Near-zero idle CPU usage; only redraws when state changes
 
 ## Why TUIOS?
 
@@ -221,7 +230,7 @@ This is particularly useful for **vi-mode** users in shells like zsh (with zsh-v
 Graphics support is experimental. Bugs are expected and functionality may change.
 </Callout>
 
-TUIOS supports the **Kitty graphics protocol** for inline image display. Applications running inside TUIOS can display images directly in the terminal when using a compatible host terminal.
+TUIOS supports the **Kitty graphics protocol** and **Sixel graphics** for inline image display. Applications running inside TUIOS can display images directly in the terminal when using a compatible host terminal.
 
 **Supported host terminals:**
 - Kitty
@@ -231,11 +240,32 @@ TUIOS supports the **Kitty graphics protocol** for inline image display. Applica
 - Foot
 - Contour
 
-**Features:**
-- Image passthrough from guest to host terminal
-- Automatic capability detection
-- Multi-window image support
+**Kitty graphics features:**
+- Raw image passthrough from guest to host terminal (no re-encoding)
+- Flicker-free video via image ID reuse
+- Shared memory support (`t=s` for mpv)
+- File path forwarding (`t=f`)
 - Viewport clipping and scroll handling
+- Mode 2026 synchronized output wrapping
+- Animation protocol (a=f, a=a, a=c) not yet supported
+
+**Sixel graphics (experimental):**
+- Raw sixel data passthrough
+- Window boundary awareness (hides images that overflow)
+- Pixel-level clipping not yet implemented (images that don't fit are hidden)
+
+### Terminal Protocol Support
+
+TUIOS implements modern terminal protocols for application compatibility:
+
+- **Kitty keyboard protocol** - Progressive enhancement via CSI u encoding. Applications can push/pop keyboard flags for disambiguated key reporting.
+- **Mode 2026** (synchronized output) - Tracked in the VT emulator for flicker-free rendering.
+- **Mode 2027** (unicode core) - Width calculation method selection.
+- **OSC 4** - Indexed color palette query/set.
+- **OSC 10-12** - Default foreground/background/cursor color query/set.
+- **OSC 52** - Clipboard operations.
+- **OSC 133** - Shell integration / semantic zones for scrollback navigation.
+- **CSI 14t/16t/18t** - Terminal and cell size reporting.
 
 See the [Architecture](/docs/architecture) page for technical details.
 
