@@ -40,11 +40,13 @@ Custom ANSI/VT100 emulator:
 - Alternative screen buffer (for vim, less, etc.)
 - Cursor shape rendering (block, bar, underline) with blink support
 - DECSCUSR sequence support for vi-mode cursor changes
-- Kitty keyboard protocol (CSI u) with push/pop/query/set
+- Kitty keyboard protocol (CSI u) with push/pop/query/set. Fish 4.x compatible; Shift+printable bypasses the protocol and sends text directly.
 - Mode 2026 (synchronized output) and mode 2027 (unicode core)
 - OSC 4 (palette colors), OSC 10-12 (default colors), OSC 52 (clipboard)
+- OSC 66 (kitty text sizing) - experimental, basic passthrough with known scrollback issues
 - OSC 133 (shell integration / semantic zones)
 - Cell size reporting (CSI 14t, 16t, 18t)
+- Thread-safe HasMouseMode/HasAllMotionMode/KittyKeyboardFlags via atomics
 
 ### Graphics Protocols (Experimental)
 
@@ -57,13 +59,13 @@ TUIOS supports terminal graphics protocols for inline image display:
 **Kitty Graphics Protocol** (`app/kitty_*.go`, `vt/kitty_*.go`):
 - Passthrough forwarding from guest terminals to host
 - Image transmission (PNG, RGB, RGBA formats) with raw passthrough (no re-encoding)
-- Flicker-free video via image ID reuse (frames replace in-place)
+- Flicker-free video via image ID reuse (frames replace in-place). `mpv --vo=kitty` works (both shm and base64), ytk works.
 - Placement tracking with viewport clipping
 - Multi-window support with ID mapping
 - Shared memory support (`t=s` for mpv `--vo-kitty-use-shm`)
 - File path forwarding (`t=f`) to avoid read+encode overhead
 - Mode 2026 synchronized output wrapping
-- Animation protocol (a=f, a=a, a=c) not supported due to ID remapping constraints
+- Animation protocol (a=f, a=a, a=c) **not supported** due to ID remapping constraints
 
 **Sixel Graphics** (`app/sixel_*.go`, `vt/sixel_*.go`):
 - Sixel image passthrough with raw data forwarding
