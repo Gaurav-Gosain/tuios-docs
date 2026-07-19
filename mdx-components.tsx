@@ -6,6 +6,9 @@ import { ClusterExplorer } from '@/components/mdx/cluster-explorer';
 import { BacklogFeel } from '@/components/mdx/backlog-feel';
 import { LineDiscipline } from '@/components/mdx/line-discipline';
 import { ShrinkRace } from '@/components/mdx/shrink-race';
+import { DividerCollide } from '@/components/mdx/divider-collide';
+import { RatioDrift } from '@/components/mdx/ratio-drift';
+import { ToleranceBlind } from '@/components/mdx/tolerance-blind';
 import { BenchBars } from '@/components/mdx/bench-bars';
 import { RunTally } from '@/components/mdx/run-tally';
 import { TapeShrink } from '@/components/mdx/tape-shrink';
@@ -19,6 +22,9 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Mermaid,
     BacklogFeel,
     BenchBars,
+    DividerCollide,
+    RatioDrift,
+    ToleranceBlind,
     LineDiscipline,
     ShrinkRace,
     ClusterExplorer,
