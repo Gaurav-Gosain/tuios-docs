@@ -3,6 +3,9 @@ import type { MDXComponents } from 'mdx/types';
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 import { Mermaid } from '@/components/mdx/mermaid';
 import { ClusterExplorer } from '@/components/mdx/cluster-explorer';
+import { BacklogFeel } from '@/components/mdx/backlog-feel';
+import { LineDiscipline } from '@/components/mdx/line-discipline';
+import { ShrinkRace } from '@/components/mdx/shrink-race';
 import { BenchBars } from '@/components/mdx/bench-bars';
 import { RunTally } from '@/components/mdx/run-tally';
 import { TapeShrink } from '@/components/mdx/tape-shrink';
@@ -14,7 +17,10 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Step,
     Steps,
     Mermaid,
+    BacklogFeel,
     BenchBars,
+    LineDiscipline,
+    ShrinkRace,
     ClusterExplorer,
     RunTally,
     TapeShrink,

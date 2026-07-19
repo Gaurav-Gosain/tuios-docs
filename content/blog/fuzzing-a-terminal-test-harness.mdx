@@ -108,6 +108,10 @@ master and arrived at the screen model as though the program had printed it,
 which quietly corrupted both the screen state and the byte counter the hang
 detector reads.
 
+All three of those are reproducible by hand:
+
+<LineDiscipline />
+
 Real TUIs hide this, because they call `MakeRaw` on startup. That is why it
 survived so long. If your program reaches raw mode before the first byte lands,
 everything works. It is a race, and any input sent during terminal setup still
@@ -126,31 +130,7 @@ mode, which makes the race harder to lose, which makes the candidate less
 likely to fail. So the commands that suppress the bug are precisely the ones
 the shrinker deletes first.
 
-<TapeShrink
-  stages={[
-    {
-      lines: ["Spawn ./myapp", "Type \"hello\"", "Key Down", "WaitStable @250ms", "Mouse Drag 10 4 20 12", "Key Ctrl+c Ctrl+c Ctrl+c"],
-      cut: [],
-      note: "What the generator produced. Nothing here looks timing sensitive."
-    },
-    {
-      lines: ["Spawn ./myapp", "Type \"hello\"", "Key Down", "WaitStable @250ms", "Mouse Drag 10 4 20 12", "Key Ctrl+c Ctrl+c Ctrl+c"],
-      cut: [4],
-      note: "The drag goes first. It is genuinely irrelevant to the failing check."
-    },
-    {
-      lines: ["Spawn ./myapp", "Type \"hello\"", "Key Down", "WaitStable @250ms", "Key Ctrl+c Ctrl+c Ctrl+c"],
-      cut: [1, 2, 3],
-      note: "Each of these costs the program a few milliseconds it was using to reach raw mode. Delete them and the candidate fails more often, so the shrinker keeps the deletion."
-    },
-    {
-      lines: ["Spawn ./myapp", "Key Ctrl+c Ctrl+c Ctrl+c"],
-      cut: [],
-      note: "The tightest possible window between spawn and the first signal-generating byte."
-    }
-  ]}
-  caption="Reproduced 4 times in 20 before the fix, 20 in 20 after. That is why the confirmation replay after minimisation failed at random."
-/>
+<ShrinkRace />
 
 The tool was optimising toward its own defect, and the tape it handed me was
 not noise. It was the shortest path to the bug, written to a file, which I had
