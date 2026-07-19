@@ -23,6 +23,7 @@ The web terminal functionality is provided as a separate `tuios-web` binary for 
 <Tabs items={['Homebrew', 'AUR', 'Go Install']}>
 <Tab value="Homebrew">
 ```bash
+brew tap Gaurav-Gosain/tap
 brew install tuios-web
 ```
 </Tab>
@@ -68,7 +69,7 @@ The browser will automatically connect using the best available transport (WebTr
 
 ## Features
 
-- **WebGL Rendering** - GPU-accelerated terminal at 60fps
+- **WebGL Rendering** - GPU-accelerated terminal
 - **Dual Protocols** - WebTransport (QUIC) with WebSocket fallback
 - **Bundled Fonts** - JetBrains Mono Nerd Font included
 - **Settings Panel** - Configure transport, renderer, font size
@@ -90,10 +91,20 @@ tuios-web [flags]
 | `--host` | `localhost` | Server bind address |
 | `--read-only` | `false` | Disable client input |
 | `--max-connections` | `0` | Max concurrent sessions (0=unlimited) |
+| `--default-session` | `web` | Session name shared by all connections |
+| `--ephemeral` | `false` | Disable daemon mode, so sessions do not persist |
 
-### TUIOS Flags
+`tuios-web` starts the daemon automatically. If the daemon cannot be started it falls back to ephemeral mode silently, so sessions that you expected to persist will not.
 
-All TUIOS flags are forwarded to the spawned instance:
+### Forwarded TUIOS Flags
+
+Nine TUIOS flags are forwarded to the spawned instance: `--debug`, `--ascii-only`, `--theme`, `--border-style`, `--dockbar-position`, `--hide-window-buttons`, `--scrollback-lines`, `--show-keys`, and `--no-animations`.
+
+<Callout type="warn">
+This is not the full TUIOS flag set. `--shared-borders`, `--show-clock`, `--show-cpu`, `--show-ram`, `--hide-scrollbar`, `--window-title-position`, `--zoom-max-width`, `--confirm-quit`, and `--pprof` are **not** forwarded. Passing them to `tuios-web` is not an error, so they fail silently. Set them in your config file instead.
+</Callout>
+
+`tuios-web` also sets `TERM=xterm-kitty` and `TERM_PROGRAM=tuios-web` for every session it spawns.
 
 ```bash
 # With theme
@@ -168,6 +179,26 @@ flowchart TB
 | Title | `5` | S→C | Window title update |
 | Options | `6` | S→C | Session configuration |
 | Close | `7` | S→C | Session ended |
+
+The code is the ASCII character `'0'` through `'7'` (bytes `0x30` to `0x37`), not the raw byte values 0 to 7. It is the first byte of each frame.
+
+## Graphics in the Browser
+
+Inline images work in the web client, but a narrower set of the Kitty graphics protocol is supported than in a native terminal.
+
+**Works:** direct base64 transmission (`t=d`), the placement and deletion actions, RGB and RGBA and PNG formats, zlib compression, chunked transmission, source-region clipping, and repositioning on scroll. Sixel graphics also work.
+
+**Does not work:** file transmission (`t=f`), temporary-file transmission (`t=t`), shared memory (`t=s`, including `/dev/shm`), the animation protocol (`a=f`, `a=a`, `a=c`), and Unicode placeholders (`U=1`).
+
+The practical consequence is that a program which insists on passing a file path or a shared memory handle gets no image. `mpv --vo=kitty` is the common case: it prefers shared memory, which the browser client cannot read.
+
+<Callout type="info">
+This is handled honestly rather than silently. TUIOS probes its host terminal at startup to find out which transmission media actually work, and answers guest capability queries with the real answer. A program that asks whether it can send a file path is told no, and falls back to streaming bytes, instead of sending a path that produces a blank image.
+
+Earlier versions answered every capability query with a yes, which is why `kitten icat` and similar tools could silently render nothing. See [Graphics Support](/docs#graphics-support-experimental) for the host-side behaviour.
+</Callout>
+
+There is one conservative edge: the host probe shares a 300 ms budget, so a host that supports file transmission but answers slowly is treated as if it does not. That costs a server-side read and re-encode per frame rather than breaking anything, and there is no environment variable to force it back on.
 
 ## Reverse Proxy Setup
 
@@ -321,33 +352,55 @@ tuios.example.com {
 # docker-compose.yml
 services:
   tuios:
-    image: ghcr.io/gaurav-gosain/tuios:latest
-    command: web --host 0.0.0.0
+    # Build this yourself; no published image ships tuios-web.
+    image: tuios-web:local
+    command: ["--host", "0.0.0.0"]
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.tuios.rule=Host(`tuios.example.com`)"
       - "traefik.http.routers.tuios.entrypoints=websecure"
       - "traefik.http.routers.tuios.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.tuios.middlewares=tuios-auth"
+      - "traefik.http.middlewares.tuios-auth.basicauth.usersfile=/etc/traefik/htpasswd"
       - "traefik.http.services.tuios.loadbalancer.server.port=7681"
 ```
 
+The `basicauth` middleware is doing the access control here. Without it this configuration publishes an unauthenticated shell on a public hostname.
+
 ## Security Considerations
 
-### Development Mode
+### There is no authentication
 
-By default, TUIOS generates a self-signed certificate for WebTransport:
-- Valid for 10 days (Chrome requirement for `serverCertificateHashes`)
-- Certificate hash provided via `/cert-hash` endpoint
-- No browser warning for WebTransport connections
+<Callout title="tuios-web has no access control of any kind" type="error">
+`tuios-web` serves a full interactive shell to anyone who can reach the port. It has no login, no token, no password flag, and no TLS option. Anyone who connects gets your shell with your privileges.
 
-### Production Recommendations
+It also accepts WebSocket connections **from any origin**. The origin check is a function that returns true unconditionally, and the allowed-origin list is left empty, which the underlying library treats as a wildcard. This means any web page you visit while `tuios-web` is running can open a connection to `localhost:7681` and run commands as you. Binding to `127.0.0.1` does not protect against this, because the request originates from your own browser.
 
-<Callout title="Security Tips" type="warn">
-1. **Always use a reverse proxy** with proper TLS for production
-2. **Bind to localhost**: `tuios-web --host 127.0.0.1`
+Treat a running `tuios-web` as an open shell on that port. Do not leave it running unattended, and do not expose it without putting authentication in front of it.
+</Callout>
+
+### Putting authentication in front of it
+
+Because the server has no authentication of its own, a reverse proxy is the only place to add it. This is a requirement for any use beyond a local session you are actively watching, not a hardening tip.
+
+<Callout title="If you expose this at all" type="warn">
+1. **Terminate TLS and authenticate at a reverse proxy.** The server speaks plaintext HTTP and WebSocket and exposes no TLS flags.
+2. **Bind to localhost**: `tuios-web --host 127.0.0.1`, and let the proxy be the only thing that reaches it.
 3. **Limit connections**: `tuios-web --max-connections 10`
 4. **Use read-only for demos**: `tuios-web --read-only`
-5. **Add authentication** at the reverse proxy level
+5. **Do not rely on origin checks.** There are none to configure. The `AllowOrigins` setting exists in the underlying library but `tuios-web` exposes no flag for it.
+</Callout>
+
+### WebTransport certificates
+
+The server generates a self-signed certificate for WebTransport:
+
+- Valid for 10 days, which is Chrome's limit for `serverCertificateHashes`
+- The hash is served from the `/cert-hash` endpoint
+- No browser warning is shown for the WebTransport connection
+
+<Callout type="warn">
+The WebTransport listener binds to `127.0.0.1` regardless of what you pass to `--host`. With `--host 0.0.0.0`, remote clients cannot use WebTransport at all and always fall back to WebSocket. WebTransport is effectively a local-only optimisation today.
 </Callout>
 
 ### Basic Auth with Nginx
@@ -384,14 +437,11 @@ htpasswd -c /etc/nginx/.htpasswd username
 - **Pre-allocated Buffers** - Reusable send/receive buffers
 - **Cached DOM Elements** - No repeated queries
 
-### Typical Metrics
+### Measured Performance
 
-| Metric | Value |
-|--------|-------|
-| Latency (local) | &lt;5ms |
-| Latency (LAN) | &lt;20ms |
-| Mouse events filtered | 80-95% |
-| Memory (per session) | ~10MB |
+There is no benchmark in the repository for the web path, so no latency, memory, or event-filtering figures are claimed here. The optimisations above are real code, but their effect has not been measured and published.
+
+If you need numbers for your own deployment, measure them on your own hardware and network. Local latency is dominated by the transport in use, and WebTransport is only available when the browser reaches the server on `127.0.0.1`.
 
 ## Troubleshooting
 
@@ -460,13 +510,23 @@ tuios-web --debug --show-keys
 
 ### Docker Deployment
 
-```bash
-docker run -it --rm \
-  -p 7681:7681 \
-  -p 7682:7682/udp \
-  ghcr.io/gaurav-gosain/tuios:latest \
-  web --host 0.0.0.0
+<Callout type="warn">
+There is no published image that contains `tuios-web`. The `ghcr.io/gaurav-gosain/tuios` image builds only `cmd/tuios` and its entrypoint is the `tuios` binary, which has no `web` subcommand. To run the web terminal in a container you have to build an image yourself.
+</Callout>
+
+```dockerfile
+FROM golang:1.25 AS build
+WORKDIR /src
+COPY . .
+RUN go build -o /out/tuios-web ./cmd/tuios-web
+
+FROM debian:bookworm-slim
+COPY --from=build /out/tuios-web /usr/local/bin/tuios-web
+EXPOSE 7681
+ENTRYPOINT ["tuios-web", "--host", "0.0.0.0"]
 ```
+
+Remember that this exposes an unauthenticated shell. See [Security Considerations](#security-considerations).
 
 ### Systemd Service
 

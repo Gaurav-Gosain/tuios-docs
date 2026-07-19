@@ -1,0 +1,154 @@
+---
+title: Hooks
+description: Run shell commands when TUIOS windows, workspaces, and sessions change
+icon: Webhook
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+Hooks run a shell command when something happens in TUIOS: a window opens, focus moves, you switch workspace, you attach or detach. They live in the `[hooks]` table of `~/.config/tuios/config.toml`.
+
+```toml
+[hooks]
+after-new-window = "notify-send 'TUIOS' \"opened $TUIOS_WINDOW_NAME\""
+after-workspace-switch = "echo \"$TUIOS_PREV_WORKSPACE -> $TUIOS_WORKSPACE\" >> ~/.tuios-ws.log"
+```
+
+<Callout type="warn" title="Event names are hyphenated, and typos are silent">
+Every other key in the config file is `snake_case`. Hook event names are not. They are hyphenated and case-sensitive: `after-new-window`, never `after_new_window`.
+
+An unrecognised name is not an error. TOML parses it happily, TUIOS writes one line to its log, and the hook never fires. If a hook seems to do nothing, check the spelling before you check the command.
+</Callout>
+
+## Events
+
+| Event | Fires when |
+|-------|------------|
+| `after-new-window` | A window is created, including windows a daemon session hands to this client |
+| `after-close-window` | A window closes, whether by keybinding or because its process exited |
+| `after-focus-change` | Focus moves to a different window. Re-focusing the same window does not fire |
+| `after-workspace-switch` | You switch to a different workspace |
+| `after-attach` | A client attaches to a session, including a switch between sessions |
+| `after-detach` | You detach from a daemon session |
+| `after-layout-change` | The tiling layout changes (cycled, toggled, or disabled) |
+| `after-resize` | A window is resized by keyboard or by dragging its border |
+
+## Both value forms parse
+
+A single string, or an array of strings to run several commands for one event:
+
+```toml
+[hooks]
+after-attach = "tmux-style-greeting"
+
+after-new-window = [
+  "logger -t tuios \"new window $TUIOS_WINDOW_ID\"",
+  "touch ~/.cache/tuios/last-window",
+]
+```
+
+<Callout type="info">
+The commands in an array run **concurrently**, each in its own goroutine. They are not sequenced in listed order. If you need ordering, put both steps in one string and separate them with `&&`.
+</Callout>
+
+## How a hook is run
+
+The command string is handed to `sh -c` verbatim. There is no argument list, no stdin, and no JSON payload. Everything a hook knows arrives as environment variables.
+
+All nine variables are set on every event. Fields that do not apply to the event are present but empty (`""` for strings, `0` for numbers), so a script can read them unconditionally without guarding.
+
+| Variable | Meaning |
+|----------|---------|
+| `TUIOS_EVENT` | The event name, exactly as spelled in the table above |
+| `TUIOS_WINDOW_ID` | Window identifier |
+| `TUIOS_WINDOW_NAME` | Window title or custom name |
+| `TUIOS_WORKSPACE` | Workspace number, 1-9 |
+| `TUIOS_SESSION_ID` | Session name |
+| `TUIOS_PREV_WORKSPACE` | Workspace you came from |
+| `TUIOS_LAYOUT` | One of `bsp`, `master-stack`, `scrolling`, `floating` |
+| `TUIOS_WIDTH` | New window width in cells |
+| `TUIOS_HEIGHT` | New window height in cells |
+
+### Which variables carry data for which event
+
+| Event | Meaningful variables |
+|-------|----------------------|
+| `after-new-window` | `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
+| `after-close-window` | `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
+| `after-focus-change` | `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
+| `after-workspace-switch` | `TUIOS_WORKSPACE`, `TUIOS_PREV_WORKSPACE`, `TUIOS_SESSION_ID`, plus `TUIOS_WINDOW_ID` and `TUIOS_WINDOW_NAME` for the window focused after the switch |
+| `after-attach` | `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
+| `after-detach` | `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
+| `after-layout-change` | `TUIOS_LAYOUT`, `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
+| `after-resize` | `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_WIDTH`, `TUIOS_HEIGHT`, `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
+
+`TUIOS_SESSION_ID` is the session name for a daemon session. In a plain local `tuios` run there is no session name, so it is empty.
+
+If the target workspace has no visible window, `after-workspace-switch` reports an empty `TUIOS_WINDOW_ID` and `TUIOS_WINDOW_NAME`. That is normal, not a failure.
+
+<Callout type="info" title="The shipped docs/HOOKS.md is out of date">
+The `docs/HOOKS.md` file in the repository omits `TUIOS_WINDOW_ID` and `TUIOS_WINDOW_NAME` from `after-workspace-switch`, and `TUIOS_WINDOW_NAME` from `after-resize`. The table above matches what the code actually sets.
+</Callout>
+
+## Limitations
+
+These are real constraints, not oversights you can configure around.
+
+- **Output is thrown away.** stdout, stderr, and the exit status are all discarded. A hook cannot report an error to you, and a failing hook looks identical to a working one. Redirect to a file yourself if you need to see anything.
+- **No timeout.** A hook that hangs stays running until the process exits. The single exception is detach, which drains in-flight hooks for at most 2 seconds before the client leaves.
+- **Order within an event is not defined.** Multiple commands under one event run in parallel.
+- **Hooks run on the client, not the daemon.** With two clients attached to the same session, each runs its own hooks from its own config. Events raised inside the daemon reach every attached client.
+- **Hooks are read once, at startup.** Unlike appearance settings, editing `[hooks]` does not take effect on config reload. Restart the client.
+- **`after-detach` needs a daemon session.** In a plain local run there is nothing to detach from and the event never fires.
+- **Wrong-typed values are dropped silently.** A number or a boolean where a string or array belongs is ignored with no message.
+
+### Event ordering
+
+Switching workspace fires `after-focus-change` first, then `after-workspace-switch`, because the switch event is deliberately fired last, once focus and layout have settled. The focus event already reports the new workspace number.
+
+Creating a window fires `after-new-window` before `after-focus-change`, since focus moves to the window after it exists.
+
+## Examples
+
+Log everything, to work out what actually fires:
+
+```toml
+[hooks]
+after-new-window = "echo \"$TUIOS_EVENT $TUIOS_WINDOW_ID $TUIOS_WINDOW_NAME\" >> ~/.tuios-hooks.log"
+after-close-window = "echo \"$TUIOS_EVENT $TUIOS_WINDOW_ID\" >> ~/.tuios-hooks.log"
+after-focus-change = "echo \"$TUIOS_EVENT $TUIOS_WINDOW_NAME\" >> ~/.tuios-hooks.log"
+after-workspace-switch = "echo \"$TUIOS_EVENT $TUIOS_PREV_WORKSPACE->$TUIOS_WORKSPACE\" >> ~/.tuios-hooks.log"
+after-layout-change = "echo \"$TUIOS_EVENT $TUIOS_LAYOUT\" >> ~/.tuios-hooks.log"
+after-resize = "echo \"$TUIOS_EVENT ${TUIOS_WIDTH}x${TUIOS_HEIGHT}\" >> ~/.tuios-hooks.log"
+```
+
+Track session presence for a status bar:
+
+```toml
+[hooks]
+after-attach = "echo attached > ~/.cache/tuios-state"
+after-detach = "echo detached > ~/.cache/tuios-state"
+```
+
+Keep an external tool in step with the tiling layout:
+
+```toml
+[hooks]
+after-layout-change = "my-statusbar set layout \"$TUIOS_LAYOUT\""
+```
+
+## Related
+
+<Cards>
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="The rest of config.toml, and what reloads live"
+  />
+  <Card
+    title="Sessions & Daemon Mode"
+    href="/docs/sessions"
+    description="Attach, detach, and persistent sessions"
+  />
+</Cards>

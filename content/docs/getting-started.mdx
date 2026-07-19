@@ -13,7 +13,7 @@ This guide will help you install TUIOS and learn the essential operations.
 
 <Callout title="Requirements" type="info">
 - A terminal with true color support (most modern terminals)
-- Go 1.24+ (if building from source)
+- Go 1.25+ (if building from source)
 - For graphics support: Kitty, WezTerm, Ghostty, iTerm2, or other Kitty-protocol-compatible terminals (optional, experimental)
 </Callout>
 
@@ -28,6 +28,7 @@ This guide will help you install TUIOS and learn the essential operations.
 #### Homebrew (macOS/Linux)
 
 ```bash
+brew tap Gaurav-Gosain/tap
 brew install tuios
 ```
 
@@ -52,12 +53,10 @@ paru -S tuios-bin
 #### Nix
 
 ```bash
-# Run directly
 nix run github:Gaurav-Gosain/tuios#tuios
-
-# Or add to your configuration
-nix-shell -p tuios
 ```
+
+The flake builds for `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. Intel Macs are not covered by the flake, but the release binaries include `darwin/amd64`.
 
 </Step>
 
@@ -70,6 +69,8 @@ nix-shell -p tuios
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/tuios/main/install.sh | bash
 ```
+
+This installs the `tuios` binary only. The browser terminal is a second binary, `tuios-web`, which you install separately. See [Web Terminal](/docs/web).
 
 ### Alternative Methods
 
@@ -106,7 +107,7 @@ tuios
 ```
 
 <Callout title="No windows yet?" type="info">
-You'll start in **Window Management Mode** with no windows. This is normal - TUIOS lets you create windows as needed.
+You'll start in **Window Management Mode** with no windows. This is normal, and TUIOS shows a welcome splash pointing at the three keys worth knowing first: <kbd>n</kbd> to create a window, <kbd>?</kbd> for help, and <kbd>,</kbd> for settings.
 </Callout>
 
 ## Understanding Modes
@@ -133,7 +134,7 @@ Where you interact with the terminal inside a window. Your keypresses go directl
 <Callout title="Mode Switching" type="tip">
 - Press <kbd>i</kbd> or <kbd>Enter</kbd> to enter **Terminal Mode**
 - Press <kbd>Alt</kbd><kbd>Esc</kbd> (or <kbd>Opt</kbd><kbd>Esc</kbd> on macOS) for quick exit from Terminal Mode
-- Press <kbd>Esc</kbd> or <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>d</kbd> to return to **Window Management Mode**
+- Press <kbd>Esc</kbd> or <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>Esc</kbd> to return to **Window Management Mode**. <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>d</kbd> detaches the session instead of changing mode.
 </Callout>
 
 ## Essential Keybindings
@@ -161,9 +162,14 @@ Or from any mode:
 ### Window Navigation
 
 In Window Management Mode:
-- <kbd>h</kbd><kbd>j</kbd><kbd>k</kbd><kbd>l</kbd> - Move focus (vim-style)
 - <kbd>Tab</kbd> - Next window
 - <kbd>Shift</kbd><kbd>Tab</kbd> - Previous window
+- **Arrow keys** - Move focus directionally
+- <kbd>1</kbd>-<kbd>9</kbd> - Select window by number
+
+<Callout title="hjkl are not focus keys" type="warn">
+In Window Management Mode, <kbd>h</kbd> snaps the focused window to the left half and <kbd>l</kbd> snaps it to the right half. <kbd>j</kbd> and <kbd>k</kbd> are unbound. Use the arrow keys to move focus. The vim motions you may be expecting are in copy mode, not window mode.
+</Callout>
 
 In Terminal Mode (without leaving the mode):
 - <kbd>Alt</kbd><kbd>N</kbd> / <kbd>Alt</kbd><kbd>P</kbd> - Next/Previous window (Linux/Windows)
@@ -177,21 +183,27 @@ From any mode (using <kbd>Ctrl</kbd><kbd>B</kbd> prefix):
 - <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>c</kbd> - Create new window
 - <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>x</kbd> - Close focused window
 - <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>r</kbd> - Rename focused window
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>m</kbd> - Minimize focused window
+- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>m</kbd> <kbd>m</kbd> - Minimize focused window (<kbd>Ctrl</kbd><kbd>B</kbd> <kbd>m</kbd> opens the minimize menu)
+- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>,</kbd> - Open the settings page
 
 ### Workspaces
 
 TUIOS provides **9 workspaces** (like virtual desktops):
 
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>1</kbd>-<kbd>9</kbd> - Switch to workspace 1-9
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>Shift</kbd><kbd>1</kbd>-<kbd>9</kbd> - Move window to workspace and follow
+- <kbd>Alt</kbd><kbd>1</kbd>-<kbd>9</kbd> - Switch to workspace 1-9
+- <kbd>Alt</kbd><kbd>Shift</kbd><kbd>1</kbd>-<kbd>9</kbd> - Move window to workspace and follow
+- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>w</kbd> then <kbd>1</kbd>-<kbd>9</kbd> - The same, through the workspace prefix menu
+
+<Callout type="info">
+<kbd>Ctrl</kbd><kbd>B</kbd> followed by a digit selects a **window** by number, not a workspace.
+</Callout>
 
 ### Tiling
 
 - <kbd>t</kbd> - Toggle automatic tiling mode
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>f</kbd> - Fullscreen focused window
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>h</kbd> - Snap window left (50% width)
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>l</kbd> - Snap window right (50% width)
+- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>z</kbd> - Zoom the focused pane to fullscreen
+- <kbd>f</kbd> - Fullscreen the focused window (window mode)
+- <kbd>h</kbd> / <kbd>l</kbd> - Snap window left / right at 50% width (window mode)
 
 ### Layout Templates
 
@@ -386,7 +398,7 @@ tuios attach mysession
 ```
 
 <Callout type="info">
-Daemon mode is available on **Linux** and **macOS** only. See the [Sessions](/docs/sessions) guide for details.
+Daemon mode works on **Linux**, **macOS**, and **Windows** (build 17063 or later, for Unix socket support). See the [Sessions](/docs/sessions) guide for details, including what does and does not survive a daemon restart.
 </Callout>
 
 ## SSH Server Mode

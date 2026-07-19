@@ -5,8 +5,11 @@ icon: Terminal
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
 
 Complete command-line interface reference for TUIOS.
+
+Every command below accepts `--help`, which is authoritative. This page documents what the binary actually does, including the places where the flags and the runtime options disagree.
 
 ## Installation
 
@@ -21,6 +24,8 @@ tuios [command] [flags]
 
 ## Global Flags
 
+These are registered as persistent flags on the root command, so they are accepted by every subcommand. Most of them only mean something to a command that draws a TUI (`tuios`, `tuios attach`, `tuios new`, `tuios tape play`). Passing `--theme` to `tuios ls` is accepted and ignored.
+
 ### --theme
 
 Set the color theme.
@@ -30,6 +35,8 @@ tuios --theme dracula
 tuios --theme nord
 tuios --theme tokyonight
 ```
+
+The default is empty, not a named theme. With no `--theme` and no theme in the config file, TUIOS uses your terminal's own 16 ANSI colors rather than overriding them.
 
 ### --list-themes
 
@@ -99,6 +106,10 @@ tuios --dockbar-position top
 tuios --dockbar-position hidden
 ```
 
+<Callout type="warn">
+This flag and the runtime `dockbar_position` option do not accept the same values. The flag takes `bottom`, `top`, `hidden`. The [`set-config`](#set-config) path takes `top`, `bottom`, `left`, `right`. There is no `hidden` at runtime and no `left`/`right` at startup.
+</Callout>
+
 ### --hide-window-buttons
 
 Hide window control buttons.
@@ -150,13 +161,13 @@ When set to `hidden`, window titles are not displayed and the rename keybinding 
 
 ### --hide-clock
 
-Hide the clock overlay.
+Hide the clock overlay. Deprecated: the clock is hidden by default, so this flag is a no-op kept for compatibility. Use `--show-clock` to opt in instead.
 
 ```bash
 tuios --hide-clock
 ```
 
-The clock will still appear during tape recording (red background) or when prefix mode is active.
+The clock still appears during tape recording (red background) or when prefix mode is active.
 
 ### --show-clock
 
@@ -184,21 +195,71 @@ tuios --show-ram
 
 ### --shared-borders
 
-Enable shared borders between adjacent windows for a more compact layout.
+Enable shared borders between adjacent tiled windows for a more compact layout.
 
 ```bash
 tuios --shared-borders
 ```
 
+### --hide-scrollbar
+
+Hide the scrollbar thumb drawn on the window border.
+
+```bash
+tuios --hide-scrollbar
+```
+
+### --zoom-max-width
+
+Cap the width, in cells, that zoom mode expands a window to. `0` means fullscreen.
+
+```bash
+tuios --zoom-max-width 120
+```
+
+Useful on ultrawide displays where a fullscreen zoom produces unreadably long lines.
+
 ### --cpuprofile
 
-Write CPU profile to file (for development).
+Write a CPU profile to a file, for development.
 
 ```bash
 tuios --cpuprofile cpu.prof
 ```
 
+### --pprof
+
+Serve `net/http/pprof` on the given address for live profiling.
+
+```bash
+tuios --pprof localhost:6060
+```
+
+<Callout type="warn">
+This opens an unauthenticated HTTP server that exposes profiling data and the process command line. Bind it to localhost.
+</Callout>
+
+### -v, --version
+
+Print the version, commit, build date, and builder, then exit.
+
+```bash
+tuios --version
+```
+
+There is no `tuios version` subcommand. `tuios version` is an error.
+
 ## Commands
+
+Several commands have aliases:
+
+| Command | Aliases |
+|---------|---------|
+| `attach` | `a` |
+| `new` | `n` |
+| `ls` | `list-sessions` |
+| `resurrect` | `restore` |
+| `keybinds` | `keys`, `kb` |
 
 ### Daemon Mode (Session Persistence)
 
@@ -206,11 +267,14 @@ TUIOS supports persistent sessions that continue running in the background, simi
 
 #### new
 
-Create a new persistent session.
+Create a new persistent session and attach to it. Alias: `n`.
 
 ```bash
 tuios new [session-name] [flags]
 ```
+
+**Flags:**
+- `-d, --detach` - Create the session headless, without attaching a client
 
 **Examples:**
 
@@ -223,11 +287,16 @@ tuios new mysession
 
 # Create session with theme
 tuios new work --theme dracula
+
+# Create a headless session for scripting
+tuios new build --detach
 ```
+
+A `--detach` session gets an initial window and is immediately usable by `send-keys`, `run-command`, and `capture-pane`. It is created at a fixed 80x24 until a client attaches, and the appearance flags are ignored because there is no client to apply them to. See [Headless Sessions](/docs/sessions#headless-sessions).
 
 #### attach
 
-Attach to an existing session.
+Attach to an existing session. Alias: `a`.
 
 ```bash
 tuios attach [session-name] [flags]
@@ -251,13 +320,47 @@ tuios attach mysession -c
 
 #### ls
 
-List all TUIOS sessions.
+List all TUIOS sessions. Alias: `list-sessions`.
 
 ```bash
-tuios ls
+tuios ls [flags]
 ```
 
-Shows a table with session name, window count, status, creation time, and last activity.
+**Flags:**
+- `--json` - Output as JSON
+
+Without `--json` it prints a table of session name, window count, status, creation time, and last activity.
+
+**JSON output** is a bare array, with no wrapper object:
+
+```json
+[
+  {
+    "name": "work",
+    "id": "7f55590c-ecc0-450e-88a3-3cb1ff2573c8",
+    "created": 1784391188,
+    "last_active": 1784391188,
+    "window_count": 3,
+    "attached": false,
+    "width": 120,
+    "height": 40
+  }
+]
+```
+
+`created` and `last_active` are Unix seconds.
+
+#### resurrect
+
+Restore a session saved to disk after the daemon exited. Alias: `restore`.
+
+```bash
+tuios resurrect [session-name]
+```
+
+With no argument it lists the sessions that can be restored. With a name it restores that session and attaches to it.
+
+Resurrection restores window structure, not running processes or scrollback. See [Session Resurrection](/docs/sessions#session-resurrection) for exactly what survives.
 
 #### kill-session
 
@@ -267,21 +370,84 @@ Kill a specific session.
 tuios kill-session <session-name>
 ```
 
+<Callout type="warn">
+Destructive. This closes every window in the session and deletes its saved state file, so a killed session cannot be resurrected.
+</Callout>
+
 #### kill-server
 
-Stop the TUIOS daemon (kills all sessions).
+Stop the TUIOS daemon.
 
 ```bash
 tuios kill-server
 ```
 
+<Callout type="warn">
+Destructive. Every session's processes are terminated. The daemon does save session structure on its way out and the next daemon restores it, so this is not a way to get a clean slate. Use `tuios daemon --no-restore` for that.
+</Callout>
+
 #### daemon
 
-Run the daemon in the foreground (for debugging).
+Run the daemon in the foreground, for debugging.
 
 ```bash
 tuios daemon [flags]
 ```
+
+**Flags:**
+- `--log-level <level>` - Debug log level: `off`, `errors`, `basic`, `messages`, `verbose`, `trace`
+- `--no-restore` - Do not auto-restore saved sessions on start
+
+```bash
+# Watch every protocol message go by
+tuios daemon --log-level messages
+
+# Start clean, ignoring saved session state
+tuios daemon --no-restore
+```
+
+#### start-server
+
+Start the daemon in the background.
+
+```bash
+tuios start-server
+```
+
+<Callout type="info">
+This command is hidden from `tuios --help` and is effectively internal. The daemon starts on its own when you create or attach to a session, so you should not need it. It is documented here because it is functional and shows up in shell completion.
+</Callout>
+
+#### logs
+
+View the daemon's logs.
+
+```bash
+tuios logs [flags]
+```
+
+**Flags:**
+- `-n, --lines <n>` - Number of entries to show, default `50`. `0` means all
+- `--all` - Show all stored log entries
+- `-f, --follow` - Keep printing new entries as they arrive
+- `--clear` - Clear the logs after viewing
+
+```bash
+# Last 50 entries
+tuios logs
+
+# Last 200
+tuios logs -n 200
+
+# Tail the log
+tuios logs -f
+```
+
+<Callout type="warn">
+`--clear` is destructive: it discards the stored log buffer after printing it. Redirect the output somewhere first if you may need it.
+</Callout>
+
+The amount of detail in the log depends on the `--log-level` the daemon was started with.
 
 ### layout
 
@@ -303,6 +469,10 @@ Delete a saved layout template.
 tuios layout delete <name>
 ```
 
+<Callout type="warn">
+Destructive and not undoable. Export the layout first if you might want it back.
+</Callout>
+
 #### layout dir
 
 Show the layout templates directory path.
@@ -313,10 +483,17 @@ tuios layout dir
 
 #### layout export
 
-Export a layout template to a file.
+Export a layout template as a tape script, printed to stdout. The name is required and is the only argument; there is no output-file argument.
 
 ```bash
-tuios layout export <name> [file]
+tuios layout export <name>
+```
+
+Redirect it yourself to save it, and replay it with `tuios tape exec`:
+
+```bash
+tuios layout export dev > dev.tape
+tuios tape exec dev.tape
 ```
 
 ### ssh
@@ -328,9 +505,11 @@ tuios ssh [flags]
 ```
 
 **Flags:**
-- `--port` - SSH server port (default: 2222)
-- `--host` - SSH server host (default: localhost)
+- `--port` - SSH server port (default: `2222`)
+- `--host` - SSH server host (default: `localhost`)
 - `--key-path` - Path to SSH host key (auto-generated if not specified)
+- `--default-session` - Session name every connection lands in
+- `--ephemeral` - Run standalone, with no daemon
 
 **Examples:**
 
@@ -344,9 +523,17 @@ tuios ssh --port 8022
 # Listen on all interfaces
 tuios ssh --host 0.0.0.0 --port 2222
 
+# Every client joins the same shared session
+tuios ssh --default-session shared
+
+# Each connection gets a throwaway instance, nothing persists
+tuios ssh --ephemeral
+
 # Connect from another machine
 ssh -p 2222 user@hostname
 ```
+
+With `--default-session`, connecting clients attach to one named session and see each other's work, which is the pairing setup. With `--ephemeral` there is no daemon at all, so nothing survives disconnection and none of the session commands (`ls`, `attach`, `send-keys`) can reach the connection.
 
 ### config
 
@@ -376,9 +563,13 @@ Reset configuration to defaults.
 tuios config reset
 ```
 
+<Callout type="warn">
+Destructive. This overwrites your config file, including custom keybindings. Copy the file shown by `tuios config path` first if you want to keep it.
+</Callout>
+
 ### keybinds
 
-View keybinding configuration.
+View keybinding configuration. Aliases: `keys`, `kb`.
 
 #### keybinds list
 
@@ -402,14 +593,13 @@ Manage and run tape automation scripts.
 
 #### tape play
 
-Run a tape file in interactive mode.
+Run a tape file in interactive mode. This always starts a visible TUI and plays the script inside it, so you can watch the automation happen. Press <kbd>Ctrl</kbd>+<kbd>P</kbd> to pause and resume.
 
 ```bash
 tuios tape play <file.tape>
 ```
 
-**Flags:**
-- `-v`, `--visible` - Show TUI during playback (default: true)
+This subcommand has no flags of its own; only the global flags apply. There is no headless or `--visible` option. To run a script without a new TUI, use [`tape exec`](#tape-exec) against a daemon session.
 
 #### tape validate
 
@@ -451,6 +641,10 @@ Delete a tape recording.
 tuios tape delete <name>
 ```
 
+<Callout type="warn">
+Destructive. The file is removed from the tape directory. Check `tuios tape show <name>` first.
+</Callout>
+
 #### tape exec
 
 Execute a tape script against a running TUIOS session (remote execution).
@@ -466,7 +660,9 @@ This allows you to run tape scripts without starting a new TUIOS instance. The s
 
 ### Remote Control Commands
 
-Control a running TUIOS session from external scripts and tools. These commands require a daemon session to be running.
+Control a running TUIOS session from external scripts and tools. These commands require a daemon session to be running. They all take `-s/--session` and default to the most recently active session when it is omitted.
+
+These are a convenience layer over the daemon's [JSON control protocol](/docs/control-protocol). If you are writing more than a few calls, go to the protocol directly.
 
 #### send-keys
 
@@ -482,10 +678,40 @@ tuios send-keys <keys> [flags]
 - `-l, --literal` - Send keys directly to terminal PTY (bypass TUIOS)
 - `-r, --raw` - Treat each character as a separate key
 
-**Key Format:**
+**Key Format** (default mode, not `--literal`):
+
 - Single keys: `i`, `n`, `Enter`, `Escape`, `Space`
-- Key combos: `ctrl+b`, `alt+1`, `shift+Enter`
-- Sequences: `"ctrl+b q"` or `"ctrl+b,q"`
+- Key combos: `ctrl+b`, `alt+1`, `shift+Enter`. Case-insensitive
+- Sequences: separated by a space or a comma, `"ctrl+b q"` or `"ctrl+b,q"`
+- Modifiers: `ctrl`, `alt`, `shift`, `super`, `meta`
+- Special keys: `Enter`, `Return`, `Space`, `Tab`, `Escape`, `Esc`, `Backspace`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PageUp`, `PageDown`, `F1` through `F12`
+
+**The PREFIX token.** `$PREFIX` and `PREFIX` both expand to the configured leader key, `ctrl+b` by default. Use it so scripts keep working when someone rebinds their prefix:
+
+```bash
+tuios send-keys "$PREFIX q"
+```
+
+In `bash` and `zsh`, `$PREFIX` inside double quotes is expanded by the shell before TUIOS sees it. Use single quotes, or the bare `PREFIX` spelling, to pass it through:
+
+```bash
+tuios send-keys 'PREFIX q'
+```
+
+**Window targeting.** `--window` resolves its argument in this order, first match wins:
+
+1. Custom name (a name set with `RenameWindow`)
+2. Window title
+3. Exact full UUID
+4. UUID prefix, 8 or more characters
+
+A custom name that happens to equal another window's title therefore wins. Use a full or prefixed ID when you need certainty.
+
+<Callout type="warn">
+`--literal` and `--raw` both disable key parsing: the string is written to the PTY as-is. `tuios send-keys --literal Enter` types the six letters `Enter` rather than pressing the key. Send the text with `--literal --raw`, then send `Enter` in a second call without those flags.
+
+Where the keys go also depends on whether a client is attached. With a TUI attached, keys are routed through it so window-manager bindings like the prefix are honored. On a headless session there is no window manager to consult, so the parsed bytes go straight to the target PTY and prefix sequences do nothing.
+</Callout>
 
 **Examples:**
 
@@ -501,6 +727,10 @@ tuios send-keys -s mysession Escape
 
 # Send literal text to terminal (use --raw to prevent space splitting)
 tuios send-keys --literal --raw "echo hello"
+
+# Target a window by name, then by ID prefix
+tuios send-keys --window "Server" --literal --raw "echo hello"
+tuios send-keys --window a1b2c3d4 --literal "ls"
 ```
 
 #### capture-pane
@@ -542,18 +772,73 @@ tuios run-command <command> [args...] [flags]
 - `--json` - Output result as JSON
 - `--list` - List all available commands
 
-**Available Commands:**
+Verb names are PascalCase and `tuios run-command --list` always prints the set the installed binary supports. The table below is that list.
+
+**Windows:**
+
 | Command | Arguments | Description |
 |---------|-----------|-------------|
 | `NewWindow` | `[name]` | Create a new terminal window |
-| `CloseWindow` | | Close the focused window |
-| `FocusNext` | | Focus the next window |
-| `FocusPrev` | | Focus the previous window |
-| `FocusWindow` | `<id-or-name>` | Focus a specific window |
-| `ToggleFullscreen` | | Toggle fullscreen mode |
+| `CloseWindow` | `[name]` | Close a window. With no name, closes the focused one |
+| `NextWindow` | | Focus the next window |
+| `PrevWindow` | | Focus the previous window |
+| `FocusWindow` | `<name>` | Focus a window by name |
+| `RenameWindow` | `<name>` or `<old> <new>` | Rename the focused window, or a named one |
+| `MinimizeWindow` | `[name]` | Minimize the focused or named window |
+| `RestoreWindow` | `[name]` | Restore the focused or named window |
+
+<Callout type="warn">
+`CloseWindow <name>` closes **every** window that matches the name, not just the first. Two windows both titled `zsh` are both closed. Pass no argument to close only the focused window.
+</Callout>
+
+**Modes and layout:**
+
+| Command | Arguments | Description |
+|---------|-----------|-------------|
+| `TerminalMode` | | Switch to terminal mode |
+| `WindowManagementMode` | | Switch to window management mode |
 | `ToggleTiling` | | Toggle tiling mode |
-| `SwitchWorkspace` | `<1-9>` | Switch to workspace |
-| `MoveToWorkspace` | `<1-9>` | Move focused window to workspace |
+| `EnableTiling` | | Enable tiling mode |
+| `DisableTiling` | | Disable tiling mode |
+| `SnapLeft` | | Snap the focused window to the left half |
+| `SnapRight` | | Snap the focused window to the right half |
+| `SnapFullscreen` | | Snap the focused window to fullscreen |
+| `Split` | `horizontal` or `vertical` | Split the focused window |
+| `RotateSplit` | | Rotate the split direction |
+| `EqualizeSplits` | | Reset all split ratios to equal |
+
+**Workspaces:**
+
+| Command | Arguments | Description |
+|---------|-----------|-------------|
+| `SwitchWorkspace` | `<1-9>` | Switch to workspace N |
+| `MoveToWorkspace` | `<1-9>` | Move the focused window to workspace N |
+
+**Appearance:**
+
+| Command | Arguments | Description |
+|---------|-----------|-------------|
+| `EnableAnimations` | | Enable UI animations |
+| `DisableAnimations` | | Disable UI animations |
+| `ToggleAnimations` | | Toggle UI animations |
+| `SetDockbarPosition` | `top`, `bottom`, `left`, `right` | Change dockbar position |
+| `SetBorderStyle` | `<style>` | Change window border style |
+| `SetTheme` | `<theme-name>` | Change the color theme |
+| `ShowNotification` | `<message> [type]` | Show a notification. Type is `info`, `success`, `warning`, or `error` |
+
+**Queries:**
+
+| Command | Arguments | Description |
+|---------|-----------|-------------|
+| `ListWindows` | | Same data as `tuios list-windows` |
+| `GetWindow` | `[id-or-name]` | Same data as `tuios get-window` |
+| `GetSessionInfo` | | Same data as `tuios session-info` |
+
+The three query verbs are what the dedicated `list-windows`, `get-window`, and `session-info` commands call internally. Use the dedicated commands; they are the same request with a shorter spelling.
+
+<Callout type="warn">
+**The two verb vocabularies are not the same.** `run-command` takes PascalCase verbs (`NewWindow`, `SwitchWorkspace`). The daemon's JSON [control protocol](/docs/control-protocol) takes kebab-case verbs (`new-window`, `capture-pane`), and the two sets are not one-to-one. A protocol verb name will not work here, and a `run-command` verb name will not work there.
+</Callout>
 
 **Examples:**
 
@@ -570,9 +855,26 @@ tuios run-command --json NewWindow "dev"
 # Switch workspace
 tuios run-command SwitchWorkspace 2
 
+# Split and equalize
+tuios run-command Split vertical
+tuios run-command EqualizeSplits
+
 # Target specific session
 tuios run-command -s mysession ToggleTiling
 ```
+
+**JSON output.** `--json` prints a result envelope with the verb's own result fields **merged into the top level**. There is no `data` wrapper:
+
+```json
+{
+  "success": true,
+  "message": "command executed",
+  "window_id": "79d10b84-414e-44cf-a0f3-20ac2c1fcc48",
+  "name": "dev"
+}
+```
+
+So a new window's ID is at `.window_id`, not `.data.window_id`. Branch on `.success`, not on `.message`; the message is human-readable text and its wording is not a stable interface. On failure the object is `{"success": false, "error": "..."}` and the exit code is 1.
 
 #### set-config
 
@@ -589,8 +891,8 @@ tuios set-config <path> <value> [flags]
 | Path | Values | Description |
 |------|--------|-------------|
 | `dockbar_position` | `top`, `bottom`, `left`, `right` | Dockbar position |
-| `border_style` | `rounded`, `normal`, `thick`, etc. | Border style |
-| `animations` | `true`, `false`, `toggle` | Enable/disable animations |
+| `border_style` | `rounded`, `normal`, `thick`, `double`, `hidden`, `block`, `ascii` | Border style |
+| `animations` | `true`, `false`, `toggle` | Enable or disable animations |
 | `hide_window_buttons` | `true`, `false` | Hide window buttons |
 
 **Examples:**
@@ -600,6 +902,51 @@ tuios set-config dockbar_position top
 tuios set-config border_style rounded
 tuios set-config animations toggle
 ```
+
+<Callout type="warn">
+`dockbar_position` here accepts `left` and `right`, which the `--dockbar-position` startup flag rejects, and does not accept `hidden`, which the flag does. The `border_style` list is also shorter than the flag's: the flag additionally takes `outer-half-block` and `inner-half-block`. The two surfaces genuinely disagree, so a value that works in one place may not work in the other.
+</Callout>
+
+#### get-config
+
+Read back a session option previously set with `set-config`.
+
+```bash
+tuios get-config <path> [flags]
+```
+
+**Flags:**
+- `-s, --session <name>` - Target session (default: most recently active)
+
+```bash
+tuios get-config border_style
+```
+
+Options are stored in daemon-owned state, so this works whether or not a TUI client is attached. It reports the option's recorded value, which is not necessarily what a running client is drawing if the client was started with a conflicting flag.
+
+#### list-verbs
+
+List the JSON control-protocol verbs the daemon supports, with their parameters and an example call.
+
+```bash
+tuios list-verbs [verb] [flags]
+```
+
+**Flags:**
+- `--json` - Output as JSON
+
+```bash
+# Every verb with its parameters
+tuios list-verbs
+
+# Just one verb
+tuios list-verbs capture-pane
+
+# Machine-readable, for a script or an agent
+tuios list-verbs --json
+```
+
+These are the kebab-case protocol verbs, a different set from the PascalCase `run-command` verbs above. The output is generated from the daemon's own verb registry, so it describes the binary you are running rather than a document that can drift. See [Control Protocol](/docs/control-protocol).
 
 ### Inspection Commands
 
@@ -638,20 +985,40 @@ tuios list-windows -s mysession --json
 
 ```json
 {
+  "success": true,
+  "message": "command executed",
   "windows": [
     {
-      "id": "a1b2c3d4",
+      "window_id": "79d10b84-414e-44cf-a0f3-20ac2c1fcc48",
+      "index": 0,
+      "title": "Terminal 79d10b84",
       "display_name": "dev",
+      "custom_name": "dev",
       "workspace": 1,
       "focused": true,
+      "minimized": false,
+      "x": 0,
+      "y": 0,
       "width": 120,
-      "height": 40
+      "height": 40,
+      "pty_id": "5643204f-ec1d-49d9-9385-ded247ba75cb"
     }
   ],
   "total": 1,
-  "focused_id": "a1b2c3d4"
+  "focused_index": 0,
+  "focused_window_id": "79d10b84-414e-44cf-a0f3-20ac2c1fcc48",
+  "current_workspace": 1,
+  "workspace_windows": [1, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 ```
+
+Notes on the shape:
+
+- The identifier field is `window_id`, a full UUID. There is no `id`.
+- The top-level focused pointer is `focused_window_id`. There is no `focused_id`.
+- `custom_name` is present only on windows that have been renamed. `display_name` is always present and is the custom name when set, the title otherwise.
+- `workspace_windows` is a per-workspace window count, indexed from workspace 1 at position 0.
+- `success` and `message` are the result envelope every remote command shares.
 
 #### get-window
 
@@ -684,27 +1051,33 @@ tuios get-window a1b2c3d4 --json
 tuios get-window -s mysession --json
 ```
 
-**JSON Output:**
+**JSON Output:** the same window object `list-windows` emits, flattened into the result envelope rather than nested.
 
 ```json
 {
-  "id": "a1b2c3d4",
-  "title": "Terminal a1b2c3d4",
+  "success": true,
+  "message": "command executed",
+  "window_id": "79d10b84-414e-44cf-a0f3-20ac2c1fcc48",
+  "index": 0,
+  "title": "Terminal 79d10b84",
   "custom_name": "dev",
   "display_name": "dev",
   "workspace": 1,
   "focused": true,
   "minimized": false,
-  "fullscreen": false,
-  "x": 0, "y": 0,
-  "width": 120, "height": 40,
-  "cursor_x": 5, "cursor_y": 10,
-  "cursor_visible": true,
-  "scrollback_lines": 1000,
-  "shell_pid": 12345,
-  "has_foreground_process": false
+  "x": 0,
+  "y": 0,
+  "width": 120,
+  "height": 40,
+  "pty_id": "5643204f-ec1d-49d9-9385-ded247ba75cb"
 }
 ```
+
+<Callout type="warn">
+`get-window` returns window *structure*, not terminal runtime state. There are no cursor coordinates, no `scrollback_lines`, no `shell_pid`, no `has_foreground_process`, and no `fullscreen` field. If you need what is on the screen, use `capture-pane`. If you need the shell's PID, TUIOS does not expose it.
+
+`custom_name` is emitted only when the window has been renamed. Read `display_name` if you want a field that is always there.
+</Callout>
 
 #### session-info
 
@@ -731,18 +1104,42 @@ tuios session-info -s mysession --json
 
 ```json
 {
+  "success": true,
+  "message": "command executed",
+  "session_name": "work",
+  "session_id": "06dd756e-0507-4656-ae8a-6cabab7631cf",
+  "mode": "unknown",
   "current_workspace": 1,
-  "total_windows": 3,
-  "mode": "terminal",
-  "tiling_enabled": true,
-  "tiling_mode": "bsp",
-  "theme": "tokyonight",
-  "dockbar_position": "bottom",
-  "animations_enabled": true,
-  "script_mode": false,
-  "workspace_windows": [2, 1, 0, 0, 0, 0, 0, 0, 0]
+  "num_workspaces": 9,
+  "layout_mode": "bsp",
+  "window_count": 3,
+  "tiling_mode": "tiling",
+  "master_ratio": 0.5,
+  "width": 120,
+  "height": 40,
+  "tui_attached": true
 }
 ```
+
+| Field | Meaning |
+|-------|---------|
+| `window_count` | Number of windows in the session, across all workspaces |
+| `num_workspaces` | Workspace count, normally 9 |
+| `layout_mode` | Which tiling layout is active, or `unknown` if none is set |
+| `tiling_mode` | Only ever `tiling` or `floating`, meaning whether tiling is on at all |
+| `master_ratio` | Split ratio of the master area |
+| `width`, `height` | Effective session size in cells |
+| `tui_attached` | Whether any TUI client is currently connected |
+
+<Callout type="warn">
+Two traps here.
+
+`mode` is hardcoded to `"unknown"` on this code path. It never reports the actual input mode, so do not branch on it.
+
+`tiling_mode` is not the layout name. It carries only `tiling` or `floating`. The layout name (`bsp` and friends) is `layout_mode`, which is itself `unknown` when the session has no layout set.
+
+There is no `total_windows`, `tiling_enabled`, `theme`, `dockbar_position`, `animations_enabled`, `script_mode`, or `workspace_windows` field. Window counts per workspace come from `list-windows` instead. For appearance options, read them back with `get-config`.
+</Callout>
 
 ### completion
 
@@ -770,33 +1167,43 @@ tuios completion powershell > tuios.ps1
 
 ## Scripting Examples
 
-The remote control and inspection commands enable powerful scripting workflows.
+The remote control and inspection commands are enough for shell scripting. Three field names carry most of the mistakes: window IDs are `.window_id`, the focused window is `.focused_window_id`, and the window count is `.window_count`.
 
 ### Create a Development Layout
 
 ```bash
 #!/bin/bash
-# Create windows and capture their IDs
-EDITOR_ID=$(tuios run-command --json NewWindow "editor" | jq -r '.data.window_id')
-TERM_ID=$(tuios run-command --json NewWindow "terminal" | jq -r '.data.window_id')
-LOGS_ID=$(tuios run-command --json NewWindow "logs" | jq -r '.data.window_id')
+set -euo pipefail
 
-# Enable tiling
-tuios run-command ToggleTiling
+# Create windows and capture their IDs. run-command --json flattens result
+# fields to the top level, so the ID is .window_id and not .data.window_id.
+EDITOR_ID=$(tuios run-command --json NewWindow "editor" | jq -r '.window_id')
+TERM_ID=$(tuios run-command --json NewWindow "terminal" | jq -r '.window_id')
+LOGS_ID=$(tuios run-command --json NewWindow "logs" | jq -r '.window_id')
 
-# Send commands to each window
-tuios send-keys --literal --raw "nvim ." && tuios send-keys Enter
-tuios run-command FocusWindow "$TERMINAL_ID"
+# Enable tiling. EnableTiling is idempotent; ToggleTiling is not
+tuios run-command EnableTiling
+
+# Send commands to each window in turn
+tuios run-command FocusWindow "$EDITOR_ID"
+tuios send-keys --literal --raw "nvim ."
+tuios send-keys Enter
+
 tuios run-command FocusWindow "$LOGS_ID"
-tuios send-keys --literal --raw "tail -f /var/log/system.log" && tuios send-keys Enter
+tuios send-keys --literal --raw "tail -f /var/log/system.log"
+tuios send-keys Enter
+
+tuios run-command FocusWindow "$TERM_ID"
 ```
+
+Prefer `EnableTiling` and `DisableTiling` over `ToggleTiling` in scripts. A toggle depends on the state you happened to start in, so rerunning the script produces the opposite result.
 
 ### Interactive Window Selector with fzf
 
 ```bash
 #!/bin/bash
 WINDOW=$(tuios list-windows --json | \
-    jq -r '.windows[] | "\(.display_name)\t\(.id)"' | \
+    jq -r '.windows[] | "\(.display_name)\t\(.window_id)"' | \
     fzf --with-nth=1 | \
     cut -f2)
 
@@ -810,7 +1217,7 @@ fi
 ```bash
 #!/bin/bash
 while true; do
-    WINDOW_COUNT=$(tuios session-info --json | jq '.total_windows')
+    WINDOW_COUNT=$(tuios session-info --json | jq '.window_count')
     if [ "$WINDOW_COUNT" -ge 3 ]; then
         echo "Ready with $WINDOW_COUNT windows"
         break
@@ -818,6 +1225,14 @@ while true; do
     sleep 0.5
 done
 ```
+
+A poll loop like this one is what the control protocol's `wait-for` verb exists to replace. If you are writing anything that has to wait on session state, do it over the [control protocol](/docs/control-protocol#waiting-for-conditions) instead of sleeping.
+
+### Beyond the CLI
+
+Each CLI invocation opens its own connection to the daemon, runs one request, and exits. That is fine for a handful of calls and wasteful for a loop. It also flattens every failure into exit code 1, with the reason only in text on stderr.
+
+For anything larger, talk to the daemon directly. It speaks a line-oriented JSON protocol on the same socket, with structured error codes, blocking waits, and a subscribable event stream. See [Control Protocol](/docs/control-protocol), and run `tuios list-verbs` to get the schema from the binary itself.
 
 ## Environment Variables
 
@@ -880,7 +1295,9 @@ Graphics support is experimental. Bugs are expected. Use environment variables t
 ## Exit Codes
 
 - `0` - Success
-- `1` - Error (command failed, invalid arguments, etc.)
+- `1` - Error: command failed, invalid arguments, no daemon, session or window not found
+
+There is only one failure code. The CLI does not distinguish "no such session" from "daemon not running" from "bad argument" by exit status, and with `--json` the reason is in the `error` field rather than the status. If your script needs to tell those cases apart, use the control protocol, which returns [structured error codes](/docs/control-protocol#error-codes).
 
 ## Examples
 
@@ -917,7 +1334,11 @@ tuios ssh --host 0.0.0.0 --port 2222
 ### Run tape automation
 
 ```bash
+# In a fresh TUI you can watch
 tuios tape play examples/demo.tape
+
+# Against a session that is already running
+tuios tape exec examples/demo.tape
 ```
 
 ### Edit configuration
@@ -949,5 +1370,15 @@ tuios keybinds list-custom
     title="Keybindings"
     href="/docs/keybindings"
     description="Keyboard shortcuts reference"
+  />
+  <Card
+    title="Control Protocol"
+    href="/docs/control-protocol"
+    description="The daemon's JSON verb protocol, error codes, and event stream"
+  />
+  <Card
+    title="Sessions & Daemon Mode"
+    href="/docs/sessions"
+    description="Persistent sessions, detach, and resurrection"
   />
 </Cards>
