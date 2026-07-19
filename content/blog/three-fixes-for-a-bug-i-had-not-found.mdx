@@ -5,8 +5,9 @@ date: '2026-06-23'
 author: Gaurav Gosain
 ---
 
-The report was short. Focus a different terminal, and sometimes one of the
-other panes goes blank. Focus it again and the content comes back.
+It was easy to describe and hard to catch. Focus a different terminal, and
+sometimes one of the other panes goes blank. Focus it again and the content
+comes back.
 
 It took four rounds. Three of those ended with me handing over a build and
 saying it was fixed. Every one of those three fixes was a real bug, which is
@@ -38,7 +39,7 @@ Next I found that switching focus could leave a stale cached layer for a window
 in alternate-screen mode. Which is exactly the sort of thing that leaves a pane
 showing nothing.
 
-Fixed it. Shipped it. Same report came back.
+Fixed it. Shipped it. Hit it again the same afternoon.
 
 ## Round three: shared border state
 
@@ -59,19 +60,20 @@ was plausible. Plausible is doing a lot of work in that sentence, because a
 multiplexer has many ways to leave a pane unpainted, and I could construct a
 story connecting almost any of them to the symptom.
 
-I never reproduced the reported bug. Not once, across three rounds. I had no
+I never reproduced it deliberately. Not once, across three rounds. I had no
 case where I could make a pane go blank on demand, so I had no way to tell
-whether a fix worked. The loop was: find bug, fix bug, ship, wait to be told.
-Three round trips, each costing someone else the time to test it.
+whether a fix worked. The loop was: find bug, fix bug, ship it, go back to
+using the thing and wait to notice. Three rounds of that before I changed
+approach.
 
 What I had was three real bugs found by auditing, which is a fine activity, and
-zero evidence about the one being reported.
+zero evidence about the one I was chasing.
 
 ## Round four: reproducing it
 
 Different approach. Instead of reading, drive the thing and check the pixels.
 
-Set up the layout from the report. One tall pane on the left, two stacked on
+Set up the layout I kept hitting it in. One tall pane on the left, two stacked on
 the right. Focus one, focus another, and after each step compose the frame and
 check whether any pane's content came out empty.
 
@@ -116,7 +118,7 @@ screen.
 That reads as obvious. What made it non-obvious in the moment is that each of
 my three wrong fixes had a passing test. I could demonstrate, with a green
 test, that the lock nesting was gone, the cache invalidation correct, the
-border state consistent. All true. None of it evidence about the reported
+border state consistent. All true. None of it evidence about the actual
 symptom, because none of those tests composed a frame and looked at it.
 
 The three bugs were worth fixing, and two of them could have caused a freeze
@@ -135,7 +137,7 @@ fix, confirm the test fails, restore it. A green test with the fix in place
 only proves the test can pass. A red test without the fix proves the test is
 actually connected to the change. In a later stretch of work I ran that
 revert-and-confirm step on every single fix, and it caught five cases where a
-fix had been reported as working and was not. Five, from a check that takes a
+fix had looked settled and was not. Five, from a check that takes a
 minute each.
 
 Note what it would not have caught here. My three wrong fixes all pass the
