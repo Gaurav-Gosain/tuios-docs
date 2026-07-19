@@ -5,28 +5,25 @@ date: '2026-06-26'
 author: Gaurav Gosain
 ---
 
-The report was short. Focus a different terminal, and sometimes one of the other
-panes goes blank. Focus it again and the content comes back.
+The report was short. Focus a different terminal, and sometimes one of the
+other panes goes blank. Focus it again and the content comes back.
 
-It took four rounds. Three of those ended with me handing over a build and saying
-it was fixed. Every one of those three fixes was a real bug. None of them was the
-one being reported.
-
-The bugs themselves are ordinary. The failure of method is the part worth writing
-down.
+It took four rounds. Three of those ended with me handing over a build and
+saying it was fixed. Every one of those three fixes was a real bug, which is
+exactly what made it so easy to keep doing.
 
 ## Round one: a lock taken twice
 
 The first thing I found was genuinely bad. The render path took a window's I/O
 read lock, then called a function that took the same lock again.
 
-Go's `RWMutex` is not reentrant for readers. Two `RLock` calls nest fine on their
-own, but if a writer queues between them, the second read blocks behind the
-writer and the writer blocks behind the first read. Everything stops.
+Go's `RWMutex` is not reentrant for readers. Two `RLock` calls nest fine on
+their own, but if a writer queues between them, the second read blocks behind
+the writer and the writer blocks behind the first read. Everything stops.
 
-Real freeze, reachable, fixed by hoisting the cursor query above the lock. I also
-believed it explained the blank pane, because a render that deadlocks partway
-could plausibly leave a pane unpainted.
+Real freeze, reachable, fixed by hoisting the cursor query above the lock. I
+also believed it explained the blank pane, because a render that deadlocks
+partway could plausibly leave a pane unpainted.
 
 It did not explain it. The blank pane came back.
 
@@ -41,8 +38,8 @@ Fixed it. Shipped it. Same report came back.
 ## Round three: shared border state
 
 Then a discrepancy in how tiled windows tracked border state across a focus
-change. Real, worth fixing, and once again my mental model let me connect it to a
-blank pane if I did not look too hard.
+change. Real, worth fixing, and once again my mental model let me connect it to
+a blank pane if I did not look too hard.
 
 The reply I got was, roughly: your stuff is still broken.
 
@@ -52,15 +49,15 @@ That was the moment the approach should have changed. It did not.
 
 The pattern is obvious in hindsight and slightly embarrassing.
 
-Each round I read code, found something genuinely wrong, and stopped. The fix was
-plausible. Plausible is doing a lot of work in that sentence, because a
+Each round I read code, found something genuinely wrong, and stopped. The fix
+was plausible. Plausible is doing a lot of work in that sentence, because a
 multiplexer has many ways to leave a pane unpainted, and I could construct a
 story connecting almost any of them to the symptom.
 
-I never reproduced the reported bug. Not once, across three rounds. I had no case
-where I could make a pane go blank on demand, so I had no way to tell whether a
-fix worked. The loop was: find bug, fix bug, ship, wait to be told. Three round
-trips, each costing someone else the time to test it.
+I never reproduced the reported bug. Not once, across three rounds. I had no
+case where I could make a pane go blank on demand, so I had no way to tell
+whether a fix worked. The loop was: find bug, fix bug, ship, wait to be told.
+Three round trips, each costing someone else the time to test it.
 
 What I had was three real bugs found by auditing, which is a fine activity, and
 zero evidence about the one being reported.
@@ -69,9 +66,9 @@ zero evidence about the one being reported.
 
 Different approach. Instead of reading, drive the thing and check the pixels.
 
-Set up the layout from the report. One tall pane on the left, two stacked on the
-right. Focus one, focus another, and after each step compose the frame and check
-whether any pane's content came out empty.
+Set up the layout from the report. One tall pane on the left, two stacked on
+the right. Focus one, focus another, and after each step compose the frame and
+check whether any pane's content came out empty.
 
 It reproduced in about a minute. The cause was one line:
 
@@ -79,10 +76,11 @@ It reproduced in about a minute. The cause was one line:
 windowWidth := ansi.StringWidth(lines[0])
 ```
 
-`clipWindowContent` measured a window's width from its first line, then discarded
-content falling outside the visible region. A window whose first line is blank
-measures zero wide. Zero width makes `x + windowWidth <= 0` true for anything at
-or left of the origin, so the entire pane is discarded as off-screen.
+`clipWindowContent` measured a window's width from its first line, then
+discarded content falling outside the visible region. A window whose first line
+is blank measures zero wide. Zero width makes `x + windowWidth <= 0` true for
+anything at or left of the origin, so the entire pane is discarded as
+off-screen.
 
 <TerminalCapture
   title="what the clip logic saw"
@@ -110,22 +108,17 @@ For anything visual, reproduce it in the rendered output before claiming a fix.
 Not in a unit test of the function you suspect. In the frame that reaches the
 screen.
 
-That reads as obvious. What made it non-obvious in the moment is that each of my
-three wrong fixes had a passing test. I could demonstrate, with a green test,
-that the lock nesting was gone, the cache invalidation was correct, the border
-state consistent. All true. None of it evidence about the reported symptom,
-because none of those tests composed a frame and looked at it.
+That reads as obvious. What made it non-obvious in the moment is that each of
+my three wrong fixes had a passing test. I could demonstrate, with a green
+test, that the lock nesting was gone, the cache invalidation correct, the
+border state consistent. All true. None of it evidence about the reported
+symptom, because none of those tests composed a frame and looked at it.
 
-A test proving the thing you changed now behaves differently is not a test
-proving the reported bug is gone. I had three of the first kind and none of the
-second.
+The three bugs were worth fixing, and two of them could have caused a freeze
+under the right conditions. I would find them again. What I would not do again
+is call any of them the fix for a bug I had never once seen happen.
 
-There is a smaller lesson about how I reported it. Each time I said "this is
-fixed", when what I knew was "I found a bug and it might be this one". Those are
-different claims and I made the stronger one three times running. The person
-testing had to discover otherwise, which is a poor use of someone else's
-afternoon.
-
-The three bugs were worth fixing, and two could have caused a freeze under the
-right conditions. But finding real bugs while looking for a different bug is not
-progress on the different bug, however much it feels like it at the time.
+Each time, I said "this is fixed" when what I actually knew was "I found a bug
+and it might be this one". Those are different claims, and I made the stronger
+one three times running, to someone who then had to spend their afternoon
+finding out otherwise.

@@ -5,7 +5,8 @@ date: '2026-07-19'
 author: Gaurav Gosain
 ---
 
-Dragging a pane divider in TUIOS trailed the mouse. Worse the longer you dragged.
+Dragging a pane divider in TUIOS trailed the mouse. Worse the longer you
+dragged.
 
 That last detail is the whole diagnosis, though I nearly skipped past it. A
 uniformly slow frame feels the same at the start of a gesture as at the end.
@@ -14,18 +15,18 @@ Something that degrades as you go is a queue you are not draining fast enough.
 ## Backlog, not slow frame
 
 Every mouse motion event composed a full frame. A frame during a tiling resize
-costs 3.3 to 6.7 ms, which caps the drain rate somewhere around 150 to 300 events
-per second. A drag emits roughly one event per cell crossed, and moving a mouse
-across a terminal briskly beats that comfortably.
+costs 3.3 to 6.7 ms, which caps the drain rate somewhere around 150 to 300
+events per second. A drag emits roughly one event per cell crossed, and moving
+a mouse across a terminal briskly beats that comfortably.
 
-So the queue grows for the duration of the drag, and what you see is wherever the
-pointer was some number of events ago. Stop moving and it catches up. That is why
-it read as lag rather than as slowness.
+So the queue grows for the duration of the drag, and what you see is wherever
+the pointer was some number of events ago. Stop moving and it catches up. That
+is why it read as lag rather than as slowness.
 
-The fix bounds redraws to one per frame interval. Every event's geometry is still
-applied before the draw decision, so no input is dropped and the layout still
-settles exactly where you released the button. Only the redundant intermediate
-frames go.
+The fix bounds redraws to one per frame interval. Every event's geometry is
+still applied before the draw decision, so no input is dropped and the layout
+still settles exactly where you released the button. Only the redundant
+intermediate frames go.
 
 <BenchBars
   groups={["2 windows", "4 windows", "9 windows"]}
@@ -48,12 +49,12 @@ obvious ones.
 go test -run XXX -bench BenchmarkResizeMotion -benchmem -count=5 ./internal/input/
 ```
 
-`-run XXX` matches no test, so nothing but the benchmark runs. `-benchmem` gives
-allocations per operation, which mattered more than nanoseconds in two places
-below. `-count=5` runs the whole thing five times, and the spread across those
-runs is the only thing that tells you whether a 15% improvement is real. On this
-machine absolute timings drift by a factor of two with thermal state, so anything
-I compared had to be interleaved rather than measured an hour apart.
+`-run XXX` matches no test, so nothing but the benchmark runs. `-benchmem`
+gives allocations per operation, which mattered more than nanoseconds in two
+places below. `-count=5` runs the whole thing five times, and the spread across
+those runs is the only thing that tells you whether a 15% improvement is real.
+Absolute timings on this machine drift with thermal state, so anything I
+compared had to be interleaved rather than measured an hour apart.
 
 TUIOS wires up `net/http/pprof` behind a flag:
 
@@ -66,42 +67,44 @@ if pprofAddr != "" {
 ```
 
 Block and mutex profiling are off by default in Go and cost real overhead when
-on, which is why they sit behind the same flag rather than being always enabled.
-For a program that spends its life waiting on PTY reads and holding locks, those
-are the two profiles that explain anything.
+on, which is why they sit behind the same flag rather than being always
+enabled. For a program that spends its life waiting on PTY reads and holding
+locks, those are the two profiles that explain anything.
 
 ## Four hypotheses. Two wrong.
 
-I wrote them down before measuring, which I recommend, because it makes being
-wrong legible afterwards.
+I wrote them down before measuring, mostly so that being wrong would stay
+visible afterwards instead of quietly evaporating.
 
-**One: the whole-tree ratio sync is expensive.** It recomputes every split ratio
-in the BSP tree on every motion event, which sounds bad. Measured at 6 to 86 us
-against a multi-millisecond frame. Roughly 1%. I would have spent a day there.
+**One: the whole-tree ratio sync is expensive.** It recomputes every split
+ratio in the BSP tree on every motion event, which sounds bad. Measured at 6 to
+86 us against a multi-millisecond frame. Roughly 1%. I would have spent a day
+there.
 
-**Two: damage tracking is doing nothing.** Mine, and wrong in an embarrassing
-way. I read a benchmark where the one-dirty case measured slightly slower than
-all-dirty and concluded the tracking was dead weight. At one window, one-dirty
-and all-dirty are the same case. Identical timings prove nothing. At four and
-nine windows it does substantial work: 929 against 1343 us, and 737 against 1221
-us. I had compared a thing to itself and written down a finding.
+**Two: damage tracking is doing nothing.** Mine, and wrong in a way that still
+stings. I read a benchmark where the one-dirty case measured slightly slower
+than all-dirty and concluded the tracking was dead weight. At one window,
+one-dirty and all-dirty are the same case. Identical timings prove nothing. At
+four and nine windows it does substantial work: 929 against 1343 us, and 737
+against 1221 us. I had compared a thing to itself, written down a finding, and
+passed that finding to someone else before I caught it.
 
 **Three: the tick throttle is not helping.** True. `SlowTickCmd` governed the
 periodic tick during a drag while motion events drove their own renders anyway,
 so it lowered the ceiling without touching the flood. Removed.
 
 **Four: PTY resizes are firing per event.** Not happening, and worth having
-checked. A `TIOCSWINSZ` per motion event would produce exactly these symptoms,
-and confirming it was already deferred to drag completion cost one grep.
+checked, because a `TIOCSWINSZ` per motion event would produce exactly these
+symptoms. Confirming it was already deferred to drag completion cost one grep.
 
-Two out of four. That ratio is normal. The point of writing them down first is
-that you find out.
+Two of four wrong is about my usual rate. That is the argument for writing them
+down.
 
 ## Fixing the top cost promotes the next one
 
-With renders coalesced, the handler ran on every event while renders did not, so
-the handler became the new floor. A gap appeared that had been sitting invisible
-underneath the old cost.
+With renders coalesced, the handler ran on every event while renders did not,
+so the handler became the new floor. A gap appeared that had been sitting
+invisible underneath the old cost.
 
 <BenchBars
   groups={["4 windows", "9 windows"]}
@@ -111,24 +114,30 @@ underneath the old cost.
   ]}
   unit="ns"
   groupLabel="windows"
-  caption="The gap is not the interesting part. The shape is. The non-shared path is flat from 4 to 9 windows while the shared path more than doubles, and flat against scaling is a far stronger signal than one number being bigger than another."
+  caption="The non-shared path is nearly flat from 4 to 9 windows. The shared path more than doubles. The shape gave it away before the gap did, because flat against scaling tells you which code is doing per-window work it should not be."
 />
 
 Allocations said it more bluntly: 10,665 B in 8 allocations against 57,238 B in
-34, per event, at nine windows. After the fix, 9,846 B in 8, flat in window
-count.
+34, per event, at nine windows.
 
-Worth keeping in mind generally. A performance conclusion has a shelf life.
-Hypothesis one, correctly measured at 1% of a frame, was the bottleneck an hour
-later, because I had removed everything that used to dwarf it.
+The culprit was `SyncBSPTreeFromGeometry` running on every motion event,
+rebuilding a geometry map over every window and re-deriving every ratio in the
+tree. Same medicine as the renders: defer the sync to the frame that actually
+draws. The drag-completion sync stays unconditional, because a stale tree means
+the next retile silently discards the user's resize. After the change, 7,215
+and 7,278 ns at four and nine windows, flat again, back to 8 allocations.
+
+A performance conclusion has a shelf life. Hypothesis one, correctly measured
+at 1% of a frame, was the bottleneck an hour later, because I had removed
+everything that used to dwarf it.
 
 ## The performance fix caused a rendering bug
 
 Deferring the ratio sync meant the separator overlay could draw from tree state
 that lagged the real window geometry. The overlay takes divider positions from
 the tree and the highlight from live geometry, so mid-drag it drew the divider
-where the drag had already left, in the unfocused colour, because that column was
-no longer on the focused pane's perimeter.
+where the drag had already left, in the unfocused colour, because that column
+was no longer on the focused pane's perimeter.
 
 It looked like a red afterimage trailing the cyan separator.
 
@@ -139,8 +148,8 @@ terminals in the other panes are still producing output. Which is why it showed
 up constantly in use and needed interleaved PTY output to reproduce in a test.
 
 The flush belongs in `View`, immediately before composing. Geometry can be
-applied whenever, but the ratios have to agree with it on any frame that reaches
-the screen.
+applied whenever, but the ratios have to agree with it on any frame that
+reaches the screen.
 
 Eighteen of twenty-four mid-drag frames wrong before, none after. Removing the
 flush with the test in place fails twenty-four of twenty-four.
@@ -154,8 +163,8 @@ Two bugs where tuning the hot path would have been wasted effort.
 Typing in the browser client was unusable. `getLine` walked the whole viewport
 for every row, making a frame O(rows squared times cols).
 
-No amount of constant-factor work closes a quadratic gap. It took three changes,
-each of which promoted the next bottleneck:
+No amount of constant-factor work closes a quadratic gap. It took three
+changes, each of which promoted the next bottleneck:
 
 | change | Chromium | Firefox |
 | --- | --- | --- |
@@ -166,6 +175,14 @@ each of which promoted the next bottleneck:
 Full repaint stayed at 11.5 to 11.2 ms through that last one, which is correct.
 That path has no dirty rows to skip. A change that improved it too would have
 meant I was measuring something else by accident.
+
+An aside from the same stretch of work, because it wasted three runs before I
+saw it. The browser test harness reused an already-running server when outside
+CI, and the client assets are compiled into the Go binary. So a server left
+over from an earlier build kept serving the previous client, and editing the
+client then rerunning the tests exercised the old build, with nothing logged.
+Three confident results about code that was never loaded. The harness now
+rebuilds per run, and I trust "the test passed" a little less than I used to.
 
 ### A freeze no profiler would find
 
@@ -178,38 +195,24 @@ the writer blocks behind the first read, and everything stops.
 
 There is no hot path to profile here. The program is not slow, it is stopped.
 What finds it is `SIGQUIT` with `GOTRACEBACK=all`, reading the goroutine dump,
-and spotting two frames of the same stack holding and wanting the same lock. The
-fix was hoisting the cursor query above the lock.
+and spotting two frames of the same stack holding and wanting the same lock.
+The fix was hoisting the cursor query above the lock.
 
-## An optimisation I measured and threw away
-
-Grapheme widths in the browser client were wrong for some clusters, and the
-obvious fix was to lift the width tables from ghostty-vt, which is a genuinely
-correct implementation.
-
-I built the table offline, applied it, measured. It changed nothing.
-
-Cluster advance is not the sum of per-codepoint widths. It is UAX 29 join
-accumulation, and no table of per-codepoint values can express that however
-correct the values are. The work went in the bin. ghostty-vt is now an oracle I
-check the existing implementation against, rather than something running in
-production.
-
-Better to find that out by measuring than by shipping it and slowly discovering
-it did not help.
+There was also an optimisation I measured and threw away entirely: porting
+correct grapheme width tables from ghostty-vt, which changed nothing because
+cluster advance was never a per-codepoint question in the first place. That one
+got [its own post](/blog/the-width-table-that-changed-nothing).
 
 ## What a benchmark cannot tell you
 
-The most useful thing here was learning where these tools stop.
-
 Later in the same work, shared-border drags still felt wrong. The benchmark
 disagreed, emphatically. At nine windows a frame had gone from 8,981,357 ns to
-326,214 ns across this work, which is 27 times faster, and the shared-border path
-had improved more than the plain one.
+326,214 ns across this work, which is 27 times faster, and the shared-border
+path had improved more than the plain one.
 
 The person using it said it got worse. They were right.
 
-Three reasons the measurement could not see it, all structural.
+Three reasons the measurement could not see it.
 
 Building an animation object is cheap. The cost was that panes never arrived at
 the pointer, because each frame cancelled the previous animation and started a
@@ -219,31 +222,16 @@ never timed.
 The daemon resize callback is nil under test. So 205 socket round trips per 30
 frames cost a nil check in the benchmark and a real round trip in production.
 
-And the benchmark drove motion into idle terminals, where coalescing made almost
-every frame a cache hit. The layout reapply ran once in twenty motion events
-under test. In use, with output flowing, it ran on every frame.
+And the benchmark drove motion into idle terminals, where coalescing made
+almost every frame a cache hit. The layout reapply ran once in twenty motion
+events under test. In use, with output flowing, it ran on every frame.
 
 What found it was instrumenting the running program: log the pointer position,
 the grabbed divider, and every window whose geometry changed, then do the drag
-and read the log. One drag showed five windows moving where two should have, and
-a sixth oscillating twenty-two times. The benchmarks had been accurately
+and read the log. One drag showed five windows moving where two should have,
+and a sixth oscillating twenty-two times. The benchmarks had been accurately
 measuring the wrong thing for three rounds.
 
-When a benchmark and a user disagree, the user is right and the benchmark is
-answering a different question.
-
-## The short version
-
-Write the hypotheses down before measuring, so being wrong stays visible.
-
-Check what a benchmark actually compares. Mine compared a case to itself and I
-believed it for half a day.
-
-`-count` is not optional. One run of a benchmark is an anecdote.
-
-Fixing the dominant cost promotes the next one, so a profile is a snapshot rather
-than a fact about your program.
-
-And when the numbers and the experience disagree, go instrument the real thing.
-Benchmarks answer the question you encoded. They have no opinion on whether it
-was the right one.
+When the numbers and the experience disagree, the experience wins. The
+benchmark is not wrong. It is answering the question you encoded, precisely,
+and it has no opinion on whether that was the right question.

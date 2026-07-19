@@ -6,8 +6,8 @@ author: Gaurav Gosain
 ---
 
 Emoji were breaking layout in the browser terminal. A family emoji would claim
-the wrong number of columns, everything after it on the line would shift, and box
-drawing further along would stop lining up.
+the wrong number of columns, everything after it on the line would shift, and
+box drawing further along would stop lining up.
 
 The obvious fix was sitting right there. ghostty has a VT implementation that
 gets this right, compiled to wasm, with width tables I could extract. Take its
@@ -32,56 +32,55 @@ not on what each of them is worth alone.
 
 A family emoji is four people joined by zero-width joiners. Seven codepoints,
 several of which are individually wide. Add up the table's answers and you get
-eight columns. The terminal advances two, because it is one grapheme cluster and
-a cluster gets one advance.
+eight columns. The terminal advances two, because it is one grapheme cluster
+and a cluster gets one advance.
 
-No table of per-codepoint values can produce that. The information is not in the
-codepoints, it is in the boundaries between them, which is UAX 29 segmentation
-and a completely different algorithm. I had spent a day importing correct answers
-to a question nobody was asking.
+No table of per-codepoint values can produce that. The information is not in
+the codepoints, it is in the boundaries between them, which is UAX 29
+segmentation and a completely different algorithm. I had spent a day importing
+correct answers to a question nobody was asking.
 
 ## What the corpus said
 
-The corpus is 45 cases measured against real ghostty-vt with mode 2027 clustering
-enabled, so the expected values come from an implementation known to be right
-rather than from my reading of a spec.
+The corpus is 45 cases measured against real ghostty-vt with mode 2027
+clustering enabled, so the expected values come from an implementation known to
+be right rather than from my reading of a spec.
 
 With the official grapheme addon in place, 39 of 45 agree. The remaining six
-diverge in documented, degenerate cases, and they are asserted as expected values
-rather than treated as outstanding bugs. That is a deliberate choice: pretending
-they are bugs means either carrying a patch forever or having a permanently red
-test.
+diverge in documented, degenerate cases, and they are asserted as expected
+values rather than treated as outstanding bugs. That is a deliberate choice:
+pretending they are bugs means either carrying a patch forever or having a
+permanently red test.
 
 The real fix was already available and was not a table at all. Use a segmenter
-that implements UAX 29, and let the cluster boundaries fall out of it. Everything
-else follows.
+that implements UAX 29, and let the cluster boundaries fall out of it.
+Everything else follows.
 
 ## What I kept from the exercise
 
-The width table went in the bin, but the wasm build did not. It is now an oracle.
+The width table went in the bin, but the wasm build did not. It is now an
+oracle.
 
 That distinction turned out to be the useful part. As a runtime dependency,
 ghostty-vt was a large coupling for a benefit I had not verified. As a test
 oracle, it is the thing that tells me whether my output is right, costs nothing
 at runtime, and gets to be as heavy as it likes because it only runs in CI.
 
-I would not have found that framing if the optimisation had worked. It only came
-up because I had to ask what the wasm build was still good for after the reason I
-built it evaporated.
+I would not have found that framing if the optimisation had worked. It only
+came up because I had to ask what the wasm build was still good for after the
+reason I built it evaporated.
 
 ## The bit I would do differently
 
-I should have measured before building. Not after.
-
-The whole exercise was maybe a day, and a fifteen-minute experiment would have
-killed it: take one family emoji, ask the current implementation how wide it
-thinks it is, ask ghostty, and compare. If both said eight, the table was not the
-problem and the bug lived somewhere else entirely.
+I should have run the cheap experiment first. Take one family emoji, ask the
+current implementation how wide it thinks it is, ask ghostty, compare. Fifteen
+minutes, and if both said eight, the table was never the problem and the bug
+lived somewhere else entirely.
 
 I skipped that because the fix felt obviously right. Correct data replacing
-incorrect data is such a clean shape that I did not think to check whether the
-data was what was wrong.
+incorrect data is such a clean shape that I did not stop to ask whether the
+data was the thing that was wrong.
 
-The negative result is worth almost as much as a fix. It permanently ruled out an
-entire category of solution, and it is the reason nobody on this project will
-spend another day importing width tables.
+The day was not a total loss. Nobody on this project will spend another day
+importing width tables, and there is now a corpus and an oracle that would
+catch anyone who tried.

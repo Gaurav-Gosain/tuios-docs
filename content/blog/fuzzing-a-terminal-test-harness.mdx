@@ -19,9 +19,9 @@ worked, writing the input by hand started to feel silly.
 
 ## Fuzzing a TUI
 
-A TUI has a wide input surface and nothing much protecting it. Keystrokes, mouse
-reports, resizes, bracketed pastes, text in scripts whose width the program has
-to get right. The bugs I ship in this area are almost never logic errors in a
+A TUI has a wide input surface and nothing much protecting it. Keystrokes,
+mouse reports, resizes, bracketed pastes, text whose width the program has to
+get right. The bugs I ship in this area are almost never logic errors in a
 handler. They are combinations. A resize during a drag. A paste with a control
 character in it. A grapheme cluster that one layer measures as one column and
 another measures as two.
@@ -31,16 +31,16 @@ tuitest fuzz -- ./myapp
 tuitest fuzz -seed 42 -iterations 200 -corpus testdata/fuzz -- ./myapp
 ```
 
-Everything the generator emits is expressible as a tape command, which matters
-later. The text corpus is deliberately nasty: ASCII mixed with accented Latin,
-CJK, ZWJ emoji, regional indicators, combining marks, zero-width and bidi
-overrides. Width handling is where layout code usually goes wrong.
+Everything the generator emits is expressible as a tape command. The text
+corpus is deliberately nasty: ASCII mixed with accented Latin, CJK, ZWJ emoji,
+regional indicators, combining marks, zero-width and bidi overrides. Width
+handling is where layout code usually goes wrong.
 
 `Ctrl+c` is in the key set even though it usually quits the program. That is on
 purpose. The check for "did this program restore the terminal on the way out"
 can only run against a program that has exited, and leaving someone's terminal
-in raw mode with the cursor hidden is the single most common TUI bug there is. A
-generator that never quits anything can never find it. `Ctrl+z` is excluded,
+in raw mode with the cursor hidden is the single most common TUI bug there is.
+A generator that never quits anything can never find it. `Ctrl+z` is excluded,
 because suspending a child under a PTY just wedges the run.
 
 When a run fails, the fuzzer shrinks the input and writes a tape. Candidates
@@ -65,8 +65,8 @@ The obvious reading is that the fuzzer's bookkeeping is broken. A failure
 recorded against the wrong input, or shrinking losing the case somewhere. I
 spent most of an evening inside the shrinker on that theory.
 
-Before going further I wanted a number, because "sometimes" is not a bug report.
-Twelve sequential runs, then twenty-four across four parallel lanes:
+Before going further I wanted a number, because "sometimes" is not a bug
+report. Twelve sequential runs, then twenty-four across four parallel lanes:
 
 <RunTally
   groups={[
@@ -76,15 +76,15 @@ Twelve sequential runs, then twenty-four across four parallel lanes:
   caption="Seventeen failures in thirty-six runs. Not subtle, once counted."
 />
 
-Worth noting that no `DATA RACE` ever fired. Not once, in any of those runs.
-`-race` mattered here because it slows the process down and reshuffles
-scheduling, not because it detects anything. I now reach for it deliberately as
-a timing perturbation, which is a different tool than the one it advertises.
+No `DATA RACE` ever fired. Not once, in any of those runs. `-race` mattered
+here because it slows the process down and reshuffles scheduling, not because
+it detects anything, and I now reach for it as a timing perturbation about as
+often as I reach for it as a race detector.
 
 ## Reading the tape I had been ignoring
 
-The shrinker had been reducing failures to two commands: spawn the program, send
-a burst of `^C`. I had written that off as a degenerate case.
+The shrinker had been reducing failures to two commands: spawn the program,
+send a burst of `^C`. I had written that off as a degenerate case.
 
 Run those two commands twenty times, outside the package, and it fails four
 times. Not zero, not twenty. On the failures the harness reported `bytes=2,
@@ -111,22 +111,20 @@ detector reads.
 Real TUIs hide this, because they call `MakeRaw` on startup. That is why it
 survived so long. If your program reaches raw mode before the first byte lands,
 everything works. It is a race, and any input sent during terminal setup still
-belongs to the line discipline. Whether a tape drove a program or killed it came
-down to how fast the child got scheduled, and under `-race` with the rest of the
-package running, it got scheduled slower.
+belongs to the line discipline. Whether a tape drove a program or killed it
+came down to how fast the child got scheduled, and under `-race` with the rest
+of the package running, it got scheduled slower.
 
 ## The shrinker was helping the bug
 
-This is the part I want to hand to anyone else writing one of these.
-
-The shrinker is delta debugging. Remove chunks in decreasing sizes, simplify what
-survives, accept a candidate if it still fails. Still fails on one replay.
+The shrinker is delta debugging. Remove chunks in decreasing sizes, simplify
+what survives, accept a candidate if it still fails. Still fails on one replay.
 
 That criterion is fine for deterministic failures. For a race it is actively
 harmful. Every command that takes time gives the program more time to reach raw
-mode, which makes the race harder to lose, which makes the candidate less likely
-to fail. So the commands that suppress the bug are precisely the ones the
-shrinker deletes first.
+mode, which makes the race harder to lose, which makes the candidate less
+likely to fail. So the commands that suppress the bug are precisely the ones
+the shrinker deletes first.
 
 <TapeShrink
   stages={[
@@ -154,12 +152,12 @@ shrinker deletes first.
   caption="Reproduced 4 times in 20 before the fix, 20 in 20 after. That is why the confirmation replay after minimisation failed at random."
 />
 
-The tool was optimising toward its own defect, and the tape it handed me was not
-noise. It was the shortest path to the bug, written to a file, which I had
+The tool was optimising toward its own defect, and the tape it handed me was
+not noise. It was the shortest path to the bug, written to a file, which I had
 skimmed and dismissed for two days.
 
-If your minimiser accepts on a single execution, it is a search for flaky inputs.
-It will find them whether you asked for that or not.
+If your minimiser accepts on a single execution, it is a search for flaky
+inputs. It will find them whether you asked for that or not.
 
 ## Fixing it, and the line I nearly crossed
 
@@ -168,12 +166,12 @@ signal-generating line discipline sits in front of a running program.
 
 The real decision is how much to clear, and my instinct was wrong. The instinct
 is `MakeRaw`. But tuitest tests what programs do under a real terminal, and a
-real terminal does apply line editing to a program that has not gone raw yet. If
-the harness strips all of that, it stops reproducing the environment it exists to
-reproduce.
+real terminal does apply line editing to a program that has not gone raw yet.
+If the harness strips all of that, it stops reproducing the environment it
+exists to reproduce.
 
-So it clears only what reinterprets or manufactures bytes: `ISIG`, `IEXTEN`, the
-echo flags, `IXON`, `IXOFF`, `IXANY`. `ICANON` and CR/NL mapping stay.
+So it clears only what reinterprets or manufactures bytes: `ISIG`, `IEXTEN`,
+the echo flags, `IXON`, `IXOFF`, `IXANY`. `ICANON` and CR/NL mapping stay.
 
 I know that boundary is right because I put it in the wrong place first. My
 first attempt also cleared `ICRNL`, and the tape roundtrip tests failed
@@ -182,65 +180,26 @@ kernel eating my input" into "change what the program sees", and I was glad
 something caught it.
 
 The rest was portability. Termios constants live in different places across
-platforms, and my first version silently broke the Solaris build. Cross-compiling
-caught it: the constants now split across `linux || solaris || aix` and the BSD
-set, verified for darwin, freebsd, netbsd, openbsd, solaris and aix/ppc64.
+platforms, and my first version silently broke the Solaris build.
+Cross-compiling caught it: the constants now split across `linux || solaris ||
+aix` and the BSD set, verified for darwin, freebsd, netbsd, openbsd, solaris
+and aix/ppc64.
 
-Forty-four runs after the fix, zero failures. The two-command tape reproduces 20
-in 20 with `bytes=947, dirty=true, status="exit status 0"`.
+Forty-four runs after the fix, zero failures. The two-command tape reproduces
+20 in 20 with `bytes=947, dirty=true, status="exit status 0"`.
 
-## While I was in there: nobody was listening
+## While I was in there
 
-Separate bug, worse consequences.
-
-`tuitest snap -- glow -p file.md` captured a blank screen and exited 0. Not a
-crash, not a timeout. A clean, confident report of nothing.
-
-My first diagnosis was a `nil` guard in the OSC handler that looked like it would
-suppress colour query replies. It was wrong, and one command proved it. Drive the
-emulator with exactly what `glow` sends:
-
-```
-"\x1b]11;?\x1b\\\x1b[6n"  ->  "\x1b]11;rgb:0000/0000/0000\a\x1b[1;1R"
-```
-
-Both replies come back. The emulator was right the whole time, and the guard is
-dead code, because the colour getters have non-nil fallbacks.
-
-Nothing carried those replies anywhere. `vt.Emulator` wrote them into an internal
-pipe exposed through `Read`, and nothing in the repository ever called it. The
-`emu.Emulator` interface had no drain method at all.
-
-The evidence had been sitting in my own source the whole time. `bufpipe.go`
-carries comments about "the response drainer" and "the terminal-response
-forwarder". I had written the producer, documented the consumer, and never built
-it.
-
-That breaks anything probing the terminal before it draws, which is most Bubble
-Tea programs, because lipgloss asks for the background colour to pick a light or
-dark palette. `glow` sends its query, waits, retries three times, gives up, and
-draws nothing. tuitest captures the nothing and calls it a pass.
-
-## A test that had never actually run
-
-Fixing the reply path broke `tape.TestRecordedMouseSessionReplays`.
-
-Its fixture explains, in a comment, why it queries the terminal: doing so "is
-what makes replies arrive on the input channel and is the situation that produced
-the reported corruption". Replies had never arrived. The scenario the test was
-written for had never executed once, in the entire life of the test.
-
-It went green every run. It asserted a real property. It just never reached the
-code path it was named after.
-
-Once replies did arrive, the fixture's parser turned out to only reset its buffer
-on a recognised sequence, so a device-attributes reply sat there and prefixed the
-next mouse report, which then matched nothing.
-
-I have no clever way to detect this class of test. What I have now is a habit: if
-a test covers a scenario that depends on some other component doing its job, go
-check that the component does its job. A test that cannot fail is worse than no
-test, because it occupies the space where a real one would go.
+The same audit turned up a second hole, unrelated to the PTY. The emulator
+generated correct replies to terminal queries and nothing ever carried them
+back to the program that asked, which is why `tuitest snap -- glow -p file.md`
+captured a blank screen and exited 0. That turned out to be one instance of a
+bug I had already hit twice in other codebases, so it has
+[its own post](/blog/nobody-was-listening). The version relevant here: my own
+source contained comments describing the component that would carry replies
+back, and the component did not exist. Fixing it also broke a test that had
+been green since the day it was written, without once reaching the scenario it
+was named after.
 
 ## Odds and ends
 
@@ -254,22 +213,15 @@ four-character fragment `a VT`. Replaced with normalised edit distance.
 A blank capture now exits 5 instead of 0, with a note about `--timeout` and
 `--wait` if the program was still running when the capture was taken.
 
-## What I would keep from this
+## What I would keep
 
-The fuzzer found almost nothing in the program it was pointed at. It found three
-bugs in the harness, one bug in a test, and one bug in its own shrinker. For a
-tool whose entire purpose is telling you the truth about what a program did, that
-is the more valuable outcome, and I would rather know.
+The fuzzer found almost nothing in the program it was pointed at. It found
+bugs in the harness, a bug in a test, and a bug in its own shrinker. For a tool
+whose entire job is telling the truth about what a program did, I think that is
+the better outcome, though it did not feel like one at the time.
 
-Three things I would carry to the next one of these.
-
-Count before theorising. "Sometimes" cost me an evening in the wrong file.
-Seventeen in thirty-six took two minutes to establish and immediately ruled out
-half of what I had been considering.
-
-Read the minimised output even when it looks stupid. Especially then. Mine had
-been correct and specific for two days while I ignored it.
-
-And a minimiser that accepts on one replay is a flaky-input detector wearing a
-hat. If you have races, it will find them, and it will present them to you as
-your smallest reproduction.
+The habit I am actually keeping is counting. "Sometimes" cost me an evening in
+the wrong file. Seventeen in thirty-six took two minutes to establish and
+immediately ruled out half of what I had been considering. And I will read the
+minimised output even when it looks stupid, especially when it looks stupid,
+because mine was correct and specific for two days while I ignored it.

@@ -9,15 +9,16 @@ Most people think of a terminal as an output device. You write bytes, glyphs
 appear. That model is good enough for `printf` and wrong for almost everything
 else.
 
-A terminal is a request-response protocol. Programs ask it questions constantly,
-and they block waiting for answers. What is the background colour. Where is the
-cursor. What are your device attributes. Do you support this image format. If
-nobody answers, the program does not error. It waits, retries, gives up, and
-carries on in a degraded state that looks like a completely different bug.
+A terminal is a request-response protocol. Programs ask it questions
+constantly, and they block waiting for answers. What is the background colour.
+Where is the cursor. What are your device attributes. Do you support this image
+format. If nobody answers, the program does not error. It waits, retries, gives
+up, and carries on in a degraded state that looks like a completely different
+bug.
 
 I hit that three times in a month, in three codebases, and each time the reply
-was going somewhere different. Writing them next to each other is the only reason
-I noticed they were the same bug.
+was going somewhere different. Writing them next to each other is the only
+reason I noticed they were the same bug.
 
 ## What a query looks like
 
@@ -36,18 +37,18 @@ Here is what `glow` sends before it draws anything at all:
   note="It sends this three times before giving up, which is the shape of a retry loop and the clearest sign that something upstream is not answering."
 />
 
-lipgloss uses that background colour to decide whether to render a light or dark
-palette, which means most Bubble Tea programs do this. It is not an edge case, it
-is the common path.
+lipgloss uses that background colour to decide whether to render a light or
+dark palette, which means most Bubble Tea programs do this. It is not an edge
+case, it is the common path.
 
 ## One: the replies were generated and then dropped
 
 `tuitest snap -- glow -p file.md` captured a blank screen and exited 0. Not a
 crash, not a timeout. A confident report of nothing.
 
-My first diagnosis was a `nil` guard in the OSC handler that looked like it would
-suppress colour replies. Wrong, and one command proved it. Drive the emulator
-with exactly the bytes above and read what comes back:
+My first diagnosis was a `nil` guard in the OSC handler that looked like it
+would suppress colour replies. Wrong, and one command proved it. Drive the
+emulator with exactly the bytes above and read what comes back:
 
 ```
 in:  "\x1b]11;?\x1b\\\x1b[6n"
@@ -67,8 +68,8 @@ producer, documented the consumer, and never written it.
 
 ## Two: the wrong terminal answered
 
-Making a screen recording of a test run, I got a burst of garbage on screen right
-as the program exited:
+Making a screen recording of a test run, I got a burst of garbage on screen
+right as the program exited:
 
 <TerminalCapture
   title="visible for about two seconds after the program quit"
@@ -82,16 +83,17 @@ as the program exited:
 
 The replay tool mirrors the child's output to its own stdout so you can watch a
 run. Verbatim. So the queries the program under test emitted travelled straight
-out of the harness and into the outer tmux, which answered them, because it is a
-terminal and that is what terminals do.
+out of the harness and into the outer tmux, which answered them, because it is
+a terminal and that is what terminals do.
 
 Those answers landed on the driver script's stdin, where nothing read them, and
 the pane's line discipline echoed them to the screen. They sat on the normal
-screen buffer, invisible underneath the program's alternate screen, and appeared
-the instant it exited.
+screen buffer, invisible underneath the program's alternate screen, and
+appeared the instant it exited.
 
-Same protocol, opposite failure. In the first case a query got no answer. Here it
-got an answer from a terminal three layers away that had no business replying.
+Same protocol, opposite failure. In the first case a query got no answer. Here
+it got an answer from a terminal three layers away that had no business
+replying.
 
 ## Three: a fake shell echoed them back
 
@@ -107,9 +109,9 @@ produced this at the prompt:
   note="That is a kitty graphics acknowledgement with its ESC stripped, echoed as though the user had typed it."
 />
 
-The demo's fake shell processes input one character at a time. It drops anything
-below `0x20`, which discards the escape, and everything else is printable, so
-`_Gi=2;OK` gets appended to the line buffer and echoed.
+The demo's fake shell processes input one character at a time. It drops
+anything below `0x20`, which discards the escape, and everything else is
+printable, so `_Gi=2;OK` gets appended to the line buffer and echoed.
 
 The terminal answered correctly. The thing receiving the answer had no idea it
 was in a protocol.
@@ -125,54 +127,53 @@ unidirectional:
 - The demo shell received replies and had no parser to recognise them.
 
 Producer with no consumer. Consumer that is the wrong process. Consumer with no
-parser. If you draw the data flow, the missing arrow is in a different place each
-time, and the visible symptom is different every time too: a blank capture, a
-burst of garbage after exit, text appearing at a prompt nobody typed.
+parser. If you draw the data flow, the missing arrow is in a different place
+each time, and the visible symptom is different every time too: a blank
+capture, a burst of garbage after exit, text appearing at a prompt nobody
+typed.
 
-None of those symptoms says "terminal query". That is what made it three separate
-investigations instead of one.
+None of those symptoms says "terminal query". That is what made it three
+separate investigations instead of one.
 
 ## What I do differently now
 
-When something under a PTY behaves oddly and the obvious explanations do not fit,
-I check the query path before anything else. Three questions, in order.
+When something under a PTY behaves oddly and the obvious explanations do not
+fit, I check the query path before anything else. Three questions, in order.
 
-Does the program send queries? Run it under `script` or a raw PTY and look at the
-bytes. `glow` sending OSC 11 three times in a row is unmistakable once you have
-seen it.
+Does the program send queries? Run it under `script` or a raw PTY and look at
+the bytes. `glow` sending OSC 11 three times in a row is unmistakable once you
+have seen it.
 
 If it does, does something answer? Drive the emulator directly with those exact
 bytes and read the output. One command, and it collapses the search space
 enormously.
 
 If something answers, does the answer reach the program that asked? This is the
-one that bit me twice, and it is the one nobody checks, because generating a
-correct reply feels like the hard part. It is not. Routing it is.
+one that bit me twice, and the one nobody checks, because generating a correct
+reply feels like the hard part. Routing it turns out to be where everyone
+actually fails, me included.
 
 There is a fourth question I have started asking about my own code: if a
-component produces something, who consumes it? `bufpipe.go` documented a consumer
-that did not exist for months. The comment was aspirational and I read it every
-time as a description of something real.
+component produces something, who consumes it? `bufpipe.go` documented a
+consumer that did not exist for months. The comment was aspirational, and I
+read it every time as a description of something real.
 
 ## The test that had never run
 
-One more, because it is the same theme and it is worse.
+One more, because it kept bothering me after everything else was fixed.
 
-Fixing the reply path in tuitest broke a test. The test had been green since it
-was written.
+Fixing the reply path in tuitest broke a test that had been green since the day
+it was written. Its fixture explains, in a comment, why it queries the
+terminal: doing so "is what makes replies arrive on the input channel and is
+the situation that produced the reported corruption". Replies had never
+arrived. The scenario the test was written to cover had never once executed. It
+asserted a real property, went green every run, and never reached the code path
+it was named after.
 
-Its fixture explains, in a comment, why it queries the terminal: doing so "is what
-makes replies arrive on the input channel and is the situation that produced the
-reported corruption". Replies had never arrived. The scenario it was written to
-cover had never once executed.
-
-It passed every run. It asserted a real property. It just never reached the code
-path it was named after, because the reply path it depended on did not work, and
-nothing anywhere said so.
-
-Once replies actually arrived, the fixture's own parser turned out to be broken
-too: it only reset its buffer on a recognised sequence, so a device-attributes
-reply sat there and prefixed the next mouse report.
-
-A test that cannot fail is worse than no test at all, because it occupies the
-place where a real one would go and reports success while it does it.
+A test like that is worse than a missing one, because it occupies the place
+where a working test would go and reports success from it. And when replies
+finally did arrive, the fixture's own parser turned out to be broken too: it
+only reset its buffer on a recognised sequence, so a device-attributes reply
+sat there and prefixed the next mouse report, which then matched nothing. The
+test and the code it was guarding had the same blind spot, so of course they
+agreed.

@@ -5,18 +5,17 @@ date: '2026-07-09'
 author: Gaurav Gosain
 ---
 
-Images displayed fine in my terminal. Fine in the multiplexer running inside it.
-Fine in the browser client. Run all three at once, browser client hosting a shell
-hosting the multiplexer, and `icat` produced nothing at all. No error, no
-placeholder, no partial image.
-
-Every layer worked. The composition did not.
+Images displayed fine in my terminal. Fine in the multiplexer running inside
+it. Fine in the browser client. Run all three at once, browser client hosting a
+shell hosting the multiplexer, and `icat` produced nothing at all. No error, no
+placeholder, no partial image, just the prompt sitting where the image should
+have been.
 
 ## What icat is actually doing
 
-The kitty graphics protocol has a capability query. Before sending anything real,
-`icat` asks the terminal whether it supports a given transmission medium, and it
-asks about three of them:
+The kitty graphics protocol has a capability query. Before sending anything
+real, `icat` asks the terminal whether it supports a given transmission medium,
+and it asks about three of them:
 
 ```
 _Ga=q,f=24,s=1,v=1,S=3,i=1        can you take pixels inline
@@ -24,8 +23,9 @@ _Ga=q,f=24,t=t,s=1,v=1,S=47,i=2   can you read a temp file
 _Ga=q,f=24,t=s,s=1,v=1,S=18,i=3   can you read shared memory
 ```
 
-It commits to whichever answers first with `OK`. Sensible design: a file is much
-cheaper than base64 inline, so if the terminal can read files, everyone wins.
+It commits to whichever answers first with `OK`, which is sensible. A file is
+much cheaper than base64 inline, so if the terminal can read files, everyone
+wins.
 
 ## The lie
 
@@ -39,12 +39,10 @@ ptyInput(response)
 It never asked its own host anything. It just said yes.
 
 So `icat` picked a file medium, wrote the image to `/tmp`, and sent a path. The
-multiplexer forwarded that path outward. And the thing on the other side was a
-browser, which cannot read `/tmp` on the server, so it dropped the transmission
-and drew nothing.
+multiplexer forwarded that path outward, to a browser, which cannot read `/tmp`
+on the server, so it dropped the transmission and drew nothing.
 
-Captured at the browser, the shape of the failure is unmistakable once you see
-it:
+Captured at the browser, the failure looks like this:
 
 <TerminalCapture
   title="what actually arrived at the browser client"
@@ -64,15 +62,16 @@ it:
 In a real terminal, the host genuinely can read the path, so the lie is true by
 accident.
 
-In the browser client alone, nothing lies. The client answers `ENOTSUPPORTED` to
-the file media, `icat` falls back to streaming the bytes inline, and everything
-works.
+In the browser client alone, nothing lies. The client answers `ENOTSUPPORTED`
+to the file media, `icat` falls back to streaming the bytes inline, and
+everything works.
 
-You need a dishonest middle layer sitting in front of a host that cannot do the
-thing, and that only happens in the three-layer stack. Each component was
-individually correct in the environment its author tested it in.
+To hit the bug you need a dishonest middle layer sitting in front of a host
+that cannot do the thing, and that only happens in the three-layer stack. Each
+component was correct in the environment its author tested it in, which is what
+made staring at any one of them so unproductive.
 
-## The fix, and the part that generalises
+## The fix
 
 Probe the host for file transmission alongside the direct probe, record the
 answer, and pass it on:
@@ -85,31 +84,27 @@ if isFileMedium(cmd.Medium) && !kp.hostReadsFiles() {
 ```
 
 A guest that never asks is covered too. If a file transmission arrives and the
-host cannot read files, the multiplexer re-encodes it as direct rather than
-forwarding a path that will be silently discarded. A file-capable host still gets
-the plain path with no extra copy, so the fast case stays fast.
+host cannot read files, the multiplexer re-encodes it as direct data rather
+than forwarding a path that will be silently discarded. A file-capable host
+still gets the plain path with no extra copy, so the fast case stays fast.
 
-There was a second bug hiding in the same function. Quiet mode has two levels:
-`q=1` suppresses success responses, `q=2` suppresses everything. The code treated
-both as "say nothing", so a guest that asked for `q=1` and hit an error got
-silence, waited out its timeout, and never tried the next medium. An error has to
-reach a guest that only suppressed successes.
+There was a second bug hiding in the same function. Quiet mode has two levels,
+`q=1` to suppress success responses and `q=2` to suppress everything, and the
+code treated both as "say nothing". So a guest that asked for `q=1` and hit an
+error got silence, waited out its timeout, and never tried the next medium. An
+error has to reach a guest that only suppressed successes.
 
-## What I would take from this
+## Ask, or say no
 
-A proxy answering capability questions on behalf of something else has exactly
-two honest options: ask, or say no.
+A proxy answering capability questions on behalf of something else has two
+honest options: ask the far end, or say no and let the guest fall back to the
+medium that always works. Saying yes because yes usually works is how you get a
+failure that only appears in composition, only for people running unusual
+stacks, with nothing logged anywhere and every individual component pointing at
+its own passing tests.
 
-Saying yes because it usually works is how you get a bug that only appears in
-composition, only for people running unusual stacks, and produces no error
-anywhere. Nothing logged. Nothing failed. The image simply did not appear, and
-every individual component could point at its own passing tests.
-
-The multiplexer already had the machinery to do this correctly. It had a function
-that re-encodes file transmissions as inline data, and it was gated behind a
-build-specific flag rather than behind "can the host actually read files". The
-right answer was already in the codebase, wired to the wrong condition.
-
-I now treat any unconditional `true` in a capability response as a bug waiting for
-someone to stack enough layers. If you are in the middle of a protocol, you are
-not entitled to answer for the far end.
+The part that actually annoys me is that the multiplexer already had the
+machinery to handle this. A function that re-encodes file transmissions as
+inline data was sitting in the codebase, gated behind a build-specific flag
+rather than behind "can the host actually read files". I did not so much write
+the fix as move it.
