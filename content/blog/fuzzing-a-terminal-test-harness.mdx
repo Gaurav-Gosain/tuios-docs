@@ -1,0 +1,331 @@
+---
+title: The fuzzer was finding my own bugs
+description: tuitest exists so TUIs can be tested like ordinary programs. Fuzzing it found that the harness itself had never configured its PTY, that a test had been passing vacuously since the day it was written, and that the minimiser was steering toward the bug rather than away from it.
+date: '2026-07-19'
+author: Gaurav Gosain
+---
+
+TUIOS is a terminal window manager. Almost everything it does is visual, and
+almost none of it is easy to assert on. A pane moves one column left. A border
+picks up the focus colour. A wide glyph either fits its cell or shaves a column
+off its neighbour. None of that is reachable from a normal Go test, because the
+thing under test only exists as bytes on a pseudo-terminal that some other
+program is supposed to interpret.
+
+So I wrote [tuitest](https://github.com/Gaurav-Gosain/tuitest). It spawns a
+program on a PTY, drives it, keeps a terminal emulator's worth of screen state
+on the other side, and lets you assert on what the program actually drew. Once
+that existed, the obvious next step was to stop writing the input by hand.
+
+## Why fuzz a TUI at all
+
+A TUI has a wide input surface and almost no type system protecting it. It takes
+keystrokes, mouse reports, resize events, bracketed pastes, and text in scripts
+whose width the program has to get right. Most of the bugs I have shipped in
+this area were not logic errors in a handler. They were combinations: a resize
+during a drag, a paste containing a control character, a grapheme cluster that
+one layer measured as one column and another measured as two.
+
+`tuitest fuzz` generates those combinations. It is not byte noise. Everything it
+sends is expressible as a tape command, which matters for a reason I will come
+back to:
+
+```
+tuitest fuzz -- ./myapp
+tuitest fuzz -seed 42 -iterations 200 -corpus testdata/fuzz -- ./myapp
+tuitest fuzz -duration 5m -exclude Ctrl+c -- ./myapp
+```
+
+The generator sends text that mixes ASCII with accented Latin, CJK and other
+double-width scripts, multi-codepoint emoji including ZWJ sequences and regional
+indicators, combining marks, and zero-width and bidi-override characters. It
+sends the full navigation and editing key set, F1 through F12, and control
+chords. It sends coherent mouse drags rather than isolated events. Width
+handling is where TUI layout code goes wrong most often, so the text corpus is
+deliberately hostile.
+
+`Ctrl+c` is in the set on purpose, even though it usually quits. The check for
+"did the program restore the terminal on the way out" can only run on a program
+that has exited, so a generator that never asks a program to quit can never find
+the single most common TUI bug: leaving the user's terminal in raw mode with the
+cursor hidden. `Ctrl+z` is excluded entirely, because suspending a child under a
+PTY wedges the run instead of finding anything.
+
+When a run fails, the fuzzer minimises the input and writes a tape file. This is
+the part I care about most. A fuzzer that reports a failure without a
+reproduction is not actionable, and a reproduction that only replays inside the
+fuzzer is barely better. Candidates replay through the same tape player that
+`tuitest run` uses, so the file the fuzzer writes is not a description of what
+it did. It is the same execution path, and it runs with no fuzz-specific
+tooling.
+
+## And then the fuzz suite went flaky
+
+The suite started failing intermittently. Not always, not on the same test
+twice, and only when the whole package ran with `-race`.
+
+Both failure modes had the same shape. Something failed once and then would not
+reproduce:
+
+```
+fuzz_test.go:314: the corpus entry should still reproduce on replay, got: no failures
+fuzz_test.go:188: the minimised reproduction did not reproduce on confirmation
+```
+
+The obvious reading is that the fuzzer's own bookkeeping is wrong, that a
+failure is being recorded against the wrong input or that shrinking is losing
+the case. I spent a while inside the shrinker on that theory. It was wrong, and
+the thing that eventually made it obvious was measurement rather than reading.
+
+First, quantify the flake. Run the package repeatedly, sequentially and
+concurrently, and count.
+
+```
+go test -race -count=1 ./fuzz/...
+```
+
+<RunTally
+  groups={[
+    { label: "Before the fix", runs: 36, failures: 17 },
+    { label: "After the fix", runs: 44, failures: 0 }
+  ]}
+  caption="36 runs across four lanes before the fix, 12 sequential and 24 concurrent, of which 17 failed. 44 clean afterwards, 20 sequential and 24 concurrent. Independently re-run at 12 of 12."
+/>
+
+Seventeen failures in thirty-six runs is not a subtle flake. It is also not a
+data race: no `DATA RACE` ever fired in any of those runs. `-race` mattered
+because it changes timing, not because it detects anything. It slows the process
+down and reorders scheduling enough to lose a race that is not a memory race at
+all. That is a use of `-race` I reach for deliberately now, and it is worth
+separating in your head from its advertised purpose.
+
+## What the minimised tape was actually saying
+
+The shrinker had reduced a failure to two commands: spawn the program, then send
+a burst of `^C`. I had been treating that as a degenerate case not worth reading.
+It is the whole answer.
+
+Run that two-command tape twenty times directly, outside the package, and it
+reproduces four times. Not zero, not twenty. On the failing runs the harness
+reported `bytes=2, dirty=false, status="killed by interrupt"`, and the captured
+screen contained, literally:
+
+```
+^C
+```
+
+That is not the program's output. The program never ran. `^C` is what a line
+discipline echoes when it turns a 0x03 into SIGINT.
+
+tuitest created a PTY and never configured it. A new PTY comes up in the
+kernel's default cooked mode, so everything written to the master went through
+the line discipline before reaching the program. `0x03` raised SIGINT and killed
+the child. `0x13` stopped the output stream through flow control and could stall
+a session indefinitely. Every byte the harness sent was echoed straight back down
+the master and arrived at the screen model as if the program had printed it,
+which corrupted both the screen state and the byte counter the hang detector
+uses.
+
+A real TUI hides all of this, because it calls `MakeRaw` as it starts. That is
+why the bug survived so long: for a program that reaches raw mode before the
+first byte arrives, everything works. It is a race, and input sent before the
+program finishes its terminal setup still belongs to the line discipline.
+Whether a tape drove a program or killed it came down to how quickly the child
+got scheduled. Under `-race`, with the rest of the package running in parallel,
+the child was slower to start, and the race was lost more often.
+
+## The minimiser was steering into the bug
+
+Here is the part I did not see coming, and the part I would want someone else to
+take away from this.
+
+The shrinker is classic delta debugging. It removes chunks of the command
+sequence in decreasing sizes, then simplifies what survives, and it accepts a
+candidate if that candidate still fails. Still fails, on one replay.
+
+That acceptance criterion is fine when failures are deterministic. When the
+failure is a race, it is actively harmful. Every command in a tape that takes
+time gives the program more time to reach raw mode, which makes the race less
+likely to be lost, which makes the candidate less likely to fail on any given
+replay. The commands that suppress the bug are exactly the commands the shrinker
+deletes.
+
+<ShrinkTrace
+  stages={[
+    {
+      commands: ["Spawn", "Type \"hello\"", "Key Down", "WaitStable", "Mouse drag", "Key Ctrl+c burst"],
+      removed: [],
+      note: "The generated sequence that failed a dirty-terminal check. Nothing about it looks timing sensitive."
+    },
+    {
+      commands: ["Spawn", "Type \"hello\"", "Key Down", "WaitStable", "Mouse drag", "Key Ctrl+c burst"],
+      removed: [4],
+      note: "Delete a chunk, replay once, keep it if it still fails. The drag goes first, because it is not what makes the check fail."
+    },
+    {
+      commands: ["Spawn", "Type \"hello\"", "Key Down", "WaitStable", "Key Ctrl+c burst"],
+      removed: [1, 2, 3],
+      note: "Every command between the spawn and the control characters costs the program time. Removing them makes the race easier to lose, so the candidate fails more readily and is accepted."
+    },
+    {
+      commands: ["Spawn", "Key Ctrl+c burst"],
+      removed: [],
+      note: "Two commands, and the tightest possible window between the spawn and the first signal-generating byte."
+    }
+  ]}
+  caption="A minimiser that accepts on a single failing replay will hill-climb toward whatever makes failure most likely. For a race, that means it converges on the raciest possible input. The final tape reproduced 4 times in 20 before the fix, and 20 in 20 after it, which is why the confirmation replay that runs after minimisation failed at random."
+/>
+
+So the tool was optimising toward its own bug. The output it handed me was not
+noise, it was a signal I had misread: the minimiser had found the shortest path
+to the harness's defect and written it into a file.
+
+The general form of this is worth stating plainly. If your minimiser's
+acceptance test is a single execution, your minimiser is a search for flaky
+inputs. It will find them whether or not you wanted it to.
+
+## The fix, and what it deliberately does not do
+
+Configure the PTY before the child exists, so there is never an instant where a
+signal-generating line discipline is attached to a running program.
+
+The interesting decision is how much to clear. The instinct is to call
+`MakeRaw`, and that instinct is wrong. tuitest is a harness for testing what a
+program does under a real terminal, and a real terminal does apply line editing
+and CR to NL mapping to a program that has not gone raw. If the harness hands
+every program a raw PTY, the harness is no longer reproducing the situation the
+program will actually meet.
+
+So only the settings that reinterpret or manufacture bytes are cleared: `ISIG`,
+`IEXTEN`, the echo flags, and `IXON`, `IXOFF`, `IXANY`. `ICANON` and the CR/NL
+mapping stay as the kernel set them.
+
+I know that boundary is in the right place because I got it wrong first. An
+earlier version also cleared `ICRNL`, and the tape roundtrip tests broke. That
+was the correct signal, and it was more informative than the fix passing would
+have been.
+
+The rest was portability. Termios constants are not in the same place across
+platforms, and the first version broke the Solaris build. The constants ended up
+split across a `linux || solaris || aix` set and a BSD set, verified by
+cross-compiling for darwin, freebsd, netbsd, openbsd, solaris and aix on ppc64.
+
+After that, the two-command tape reproduces 20 times in 20 with
+`bytes=947, dirty=true, status="exit status 0"`. The program runs.
+
+## A separate bug: nobody was listening for replies
+
+While the flake was open I hit something unrelated that turned out to be worse.
+
+```
+tuitest snap -- glow -p file.md
+```
+
+Blank screen. Exit code 0.
+
+My first diagnosis was a `nil` guard in the OSC handler that looked like it
+could swallow a colour query. I was confident about it, and I was wrong. One
+command disproved it. Drive the emulator directly with a colour query followed
+by a cursor position report:
+
+```
+in:  \x1b]11;?\x1b\\\x1b[6n
+out: \x1b]11;rgb:0000/0000/0000\a\x1b[1;1R
+```
+
+Both replies come back. The emulator was correct the whole time. The colour
+getters have non-nil fallbacks, so the guard I had blamed is dead code.
+
+The actual gap was that nothing carried those replies anywhere. `vt.Emulator`
+buffered its responses in an internal pipe, `emu.Emulator` was write-only with
+respect to the byte stream, and nothing in the repository ever called
+`vt.Emulator.Read`. Every query a program made went unanswered.
+
+The most damning evidence was already in my own source. `internal/vt/bufpipe.go`
+carried comments referring to "the response drainer" and "the terminal-response
+forwarder". The layer had been written expecting a consumer that was never
+built, and the comments had been sitting there describing a component that did
+not exist.
+
+This breaks anything that probes the terminal before drawing, which is most
+things. The lipgloss and termenv background-colour probe sends `OSC 11` followed
+by a cursor position report to decide whether to use a light or dark palette,
+and retries three times before giving up. Under tuitest all three attempts timed
+out, so a Bubble Tea program would sit there waiting and then draw nothing.
+
+The fix adds `TakeResponses`, a non-blocking drain, to the `emu.Emulator`
+interface, and pumps it back to the PTY master from the output loop. It is part
+of the interface rather than a type assertion, because the package documentation
+promises the emulator is swappable and a replacement that cannot answer a query
+is a broken terminal.
+
+## The test that had never run
+
+Fixing the reply path broke `tape.TestRecordedMouseSessionReplays`, which had
+been green since the day it was written.
+
+Its own fixture documents why it queries the terminal: doing so "is what makes
+replies arrive on the input channel and is the situation that produced the
+reported corruption". Replies had never arrived. The scenario the test was
+written to cover had never executed once. It was passing because the interesting
+half of it never happened.
+
+Once replies did arrive, the fixture's parser only reset its buffer on a
+recognised sequence, so a device-attributes reply sat there and prefixed the
+next mouse report. That is a real bug in exactly the class the test was written
+to catch, and the test had been quietly reporting success over it for its entire
+existence.
+
+I do not have a clever detection method for this. What I have is a habit, and it
+is the single most useful one in this whole run: after fixing something, revert
+the fix and confirm the test that covers it fails. Across this batch of work
+that negative control caught five separate cases where a fix was believed to be
+working and was not.
+
+## Smaller things that fell out
+
+**A blank capture is not a success.** `snap` exiting 0 on an empty screen is a
+false result. For a tool whose job is reporting what a program drew, "it drew
+nothing" is something the caller needs told. A blank capture now exits 5, kept
+separate from the assertion exit code because `snap` asserts nothing, and
+separate from the harness exit code because the harness worked fine.
+
+**`--duration` overshot.** It was only checked between iterations, so a session
+ran over by up to a full iteration: `--duration 5s` took 6.47 seconds, and
+`--duration 20s` took 54 seconds with the default action set. Generation now
+shares a deadline-bounded context, which lands 5 seconds at 5.09 and 20 seconds
+at 20.27. Shrinking and confirmation stay unbounded on purpose, because handing
+back an unminimised reproduction to save a few seconds is a bad trade.
+
+**Failure output pointed at the wrong line.** The "closest line" heuristic in
+assertion failures scored candidates on shared prefix length, which rewards
+being short. Against the expected text `a headless testing framework for TUIs`
+it picked the four-character fragment `a VT` over lines that differed by one
+word. It now scores on normalised edit distance.
+
+## What I would take from this
+
+The fuzzer found very little in the program it was pointed at during this run.
+It found a great deal in the harness holding the program. That is not a
+disappointment. A harness that eats control characters, discards terminal
+replies and reports blank screens as successes was producing wrong answers for
+every test that had ever run through it, including the ones that were passing.
+
+Three things I would keep:
+
+The minimiser's acceptance criterion is a design decision with consequences, not
+a detail. Single-replay acceptance turns a shrinker into a flaky-input finder.
+
+`-race` is a timing perturbation as well as a race detector, and the two uses are
+independent. Nothing in this investigation ever tripped the detector, and the
+flag was still the reason the bug was visible.
+
+Reading code produced a confidently wrong root cause at least three times here
+where executing it produced the right one in a single command. The OSC handler
+guard is the clean example: I had a plausible mechanism, a suspicious-looking
+line of code, and a story that fit. One command against the real emulator ended
+it.
+
+The [fuzzing documentation](https://github.com/Gaurav-Gosain/tuitest/blob/main/docs/fuzzing.md)
+covers the generator and the detectors in more detail, and the
+[tape format](/docs/tape-scripting) is what the reproductions are written in.
