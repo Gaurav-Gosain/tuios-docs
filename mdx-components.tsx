@@ -2,10 +2,10 @@ import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { MDXComponents } from 'mdx/types';
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 import { Mermaid } from '@/components/mdx/mermaid';
-import { BacklogChart } from '@/components/mdx/backlog-chart';
 import { BenchBars } from '@/components/mdx/bench-bars';
 import { RunTally } from '@/components/mdx/run-tally';
-import { ShrinkTrace } from '@/components/mdx/shrink-trace';
+import { TapeShrink } from '@/components/mdx/tape-shrink';
+import { TerminalCapture } from '@/components/mdx/terminal-capture';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -13,10 +13,10 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Step,
     Steps,
     Mermaid,
-    BacklogChart,
     BenchBars,
     RunTally,
-    ShrinkTrace,
+    TapeShrink,
+    TerminalCapture,
     ...components,
   };
 }
