@@ -1,0 +1,87 @@
+---
+title: I ported a correct width table and it fixed nothing
+description: Grapheme widths were wrong in the browser client, so I lifted the tables from an implementation that gets it right. Measured it. No change at all, for a reason that took me longer to see than it should have.
+date: '2026-07-03'
+author: Gaurav Gosain
+---
+
+Emoji were breaking layout in the browser terminal. A family emoji would claim
+the wrong number of columns, everything after it on the line would shift, and box
+drawing further along would stop lining up.
+
+The obvious fix was sitting right there. ghostty has a VT implementation that
+gets this right, compiled to wasm, with width tables I could extract. Take its
+answers, use them instead of mine, done.
+
+I built the table offline, wired it in, and measured against a corpus of hard
+cases.
+
+It changed nothing. Not "small improvement", not "fixed some cases". The output
+was identical.
+
+## Why a table cannot work
+
+Here is the thing I had wrong, and you can check it yourself:
+
+<ClusterExplorer />
+
+A per-codepoint table answers "how wide is this codepoint". Correctly, in
+ghostty's case. But the terminal is not asking that question. It is asking "how
+far does the cursor advance", and the answer depends on how codepoints combine,
+not on what each of them is worth alone.
+
+A family emoji is four people joined by zero-width joiners. Seven codepoints,
+several of which are individually wide. Add up the table's answers and you get
+eight columns. The terminal advances two, because it is one grapheme cluster and
+a cluster gets one advance.
+
+No table of per-codepoint values can produce that. The information is not in the
+codepoints, it is in the boundaries between them, which is UAX 29 segmentation
+and a completely different algorithm. I had spent a day importing correct answers
+to a question nobody was asking.
+
+## What the corpus said
+
+The corpus is 45 cases measured against real ghostty-vt with mode 2027 clustering
+enabled, so the expected values come from an implementation known to be right
+rather than from my reading of a spec.
+
+With the official grapheme addon in place, 39 of 45 agree. The remaining six
+diverge in documented, degenerate cases, and they are asserted as expected values
+rather than treated as outstanding bugs. That is a deliberate choice: pretending
+they are bugs means either carrying a patch forever or having a permanently red
+test.
+
+The real fix was already available and was not a table at all. Use a segmenter
+that implements UAX 29, and let the cluster boundaries fall out of it. Everything
+else follows.
+
+## What I kept from the exercise
+
+The width table went in the bin, but the wasm build did not. It is now an oracle.
+
+That distinction turned out to be the useful part. As a runtime dependency,
+ghostty-vt was a large coupling for a benefit I had not verified. As a test
+oracle, it is the thing that tells me whether my output is right, costs nothing
+at runtime, and gets to be as heavy as it likes because it only runs in CI.
+
+I would not have found that framing if the optimisation had worked. It only came
+up because I had to ask what the wasm build was still good for after the reason I
+built it evaporated.
+
+## The bit I would do differently
+
+I should have measured before building. Not after.
+
+The whole exercise was maybe a day, and a fifteen-minute experiment would have
+killed it: take one family emoji, ask the current implementation how wide it
+thinks it is, ask ghostty, and compare. If both said eight, the table was not the
+problem and the bug lived somewhere else entirely.
+
+I skipped that because the fix felt obviously right. Correct data replacing
+incorrect data is such a clean shape that I did not think to check whether the
+data was what was wrong.
+
+The negative result is worth almost as much as a fix. It permanently ruled out an
+entire category of solution, and it is the reason nobody on this project will
+spend another day importing width tables.

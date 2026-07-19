@@ -1,0 +1,131 @@
+---
+title: I shipped three fixes for a bug I had not found
+description: A pane went blank when I focused a different one. I found and fixed three real bugs on the way to the actual cause, and shipped every one of them as the answer.
+date: '2026-06-26'
+author: Gaurav Gosain
+---
+
+The report was short. Focus a different terminal, and sometimes one of the other
+panes goes blank. Focus it again and the content comes back.
+
+It took four rounds. Three of those ended with me handing over a build and saying
+it was fixed. Every one of those three fixes was a real bug. None of them was the
+one being reported.
+
+The bugs themselves are ordinary. The failure of method is the part worth writing
+down.
+
+## Round one: a lock taken twice
+
+The first thing I found was genuinely bad. The render path took a window's I/O
+read lock, then called a function that took the same lock again.
+
+Go's `RWMutex` is not reentrant for readers. Two `RLock` calls nest fine on their
+own, but if a writer queues between them, the second read blocks behind the
+writer and the writer blocks behind the first read. Everything stops.
+
+Real freeze, reachable, fixed by hoisting the cursor query above the lock. I also
+believed it explained the blank pane, because a render that deadlocks partway
+could plausibly leave a pane unpainted.
+
+It did not explain it. The blank pane came back.
+
+## Round two: alt-screen cache invalidation
+
+Next I found that switching focus could leave a stale cached layer for a window
+in alternate-screen mode. Which is exactly the sort of thing that leaves a pane
+showing nothing.
+
+Fixed it. Shipped it. Same report came back.
+
+## Round three: shared border state
+
+Then a discrepancy in how tiled windows tracked border state across a focus
+change. Real, worth fixing, and once again my mental model let me connect it to a
+blank pane if I did not look too hard.
+
+The reply I got was, roughly: your stuff is still broken.
+
+That was the moment the approach should have changed. It did not.
+
+## What I was doing wrong
+
+The pattern is obvious in hindsight and slightly embarrassing.
+
+Each round I read code, found something genuinely wrong, and stopped. The fix was
+plausible. Plausible is doing a lot of work in that sentence, because a
+multiplexer has many ways to leave a pane unpainted, and I could construct a
+story connecting almost any of them to the symptom.
+
+I never reproduced the reported bug. Not once, across three rounds. I had no case
+where I could make a pane go blank on demand, so I had no way to tell whether a
+fix worked. The loop was: find bug, fix bug, ship, wait to be told. Three round
+trips, each costing someone else the time to test it.
+
+What I had was three real bugs found by auditing, which is a fine activity, and
+zero evidence about the one being reported.
+
+## Round four: reproducing it
+
+Different approach. Instead of reading, drive the thing and check the pixels.
+
+Set up the layout from the report. One tall pane on the left, two stacked on the
+right. Focus one, focus another, and after each step compose the frame and check
+whether any pane's content came out empty.
+
+It reproduced in about a minute. The cause was one line:
+
+```go
+windowWidth := ansi.StringWidth(lines[0])
+```
+
+`clipWindowContent` measured a window's width from its first line, then discarded
+content falling outside the visible region. A window whose first line is blank
+measures zero wide. Zero width makes `x + windowWidth <= 0` true for anything at
+or left of the origin, so the entire pane is discarded as off-screen.
+
+<TerminalCapture
+  title="what the clip logic saw"
+  lines={[
+    { text: "lines[0] = \"\"             width measured as 0", tone: "echo" },
+    { text: "lines[1] = \"~/dev/tuios\"  ignored", tone: "dim" },
+    { text: "lines[2] = \"$ nvim\"       ignored", tone: "dim" },
+    { text: "", tone: "dim" },
+    { text: "x + 0 <= 0   ->  discard the entire pane", tone: "echo" }
+  ]}
+  rows={6}
+  note="One measurement, taken from one line, deciding the fate of the whole window."
+/>
+
+Which panes have a blank first line? The ones running full-screen applications
+that just repainted, and the ones scrolled so row zero is empty. That is why it
+was intermittent, and why it correlated with focus changes, because a focus
+change triggers a repaint.
+
+The fix takes the maximum width across all lines instead of trusting the first.
+
+## The lesson
+
+For anything visual, reproduce it in the rendered output before claiming a fix.
+Not in a unit test of the function you suspect. In the frame that reaches the
+screen.
+
+That reads as obvious. What made it non-obvious in the moment is that each of my
+three wrong fixes had a passing test. I could demonstrate, with a green test,
+that the lock nesting was gone, the cache invalidation was correct, the border
+state consistent. All true. None of it evidence about the reported symptom,
+because none of those tests composed a frame and looked at it.
+
+A test proving the thing you changed now behaves differently is not a test
+proving the reported bug is gone. I had three of the first kind and none of the
+second.
+
+There is a smaller lesson about how I reported it. Each time I said "this is
+fixed", when what I knew was "I found a bug and it might be this one". Those are
+different claims and I made the stronger one three times running. The person
+testing had to discover otherwise, which is a poor use of someone else's
+afternoon.
+
+The three bugs were worth fixing, and two could have caused a freeze under the
+right conditions. But finding real bugs while looking for a different bug is not
+progress on the different bug, however much it feels like it at the time.

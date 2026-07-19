@@ -1,0 +1,178 @@
+---
+title: Three bugs in one month turned out to be one bug
+description: A terminal is a request-response protocol that most people write as if it were one-way. I hit the same bug three times in a month, in three different codebases, pointing three different directions.
+date: '2026-06-19'
+author: Gaurav Gosain
+---
+
+Most people think of a terminal as an output device. You write bytes, glyphs
+appear. That model is good enough for `printf` and wrong for almost everything
+else.
+
+A terminal is a request-response protocol. Programs ask it questions constantly,
+and they block waiting for answers. What is the background colour. Where is the
+cursor. What are your device attributes. Do you support this image format. If
+nobody answers, the program does not error. It waits, retries, gives up, and
+carries on in a degraded state that looks like a completely different bug.
+
+I hit that three times in a month, in three codebases, and each time the reply
+was going somewhere different. Writing them next to each other is the only reason
+I noticed they were the same bug.
+
+## What a query looks like
+
+Here is what `glow` sends before it draws anything at all:
+
+<TerminalCapture
+  title="bytes on the wire, glow starting up"
+  lines={[
+    { text: "\\x1b]11;?\\x1b\\\\      OSC 11, what is your background colour", tone: "normal" },
+    { text: "\\x1b[6n              CPR, where is the cursor", tone: "normal" },
+    { text: "", tone: "dim" },
+    { text: "\\x1b]11;rgb:0000/0000/0000\\x07   the terminal answers", tone: "echo" },
+    { text: "\\x1b[1;1R                        and again", tone: "echo" }
+  ]}
+  rows={5}
+  note="It sends this three times before giving up, which is the shape of a retry loop and the clearest sign that something upstream is not answering."
+/>
+
+lipgloss uses that background colour to decide whether to render a light or dark
+palette, which means most Bubble Tea programs do this. It is not an edge case, it
+is the common path.
+
+## One: the replies were generated and then dropped
+
+`tuitest snap -- glow -p file.md` captured a blank screen and exited 0. Not a
+crash, not a timeout. A confident report of nothing.
+
+My first diagnosis was a `nil` guard in the OSC handler that looked like it would
+suppress colour replies. Wrong, and one command proved it. Drive the emulator
+with exactly the bytes above and read what comes back:
+
+```
+in:  "\x1b]11;?\x1b\\\x1b[6n"
+out: "\x1b]11;rgb:0000/0000/0000\a\x1b[1;1R"
+```
+
+Both replies, correctly formed. The emulator had been right the whole time, and
+the guard was dead code because the colour getters have non-nil fallbacks.
+
+The replies went into an internal pipe, exposed through a `Read` method, and
+nothing in the repository ever called it. The interface the rest of the harness
+was written against had no drain method at all. Bytes in, nothing out.
+
+The evidence was sitting in my own source. `bufpipe.go` carries comments about
+"the response drainer" and "the terminal-response forwarder". I had built the
+producer, documented the consumer, and never written it.
+
+## Two: the wrong terminal answered
+
+Making a screen recording of a test run, I got a burst of garbage on screen right
+as the program exited:
+
+<TerminalCapture
+  title="visible for about two seconds after the program quit"
+  lines={[
+    { text: "^[[8;22;88t^[[?2048;0$y^[[?1000;2$y^[[?1006;2$y", tone: "echo" },
+    { text: "^[[?9001;0$y^[P>|tmux 3.7b^[\\^[[?1;2;4c", tone: "echo" }
+  ]}
+  rows={3}
+  note="Device attributes, mode reports, and a tmux version string. All of them replies, none of them addressed to anything that was still listening."
+/>
+
+The replay tool mirrors the child's output to its own stdout so you can watch a
+run. Verbatim. So the queries the program under test emitted travelled straight
+out of the harness and into the outer tmux, which answered them, because it is a
+terminal and that is what terminals do.
+
+Those answers landed on the driver script's stdin, where nothing read them, and
+the pane's line discipline echoed them to the screen. They sat on the normal
+screen buffer, invisible underneath the program's alternate screen, and appeared
+the instant it exited.
+
+Same protocol, opposite failure. In the first case a query got no answer. Here it
+got an answer from a terminal three layers away that had no business replying.
+
+## Three: a fake shell echoed them back
+
+Third instance, in a browser terminal demo. Displaying an image and then typing
+produced this at the prompt:
+
+<TerminalCapture
+  title="the demo's shell prompt after displaying an image"
+  lines={[
+    { text: "~ >  _Gi=2;OK\\", tone: "echo" }
+  ]}
+  rows={3}
+  note="That is a kitty graphics acknowledgement with its ESC stripped, echoed as though the user had typed it."
+/>
+
+The demo's fake shell processes input one character at a time. It drops anything
+below `0x20`, which discards the escape, and everything else is printable, so
+`_Gi=2;OK` gets appended to the line buffer and echoed.
+
+The terminal answered correctly. The thing receiving the answer had no idea it
+was in a protocol.
+
+## The shape
+
+Three bugs. In each one, some component treated a bidirectional protocol as
+unidirectional:
+
+- tuitest generated replies and had no path to send them anywhere.
+- The replay tool forwarded queries to a terminal that was not the intended
+  recipient, and had no path to route the answers back.
+- The demo shell received replies and had no parser to recognise them.
+
+Producer with no consumer. Consumer that is the wrong process. Consumer with no
+parser. If you draw the data flow, the missing arrow is in a different place each
+time, and the visible symptom is different every time too: a blank capture, a
+burst of garbage after exit, text appearing at a prompt nobody typed.
+
+None of those symptoms says "terminal query". That is what made it three separate
+investigations instead of one.
+
+## What I do differently now
+
+When something under a PTY behaves oddly and the obvious explanations do not fit,
+I check the query path before anything else. Three questions, in order.
+
+Does the program send queries? Run it under `script` or a raw PTY and look at the
+bytes. `glow` sending OSC 11 three times in a row is unmistakable once you have
+seen it.
+
+If it does, does something answer? Drive the emulator directly with those exact
+bytes and read the output. One command, and it collapses the search space
+enormously.
+
+If something answers, does the answer reach the program that asked? This is the
+one that bit me twice, and it is the one nobody checks, because generating a
+correct reply feels like the hard part. It is not. Routing it is.
+
+There is a fourth question I have started asking about my own code: if a
+component produces something, who consumes it? `bufpipe.go` documented a consumer
+that did not exist for months. The comment was aspirational and I read it every
+time as a description of something real.
+
+## The test that had never run
+
+One more, because it is the same theme and it is worse.
+
+Fixing the reply path in tuitest broke a test. The test had been green since it
+was written.
+
+Its fixture explains, in a comment, why it queries the terminal: doing so "is what
+makes replies arrive on the input channel and is the situation that produced the
+reported corruption". Replies had never arrived. The scenario it was written to
+cover had never once executed.
+
+It passed every run. It asserted a real property. It just never reached the code
+path it was named after, because the reply path it depended on did not work, and
+nothing anywhere said so.
+
+Once replies actually arrived, the fixture's own parser turned out to be broken
+too: it only reset its buffer on a recognised sequence, so a device-attributes
+reply sat there and prefixed the next mouse report.
+
+A test that cannot fail is worse than no test at all, because it occupies the
+place where a real one would go and reports success while it does it.

@@ -1,0 +1,115 @@
+---
+title: My multiplexer lied about what it could do
+description: Images worked in the terminal, worked in the multiplexer, worked in the browser client, and failed the moment you stacked all three. The middle layer was answering a capability question it had never asked anyone.
+date: '2026-07-09'
+author: Gaurav Gosain
+---
+
+Images displayed fine in my terminal. Fine in the multiplexer running inside it.
+Fine in the browser client. Run all three at once, browser client hosting a shell
+hosting the multiplexer, and `icat` produced nothing at all. No error, no
+placeholder, no partial image.
+
+Every layer worked. The composition did not.
+
+## What icat is actually doing
+
+The kitty graphics protocol has a capability query. Before sending anything real,
+`icat` asks the terminal whether it supports a given transmission medium, and it
+asks about three of them:
+
+```
+_Ga=q,f=24,s=1,v=1,S=3,i=1        can you take pixels inline
+_Ga=q,f=24,t=t,s=1,v=1,S=47,i=2   can you read a temp file
+_Ga=q,f=24,t=s,s=1,v=1,S=18,i=3   can you read shared memory
+```
+
+It commits to whichever answers first with `OK`. Sensible design: a file is much
+cheaper than base64 inline, so if the terminal can read files, everyone wins.
+
+## The lie
+
+The multiplexer's passthrough answered `OK` to all three. Unconditionally.
+
+```go
+response := vt.BuildKittyResponse(true, cmd.ImageID, "")
+ptyInput(response)
+```
+
+It never asked its own host anything. It just said yes.
+
+So `icat` picked a file medium, wrote the image to `/tmp`, and sent a path. The
+multiplexer forwarded that path outward. And the thing on the other side was a
+browser, which cannot read `/tmp` on the server, so it dropped the transmission
+and drew nothing.
+
+Captured at the browser, the shape of the failure is unmistakable once you see
+it:
+
+<TerminalCapture
+  title="what actually arrived at the browser client"
+  lines={[
+    { text: "a=t,t=f,i=1,f=100,s=64,v=64,q=2,c=8,r=4", tone: "normal" },
+    { text: "payload=132  \"L3RtcC9jbGF1ZGUtMTAwMC8t\"", tone: "echo" },
+    { text: "", tone: "dim" },
+    { text: "a=p,i=1,p=1,c=8,r=4,q=2   place image 1", tone: "normal" },
+    { text: "images:0  placements:0  canvases:0", tone: "echo" }
+  ]}
+  rows={6}
+  note="That base64 decodes to a filesystem path. The placement then references an image that was never stored, because the transmission carrying it was dropped."
+/>
+
+## Why each layer alone was fine
+
+In a real terminal, the host genuinely can read the path, so the lie is true by
+accident.
+
+In the browser client alone, nothing lies. The client answers `ENOTSUPPORTED` to
+the file media, `icat` falls back to streaming the bytes inline, and everything
+works.
+
+You need a dishonest middle layer sitting in front of a host that cannot do the
+thing, and that only happens in the three-layer stack. Each component was
+individually correct in the environment its author tested it in.
+
+## The fix, and the part that generalises
+
+Probe the host for file transmission alongside the direct probe, record the
+answer, and pass it on:
+
+```go
+if isFileMedium(cmd.Medium) && !kp.hostReadsFiles() {
+    ok = false
+    errMsg = "ENOTSUPPORTED:host terminal cannot read files from this machine"
+}
+```
+
+A guest that never asks is covered too. If a file transmission arrives and the
+host cannot read files, the multiplexer re-encodes it as direct rather than
+forwarding a path that will be silently discarded. A file-capable host still gets
+the plain path with no extra copy, so the fast case stays fast.
+
+There was a second bug hiding in the same function. Quiet mode has two levels:
+`q=1` suppresses success responses, `q=2` suppresses everything. The code treated
+both as "say nothing", so a guest that asked for `q=1` and hit an error got
+silence, waited out its timeout, and never tried the next medium. An error has to
+reach a guest that only suppressed successes.
+
+## What I would take from this
+
+A proxy answering capability questions on behalf of something else has exactly
+two honest options: ask, or say no.
+
+Saying yes because it usually works is how you get a bug that only appears in
+composition, only for people running unusual stacks, and produces no error
+anywhere. Nothing logged. Nothing failed. The image simply did not appear, and
+every individual component could point at its own passing tests.
+
+The multiplexer already had the machinery to do this correctly. It had a function
+that re-encodes file transmissions as inline data, and it was gated behind a
+build-specific flag rather than behind "can the host actually read files". The
+right answer was already in the codebase, wired to the wrong condition.
+
+I now treat any unconditional `true` in a capability response as a bug waiting for
+someone to stack enough layers. If you are in the middle of a protocol, you are
+not entitled to answer for the far end.
