@@ -17,7 +17,7 @@ Press <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>?</kbd> from anywhere in TUIOS to s
 
 ## Modes
 
-TUIOS has two main modes:
+Mode switching is configured in `[keybindings.mode_control]`. TUIOS has two main modes:
 
 - **Window Management Mode** - Navigate and manage windows (default on startup)
 - **Terminal Mode** - Input goes directly to the focused terminal
@@ -26,13 +26,19 @@ TUIOS has two main modes:
 
 - <kbd>i</kbd> or <kbd>Enter</kbd> - Enter Terminal Mode
 - <kbd>Alt</kbd>+<kbd>Esc</kbd> or <kbd>Opt</kbd>+<kbd>Esc</kbd> - Exit Terminal Mode (direct shortcut)
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>d</kbd> or <kbd>Esc</kbd> - Return to Window Management Mode (from Terminal Mode)
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Esc</kbd> - Return to Window Management Mode (from Terminal Mode)
 - <kbd>?</kbd> (Window Mode) or <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>?</kbd> (universal) - Toggle help overlay
 - <kbd>q</kbd> (Window Mode) or <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>q</kbd> (universal) - Quit TUIOS
 
+<Callout title="Esc and d are not the same thing" type="warn">
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Esc</kbd> leaves terminal mode and returns you to window mode. It never detaches.
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> detaches from a daemon session, leaving it running in the background. These were one action in older versions and are now separate: `prefix_exit_mode` and `prefix_detach`.
+</Callout>
+
 ### Terminal Mode Shortcuts
 
-These shortcuts work directly in Terminal Mode without requiring the prefix key:
+These shortcuts work directly in Terminal Mode without requiring the prefix key. Configured in `[keybindings.terminal_mode]`.
 
 | Platform | Next Window | Previous Window | Exit Terminal Mode |
 |----------|-------------|-----------------|-------------------|
@@ -44,6 +50,8 @@ On Linux and Windows, <kbd>Alt</kbd>+<kbd>Tab</kbd> is captured by the OS window
 </Callout>
 
 ## Window Management
+
+Window mode, from `[keybindings.window_management]` (and `[keybindings.restore_minimized]` for the last row).
 
 - <kbd>z</kbd> - Toggle zoom (fullscreen focused window). Shared borders hidden when zoomed, dockbar shows **Z** indicator.
 - <kbd>n</kbd> - Create new window
@@ -58,7 +66,7 @@ On Linux and Windows, <kbd>Alt</kbd>+<kbd>Tab</kbd> is captured by the OS window
 
 ## Workspaces
 
-TUIOS supports **9 workspaces** for organizing windows.
+TUIOS supports **9 workspaces** for organizing windows. Configured in `[keybindings.workspaces]`.
 
 - <kbd>Alt</kbd>+<kbd>1</kbd> through <kbd>Alt</kbd>+<kbd>9</kbd> - Switch to workspace 1-9
 - <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> through <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>9</kbd> - Move window to workspace and follow
@@ -113,14 +121,34 @@ TUIOS uses Binary Space Partitioning (BSP) for automatic tiling. Windows are arr
 - <kbd>&gt;</kbd> or <kbd>Shift</kbd>+<kbd>.</kbd> - Increase master window width (from right edge)
 - <kbd>&#123;</kbd> or <kbd>Shift</kbd>+<kbd>[</kbd> - Decrease focused window height (from bottom edge)
 - <kbd>&#125;</kbd> or <kbd>Shift</kbd>+<kbd>]</kbd> - Increase focused window height (from bottom edge)
+- <kbd>.</kbd> - Increase master window width from the left edge
+- <kbd>[</kbd> - Decrease focused window height from the top edge
+- <kbd>]</kbd> - Increase focused window height from the top edge
+
+<Callout title="One default binding you cannot reach" type="warn">
+`resize_master_shrink_left` is bound to a bare <kbd>,</kbd> by default, and you will never trigger it. In window mode, <kbd>,</kbd> is intercepted for the settings page before any keybinding lookup runs.
+
+Rebinding <kbd>,</kbd> in `[keybindings.layout]` does not help either, because the intercept is not registry-driven. Bind `resize_master_shrink_left` to a different key if you want it.
+</Callout>
 
 ### BSP Split Controls
 
-These commands are available in tiling mode via the prefix key:
+In window mode, from `[keybindings.layout]`:
 
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>-</kbd> - Split focused window horizontally (top/bottom)
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>&#124;</kbd> or <kbd>&#92;</kbd> - Split focused window vertically (left/right)
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>R</kbd> - Rotate split direction at focused window
+- <kbd>-</kbd> - `split_horizontal`
+- <kbd>&#124;</kbd> or <kbd>&#92;</kbd> - `split_vertical`
+- <kbd>R</kbd> - `rotate_split`
+- <kbd>=</kbd> - `equalize_splits`
+- <kbd>Alt</kbd>+<kbd>h</kbd> <kbd>Alt</kbd>+<kbd>j</kbd> <kbd>Alt</kbd>+<kbd>k</kbd> <kbd>Alt</kbd>+<kbd>l</kbd> - `preselect_left` / `preselect_down` / `preselect_up` / `preselect_right`, choosing where the next window lands (<kbd>Opt</kbd> on macOS)
+
+The same four split operations are also on the prefix key, as separate actions in `[keybindings.prefix_mode]`:
+
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>-</kbd> - `prefix_split_horizontal`
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>&#124;</kbd> or <kbd>&#92;</kbd> - `prefix_split_vertical`
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>R</kbd> - `prefix_rotate_split`
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>=</kbd> - `prefix_equalize_splits`
+
+Rebinding one does not rebind the other. They are two independent sets.
 
 <Callout title="Split Indicator" type="tip">
 The dock shows the next split direction (V for vertical, H for horizontal) when tiling mode is active.
@@ -197,32 +225,91 @@ The leader key (<kbd>Ctrl</kbd>+<kbd>B</kbd> by default) is configurable. See [C
 
 ### Main Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd>)
 
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>c</kbd> - Create new window
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>x</kbd> - Close current window
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>,</kbd> or <kbd>r</kbd> - Rename window
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>n</kbd> or <kbd>Tab</kbd> - Next window
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>p</kbd> or <kbd>Shift</kbd>+<kbd>Tab</kbd> - Previous window
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>0</kbd>-<kbd>9</kbd> - Jump to window
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Space</kbd> - Toggle tiling mode
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>z</kbd> - Toggle zoom (fullscreen) on current pane
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>S</kbd> - Open Session Switcher
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>L</kbd> - Enter layout prefix menu (<kbd>l</kbd> = load, <kbd>s</kbd> = save)
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>P</kbd> - Open Command Palette
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>w</kbd> - Enter workspace prefix menu
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>m</kbd> - Enter minimize prefix menu
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>t</kbd> - Enter window prefix menu
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd> - Enter debug prefix menu
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>[</kbd> - Enter copy mode
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>d</kbd> or <kbd>Esc</kbd> - Detach (exit terminal mode)
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>q</kbd> - Quit TUIOS
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>?</kbd> - Toggle help
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Ctrl</kbd>+<kbd>B</kbd> - Send literal Ctrl+B to terminal
+Every row below is an action in `[keybindings.prefix_mode]` and can be rebound.
+
+| Key | Action name | Does |
+|-----|-------------|------|
+| <kbd>c</kbd> | `prefix_new_window` | Create new window |
+| <kbd>x</kbd> | `prefix_close_window` | Close current window |
+| <kbd>r</kbd> | `prefix_rename_window` | Rename window |
+| <kbd>,</kbd> | `prefix_settings` | Open the settings page |
+| <kbd>n</kbd> or <kbd>Tab</kbd> | `prefix_next_window` | Next window |
+| <kbd>p</kbd> or <kbd>Shift</kbd>+<kbd>Tab</kbd> | `prefix_prev_window` | Previous window |
+| <kbd>0</kbd>-<kbd>9</kbd> | `prefix_select_0` to `prefix_select_9` | Jump to window |
+| <kbd>Space</kbd> | `prefix_toggle_tiling` | Toggle tiling mode |
+| <kbd>z</kbd> | `prefix_fullscreen` | Toggle zoom on current pane |
+| <kbd>-</kbd> | `prefix_split_horizontal` | Split horizontally (top/bottom) |
+| <kbd>&#124;</kbd> or <kbd>&#92;</kbd> | `prefix_split_vertical` | Split vertically (left/right) |
+| <kbd>R</kbd> | `prefix_rotate_split` | Rotate split direction |
+| <kbd>=</kbd> | `prefix_equalize_splits` | Equalize all split ratios |
+| <kbd>[</kbd> | `prefix_selection` | Enter copy mode |
+| <kbd>s</kbd> | `prefix_scrollback` | Open the scrollback browser |
+| <kbd>S</kbd> | `prefix_session_switcher` | Open the session switcher |
+| <kbd>P</kbd> | `prefix_command_palette` | Open the command palette |
+| <kbd>L</kbd> | `prefix_layout` | Enter layout prefix menu |
+| <kbd>w</kbd> | `prefix_workspace` | Enter workspace prefix menu |
+| <kbd>m</kbd> | `prefix_minimize` | Enter minimize prefix menu |
+| <kbd>t</kbd> | `prefix_window` | Enter window prefix menu |
+| <kbd>D</kbd> | `prefix_debug` | Enter debug prefix menu |
+| <kbd>T</kbd> | `prefix_tape` | Enter tape prefix menu |
+| <kbd>d</kbd> | `prefix_detach` | Detach; a daemon session keeps running |
+| <kbd>Esc</kbd> | `prefix_exit_mode` | Leave terminal mode, never detaches |
+| <kbd>q</kbd> | `prefix_quit` | Quit; in daemon mode this kills the session |
+| <kbd>?</kbd> | `prefix_help` | Toggle help |
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Ctrl</kbd>+<kbd>B</kbd> sends a literal <kbd>Ctrl</kbd>+<kbd>B</kbd> to the terminal.
+
+<Callout title="Copy mode and the scrollback browser are different" type="info">
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> enters copy mode, with vim motions and text selection. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>s</kbd> opens the scrollback browser, which is for reading back through history. They are separate actions with separate bindings.
+</Callout>
+
+### Window Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>t</kbd>)
+
+Configured in `[keybindings.window_prefix]`.
+
+- <kbd>n</kbd> - `window_prefix_new`, create new window
+- <kbd>x</kbd> - `window_prefix_close`, close current window
+- <kbd>r</kbd> - `window_prefix_rename`, rename window
+- <kbd>Tab</kbd> - `window_prefix_next`, next window
+- <kbd>Shift</kbd>+<kbd>Tab</kbd> - `window_prefix_prev`, previous window
+- <kbd>t</kbd> - `window_prefix_tiling`, toggle tiling mode
+- <kbd>Esc</kbd> - `window_prefix_cancel`, cancel
+
+### Minimize Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>m</kbd>)
+
+Configured in `[keybindings.minimize_prefix]`.
+
+- <kbd>m</kbd> - `minimize_prefix_focused`, minimize the focused window
+- <kbd>1</kbd>-<kbd>9</kbd> - `minimize_prefix_restore_1` to `minimize_prefix_restore_9`, restore minimized window by position
+- <kbd>M</kbd> - `minimize_prefix_restore_all`, restore all minimized windows
+- <kbd>Esc</kbd> - `minimize_prefix_cancel`, cancel
+
+### Tape Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>T</kbd>)
+
+Record and replay `.tape` automation scripts. Configured in `[keybindings.tape_prefix]`.
+
+- <kbd>m</kbd> - `tape_prefix_manager`, open the tape manager
+- <kbd>r</kbd> - `tape_prefix_record`, start recording
+- <kbd>s</kbd> - `tape_prefix_stop`, stop recording
+- <kbd>Esc</kbd> - `tape_prefix_cancel`, cancel
 
 ### Workspace Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>w</kbd>)
 
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>w</kbd> then <kbd>1</kbd>-<kbd>9</kbd> - Switch to workspace
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>w</kbd> then <kbd>Shift</kbd>+<kbd>1</kbd>-<kbd>9</kbd> - Move window to workspace and follow
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>w</kbd> then <kbd>Esc</kbd> - Cancel
+Configured in `[keybindings.workspace_prefix]`.
+
+- <kbd>1</kbd>-<kbd>9</kbd> - `workspace_prefix_switch_1` to `workspace_prefix_switch_9`, switch to workspace
+- <kbd>!</kbd> <kbd>@</kbd> <kbd>#</kbd> <kbd>$</kbd> <kbd>%</kbd> <kbd>^</kbd> <kbd>&</kbd> <kbd>*</kbd> <kbd>(</kbd> - `workspace_prefix_move_1` to `workspace_prefix_move_9`, move window to workspace and follow
+- <kbd>Esc</kbd> - `workspace_prefix_cancel`, cancel
+
+### Debug Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd>)
+
+Debug and development tools. Configured in `[keybindings.debug_prefix]`.
+
+- <kbd>l</kbd> - `debug_prefix_logs`, toggle log viewer
+- <kbd>c</kbd> - `debug_prefix_cache`, toggle cache statistics
+- <kbd>k</kbd> - `debug_prefix_showkeys`, toggle showkeys overlay
+- <kbd>a</kbd> - `debug_prefix_animations`, toggle animations
+- <kbd>Esc</kbd> - `debug_prefix_cancel`, cancel
 
 ### Layout Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>L</kbd>)
 
@@ -234,15 +321,9 @@ Save and load window layout templates:
 
 Layout loading is non-destructive: existing windows are repositioned to match the template rather than being killed. Extra windows are minimized.
 
-### Debug Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd>)
-
-Access debug and development tools:
-
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd> then <kbd>l</kbd> - Toggle log viewer
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd> then <kbd>c</kbd> - Toggle cache statistics
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd> then <kbd>k</kbd> - Toggle showkeys overlay
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd> then <kbd>a</kbd> - Toggle animations
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd> then <kbd>Esc</kbd> - Cancel
+<Callout title="The only prefix menu you cannot rebind" type="info">
+Entering this menu is the configurable `prefix_layout` action, but <kbd>l</kbd> and <kbd>s</kbd> inside it are literal. The layout sub-prefix has no config section of its own.
+</Callout>
 
 ## Mouse Controls
 
@@ -258,9 +339,7 @@ Access debug and development tools:
 
 ## Customization
 
-All keybindings can be customized in the configuration file. See the [Configuration Guide](/docs/configuration) for details.
-
-### Quick Customization
+Every binding on this page lives in one of 14 sections under `[keybindings]` in `config.toml`, and every one is rebindable. The section is named next to each group above. See the [Configuration Guide](/docs/configuration) for the full list and the key syntax.
 
 ```bash
 # Edit your keybindings
@@ -269,9 +348,21 @@ tuios config edit
 # View current configuration
 tuios keybinds list
 
-# View only your customizations
+# View your customizations
 tuios keybinds list-custom
 ```
+
+<Callout title="Prefix bindings work now" type="info">
+Six sections used to be parsed and then ignored, so rebinding anything under the leader key silently did nothing: `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`, `debug_prefix`, and `tape_prefix`. They all resolve properly now, as does `terminal_mode`. If you gave up on customizing your prefix menus, try again.
+</Callout>
+
+<Callout title="list-custom is not a full audit" type="warn">
+`tuios keybinds list-custom` compares 9 of the 14 sections. It ignores `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, and `terminal_mode`, and it never reports a customized `leader_key`. A config that changes only those prints "No custom keybindings configured".
+</Callout>
+
+<Callout title="Most keybinding changes need a restart" type="warn">
+TUIOS hot-reloads part of `[appearance]`, but keybindings are not in that subset. Restart the client after editing them.
+</Callout>
 
 ## Platform-Specific Notes
 
@@ -308,6 +399,11 @@ Terminal mode shortcuts:
     title="Configuration Guide"
     href="/docs/configuration"
     description="Customize keybindings and settings"
+  />
+  <Card
+    title="Hooks"
+    href="/docs/hooks"
+    description="Run shell commands on TUIOS events"
   />
   <Card
     title="CLI Reference"

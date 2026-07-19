@@ -8,524 +8,281 @@ import { Callout } from 'fumadocs-ui/components/callout';
 import { Steps, Step } from 'fumadocs-ui/components/steps';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-# Binary Space Partitioning Tiling
+TUIOS ships three tiling layouts. BSP is the default and the one with manual split control, preselection, and edge resizing. This page covers BSP in depth and tells you how to reach the other two.
 
-TUIOS implements automatic window tiling using Binary Space Partitioning (BSP), an algorithm that recursively divides screen space to fit windows efficiently. Unlike rigid grid-based tiling, BSP adapts to any number of windows and allows fine-grained control over splits.
+## Layout Modes
 
-<Callout type="info">
-**Key Advantage**: BSP works with any number of windows (not limited to 2, 4, 6, etc.), and each window can have a different size.
+Tiling is a toggle (on or off), and the tiling layout is a separate setting that TUIOS remembers while tiling is off.
+
+| Mode | Behavior |
+|------|----------|
+| `bsp` | Binary space partitioning. A tree of splits, any number of panes, each independently resizable. The default. |
+| `master-stack` | Fixed arrangements by window count: 1 full screen, 2 side by side, 3 master plus stacked pair, 4 a 2x2 grid, 5 or more a grid (2 columns up to 6 windows, 3 columns beyond). |
+| `scrolling` | Niri-style horizontal columns. You scroll the workspace instead of shrinking every pane. |
+| floating | Not a layout mode. This is what you get when tiling is off, and the mode you were in comes back when you turn tiling on again. |
+
+### Switching modes
+
+There is no keybinding for layout mode. Open the command palette with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>P</kbd> and run one of:
+
+- `Layout: BSP Tiling`
+- `Layout: Master-Stack`
+- `Layout: Scrolling (niri-style)`
+- `Layout: Disable Tiling`
+
+<Callout type="warn">
+There is no "cycle layout" key. `Next Layout` and `Previous Layout` in the palette cycle your saved layout *templates*, not layout modes. A `ToggleLayoutMode` function exists in the code that cycles bsp to master-stack to scrolling, but nothing calls it outside tests, so it is not reachable from the UI.
 </Callout>
 
 ## Enable Tiling
 
-In Window Management Mode, press <kbd>t</kbd> to toggle tiling on/off.
+| Key | Where |
+|-----|-------|
+| <kbd>t</kbd> | Window management mode |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Space</kbd> | Any mode |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>t</kbd> <kbd>t</kbd> | Window prefix menu |
 
-Or using prefix commands:
+Tiling state is per workspace. Switching workspaces can land you somewhere tiling is off.
 
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Space</kbd> - Alternative
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>t</kbd> <kbd>t</kbd> - Via tiling prefix menu
+The dock shows the tiling icon followed by `V` or `H`, which is the direction the *next* split will take, not the current mode. There is no `TILING` text label.
 
-The status bar shows "TILING" when enabled.
+## Auto-Insertion Schemes
 
-## Auto-Tiling Behavior
+When a new window is added without a preselection, the tree picks a split direction using its auto scheme. New trees default to `spiral`.
 
-When tiling is enabled, TUIOS automatically positions new windows:
+| Scheme | Rule |
+|--------|------|
+| `longest_side` | Split along the longer dimension of the target pane. |
+| `alternate` | Alternate V, H, V, H based on the total number of splits in the tree. |
+| `spiral` | bspwm-style. Alternate on the *depth* of the pane being split, so repeatedly splitting the newest pane rotates V, H, V, H. Default. |
+| `smart_split` | Pane wider than twice its height splits vertically; taller than it is wide splits horizontally; otherwise falls back to depth parity. |
 
-<Steps>
-
-<Step>
-
-### First Window
-
-Takes full screen
-
-</Step>
-
-<Step>
-
-### Second Window
-
-Splits vertically (side-by-side)
-
-</Step>
-
-<Step>
-
-### Third Window
-
-Splits horizontally (top/bottom on right side)
-
-</Step>
-
-<Step>
-
-### Fourth+ Windows
-
-Spiral pattern (alternating V/H splits)
-
-</Step>
-
-</Steps>
-
-This spiral layout balances screen space naturally as you add windows.
-
-## BSP Concepts
-
-### The Split Tree
-
-Internally, TUIOS maintains a binary tree for each workspace:
-
-<pre className="monospace">
-Root Split (Vertical)
-├── Window 1 (left half)
-└── Split (Horizontal)
-<span className="tab"/> ├── Window 2 (top-right quarter)
-<span className="tab"/> └── Window 3 (bottom-right quarter)
-</pre>
-
-Each split has a direction (vertical or horizontal) and a ratio determining how space is divided.
-
-### Split Direction Indicators
-
-The dock shows the next split direction when tiling is active:
-
-- `V` - Next window splits vertically (left/right)
-- `H` - Next window splits horizontally (top/bottom)
-
-<Callout type="tip">
-This helps you predict where the next window will appear.
+<Callout type="warn">
+The scheme has no config key and no keybinding. It travels in session state and in saved layout templates (`tiling_scheme`), so in practice the only way to change it is to load a template that carries one. A fresh workspace is always `spiral`.
 </Callout>
 
-## Manual Split Control
+The `Smart Split` command in the palette forces one insertion through `smart_split` regardless of the tree's scheme. It has no keybinding.
 
-Rather than relying on automatic placement, you can manually split the focused window.
+## Creating Splits
 
-### Create Splits
-
-In Window Management Mode with a window focused:
-
-| Key | Action |
-|-----|--------|
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> | Split horizontally (top/bottom) |
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>\|</kbd> or <kbd>\\</kbd> | Split vertically (left/right) |
-
-This divides the focused window's space in half, placing the focused window in one half and preparing space for a new window in the other half.
-
-<Callout type="info">
-**Workflow**: Create a split, then create a new window with <kbd>n</kbd>. The new window appears in the prepared space.
+<Callout type="warn">
+A split command creates a window. `SplitFocusedHorizontal` and `SplitFocusedVertical` set a preselection and immediately call `AddWindow`. Pressing <kbd>n</kbd> after a split adds a *third* window, it does not fill a reserved gap. There is no empty-slot state in TUIOS.
 </Callout>
 
-### Rotate Split Direction
+These are bound both directly in window management mode and behind the prefix:
 
-To change an existing split's direction:
+| Key | Prefix form | Action |
+|-----|-------------|--------|
+| <kbd>-</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> | Split horizontal, new window below |
+| <kbd>\|</kbd> or <kbd>\\</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>\|</kbd> | Split vertical, new window right |
+| <kbd>R</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>R</kbd> | Rotate the split containing the focused window |
+| <kbd>=</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd> | Equalize every split ratio to 0.5 |
 
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>R</kbd> to rotate the split at the focused window.
-
-This toggles the split containing the focused window between vertical and horizontal.
-
-**Example**: Side-by-side windows become stacked, and vice versa.
+Rotating flips a vertical split to horizontal and back, so side-by-side panes become stacked.
 
 ## Preselection
 
-Preselection lets you control where the next window spawns relative to the focused window.
+Preselection tells the tree where the *next* window goes relative to the focused one.
 
-### Preselection Commands
+| Key | Next window appears |
+|-----|--------------------|
+| <kbd>Alt</kbd>+<kbd>h</kbd> | Left |
+| <kbd>Alt</kbd>+<kbd>l</kbd> | Right |
+| <kbd>Alt</kbd>+<kbd>k</kbd> | Above |
+| <kbd>Alt</kbd>+<kbd>j</kbd> | Below |
+
+On macOS these are <kbd>Opt</kbd>+<kbd>h</kbd>/<kbd>j</kbd>/<kbd>k</kbd>/<kbd>l</kbd>.
+
+Preselection only applies when tiling is on. It is consumed by the next window creation and then resets.
+
+<Callout type="warn">
+There is no key that cancels a preselection. `ClearPreselection` exists but its only caller is the tape executor. Once set, a preselection stays until a window consumes it, or until a split command overwrites it with its own direction.
+</Callout>
+
+## Swapping Windows
+
+Swaps move windows between leaves without changing the split structure.
 
 | Key | Action |
 |-----|--------|
-| <kbd>Alt</kbd>+<kbd>h</kbd> | Next window appears left |
-| <kbd>Alt</kbd>+<kbd>l</kbd> | Next window appears right |
-| <kbd>Alt</kbd>+<kbd>k</kbd> | Next window appears above |
-| <kbd>Alt</kbd>+<kbd>j</kbd> | Next window appears below |
+| <kbd>Shift</kbd>+<kbd>H</kbd> or <kbd>Ctrl</kbd>+<kbd>←</kbd> | Swap with the pane to the left |
+| <kbd>Shift</kbd>+<kbd>L</kbd> or <kbd>Ctrl</kbd>+<kbd>→</kbd> | Swap with the pane to the right |
+| <kbd>Shift</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>↑</kbd> | Swap with the pane above |
+| <kbd>Shift</kbd>+<kbd>J</kbd> or <kbd>Ctrl</kbd>+<kbd>↓</kbd> | Swap with the pane below |
 
-After preselecting, create a window normally with <kbd>n</kbd>. The preselection is consumed and resets.
+Lowercase <kbd>h</kbd>/<kbd>j</kbd>/<kbd>k</kbd>/<kbd>l</kbd> move focus; the shifted forms swap. Dragging one window onto another with the mouse also swaps them.
+
+## Resizing
+
+Each key moves one edge of the focused window by a fixed number of cells. These are split-line moves, not ratio adjustments, and every window sharing the moved divider moves with it.
+
+| Key | Edge moved | Step |
+|-----|-----------|------|
+| <kbd>&gt;</kbd> | Right edge, outward | 4 columns |
+| <kbd>&lt;</kbd> | Right edge, inward | 4 columns |
+| <kbd>.</kbd> | Left edge, outward | 4 columns |
+| <kbd>,</kbd> | Left edge, inward | 4 columns (see below) |
+| <kbd>{'}'}</kbd> | Bottom edge, downward | 2 rows |
+| <kbd>{'{'}</kbd> | Bottom edge, upward | 2 rows |
+| <kbd>]</kbd> | Top edge, upward | 2 rows |
+| <kbd>[</kbd> | Top edge, downward | 2 rows |
+
+<Callout type="warn">
+<kbd>,</kbd> does not resize. Window management mode intercepts it to open the settings page before the keybind registry ever sees it, so the `resize_master_shrink_left` binding is unreachable. <kbd>.</kbd> works normally.
+</Callout>
+
+A resize is a no-op when the edge you are moving is already at the screen boundary. Growing the right edge of a pane that is already flush with the right side of the screen does nothing; move the left edge instead.
+
+### How resizing actually works
+
+Resize in BSP is geometry-first. The tree is reconciled afterwards.
+
+<Steps>
+
+<Step>
+
+### Move the geometry
+
+`adjustTilingNeighborsGeneric` takes the moved edge's *old* pixel coordinate, finds every window whose corresponding edge sits within 1 cell of it, and splits them into the two sides of that divider.
+
+</Step>
+
+<Step>
+
+### Constrain
+
+The requested new divider position is clamped so that no window on either side falls below the minimum size (20 columns, 5 rows).
+
+</Step>
+
+<Step>
+
+### Rewrite rectangles
+
+Window `X`, `Y`, `Width`, and `Height` are written directly. The tree is not consulted at all in this step.
+
+</Step>
+
+<Step>
+
+### Re-derive ratios
+
+`SyncRatiosFromGeometry` walks the tree and recomputes every split ratio from the resulting rectangles.
+
+</Step>
+
+</Steps>
+
+The last step is not optional. From the code comment on `MarkBSPSyncPending`:
+
+> the tree ratios, not the window rectangles, are what survives a retile, so a drag that ended without a final sync would have its result discarded the next time the layout was applied.
+
+For mouse drags the sync is deferred to the next composed frame (its only job mid-drag is to keep the separator overlay under the pointer), and it always runs unconditionally on mouse release.
+
+### Resize invariants
+
+These are pinned by tests in `internal/layout/bsp_resize_axis_test.go`, exercised across both shared-border settings, five layouts (two panes, tall-left, tall-right, 2x2 grid, and a three-level nest), every pane, and all four edges.
+
+| Invariant | Meaning |
+|-----------|---------|
+| Axis isolation | A horizontal resize may change only `X` and `W`. A vertical resize may change only `Y` and `H`. |
+| Round-trip axis isolation | Drag any edge, sync the geometry back into the tree, re-apply the layout: the perpendicular axis of every pane is unchanged. |
+| No drift | Many small drags land where one large drag lands, and the perpendicular axis accumulates no drift over a long sequence. |
+| Sync stability | Syncing an unmodified layout and re-applying it is a no-op. Any movement here would show up as panes creeping on every mouse motion event. |
 
 <Callout type="info">
-Preselection only works when tiling mode is enabled. Press <kbd>t</kbd> to enable tiling first.
+Split ratios in BSP are stored as a plain `float64` and are not clamped to a band. The 0.3 to 0.7 clamp you may have read about applies only to the master-stack layout's master ratio.
 </Callout>
 
-<Callout type="tip">
-**Use Case**: Creating sidebar layouts, asymmetric designs, or inserting windows into specific locations in complex layouts.
-</Callout>
+## Shared Borders
 
-### Preselection Example
+By default each tiled pane draws its own border, so adjacent panes show two border lines between them. Shared borders collapses that into one.
 
-<Steps>
+| Setting | Value |
+|---------|-------|
+| Config key | `appearance.shared_borders` |
+| Default | `false` |
+| CLI flag | `--shared-borders` |
+| In-app | Settings page (<kbd>,</kbd> in window management mode) |
 
-<Step>
+```toml
+[appearance]
+shared_borders = true
+```
 
-Start with one window
+This applies to BSP only. The scrolling layout ignores it.
 
-Press <kbd>n</kbd> to create it
+### Panes are asymmetric under shared borders
 
-</Step>
+A split reserves one cell for the separator, and that cell is taken from the right or bottom pane. The two children of a 0.5 split are not the same size.
 
-<Step>
+Bounds `X=0, W=160`, one vertical split at ratio `0.5`:
 
-Preselect left
+| Shared borders | Left pane | Separator | Right pane |
+|----------------|-----------|-----------|------------|
+| off | `X=0, W=80` | none | `X=80, W=80` |
+| on | `X=0, W=80` | column `x=80` | `X=81, W=79` |
 
-Press <kbd>Alt</kbd>+<kbd>h</kbd>
+The same one-cell deduction applies to horizontal splits, taken from the bottom pane. Ratio syncing uses the identical model; if it did not, every ratio in the tree would be re-derived one cell off on each sync and a resize on one axis would walk the dividers on the other.
 
-</Step>
+### Mouse affordance
 
-<Step>
+With shared borders on, hovering the pointer over a separator changes the cursor shape: horizontal resize over a vertical divider, vertical resize over a horizontal one. Drag from there to move the divider.
 
-Create sidebar
+With shared borders off there is no separator to hover, so tiled panes fall back to their own border edges and corners for resize handles.
 
-Press <kbd>n</kbd> - New window appears on the left
+## Layout Templates
 
-</Step>
-
-<Step>
-
-Resize sidebar
-
-Press <kbd>&lt;</kbd> multiple times to make it narrower
-
-</Step>
-
-</Steps>
-
-Result: Narrow sidebar on left, main area on right.
-
-## Window Swapping
-
-Rearrange tiled windows without changing the split structure.
-
-### Swap Commands
+Save the current arrangement and restore it later.
 
 | Key | Action |
 |-----|--------|
-| <kbd>Shift</kbd>+<kbd>H</kbd> or <kbd>Ctrl</kbd>+<kbd>←</kbd> | Swap with window to the left |
-| <kbd>Shift</kbd>+<kbd>L</kbd> or <kbd>Ctrl</kbd>+<kbd>→</kbd> | Swap with window to the right |
-| <kbd>Shift</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>↑</kbd> | Swap with window above |
-| <kbd>Shift</kbd>+<kbd>J</kbd> or <kbd>Ctrl</kbd>+<kbd>↓</kbd> | Swap with window below |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>s</kbd> | Save layout (prompts for a name) |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>l</kbd> | Load layout (searchable picker) |
 
-<Callout type="info">
-**Difference**: <kbd>h</kbd>/<kbd>j</kbd>/<kbd>k</kbd>/<kbd>l</kbd> move focus. <kbd>Shift</kbd> + those keys swap windows.
-</Callout>
+The same two are in the command palette as `Save Layout` and `Load Layout`, and `Next Layout` / `Previous Layout` cycle through saved templates in order. A template records the tiling scheme alongside the geometry.
 
-### Drag to Swap
+From a script or a tape, `SaveLayoutExec` and `LoadLayoutExec` take a template name directly.
 
-Mouse users can drag windows in tiling mode. Dragging a window onto another swaps them.
+## Persistence
 
-## Resizing in BSP Mode
+Each workspace owns its own BSP tree, kept in `WorkspaceTrees` keyed by workspace number. Trees are serialized into session state, so they survive detach and reattach, and are written to disk by the daemon for resurrection. See [Sessions](/docs/sessions#session-resurrection) for what resurrection does and does not restore.
 
-### Master Ratio Adjustment
+The tree is rebuilt from scratch when it goes stale, for example when it still references a window that has closed. A rebuild re-inserts the current windows in order and then syncs ratios back from their live positions, so a rebuild preserves proportions rather than resetting to 50/50.
 
-Control the size of the main window area:
+## Known Gaps
 
-| Key | Action |
-|-----|--------|
-| <kbd>&gt;</kbd> or <kbd>Shift</kbd>+<kbd>.</kbd> | Grow master area (from right edge) |
-| <kbd>&lt;</kbd> or <kbd>Shift</kbd>+<kbd>,</kbd> | Shrink master area (from right edge) |
-| <kbd>.</kbd> (period) | Grow master area (from left edge) |
-| <kbd>,</kbd> (comma) | Shrink master area (from left edge) |
-
-Adjustment increment: 5% per keypress.
-
-### Height Adjustment
-
-Control the vertical split ratio:
-
-| Key | Action |
-|-----|--------|
-| <kbd>{'}'}</kbd> or <kbd>Shift</kbd>+<kbd>]</kbd> | Grow height (from bottom edge) |
-| <kbd>{'{'}</kbd> or <kbd>Shift</kbd>+<kbd>[</kbd> | Shrink height (from bottom edge) |
-| <kbd>]</kbd> | Grow height (from top edge) |
-| <kbd>[</kbd> | Shrink height (from top edge) |
-
-<Callout type="tip">
-**Edge Control**: The distinction between left/right and top/bottom edge resizing gives you precise control in complex layouts.
-</Callout>
-
-## Advanced Operations
-
-### Equalize Splits
-
-Reset all splits to equal proportions:
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd> to equalize all splits.
-
-This sets all split ratios to 50/50 throughout the entire tree, giving all windows equal space based on their position.
-
-<Callout type="info">
-Useful when you've made many resize adjustments and want to start fresh with balanced spacing.
-</Callout>
-
-## Practical Workflows
-
-### Workflow 1: Development Environment
-
-Classic three-pane layout (editor + terminal + docs).
-
-<Steps>
-
-<Step>
-
-Enable tiling:
-
-Press <kbd>t</kbd>
-
-</Step>
-
-<Step>
-
-Create editor window:
-
-Press <kbd>n</kbd> to create window, then <kbd>i</kbd> to enter terminal mode
-
-```bash
-vim main.go
-```
-
-</Step>
-
-<Step>
-
-Preselect right for terminal:
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> to return to window mode
-
-Press <kbd>Alt</kbd>+<kbd>l</kbd> to preselect right
-
-Press <kbd>n</kbd> to create terminal window, then <kbd>i</kbd> to enter it
-
-```bash
-go run .
-```
-
-</Step>
-
-<Step>
-
-Preselect below for logs:
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> then <kbd>Tab</kbd> to focus terminal
-
-Press <kbd>Alt</kbd>+<kbd>j</kbd> to preselect below
-
-Press <kbd>n</kbd> then <kbd>i</kbd> to create logs window
-
-```bash
-tail -f logs/app.log
-```
-
-</Step>
-
-</Steps>
-
-Result:
-
-<pre className="monospace">
-┌──────────┬──────────┐
-│          │ Terminal │
-│  Editor  ├──────────┤
-│          │   Logs   │
-└──────────┴──────────┘
-</pre>
-
-### Workflow 2: Dashboard Grid
-
-Four equal quadrants for monitoring.
-
-<Steps>
-
-<Step>
-
-Enable tiling and create first window:
-
-Press <kbd>t</kbd> to enable tiling
-
-Press <kbd>n</kbd> to create first window (full screen)
-
-</Step>
-
-<Step>
-
-Split vertically for left/right:
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>|</kbd> to split vertically
-
-Press <kbd>n</kbd> to create second window (right side)
-
-</Step>
-
-<Step>
-
-Focus left and split horizontally:
-
-Press <kbd>Tab</kbd> to focus left window
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> to split horizontally
-
-Press <kbd>n</kbd> to create third window (bottom-left)
-
-</Step>
-
-<Step>
-
-Focus top-right and split horizontally:
-
-Press <kbd>Tab</kbd> twice to focus right side
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> to split horizontally
-
-Press <kbd>n</kbd> to create fourth window (bottom-right)
-
-</Step>
-
-<Step>
-
-Equalize all splits for perfect quadrants:
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd>
-
-</Step>
-
-</Steps>
-
-Result:
-
-<pre className="monospace">
-┌─────┬─────┐
-│  1  │  2  │
-├─────┼─────┤
-│  3  │  4  │
-└─────┴─────┘
-</pre>
-
-### Workflow 3: Ultrawide Layout
-
-Three-column layout for ultrawide monitors.
-
-<Steps>
-
-<Step>
-
-Enable tiling and split vertically:
-
-Press <kbd>t</kbd> to enable tiling
-
-Press <kbd>n</kbd> to create first window (full screen)
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>|</kbd> to split vertically
-
-Press <kbd>n</kbd> to create second window (right)
-
-</Step>
-
-<Step>
-
-Split left side for third column:
-
-Press <kbd>Tab</kbd> to focus first (left) window
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>|</kbd> to split left side vertically
-
-Press <kbd>n</kbd> to create third window (middle)
-
-</Step>
-
-<Step>
-
-Adjust widths for 1:2:1 ratio:
-
-Press <kbd>Tab</kbd> twice to focus rightmost
-
-Press <kbd>&lt;</kbd> twice to shrink right column
-
-Press <kbd>Tab</kbd> twice to focus leftmost
-
-Press <kbd>.</kbd> twice to shrink left column
-
-</Step>
-
-</Steps>
-
-Result: Left sidebar, main area, right sidebar.
-
-### Workflow 4: Presenter Layout
-
-Main presentation area with hidden notes.
-
-<Steps>
-
-<Step>
-
-Create main presentation window:
-
-Press <kbd>t</kbd> to enable tiling
-
-Press <kbd>n</kbd> to create main window
-
-Press <kbd>Alt</kbd>+<kbd>j</kbd> to preselect below
-
-Press <kbd>n</kbd> to create notes window
-
-</Step>
-
-<Step>
-
-Shrink notes to minimal height:
-
-Press <kbd>{'{'}</kbd> five times to shrink notes area
-
-</Step>
-
-</Steps>
-
-Result: Full screen presentation with a thin strip of notes at bottom.
-
-## Technical Details
-
-### BSP Tree Structure
-
-Each workspace maintains a `BSPTree` with nodes of two types:
-
-- **Leaf nodes**: Contain a window ID
-- **Internal nodes**: Contain split direction (H/V), ratio (0.0-1.0), and two child nodes
-
-### Split Ratio Storage
-
-Each internal node stores a ratio (default 0.5) representing the fraction of space given to the left/top child. Ratio range: 0.3 to 0.7 (enforced to prevent unusable layouts).
-
-### Layout Application
-
-After tree modifications, TUIOS walks the tree recursively, calculating rectangles:
-
-1. Start with workspace dimensions
-2. At each split node, divide rectangle by ratio and direction
-3. At each leaf node, assign rectangle to corresponding window
-4. Apply all window geometry in a single batch
-
-This prevents flicker and ensures atomic layout updates.
+- **Layout mode has no keybinding.** Command palette only.
+- **The auto-insertion scheme is not configurable.** No config key, no key, no palette entry that sets it directly.
+- **`,` is dead in window management mode.** It opens settings instead of resizing.
+- **Stacked splits are unreachable.** `SplitStacked` is a real split type, and both layout application and ratio syncing handle it (the inactive child collapses to a one-row title bar). Nothing in the app ever constructs such a node, so you cannot produce one.
+- **Layout application is not batched.** `ApplyBSPLayout` loops over windows and creates a per-window snap animation. There is no single atomic geometry commit.
 
 ## Troubleshooting
 
-### Windows Not Tiling
+### Windows are not tiling
 
-Check tiling is enabled - status bar should show "TILING". Press <kbd>t</kbd> to toggle.
+Check that tiling is on for *this* workspace: the dock shows the tiling icon plus `V` or `H` when it is. Press <kbd>t</kbd> to toggle. Tiling state does not follow you across workspaces.
 
-Each workspace has independent tiling state. Switching workspaces may land you on a workspace with tiling disabled.
+If windows are arranging themselves but not the way BSP would, you may be in master-stack or scrolling mode. Run `Layout: BSP Tiling` from the palette.
 
-### Unexpected Layout After Resize
+### A resize key does nothing
 
-Reset to balanced layout by pressing <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd> to equalize all splits.
+Either the edge you are moving is already at the screen boundary, or the move would push a pane below 20 columns or 5 rows and was clamped away. Try the opposite edge key: <kbd>.</kbd> instead of <kbd>&gt;</kbd>, <kbd>]</kbd> instead of <kbd>{'}'}</kbd>.
 
-Verify the correct window is focused. Resize operations affect the split containing the focused window.
+If it is specifically <kbd>,</kbd> that does nothing, that key opens settings and cannot resize.
 
-### Swap Not Working
+### The layout looks lopsided after resizing
 
-Swap commands are directional. If there's no window in the specified direction, nothing happens.
+Press <kbd>=</kbd> to reset every split ratio to 0.5. Note that under shared borders this still leaves each right/bottom pane one cell smaller than its sibling, by design.
 
-Try mouse drag: Dragging one window onto another always swaps.
+### Swap does nothing
 
-### Preselection Not Applied
+Swaps are directional. If there is no pane in that direction, nothing happens. Mouse drag onto another window always swaps.
 
-Preselection is one-time. After creating a window, preselection resets. You need to preselect again for the next window.
+### A preselection fired in the wrong direction
 
-Press <kbd>Esc</kbd> in Window Management Mode to cancel a preselection without creating a window.
+Preselection is one-shot and cannot be cancelled. A split command sets its own preselection, so pressing <kbd>-</kbd> after <kbd>Alt</kbd>+<kbd>l</kbd> overwrites "right" with "below".
 
 ## Related Documentation
 
@@ -533,33 +290,21 @@ Press <kbd>Esc</kbd> in Window Management Mode to cancel a preselection without 
   <Card
     title="Keybindings"
     href="/docs/keybindings"
-    description="Complete keybinding list for tiling"
+    description="Complete keybinding list"
   />
   <Card
     title="Configuration"
     href="/docs/configuration"
-    description="Customize keybindings"
+    description="shared_borders and keybinding customization"
+  />
+  <Card
+    title="Sessions & Daemon Mode"
+    href="/docs/sessions"
+    description="What survives detach and resurrection"
   />
   <Card
     title="Architecture"
     href="/docs/architecture"
-    description="Technical details on BSP implementation"
+    description="Technical details on the layout engine"
   />
 </Cards>
-
-## Comparison with Grid Tiling
-
-### BSP Advantages
-
-- Works with any number of windows (not limited to grid cells)
-- No wasted space with odd numbers of windows
-- Full control over layout
-- Each window can have different size
-
-### Grid Tiling
-
-- Fixed positions (1, 2, 3, 4 windows fit in grid cells)
-- Wasted space with odd numbers
-- Predictable but inflexible
-
-TUIOS chose BSP for flexibility and space efficiency.

@@ -48,7 +48,7 @@ Showkeys state persists for the current session.
     Single keystrokes: `a`, `j`, `x`, `1`, `Space`, `Enter`, `Esc`
   </Card>
   <Card title="Modifier Combinations">
-    Combined keys: `Ctrl+C`, `Shift+Tab`, `Alt+1`, `Ctrl+Shift+T`
+    Combined keys: `Ctrl+C`, `Shift+Tab`, `Alt+1`, `Ctrl+Alt+T`
   </Card>
   <Card title="Action Names">
     What the key does: `n → new_window`, `t → toggle_tiling`
@@ -221,13 +221,11 @@ Showkeys works identically across all platforms:
 
 ### Performance Impact
 
-Showkeys has minimal overhead:
+Showkeys keeps a fixed 5-entry ring buffer of formatted key strings and draws one overlay line during composition. The cost does not grow with session length, and nothing is written to disk.
 
-- **Memory**: ~1KB for key history
-- **CPU**: < 0.1% per keystroke
-- **Rendering**: No performance impact
-
-Recording does not slow down terminal performance or increase latency.
+<Callout type="info">
+There is no benchmark for showkeys overhead in the repo, so this page does not quote memory or CPU figures.
+</Callout>
 
 ### History Buffer
 
@@ -269,7 +267,9 @@ tuios --show-keys
 
 ### Keys Not Showing
 
-**Modifier key issues**: Some terminals don't send all modifier combinations. For example, `Ctrl+Shift+letter` might arrive as just `Ctrl+letter`.
+**Shift on single letters is dropped on purpose**: TUIOS omits the Shift modifier when the key is a single letter, because the uppercase letter already implies it. Pressing <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> displays as `Ctrl+T`, not `Ctrl+Shift+T`. Shift is still shown on non-letter keys, so `Shift+Tab` appears in full.
+
+**Modifier key issues**: Separately, some terminals don't send all modifier combinations at all. For example, `Ctrl+Shift+letter` might arrive as just `Ctrl+letter`.
 
 **Solution**: Use a terminal with proper keyboard protocol support (kitty, wezterm, alacritty).
 

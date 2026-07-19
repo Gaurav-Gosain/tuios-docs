@@ -44,6 +44,22 @@ tuios new work
 tuios new dev --theme dracula --show-keys
 ```
 
+### Headless Sessions
+
+`--detach` (short `-d`) creates a session without attaching to it. The session gets an initial window and is immediately usable by `send-keys`, `run-command`, `capture-pane`, and the [control protocol](/docs/control-protocol). This is the entry point for scripting and for driving TUIOS from a program.
+
+```bash
+tuios new build --detach
+tuios send-keys -s build --literal --raw "make all"
+tuios send-keys -s build Enter
+```
+
+<Callout type="warn">
+A detached session is created at a fixed 80x24. It resizes when a client attaches, but until then anything you capture is 80 columns wide regardless of your terminal.
+
+The root appearance flags (`--theme`, `--show-keys`, `--border-style`, and the rest) are ignored by `--detach`. They are read when a client attaches, and a headless session has no client. Passing them is not an error, so they fail silently.
+</Callout>
+
 ### Session Naming
 
 - Session names can contain letters, numbers, hyphens, and underscores
@@ -76,7 +92,7 @@ Reattach to a session with `tuios attach`:
 # Attach to specific session
 tuios attach work
 
-# Attach to most recent session (if only one)
+# Attach to the most recently active session
 tuios attach
 
 # Attach and create if session doesn't exist
@@ -84,7 +100,9 @@ tuios attach work -c
 ```
 
 <Callout type="info">
-When you attach, the session resumes exactly where you left off. All windows, their positions, and terminal content are preserved.
+Attaching to a session you detached from resumes it exactly where you left off: the same windows, positions, and terminal content, because the PTYs never stopped running.
+
+This is different from what survives a daemon restart. See [Session Resurrection](#session-resurrection) for what comes back after the daemon exits, and what does not.
 </Callout>
 
 ## Detaching from Sessions
@@ -111,7 +129,9 @@ In addition to the CLI commands above, TUIOS v0.7.0 includes an in-app **Session
 The session switcher displays a list of all daemon sessions with their name, window count, and status. You can:
 
 - **Arrow keys** or <kbd>j</kbd>/<kbd>k</kbd> to navigate the list
-- **Enter** to attach to the selected session (detaches from the current one)
+- **Type** to filter the list by name
+- **Enter** to attach to the selected session (detaches from the current one). If your query matches no existing session, Enter creates a session with that name instead.
+- <kbd>Ctrl</kbd>+<kbd>D</kbd> to kill the selected session, confirmed with <kbd>y</kbd> or cancelled with <kbd>n</kbd>
 - **Esc** to close the switcher without changing sessions
 
 This is especially useful when you have multiple projects running as separate sessions and want to hop between them quickly, without dropping to the shell to run `tuios attach`.
@@ -189,6 +209,50 @@ graph TB
 3. **PTY Persistence**: Terminal PTYs are owned by the daemon, not the client, so they survive disconnection
 4. **State Sync**: Window positions, workspace layout, and terminal content sync continuously
 
+## Session Resurrection
+
+Detaching and reattaching preserves everything, because the daemon keeps running and the PTYs never stop. Resurrection is the weaker guarantee that applies when the daemon itself exits: a reboot, a crash, or `tuios kill-server`.
+
+The daemon writes each session's structure to disk every 30 seconds, and again synchronously when it shuts down cleanly. On its next cold start it restores those sessions automatically, before it accepts any connections.
+
+### What comes back
+
+Window structure, and only window structure:
+
+- Window geometry, titles, and custom names
+- Workspace assignment, minimize state, and which window had focus
+- The BSP tree for each workspace, the layout mode, tiling scheme, and master ratio
+- The working directory each window was in
+- Session options
+
+### What does not come back
+
+<Callout type="warn">
+Resurrection restores the shape of your session, not its contents. It is crash recovery, not a snapshot.
+</Callout>
+
+- **Processes are gone.** Every window gets a fresh `$SHELL`. A build, a `vim`, or an SSH connection that was running is not restarted, and TUIOS does not try to re-run it.
+- **Screen contents and scrollback are gone.** They live only in daemon memory and are never written to disk. Each restored window starts with an empty emulator.
+- **Up to 30 seconds of structural change can be lost** if the daemon is killed rather than shut down. A window created 5 seconds before a `SIGKILL` will not be there.
+- **Restored shells inherit the daemon's environment**, not the environment of the terminal you attach from. If your `$SHELL` or your exported variables changed since the daemon started, the restored windows do not see it.
+- **Working directory capture is Linux only.** It reads `/proc/<pid>/cwd`. On macOS and Windows, restored windows open in the shell's default directory instead.
+
+A restored window announces itself so you are not misled into thinking your work survived. It prints a dimmed `-- tuios: session restored, fresh shell in <cwd> --` banner, dropping the `in <cwd>` part when the working directory could not be captured, and sets `TUIOS_RESTORED=1` in the environment so your shell profile can react to it.
+
+### Controlling resurrection
+
+```bash
+# Restore saved sessions on demand
+tuios resurrect
+
+# Start a daemon without restoring anything
+tuios daemon --no-restore
+```
+
+State lives in `$XDG_STATE_HOME/tuios/sessions/<name>.json`, written with owner-only permissions.
+
+Killing a session with `tuios kill-session` deletes its state file, so a killed session is deliberately not resurrectable. This is the difference between killing a session and losing a daemon.
+
 ## Multi-Client Support
 
 Multiple clients can connect to the same session simultaneously. All clients see synchronized state in real-time.
@@ -208,7 +272,6 @@ TUIOS displays notifications for multi-client events:
 |-------|--------------|
 | Client joins | "Client joined (N connected)" |
 | Client leaves | "Client left (N connected)" |
-| Mode change | "Switched to Terminal/Window mode" |
 | Window created | "Window created (N total)" |
 | Window closed | "Window closed (N remaining)" |
 | Workspace switch | "Switched to workspace N" |
@@ -308,6 +371,22 @@ tuios get-window --json
 
 # Get session state
 tuios session-info --json
+
+# Capture a pane's contents
+tuios capture-pane -w mywindow --scrollback
+```
+
+<Callout type="info">
+`run-command --json` flattens its result data to the top level of the JSON object, so a window ID is at `.window_id`, not `.data.window_id`. Window objects from `list-windows` use `window_id` as their identifier field; there is no `.id`.
+</Callout>
+
+### Beyond the CLI
+
+The CLI commands above are convenient for shell scripts, but they open a connection per invocation and report failures as exit codes. For anything more involved, the daemon speaks a [JSON control protocol](/docs/control-protocol) on the same socket: structured errors, blocking waits with `wait-for` instead of poll loops, and a subscribable event stream.
+
+```bash
+# Discover the whole protocol without reading the docs
+tuios list-verbs
 ```
 
 ### Example: Development Layout Script
@@ -317,9 +396,9 @@ tuios session-info --json
 # Create a development environment
 
 # Create windows and capture IDs
-EDITOR=$(tuios run-command --json NewWindow "editor" | jq -r '.data.window_id')
-TERM=$(tuios run-command --json NewWindow "terminal" | jq -r '.data.window_id')
-LOGS=$(tuios run-command --json NewWindow "logs" | jq -r '.data.window_id')
+EDITOR=$(tuios run-command --json NewWindow "editor" | jq -r '.window_id')
+TERM=$(tuios run-command --json NewWindow "terminal" | jq -r '.window_id')
+LOGS=$(tuios run-command --json NewWindow "logs" | jq -r '.window_id')
 
 # Enable tiling
 tuios run-command ToggleTiling
@@ -336,7 +415,7 @@ tuios send-keys --literal --raw "tail -f app.log" && tuios send-keys Enter
 ```bash
 #!/bin/bash
 WINDOW=$(tuios list-windows --json | \
-    jq -r '.windows[] | "\(.display_name)\t\(.id)"' | \
+    jq -r '.windows[] | "\(.display_name)\t\(.window_id)"' | \
     fzf --with-nth=1 | cut -f2)
 
 [ -n "$WINDOW" ] && tuios run-command FocusWindow "$WINDOW"
@@ -375,12 +454,21 @@ tuios kill-session old-project
 
 ### "Daemon not running"
 
-If you see this error, the daemon may have crashed. Start fresh:
+If you see this error, the daemon may have crashed. Clean up the stale socket and start again:
 
 ```bash
 tuios kill-server     # Clean up any stale socket
-tuios new mysession   # Start new daemon
+tuios new mysession   # Start a new daemon
 ```
+
+<Callout type="warn">
+This does not give you a clean slate. `kill-server` saves every session on the way out, and the next daemon restores them all on start. If you want a daemon with no sessions, start it explicitly:
+
+```bash
+tuios kill-server
+tuios daemon --no-restore
+```
+</Callout>
 
 ### "Session not found"
 
@@ -417,5 +505,10 @@ tuios new fresh-session
     title="Configuration"
     href="/docs/configuration"
     description="Customize TUIOS"
+  />
+  <Card
+    title="Control Protocol"
+    href="/docs/control-protocol"
+    description="Drive the daemon from scripts"
   />
 </Cards>
