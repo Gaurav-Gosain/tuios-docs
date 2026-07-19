@@ -6,6 +6,7 @@ icon: FileCode
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Steps, Step } from 'fumadocs-ui/components/steps';
+import { Card, Cards } from 'fumadocs-ui/components/card';
 
 # Tape Scripting
 
@@ -37,7 +38,7 @@ tuios tape show my-recording
 
 ## Remote Execution
 
-The `tuios tape exec` command allows you to run tape scripts against an already running TUIOS session. This is perfect for automation workflows where TUIOS is running in daemon mode.
+The `tuios tape exec` command runs a tape script against an already running TUIOS session, without a visible TUI. Use it when TUIOS is running in daemon mode.
 
 ```bash
 # Execute against current session
@@ -46,6 +47,26 @@ tuios tape exec script.tape
 # Execute against a specific session
 tuios tape exec -s mysession script.tape
 ```
+
+<Callout title="exec ignores all waiting" type="error">
+`tuios tape exec` silently skips every `Wait` and `WaitUntilRegex` command. They are deliberate no-ops in the remote executor, which is fire-and-forget; only the interactive playback loop behind `tape play` blocks on them. No warning is printed and the exit status does not change.
+
+This matters most in CI. A tape that reads
+
+```
+Type "npm test"
+Enter
+WaitUntilRegex "Tests passed" 30000
+CloseWindow
+```
+
+will, under `exec`, close the window immediately after pressing Enter. `Sleep` is honoured, so an unconditional `Sleep` is the only pacing that works under `exec`. If you need to wait on output, poll from the shell instead:
+
+```bash
+tuios tape exec -s ci run-tests.tape
+until tuios capture-pane -s ci | grep -q "Tests passed"; do sleep 1; done
+```
+</Callout>
 
 ### Progress Display
 
@@ -62,15 +83,20 @@ Progress: 5/12 [███████░░░░░░░░░░░░░] 41
 
 ```bash
 #!/bin/bash
-# Start a session
-tuios new automation &
-sleep 2
+set -euo pipefail
 
-# Execute scripts
+# A headless session is created immediately, so no sleep is needed
+tuios new automation --detach
+
 tuios tape exec -s automation setup.tape
+
+# exec does not wait on output, so gate on it from the shell
+until tuios capture-pane -s automation | grep -q "setup complete"; do
+    sleep 1
+done
+
 tuios tape exec -s automation test-workflow.tape
 
-# Cleanup
 tuios kill-session automation
 ```
 
@@ -91,12 +117,15 @@ tuios tape exec -s dev environment-setup.tape
 | Starts TUIOS | Yes | No (requires running session) |
 | Shows TUI | Yes | No (progress bar only) |
 | Interactive | Yes | No |
-| For automation | No | Yes |
 | Session persistence | No | Yes (works with daemon) |
+| Honours `Sleep` | Yes | Yes |
+| Honours `Wait` / `WaitUntilRegex` | Yes | **No, silently skipped** |
+
+Pick `exec` when the script is a sequence of state changes and you can pace it externally. Pick `play` when the script depends on terminal output.
 
 ### Combining with CLI Commands
 
-Remote tape execution works seamlessly with other CLI commands:
+Remote tape execution composes with the other CLI commands:
 
 ```bash
 # Execute script then query state
@@ -125,7 +154,7 @@ NewWindow  # Create a window
 
 ### Commands
 
-Commands are case-sensitive:
+One command per line. Keyword matching is **case-insensitive**: `NewWindow`, `newwindow`, and `NEWWINDOW` all lex to the same token. The examples in this page use the canonical mixed case, and recorded tapes are written that way, but nothing enforces it.
 
 ```bash
 NewWindow
@@ -134,6 +163,8 @@ TerminalMode
 Type "echo hello"
 Enter
 ```
+
+Arguments are not keywords and stay case-sensitive.
 
 ### String Literals
 
@@ -150,6 +181,39 @@ Sleep 500ms     # Milliseconds
 Sleep 2s        # Seconds
 Sleep 1.5s      # Decimal seconds
 ```
+
+### Repeat Count
+
+Key and navigation commands accept a trailing repeat count. The key is sent that many times.
+
+```bash
+Down 5          # Press Down five times
+Backspace 10
+Enter 2
+```
+
+This works for `Enter`, `Space`, `Tab`, `Backspace`, `Delete`, `Escape`, and the six navigation keys, and nothing else.
+
+<Callout type="warn">
+Other commands still parse a trailing number, they just do not repeat on it, and a few then treat it as an argument. `NewWindow 3` creates a single window named `3`. `ToggleTiling 3` toggles once. Do not add counts to non-key commands.
+</Callout>
+
+### Delay Modifier
+
+The grammar also accepts an optional `@<duration>` between a command and its count: `<Command> [@<duration>] [<count>]`.
+
+```bash
+Down@100ms 3
+NewWindow @500ms    # Whitespace around @ is allowed
+```
+
+<Callout title="@ is parsed but not applied" type="warn">
+Outside of `Sleep` and `Wait`, the parsed delay is stored on the command and then never read, by either the interactive player or the remote executor. `Down@100ms 3` sends three Down keys back to back, not one every 100ms.
+
+Use explicit `Sleep` lines for pacing.
+
+`Sleep` itself takes a bare duration and rejects `@`, so `Sleep@200ms` is a parse error. Write `Sleep 200ms`.
+</Callout>
 
 ## Mode Management
 
@@ -351,9 +415,75 @@ End
 Ctrl+c
 Ctrl+b
 Alt+1
-Shift+Tab
 Ctrl+Alt+t
+Ctrl+Up
+Shift+Left
+Ctrl+Enter
+Ctrl+Space
 ```
+
+<Callout title="Tab, Escape, Backspace and Delete cannot be modified" type="warn">
+After a modifier the parser accepts an identifier, a navigation key (`Up`, `Down`, `Left`, `Right`, `Home`, `End`), `Enter`, `Space`, or a number. `Tab`, `Escape`, `Backspace`, and `Delete` are their own keyword tokens and are not in that set, so `Shift+Tab`, `Ctrl+Tab`, `Ctrl+Escape`, and `Ctrl+Backspace` all fail to parse:
+
+```
+expected key after modifier, got Tab
+```
+
+The executor has handling for `Shift+Tab`, so this is a parser gap rather than a missing feature, but there is no way to reach it from a tape file today. If you need a modified Tab or Escape, send it through the daemon instead:
+
+```bash
+tuios send-keys "shift+tab"
+```
+</Callout>
+
+## Layout and Split Commands
+
+These verbs are recognised by the lexer and act on the BSP tree. See [BSP Tiling](/docs/bsp-tiling).
+
+```bash
+SmartSplit
+RotateSplit
+EqualizeSplits
+ToggleZoom
+FocusWindow 2
+SaveLayout "dev"
+LoadLayout "dev"
+CommandPalette
+```
+
+`FocusWindow` takes a window ID or name. `SaveLayout` and `LoadLayout` take a layout name.
+
+## Commands That Parse But Do Nothing
+
+The lexer recognises 53 command keywords, more than the executor acts on. Several of them produce a valid command that the executor has no case for, so they run without error and without effect. `tuios tape validate` will report them as fine.
+
+| Command | Behaviour |
+|---------|-----------|
+| `Set <key> <value>` | Parsed, no executor case. No-op. |
+| `Output <file>` | Parsed, no executor case. No-op. |
+| `Source <file>` | Parsed, no executor case. Does not include another tape. |
+| `Focus <id>` | Parsed, no executor case. Use `FocusWindow` instead. |
+| `Split` | See below. Always a no-op from a tape file. |
+
+<Callout title="Split always does nothing in a tape" type="error">
+The executor implements `Split` and branches on a `horizontal` or `vertical` argument. The parser routes `Split` through the basic-command path, which can only hold a trailing number, so the direction is discarded before the executor ever sees it. `Split horizontal` validates cleanly and then does nothing.
+
+The direction works only through the daemon:
+
+```bash
+tuios run-command Split horizontal
+```
+
+Inside a tape, use `SmartSplit`, which needs no argument.
+</Callout>
+
+The same parser gap affects the by-name variants of four window commands. The executor supports `NewWindow "name"`, `CloseWindow "name"`, `MinimizeWindow "name"`, and `RestoreWindow "name"`, but the parser cannot build them. In a tape, the string argument is skipped and the command applies to the focused window:
+
+```bash
+NewWindow "editor"   # Validates. Creates an unnamed window.
+```
+
+To create a named window, use `RenameWindow` after it, or call the daemon directly with `tuios run-command NewWindow "editor"`.
 
 ## Timing
 
@@ -366,9 +496,17 @@ Sleep 500ms
 Sleep 1s
 ```
 
+### Wait
+
+`Wait` is an alias for `Sleep` and requires a duration. `Wait` on its own is a parse error.
+
+```bash
+Wait 2s
+```
+
 ### WaitUntilRegex
 
-Wait for terminal output to match a pattern.
+Wait for terminal output to match a pattern, with a timeout in milliseconds.
 
 ```bash
 TerminalMode
@@ -376,6 +514,10 @@ Type "ls -la"
 Enter
 WaitUntilRegex "\$" 3000  # Wait for prompt
 ```
+
+<Callout title="Only under tape play" type="error">
+`Wait` and `WaitUntilRegex` are honoured by the interactive playback loop and skipped entirely by `tuios tape exec`. A tape that relies on either for synchronisation will race when run remotely. See [Remote Execution](#remote-execution).
+</Callout>
 
 ## Example Scripts
 
@@ -615,5 +757,15 @@ Sleep 500ms
     title="Keybindings"
     href="/docs/keybindings"
     description="Keybindings for manual control"
+  />
+  <Card
+    title="Tape Recording"
+    href="/docs/tape-recording"
+    description="Record a workflow into a tape file"
+  />
+  <Card
+    title="Control Protocol"
+    href="/docs/control-protocol"
+    description="Drive the daemon directly when a tape cannot"
   />
 </Cards>

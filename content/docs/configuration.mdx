@@ -4,386 +4,470 @@ description: Customize TUIOS keybindings and appearance
 icon: Settings
 ---
 
-TUIOS supports user-configurable keybindings and appearance through a TOML configuration file, following the XDG Base Directory specification.
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+TUIOS reads a single TOML file, `~/.config/tuios/config.toml`, following the XDG Base Directory specification. It has exactly four top-level tables: `[appearance]`, `[keybindings]`, `[daemon]`, and `[hooks]`.
+
+Custom colour themes are a separate mechanism. They are JSON files in `~/.config/tuios/themes/`, not entries in the TOML file. See [Custom themes](#custom-themes).
 
 ## Quick Start
 
-### Find Your Configuration
+### Find your configuration
 
 ```bash
 tuios config path
 ```
 
-### Edit Configuration
+### Edit configuration
 
 ```bash
 tuios config edit
 ```
 
-### View Current Keybindings
+### View current keybindings
 
 ```bash
-# View all keybindings
 tuios keybinds list
-
-# View only your customizations
-tuios keybinds list-custom
 ```
 
-### Reset to Defaults
+### Reset to defaults
 
 ```bash
 tuios config reset
 ```
 
-## Configuration File Location
+## Configuration file location
 
 **Default path:** `~/.config/tuios/config.toml`
 
-On first launch, TUIOS automatically creates a default configuration file. The exact location follows the XDG Base Directory specification:
+On first launch, TUIOS writes a default configuration file. The exact location follows the XDG Base Directory specification:
 
 - Linux/macOS: `~/.config/tuios/config.toml`
 - Custom: `$XDG_CONFIG_HOME/tuios/config.toml` (if `XDG_CONFIG_HOME` is set)
 
-## Configuration Structure
-
-The configuration file uses TOML format with the following structure:
-
-```toml
-[keybindings]
-leader_key = "ctrl+b"
-
-[keybindings.window_management]
-new_window = ["n"]
-close_window = ["w", "x"]
-# ... more keybindings
-
-[keybindings.workspaces]
-switch_workspace_1 = ["alt+1"]
-# ... more workspaces
-
-[keybindings.layout]
-snap_left = ["h"]
-# ... more layouts
-
-[appearance]
-border_style = "rounded"
-dockbar_position = "bottom"
-hide_window_buttons = false
-scrollback_lines = 10000
-```
-
-### Minimal Configuration (Recommended)
-
-You only need to specify what you want to customize. TUIOS automatically fills in missing keybindings with defaults:
+You only need to specify what you want to change. Missing keys and whole missing sections are filled in with defaults at load time, so a three-line file is a perfectly valid config.
 
 ```toml
 # ~/.config/tuios/config.toml
-# Only customize what you need!
 
 [keybindings.window_management]
 new_window = ["ctrl+t"]
 close_window = ["ctrl+w"]
-
-# Everything else uses defaults automatically
 ```
 
-**Benefits:**
-- Shorter, cleaner configuration
-- Automatic updates when new features are added
-- Easy to see what you've customized
-- Less maintenance required
+## Applying changes
 
-## Appearance Configuration
+TUIOS watches the config file and reloads it automatically. A write is debounced for 200ms, the file is re-parsed, and the result is applied on the render loop. There is also a **Reload Config** entry in the command palette (<kbd>Ctrl</kbd>+<kbd>P</kbd>) if you want to force it.
 
-The `[appearance]` section controls the visual presentation of TUIOS.
+<Callout type="warn" title="Only part of the config reloads">
+Hot reload re-applies a specific subset of `[appearance]`. Everything else needs a restart, and nothing tells you which is which at the time you edit.
 
-```toml
-[appearance]
-border_style = "rounded"
-dockbar_position = "bottom"
-hide_window_buttons = false
-scrollback_lines = 10000
-animations_enabled = true
-confirm_quit = false
-```
+**Reloads live:** `animations_enabled`, `confirm_quit`, `shared_borders`, `whichkey_enabled`, `whichkey_position`, `window_title_format`, `scroll_lines`, `zoom_max_width`, `border_focused_color`, `border_unfocused_color`. Also `window_title_position`, but only while the current value is still the default `bottom`.
+
+**Needs a restart:** every keybinding, `leader_key`, `theme`, `border_style`, `dockbar_position`, `hide_window_buttons`, `hide_scrollbar`, `show_clock`, `show_cpu`, `show_ram`, `scrollback_lines`, `max_fps`, `niri_reverse_scroll`, `preferred_shell`, the whole `[daemon]` table, and the whole `[hooks]` table.
+
+Hooks in particular are read once at startup. Editing `[hooks]` and saving does nothing until you restart the client.
+</Callout>
+
+If the reloaded file fails to parse or has errors, the reload is abandoned and the running config stays in place. The failure is written to the log, not shown on screen, so a silently unchanged setting usually means the file did not parse.
+
+## Appearance
+
+The `[appearance]` table controls visual presentation. All 24 keys:
+
+| Key | Type | Default | CLI flag |
+|-----|------|---------|----------|
+| `theme` | string | `""` | `--theme` |
+| `border_style` | enum | `"rounded"` | `--border-style` |
+| `border_focused_color` | hex string | `""` | none |
+| `border_unfocused_color` | hex string | `""` | none |
+| `dockbar_position` | enum | `"bottom"` | `--dockbar-position` |
+| `hide_window_buttons` | bool | `false` | `--hide-window-buttons` |
+| `hide_scrollbar` | bool | `false` | `--hide-scrollbar` |
+| `shared_borders` | bool | `false` | `--shared-borders` |
+| `window_title_position` | enum | `"bottom"` | `--window-title-position` |
+| `window_title_format` | string | `""` | none |
+| `scrollback_lines` | int, 100 to 1000000 | `10000` | `--scrollback-lines` |
+| `scroll_lines` | int, 1 to 50 | `3` | none |
+| `zoom_max_width` | int, 0 means fullscreen | `0` | `--zoom-max-width` |
+| `max_fps` | int, 10 to 240 | `0`, meaning 60 | none |
+| `animations_enabled` | bool | `true` | `--no-animations` |
+| `confirm_quit` | bool | `false` | `--confirm-quit` |
+| `whichkey_enabled` | bool | `true` | none |
+| `whichkey_position` | enum | `"bottom-right"` | none |
+| `show_clock` | bool | `false` | `--show-clock` |
+| `show_cpu` | bool | `false` | `--show-cpu` |
+| `show_ram` | bool | `false` | `--show-ram` |
+| `hide_clock` | bool, deprecated | `false` | `--hide-clock` |
+| `preferred_shell` | string | `""` | none |
+| `niri_reverse_scroll` | bool | `false` | none |
 
 ### border_style
 
-Controls the style of window borders.
+**Valid values:** `"rounded"` (default), `"normal"`, `"thick"`, `"double"`, `"hidden"`, `"block"`, `"ascii"`, `"outer-half-block"`, `"inner-half-block"`.
 
-**Valid values:**
-- `"rounded"` - Rounded corners (default)
-- `"normal"` - Standard straight borders
-- `"thick"` - Bold/thick borders
-- `"double"` - Double-line borders
-- `"hidden"` - No borders (automatically hides window buttons)
-- `"block"` - Block-style borders
-- `"ascii"` - ASCII-only characters for compatibility
-- `"outer-half-block"` - Half-block style (outer)
-- `"inner-half-block"` - Half-block style (inner)
+`"hidden"` does more than remove the border characters. It also suppresses the window control buttons and the scrollbar thumb, because both are drawn on the border and there is no border left to draw them on. You do not need to set `hide_window_buttons` or `hide_scrollbar` alongside it.
 
-**CLI override:** `--border-style <style>`
+### border_focused_color and border_unfocused_color
+
+Hex colours that override the theme's border colours, for example `"#89b4fa"` and `"#585b70"`. Empty clears the override and restores the theme's own colours.
 
 ### dockbar_position
 
-Controls the position of the dockbar.
-
-**Valid values:**
-- `"bottom"` - Position dockbar at the bottom (default)
-- `"top"` - Position dockbar at the top
-- `"hidden"` - Hide dockbar
-
-**CLI override:** `--dockbar-position <position>`
-
-### hide_window_buttons
-
-Controls whether window control buttons (minimize, maximize, close) are displayed in the title bar.
-
-**Default:** `false`
-
-**CLI override:** `--hide-window-buttons`
-
-### scrollback_lines
-
-Controls the number of lines stored in the scrollback buffer for each terminal window.
-
-**Valid values:** Integer between 100 and 1,000,000
-
-**Default:** `10000`
-
-**CLI override:** `--scrollback-lines <number>`
+**Valid values:** `"bottom"` (default), `"top"`, `"hidden"`.
 
 ### window_title_position
 
-Controls where window titles are displayed.
+**Valid values:** `"bottom"` (default), `"top"`, `"hidden"`.
 
-**Valid values:**
-- `"bottom"` - Show title on bottom border (default)
-- `"top"` - Show title on top border
-- `"hidden"` - Hide window titles
+When hidden, the rename window keybinding is disabled.
 
-**Default:** `"bottom"`
+### window_title_format
 
-**Note:** When hidden, the rename window keybinding is disabled.
+A template applied to every window title. Three placeholders are expanded:
 
-**CLI override:** `--window-title-position <position>`
+- `{title}` - the window's custom name, or the title the terminal set
+- `{index}` - the window's 1-based position in its workspace
+- `{cwd}` - the window's working directory
 
-### show_clock
+```toml
+[appearance]
+window_title_format = "{index}: {title} ({cwd})"
+```
 
-Controls whether the clock overlay is displayed.
+Anything written in braces that is not one of those three produces a validation warning and is rendered literally in the title bar. A format that mentions only `{index}` or `{cwd}` still renders for a window that has no title of its own.
 
-**Default:** `false`
+### scrollback_lines
 
-**Note:** Clock still shows during tape recording or prefix mode regardless of this setting.
+Lines kept per terminal window. Clamped to 100 minimum, 1,000,000 maximum.
 
-**CLI override:** `--show-clock`
+<Callout type="info">
+This is read when a window is constructed. Changing it applies to windows you open afterwards, never to windows already on screen.
+</Callout>
 
-### show_cpu
+### scroll_lines
 
-Controls whether the CPU usage indicator is displayed in the dockbar.
+Lines moved per mouse wheel notch, in scrollback, copy mode, and the scrollback browser. Clamped to 1 minimum, 50 maximum.
 
-**Default:** `false`
+### zoom_max_width
 
-**CLI override:** `--show-cpu`
+Maximum width in cells for zoom mode. `0` means fill the screen. Setting it to, say, `120` centres the zoomed window at 120 columns instead of stretching it across an ultrawide display.
 
-### show_ram
+### max_fps
 
-Controls whether the RAM usage indicator is displayed in the dockbar.
+Render frame-rate cap. `0` leaves it at the default of 60. Any other value is clamped to the range 10 to 240.
 
-**Default:** `false`
+<Callout type="info">
+The comment on this field in the source says the maximum is 120. The code clamps to 240, and 240 is what you get.
+</Callout>
 
-**CLI override:** `--show-ram`
+### hide_clock
 
-### shared_borders
+Deprecated. The clock is hidden by default now, so use `show_clock` to turn it on. `hide_clock` still takes precedence when true.
 
-When enabled, adjacent windows share a single border line instead of each window drawing its own. This gives a more compact layout with more usable screen space.
+The clock is drawn during tape recording and while the leader key is pending regardless of this setting.
 
-**Default:** `false`
+### preferred_shell
 
-**CLI override:** `--shared-borders`
+The shell to launch in new windows. Empty means auto-detect for the platform.
 
-### animations_enabled
+### niri_reverse_scroll
 
-Controls whether UI animations are enabled.
+Reverses the mouse scroll direction in the scrolling (niri-style) layout.
 
-**Default:** `true`
+## Themes
 
-**CLI override:** `--no-animations`
+TUIOS ships 342 built-in themes, supplied by the `bubbletint` dependency.
 
-### confirm_quit
+```bash
+# List every theme
+tuios --list-themes
 
-Always show the quit confirmation dialog, even when no foreground processes are running. By default, the dialog only appears if there are active processes (like a running command) that would be killed on exit.
+# Preview one theme's 16 ANSI colors
+tuios --preview-theme dracula
 
-**Default:** `false`
+# Launch with a theme
+tuios --theme dracula
+```
 
-**CLI override:** `--confirm-quit`
+```toml
+[appearance]
+theme = "dracula"
+```
 
-## Keybindings Configuration
+### The theme picker
+
+There is a searchable theme picker with fuzzy matching, an 8-colour swatch per theme, and live preview as you move through the list. <kbd>Esc</kbd> restores whatever theme you had before you opened it.
+
+<Callout type="warn" title="The picker has no keybinding">
+There is no prefix command and no configurable action for the theme picker. The only two ways to open it are the **Theme** row on the [settings page](#the-in-app-settings-page) (press <kbd>Enter</kbd> on it) and the **Theme Picker** entry in the <kbd>Ctrl</kbd>+<kbd>P</kbd> command palette.
+</Callout>
+
+### Custom themes
+
+Custom themes are JSON, one theme per file, in `~/.config/tuios/themes/`. The directory is flat: subdirectories are skipped, not searched.
+
+```json
+{
+  "id": "my-theme",
+  "display_name": "My Theme",
+  "dark": true,
+  "fg": "#e0def4",
+  "bg": "#191724",
+  "black": "#26233a",
+  "red": "#eb6f92",
+  "green": "#31748f",
+  "yellow": "#f6c177",
+  "blue": "#9ccfd8",
+  "purple": "#c4a7e7",
+  "cyan": "#ebbcba",
+  "white": "#e0def4"
+}
+```
+
+Save that as `~/.config/tuios/themes/my-theme.json` and select it with `theme = "my-theme"` or `--theme my-theme`.
+
+- `id` defaults to the filename with the extension stripped and lowercased, so it can be omitted.
+- `display_name` defaults to `id`.
+- Missing colours are filled with xterm defaults rather than rejected.
+- Each `bright_*` colour falls back to its non-bright counterpart when absent, which is why the example above omits all eight.
+- A file that does not parse is logged and skipped. It does not stop the other themes loading, and it does not stop TUIOS starting. Nothing appears on screen, so check the log viewer if a theme does not show up.
+
+<Callout type="warn">
+The themes directory is read once per process, behind a one-shot guard. Adding a new `.json` file while TUIOS is running will not make it appear, and neither will the config reload. Restart.
+</Callout>
+
+## Keybindings
 
 ### leader_key
 
-Controls the prefix key for window management commands (the tmux-style leader key).
+The tmux-style prefix key for prefix commands.
 
-**Default:** `"ctrl+b"`
-
-**Examples:**
 ```toml
 [keybindings]
-# Use Ctrl+A instead of Ctrl+B (like GNU Screen)
+# Ctrl+A, like GNU Screen
 leader_key = "ctrl+a"
-
-# Use Alt+Space
-leader_key = "alt+space"
-
-# Use Ctrl+Space
-leader_key = "ctrl+space"
 ```
 
-### Keybinding Sections
+Other useful values: `"alt+space"`, `"ctrl+space"`.
 
-#### window_management
+### The 14 sections
 
-Window creation, navigation, and control.
+Every one of these is a table under `[keybindings]`, and every one resolves through the keybind registry, so every action in every one of them is rebindable.
 
-**Available actions:**
-- `new_window` - Create new terminal window
-- `close_window` - Close focused window
-- `rename_window` - Rename focused window
-- `minimize_window` - Minimize focused window
-- `restore_all` - Restore all minimized windows
-- `next_window` - Focus next window
-- `prev_window` - Focus previous window
-- `select_window_1` through `select_window_9` - Select window by number
+| Section | Context |
+|---------|---------|
+| `window_management` | Window mode: create, close, rename, minimize, cycle, select by number |
+| `workspaces` | Switch workspace, move window to workspace and follow |
+| `layout` | Snapping, tiling toggle, swaps, resizes, BSP splits, preselect |
+| `mode_control` | Enter terminal mode, enter window mode, toggle help, quit |
+| `navigation` | Arrow navigation and selection extension |
+| `restore_minimized` | Restore minimized window 1-9 |
+| `system` | Ships empty by default |
+| `prefix_mode` | After the leader key |
+| `window_prefix` | After leader then `t` |
+| `minimize_prefix` | After leader then `m` |
+| `workspace_prefix` | After leader then `w` |
+| `debug_prefix` | After leader then `D` |
+| `tape_prefix` | After leader then `T` |
+| `terminal_mode` | Direct binds in terminal mode, no prefix needed |
 
-#### workspaces
+<Callout type="info" title="The prefix sections used to be inert">
+Six of these sections were parsed and then ignored. Rebinding anything under the leader key was a silent no-op: your config was accepted, and the hard-coded key kept working instead.
 
-Workspace switching and window movement.
+`prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`, `debug_prefix`, and `tape_prefix` now all resolve through the registry, so they do what they say. `terminal_mode` was fixed at the same time, though it is not a prefix section.
 
-**Available actions:**
-- `switch_workspace_1` through `switch_workspace_9` - Switch to workspace N
-- `move_and_follow_1` through `move_and_follow_9` - Move window to workspace N and follow
+If you wrote bindings for these sections against an older version and gave up on them, they work now.
+</Callout>
 
-#### layout
+### Section contents
 
-Window positioning and tiling.
+`window_management` actions: `new_window`, `close_window`, `rename_window`, `minimize_window`, `restore_all`, `toggle_zoom`, `next_window`, `prev_window`, `select_window_1` through `select_window_9`.
 
-**Available actions:**
-- `snap_left`, `snap_right`, `snap_fullscreen`, `unsnap`
-- `snap_corner_1` through `snap_corner_4` - Snap to corners
-- `toggle_tiling` - Toggle automatic tiling mode
-- `swap_left`, `swap_right`, `swap_up`, `swap_down` - Swap windows
-- Resize commands for tiling mode
+`workspaces` actions: `switch_workspace_1` through `switch_workspace_9`, `move_and_follow_1` through `move_and_follow_9`.
 
-#### mode_control
+`layout` actions: `snap_left`, `snap_right`, `snap_fullscreen`, `unsnap`, `snap_corner_1` through `snap_corner_4`, `toggle_tiling`, `swap_left`, `swap_right`, `swap_up`, `swap_down`, `resize_master_shrink`, `resize_master_grow`, `resize_height_shrink`, `resize_height_grow`, `resize_master_shrink_left`, `resize_master_grow_left`, `resize_height_shrink_top`, `resize_height_grow_top`, `split_horizontal`, `split_vertical`, `rotate_split`, `equalize_splits`, `preselect_left`, `preselect_right`, `preselect_up`, `preselect_down`.
 
-Mode switching and application control.
+`mode_control` actions: `enter_terminal_mode`, `enter_window_mode`, `toggle_help`, `quit`.
 
-**Available actions:**
-- `enter_terminal_mode` - Enter terminal mode
-- `enter_window_mode` - Enter window management mode
-- `toggle_help` - Toggle help overlay
-- `quit` - Quit TUIOS
+`navigation` actions: `nav_up`, `nav_down`, `nav_left`, `nav_right`, `extend_up`, `extend_down`, `extend_left`, `extend_right`.
 
-#### terminal_mode
+`restore_minimized` actions: `restore_minimized_1` through `restore_minimized_9`.
 
-Shortcuts that work directly in Terminal Mode without requiring the prefix key.
+`terminal_mode` actions: `terminal_next_window`, `terminal_prev_window`, `terminal_exit_mode`.
 
-**Available actions:**
-- `terminal_next_window` - Cycle to next visible window
-- `terminal_prev_window` - Cycle to previous visible window
-- `terminal_exit_mode` - Exit terminal mode
+The prefix sections are listed in full on the [Keybindings reference](/docs/keybindings), alongside their default keys.
 
-**Default values (platform-specific):**
+### terminal_mode defaults are platform-specific
 
 ```toml
-# macOS defaults
+# macOS
 [keybindings.terminal_mode]
-terminal_next_window = ["opt+tab"]
-terminal_prev_window = ["opt+shift+tab"]
+terminal_next_window = ["opt+tab", "alt+n"]
+terminal_prev_window = ["opt+shift+tab", "alt+p"]
 terminal_exit_mode = ["opt+esc"]
 
-# Linux/Windows defaults
+# Linux and elsewhere
 [keybindings.terminal_mode]
 terminal_next_window = ["alt+n"]
 terminal_prev_window = ["alt+p"]
 terminal_exit_mode = ["alt+esc"]
 ```
 
-## Key Syntax
+<Callout type="warn" title="One key that config cannot claim">
+A bare <kbd>,</kbd> in window mode is intercepted for the settings page before any keybinding lookup happens.
 
-### Modifier Keys
+Two consequences. The default `resize_master_shrink_left` binding on `,` is unreachable in window mode. And rebinding `,` under `[keybindings.layout]` to something else will still open settings, because the intercept is a hardcoded comparison rather than a registry lookup. This is the one place where the config does not win.
+</Callout>
 
-**Supported modifiers:**
-- `ctrl+` - Control key
-- `alt+` - Alt key
-- `shift+` - Shift key
-- `opt+`, `option+` - Option key (macOS only)
+## Key syntax
 
-**Not supported:**
-- `cmd+`, `super+` - Not supported (typically captured by OS)
+### Modifiers
 
-### Special Keys
+- `ctrl+`
+- `alt+`
+- `shift+`
+- `opt+`, `option+` (macOS only)
 
-- `enter`, `return`, `esc`, `escape`, `tab`, `space`
-- `backspace`, `delete`
-- `up`, `down`, `left`, `right`
-- `home`, `end`, `pgup`, `pgdown`
-- `f1` through `f12`
+`cmd+` and `super+` are not supported; they are usually captured by the OS before TUIOS sees them.
 
-### Key Combinations
+### Special keys
 
-```toml
-"ctrl+shift+t"  # Control + Shift + T
-"alt+enter"     # Alt + Enter
-"shift+tab"     # Shift + Tab
-"opt+1"         # Option + 1 (macOS only)
-```
+`enter`, `return`, `esc`, `escape`, `tab`, `space`, `backspace`, `delete`, `up`, `down`, `left`, `right`, `home`, `end`, `pgup`, `pgdown`, `f1` through `f12`.
 
-### Multiple Keybindings
-
-Bind multiple keys to the same action:
+### Multiple keys per action
 
 ```toml
 new_window = ["n", "ctrl+n", "ctrl+t"]
 ```
 
-### Removing Keybindings
-
-Use an empty array to disable a keybinding:
+### Removing a binding
 
 ```toml
-close_window = []  # Disables this action
+close_window = []
 ```
 
-## Platform-Specific Configuration
+An empty array unbinds the action. It produces a warning, not an error, since some actions are reasonably left unbound.
+
+### Shifted keys have two spellings, and both match
+
+`shift+1` and `!` are treated as the same key. So are `shift+a` and `A`. Binding either spelling binds both, on every platform.
+
+This is convenient until it is not. If you bind `shift+1` to one action and `!` to another, they collide, and one of them wins non-deterministically. Pick one spelling per key. The default config leans on this deliberately, which is why `restore_minimized_1` lists both `"shift+1"` and `"!"`.
+
+## Platform notes
 
 ### macOS
 
-On macOS, TUIOS supports the Option key.
+Workspace switching defaults to the Option key:
 
-**Default workspace switching:**
 ```toml
 [keybindings.workspaces]
 switch_workspace_1 = ["opt+1"]
 switch_workspace_2 = ["opt+2"]
-# ... etc
 ```
 
-**Equivalent notations:**
-- `opt+1` - Recommended (Mac-friendly)
-- `option+1` - Also supported
-- `alt+1` - Works but less intuitive for Mac users
+`opt+1`, `option+1`, and `alt+1` all work. On macOS, writing `alt+` produces an advisory warning suggesting `opt+` instead, for consistency with what is printed on the key. It is advice, not an error, and the binding works either way.
 
-### Linux/Other Platforms
+### Linux and elsewhere
 
-Use standard modifiers only:
-- `alt+1`, `ctrl+1`, etc.
-- `opt+` and `option+` are not valid
+Use `alt+` and `ctrl+`. `opt+` and `option+` are not valid.
 
-## Example Configurations
+## The in-app settings page
 
-### Browser-Style
+TUIOS has a settings page that edits the config for you. It exposes 19 options in four categories:
+
+| Category | Options |
+|----------|---------|
+| Appearance | Theme, Border style, Window title, Shared borders, Window buttons, Scrollbar |
+| Dock | Dock position, Clock, CPU meter, RAM meter |
+| Behavior | Animations, Confirm quit, Which-key, Which-key position, Reverse scroll, Max FPS |
+| Advanced | Scrollback lines, Scroll lines, Zoom width |
+
+Three ways in:
+
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>,</kbd> (the `prefix_settings` action)
+- a bare <kbd>,</kbd> in window mode
+- the **Settings** entry in the <kbd>Ctrl</kbd>+<kbd>P</kbd> command palette
+
+<Callout type="warn" title="The settings page rewrites your config file">
+Every adjustment you make persists immediately, by serialising the in-memory config and overwriting `~/.config/tuios/config.toml` wholesale. There is no merge and no round-trip.
+
+That means your comments are gone, your key ordering is gone, your formatting is gone, and every field that was previously absent gets written out with its default value. A hand-tuned 10-line config comes back as a full dump.
+
+If you maintain the file by hand, keep a copy in version control before you touch the settings page.
+</Callout>
+
+Most of the page applies as you adjust it. Two exceptions worth knowing:
+
+- **Scrollback lines** applies to windows opened afterwards, not to windows already on screen.
+- **Theme**, if you point it at a custom `.json` you just added, needs a restart. The themes directory is only read once per process.
+
+## The daemon table
+
+```toml
+[daemon]
+log_level = "off"
+```
+
+`log_level` sets the daemon's debug verbosity. Valid values, in increasing order: `off` (default), `errors`, `basic`, `messages`, `verbose`, `trace`. It is read when a foreground daemon starts, and only if the level was not already set another way.
+
+<Callout type="warn" title="default_codec and socket_path are declared and inert">
+The default config file that TUIOS writes for you contains two more daemon keys:
+
+```toml
+[daemon]
+default_codec = "gob"
+socket_path = ""
+```
+
+Both are parsed, both are given defaults, both are written into every user's config file, and neither is read by anything. Setting `default_codec = "json"` does not change the wire codec. Setting `socket_path` does not move the socket.
+
+They are documented here only so you do not spend an evening working out why they have no effect. The socket location is fixed; see [Sessions](/docs/sessions#daemon-location).
+</Callout>
+
+## Hooks
+
+The `[hooks]` table runs shell commands on window, workspace, and session events. It has its own page: [Hooks](/docs/hooks).
+
+Two things to carry over from there: hook event names are hyphenated rather than snake_case, and a misspelled event name is silently ignored.
+
+## Validation
+
+The config is validated at load. Errors and warnings are treated differently.
+
+**Errors** are things like an unparseable key (`"cmd+t"`, `"ctrl+"`). They are printed to stderr:
+
+```
+Config error in [window_management]: cmd+t - invalid modifier: cmd
+```
+
+<Callout type="warn">
+An error does not stop TUIOS from starting, and it does not fall back for just the broken key. The whole config file is discarded and the full built-in defaults are used instead. One bad key costs you every customisation in the file.
+
+Since this is printed before the alternate screen is entered, the first rendered frame usually wipes it. Run `tuios keybinds list` to see it without the TUI on top.
+</Callout>
+
+**Warnings** do not discard anything. They cover unknown enum values (which fall back to their defaults), unknown title-format placeholders, actions bound to no keys, keys bound to more than one action in the same context, essential actions left unbound, and the macOS `alt+` advisory. They are surfaced inside the running TUI as a notification pointing you at the log viewer.
+
+## Auditing your customisations
+
+```bash
+tuios keybinds list-custom
+```
+
+<Callout type="warn" title="This is not a complete audit">
+`list-custom` diffs 9 of the 14 keybinding sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`.
+
+It does not look at `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, or `terminal_mode`, and it does not report a customised `leader_key` at all. A config that changes only those will print "No custom keybindings configured", which is wrong.
+
+Treat the output as a partial view. For the whole picture, read the file.
+</Callout>
+
+## Example configurations
+
+### Browser-style
 
 ```toml
 [keybindings.window_management]
@@ -393,7 +477,7 @@ next_window = ["ctrl+tab"]
 prev_window = ["ctrl+shift+tab"]
 ```
 
-### Vim-Style
+### Vim-style
 
 ```toml
 [keybindings.mode_control]
@@ -405,50 +489,77 @@ new_window = ["ctrl+t"]
 close_window = ["ctrl+w"]
 ```
 
-### Custom Leader Key
+### Screen-style leader with a rebound prefix menu
 
 ```toml
 [keybindings]
-# Use Ctrl+A like GNU Screen
 leader_key = "ctrl+a"
+
+[keybindings.prefix_mode]
+prefix_new_window = ["c"]
+prefix_split_horizontal = ["S"]
+prefix_split_vertical = ["V"]
+prefix_settings = ["g"]
+```
+
+### A quieter, denser look
+
+```toml
+[appearance]
+theme = "nord"
+border_style = "hidden"
+dockbar_position = "hidden"
+shared_borders = true
+whichkey_enabled = false
+window_title_format = "{index}: {title}"
+scrollback_lines = 50000
+max_fps = 120
 ```
 
 ## Troubleshooting
 
-### Configuration Not Loading
+### Configuration not loading
 
-1. Check file location:
 ```bash
+# Confirm the path TUIOS is actually reading
 tuios config path
+
+# Parse the file and print any errors, without the TUI covering them
+tuios keybinds list
 ```
 
-2. Verify TOML syntax
-3. Check startup logs:
-```bash
-tuios --debug
-```
+If `keybinds list` prints `Using default keybindings...`, your file was rejected and everything in it is being ignored.
 
-### Invalid Key Syntax
+### Invalid key syntax
 
-Common errors:
-- `"cmd+t"` - cmd/super not supported
-- `"opt+1"` on Linux - opt only valid on macOS
+Common mistakes:
+
+- `"cmd+t"` and `"super+t"` - not supported
+- `"opt+1"` on Linux - `opt` is macOS only
 - `"ctrl+"` - incomplete combination
 
-### Applying Changes
+### A setting changed nothing
 
-Configuration is loaded on startup. To apply changes:
-1. Edit configuration
-2. Quit TUIOS
-3. Restart TUIOS
+Work through, in order:
 
-## Related Documentation
+1. Is it in the reload subset? Most keys are not. See [Applying changes](#applying-changes). Restart before concluding anything.
+2. Did the file parse? A reload that fails is silent. Run `tuios keybinds list`.
+3. Is it a keybinding under the leader key? Those work now, but only on a current build.
+4. Is it `,` in window mode? That key is claimed by the settings page and cannot be rebound.
+5. Is it a hook? Check the event name spelling. Hyphens, not underscores.
+
+## Related documentation
 
 <Cards>
   <Card
     title="Keybindings Reference"
     href="/docs/keybindings"
     description="Complete keyboard shortcut reference"
+  />
+  <Card
+    title="Hooks"
+    href="/docs/hooks"
+    description="Run shell commands on TUIOS events"
   />
   <Card
     title="CLI Reference"

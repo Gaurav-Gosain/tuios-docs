@@ -12,9 +12,11 @@ Thank you for your interest in contributing to TUIOS!
 
 ### Prerequisites
 
-- Go 1.24.4 or later
+- Go 1.25.9 or later (the version pinned in `go.mod`)
 - Git
-- Nerd Font (for testing UI)
+- Nerd Font (for testing UI; `--ascii-only` works without one)
+
+No C toolchain is needed. There is no cgo in the tree.
 
 ### Development Setup
 
@@ -48,10 +50,20 @@ nix run        # Run directly
 
 ## Code Style
 
-- Run `go fmt` before committing
+There is no `.golangci.yml` and no configured linter in this repository. The entire automated bar is:
+
+```bash
+go fmt ./...
+go vet ./...
+```
+
+Run both before committing. Everything else is convention, enforced by review rather than tooling:
+
 - Follow [Effective Go](https://go.dev/doc/effective_go) conventions
 - Add doc comments for exported types/functions
 - Keep functions focused and testable
+
+If you run `golangci-lint` or `staticcheck` locally, treat their output as advisory. The existing tree is not clean under every linter's default rule set, so do not mix unrelated lint fixes into a feature PR.
 
 ## Testing
 
@@ -73,6 +85,16 @@ go test -race ./...
 # Verbose output
 go test -v ./internal/config/...
 ```
+
+<Callout type="warn">
+`e2e/tui` is a separate Go module and is **not** covered by `go test ./...` from the repository root. It drives a real TUIOS in a PTY and has to be run on its own:
+
+```bash
+cd e2e/tui && go test ./...
+```
+
+If you change rendering, input handling, or the daemon protocol, run it before opening a PR.
+</Callout>
 
 ### Writing Tests
 

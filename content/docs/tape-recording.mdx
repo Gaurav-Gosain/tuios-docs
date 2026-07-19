@@ -74,15 +74,17 @@ Recording status appears in the status bar while active. Look for the "REC" indi
 
 ## What Gets Recorded
 
+The recorder maps a fixed set of action names to tape commands. Anything outside that set is dropped silently.
+
 ### Captured
 
-- **Window Operations**: New, close, rename, minimize, restore
-- **Navigation**: Next/previous window, select by number
-- **Workspaces**: Switch, move window to workspace
-- **Layout**: Toggle tiling, snap operations, splits
-- **Mode Switches**: Window management ↔ Terminal mode
+- **Window Operations**: New, close, minimize, restore all
+- **Navigation**: Next/previous window, select window by number
+- **Workspaces**: Switch workspace
+- **Layout**: Toggle tiling, snap left, snap right, snap fullscreen
+- **Mode Switches**: Window management to terminal mode and back
 - **Keyboard Input**: Text typed in terminals, special keys
-- **Timing**: Automatic delays between actions
+- **Timing**: Automatic delays between actions, emitted as `Sleep`
 
 ### Not Captured
 
@@ -90,9 +92,12 @@ Recording status appears in the status bar while active. Look for the "REC" indi
 - **Terminal Output**: Only input is recorded
 - **Visual State**: Window positions in non-tiling mode
 - **Copy Mode**: Scrollback navigation
+- **Splits**: `Split`, `SmartSplit`, `RotateSplit`, `EqualizeSplits`, and `ToggleZoom` have no recorder mapping. A BSP session records as if you never split anything.
+- **Renames**: `RenameWindow` is not recorded
+- **Move to workspace**: only the switch is recorded, not moving a window across
 
-<Callout type="info">
-This is intentional. Recordings focus on reproducible actions that work across different terminal sizes and states.
+<Callout type="warn">
+The gaps above are not configurable. If your workflow depends on splits or renames, you will have to add those lines to the tape by hand after recording. `RenameWindow "name"` and `SmartSplit` both work on playback; only the capture side is missing.
 </Callout>
 
 ## Managing Recordings
@@ -125,7 +130,11 @@ tuios tape delete my-workflow
 tuios tape dir
 ```
 
-Prints the path: `~/.local/share/tuios/tapes/`
+<Callout type="warn">
+This prints `~/.local/share/tuios`, one level above where tapes are actually stored. Recordings live in the `tapes/` subdirectory of that path. This is a bug in `internal/app/tapemanager.go`, which calls `filepath.Dir` on a path that already ends in `/tapes`. Do not pipe the output of `tape dir` straight into a glob.
+
+The correct directory is `~/.local/share/tuios/tapes/`.
+</Callout>
 
 ## Recording Workflow
 
@@ -254,15 +263,13 @@ Follows XDG Base Directory specification. Created automatically on first recordi
 
 Standard `.tape` files using the TUIOS tape scripting language. See [Tape Scripting](/docs/tape-scripting) for the complete language reference.
 
-### Performance
+### Overhead
 
-Recording overhead is minimal:
+Recording appends a small struct per action to an in-memory slice and writes the file once, when you stop. There is no per-keystroke disk I/O and no extra work in the render path.
 
-- **Memory**: ~100 bytes per action
-- **CPU**: < 0.1% on modern systems
-- **Disk**: 1-10KB per recording
-
-Recording does not impact terminal performance or increase latency.
+<Callout type="info">
+There is no benchmark for recording overhead in the repo, so this page does not quote memory, CPU, or file-size figures. If you need numbers for your workload, measure them.
+</Callout>
 
 ## Examples
 
@@ -323,26 +330,9 @@ SwitchWorkspace 1
 
 ### Example 3: CI/CD Testing
 
-Record a test execution workflow:
+Record the workflow interactively first. Start TUIOS, press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>r</kbd>, name it `ci-test-suite`, create a window with <kbd>n</kbd>, enter terminal mode with <kbd>i</kbd>, run your test command, then stop with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>s</kbd>.
 
-```bash
-# Start recording
-tuios
-# Ctrl+B T r
-# Name: "ci-test-suite"
-
-# Run tests
-n
-i
-npm test
-# Wait for completion...
-Ctrl+C
-
-# Stop recording
-# Ctrl+B T s
-```
-
-Edit to add proper waiting:
+The saved tape at `~/.local/share/tuios/tapes/ci-test-suite.tape` will look like this:
 
 ```bash
 WindowManagementMode
@@ -354,12 +344,26 @@ Enter
 WaitUntilRegex "Tests passed" 30000
 ```
 
-Run in CI:
+Run it in CI with `tape play`, which is the subcommand that honours `WaitUntilRegex`:
 
 ```bash
 #!/bin/bash
-tuios tape run ci-test-suite.tape
+set -euo pipefail
+tuios tape play ~/.local/share/tuios/tapes/ci-test-suite.tape
 ```
+
+<Callout title="Do not swap play for exec here" type="error">
+`tuios tape exec` silently skips `Wait` and `WaitUntilRegex`. Under `exec` this tape would press Enter and finish immediately, reporting success before the tests have run.
+
+If you need the headless daemon path, drop the `WaitUntilRegex` line from the tape and gate on output from the shell instead:
+
+```bash
+tuios new ci --detach
+tuios tape exec -s ci ci-test-suite.tape
+timeout 60 bash -c 'until tuios capture-pane -s ci | grep -q "Tests passed"; do sleep 1; done'
+tuios kill-session ci
+```
+</Callout>
 
 ## Editing Recordings
 
@@ -367,9 +371,13 @@ Tape files are plain text. Edit them to:
 
 - Add comments explaining steps
 - Insert additional `Sleep` commands for pacing
-- Add `WaitUntilRegex` for output synchronization
+- Add `WaitUntilRegex` for output synchronization, if you will replay with `tape play`
 - Remove mistakes
 - Combine multiple recordings
+
+<Callout type="warn">
+`Wait` and `WaitUntilRegex` only take effect under `tuios tape play`. `tuios tape exec` skips them without warning. If a tape is meant for both, pace it with `Sleep`.
+</Callout>
 
 **Before editing:**
 

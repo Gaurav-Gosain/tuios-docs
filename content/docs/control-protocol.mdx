@@ -1,0 +1,200 @@
+---
+title: Control Protocol
+description: Drive a TUIOS daemon from scripts with the JSON verb protocol
+icon: Terminal
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+The TUIOS daemon speaks a line-oriented JSON protocol on its Unix socket. It is meant for scripts, automation, and programs that drive TUIOS without a terminal attached. Every request is one line of JSON, and every response is one line of JSON.
+
+This is a separate surface from the [remote control CLI commands](/docs/cli-reference#remote-control-commands). Those commands are convenient for shell one-liners; the verb protocol is what you want when you need structured errors, blocking waits, or an event stream.
+
+## Connecting
+
+The verb protocol shares the daemon socket with the binary client protocol. The daemon decides which one you are speaking by looking at the first byte you send: a line beginning with `{` (or leading whitespace) is a verb-protocol client, and a binary client's first byte is the high byte of a length prefix, which is never `{`.
+
+That means there is no separate port, no handshake negotiation, and no special socket. Connect to the socket and write JSON.
+
+```bash
+# Linux, when XDG_RUNTIME_DIR is set
+echo '{"id":1,"verb":"list-sessions"}' | socat - UNIX-CONNECT:"$XDG_RUNTIME_DIR/tuios/tuios.sock"
+```
+
+See [Sessions](/docs/sessions#daemon-location) for the socket path on each platform.
+
+## Discovering the protocol
+
+You do not have to read this page to use the protocol. The daemon describes itself:
+
+```bash
+# Every verb, its parameters, and example requests
+tuios list-verbs
+
+# Just one verb
+tuios list-verbs capture-pane
+```
+
+`list-verbs` reports the protocol version, every verb and parameter, the accepted values for each constrained parameter, the stable error codes, and the request and response envelope shapes. The same information is available over the socket as the `list-verbs` verb.
+
+<Callout type="tip">
+The parameter schema `list-verbs` returns is generated from the same value sets the request validator uses, so the accepted values it advertises cannot disagree with what the daemon will actually take.
+</Callout>
+
+## Envelopes
+
+A request carries an `id`, a `verb`, and optional `params`:
+
+```json
+{"id":1,"verb":"send-keys","params":{"session":"work","keys":"ls,Enter"}}
+```
+
+A successful response echoes the `id` and carries a `result`. An error response carries an `error` object with a stable `code`, a human-readable `message`, and often a `hint` naming what would resolve the failure: the closest verb spelling, the parameter that was wrong, or the set of values that do exist.
+
+Existing consumers that read only `code` and `message` are unaffected by hints, which are all optional.
+
+## Verbs
+
+Seventeen verbs are implemented.
+
+### Discovery and handshake
+
+| Verb | Purpose |
+|------|---------|
+| `hello` | Report the daemon's protocol version and the range it accepts. Takes `client`, `version`, `protocol`. |
+| `list-verbs` | Describe every verb, or one named verb. |
+
+### Sessions and windows
+
+| Verb | Purpose |
+|------|---------|
+| `list-sessions` | List all sessions the daemon holds. |
+| `session-info` | Report details about one session. |
+| `list-windows` | List the windows in a session. |
+| `new-window` | Create a window. Optional `name`. |
+| `close-window` | Close a window. |
+| `kill-session` | Terminate a session and every window in it. |
+
+### Input and output
+
+| Verb | Purpose |
+|------|---------|
+| `send-keys` | Send parsed key tokens, for example `"ctrl+b,n"`. Optional `literal` and `raw` flags. |
+| `send-text` | Write literal text to a window's PTY. |
+| `capture-pane` | Capture a pane's contents. |
+| `resize` | Resize a window's PTY. Requires `width` and `height`. |
+
+### Options
+
+| Verb | Purpose |
+|------|---------|
+| `set-option` | Set a session option by path, for example `appearance.dockbar_position`. Applied live when a client is attached. |
+| `get-option` | Read an option previously set with `set-option`. |
+
+<Callout type="info">
+`get-option` reads back only what `set-option` has set on that session. It is not a view of the whole resolved configuration, so a key you never set returns the `option_not_found` error rather than the value from your config file.
+</Callout>
+
+### Events and waiting
+
+| Verb | Purpose |
+|------|---------|
+| `subscribe` | Open a long-lived event stream on this connection. |
+| `unsubscribe` | Close this connection's event stream. |
+| `wait-for` | Block until a condition matches, or fail with the `timeout` code. |
+
+## Capturing panes
+
+`capture-pane` reads one of two buffers, named by `source`:
+
+- `visible` (default) captures the visible screen.
+- `recent` captures recent scrollback.
+
+Set `styled` to include ANSI styling. Restrict the output with `lines` to keep the last N lines, or with `start` and `end` for a 1-based inclusive range. When `start` or `end` is given, `lines` is ignored.
+
+```json
+{"id":1,"verb":"capture-pane","params":{"session":"work","source":"recent","lines":50}}
+```
+
+<Callout type="warn">
+There is no unwrapped capture. A `recent-unwrapped` source was once accepted and behaved as a silent alias for `recent`; it has been retired, and asking for it now returns an error explaining why. The emulator does not record which rows are soft wrapped, so unwrapping would mean guessing at row boundaries. Long lines come back split at the pane width.
+</Callout>
+
+## Waiting for conditions
+
+`wait-for` replaces the poll-and-capture loops that scripts otherwise write. It blocks until the condition matches or the timeout expires.
+
+| Condition | Matches when |
+|-----------|--------------|
+| `session-exists` | The named session exists. |
+| `window-output` | Output matching `pattern` (a regular expression) appears. |
+| `window-exit` | The window's process exits. |
+| `window-idle` | The window produces no output for `idle` milliseconds. |
+
+`idle` defaults to 500 ms and `timeout` defaults to 30000 ms. `pattern` is required by `window-output`. A wait that expires fails with the `timeout` error code rather than returning a non-match result.
+
+```json
+{"id":1,"verb":"wait-for","params":{"condition":"window-output","session":"work","pattern":"done","timeout":10000}}
+```
+
+## Event stream
+
+`subscribe` turns the connection into an event stream. Events are delivered from the moment of subscription and there is no backfill, so subscribe before you trigger the thing you want to observe.
+
+Filter with `types` to receive only some events, and set `queue` to change how many events buffer before the stream marks a gap (default 256). If a consumer falls behind far enough to overflow that buffer, the stream emits a `gap` event rather than silently dropping events.
+
+The event types are:
+
+`window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `output`, `bell`, `mode-changed`, `session-created`, `session-closed`, and `gap`.
+
+```json
+{"id":1,"verb":"subscribe","params":{"session":"work","types":["window-created","window-closed"]}}
+```
+
+## Error codes
+
+Codes are stable and safe to branch on.
+
+| Code | Meaning |
+|------|---------|
+| `invalid_request` | Not a valid request envelope, or the connection is in the wrong state for the verb. |
+| `unknown_verb` | No such verb. The hint carries the closest match and the full verb list. |
+| `invalid_params` | A parameter was missing, malformed, or outside its accepted set. The hint names the parameter. |
+| `session_not_found` | The named session does not exist. The hint lists the sessions that do. |
+| `window_not_found` | The window target did not resolve. The hint lists the addressable windows. |
+| `no_windows` | The session exists but holds no windows to act on. |
+| `pty_not_found` | The target window has no live PTY; its shell has already exited. |
+| `needs_client` | The verb needs a live renderer, and no client is attached. |
+| `option_not_found` | A `get-option` key was never set. |
+| `command_failed` | A verb routed to the attached client came back failed. |
+| `timeout` | A `wait-for` condition did not match before its timeout. |
+| `protocol_mismatch` | The caller's protocol version is outside the range this daemon accepts. |
+| `internal` | Unexpected server-side failure. |
+
+## Verbs that need an attached client
+
+Some work cannot happen without a renderer. A verb that routes to the attached TUI returns `needs_client` when the session is headless, rather than appearing to succeed. If you are driving a session created with `tuios new --detach`, expect this for anything that depends on the client's view of the world, and attach a client if you need it.
+
+## Known gaps
+
+Written plainly, because scripting against a wrong schema is expensive:
+
+- `capture-pane` accepts `scrollback` and `ansi` as aliases for convenience, but neither alias is declared in the schema `list-verbs` reports. A caller generating code from the schema will not discover them.
+- `wait-for` accepts a `source` parameter that is likewise absent from its advertised schema.
+- Both mean the advertised parameter lists are narrower than what the daemon accepts. Nothing the schema advertises is wrong, so code written from `list-verbs` works; it just does not cover everything.
+
+## Related
+
+<Cards>
+  <Card
+    title="Sessions & Daemon Mode"
+    href="/docs/sessions"
+    description="Persistent sessions, detach, and resurrection"
+  />
+  <Card
+    title="CLI Reference"
+    href="/docs/cli-reference"
+    description="Complete command reference"
+  />
+</Cards>
