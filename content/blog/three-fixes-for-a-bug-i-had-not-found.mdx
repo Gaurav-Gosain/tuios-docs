@@ -21,6 +21,11 @@ Go's `RWMutex` is not reentrant for readers. Two `RLock` calls nest fine on
 their own, but if a writer queues between them, the second read blocks behind
 the writer and the writer blocks behind the first read. Everything stops.
 
+A profiler is useless on a stopped program, because nothing is hot. What shows
+a deadlock is the goroutine dump: `SIGQUIT` with `GOTRACEBACK=all`, and there
+in a single goroutine's stack is the same lock, held at one frame and wanted
+at a deeper one.
+
 Real freeze, reachable, fixed by hoisting the cursor query above the lock. I
 also believed it explained the blank pane, because a render that deadlocks
 partway could plausibly leave a pane unpainted.
@@ -122,3 +127,26 @@ Each time, I said "this is fixed" when what I actually knew was "I found a bug
 and it might be this one". Those are different claims, and I made the stronger
 one three times running, to someone who then had to spend their afternoon
 finding out otherwise.
+
+## Two checks I now run
+
+The first is the negative control. After a fix lands with its test, revert the
+fix, confirm the test fails, restore it. A green test with the fix in place
+only proves the test can pass. A red test without the fix proves the test is
+actually connected to the change. In a later stretch of work I ran that
+revert-and-confirm step on every single fix, and it caught five cases where a
+fix had been reported as working and was not. Five, from a check that takes a
+minute each.
+
+Note what it would not have caught here. My three wrong fixes all pass the
+negative control, because each one really did fix the bug its test guarded.
+The negative control proves the test measures the fix. Only reproducing the
+symptom proves the fix addresses the bug, which is why both checks exist and
+neither substitutes for the other.
+
+The second check is on myself, not the code. When I notice that a causal story
+has been assembled entirely by reading, I stop and execute something before
+acting on it. Across the same stretch of work, reading produced a confidently
+wrong root cause at least three times, and in every one of those cases
+executing the code settled the question in a single command. Reading is how I
+find candidates. I have stopped letting it also pick between them.

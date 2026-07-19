@@ -70,6 +70,47 @@ I would not have found that framing if the optimisation had worked. It only
 came up because I had to ask what the wasm build was still good for after the
 reason I built it evaporated.
 
+## What parity means once pixels are involved
+
+The corpus asserts integers, and integers can be compared with equality: a
+cluster advances two columns or it does not. The renderer's own tests do not
+get that luxury, and deciding what "matches" should mean for pixels took
+longer than wiring up the oracle did.
+
+Pixel parity is a tolerance, not equality. Four golden scenarios pass under a
+budget of 2 percent differing pixels against the reference, and the emoji
+scenario under 5 percent, because glyph rasterisation is allowed to differ in
+its antialiasing without anything being wrong.
+
+The 24-entry torture corpus needed a different comparison entirely. Those rows
+are mostly background, and that is exactly what makes a per-pixel comparison
+useless on them: a subpixel shift in glyph position swings the differing-pixel
+fraction wildly while nothing is actually wrong, so the number measures jitter
+rather than correctness. Those rows are compared by ink coverage per cell
+instead. Does the right cell contain the right amount of glyph, not are the
+exact pixels identical.
+
+Every threshold in that list is a claim about the size of defect I am prepared
+not to notice. Choosing them felt like bookkeeping at the time. It was not,
+and the same choice made carelessly in another suite later
+[cost me three wrong closures on one bug](/blog/the-bug-i-closed-three-times),
+because a tolerance wider than a defect does not make the defect unlikely to
+be seen. It makes it invisible.
+
+## What the benchmarks refuse to claim
+
+The renderer's benchmarks run under headless chromium, where WebGL executes on
+SwiftShader and rasterises on the CPU. That is a different machine from the
+one any user has, so the repo states plainly which columns transfer to real
+hardware: the CPU timings, the draw-call counts and the allocation figures.
+Nothing else, and no frame rate is claimed anywhere, because a frame rate
+measured on a software rasteriser describes the rasteriser.
+
+Writing down what a measurement cannot tell you costs a paragraph in a README.
+I have since [been on the other end](/blog/measuring-before-optimising) of
+skipping that paragraph, with three rounds of benchmarks vouching for a broken
+code path, so it no longer reads as pedantry to me.
+
 ## The bit I would do differently
 
 I should have run the cheap experiment first. Take one family emoji, ask the

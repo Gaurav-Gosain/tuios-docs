@@ -1,0 +1,203 @@
+---
+title: I dragged one divider and five windows moved
+description: One resize report turned out to be three separate defects, a wrong theory, and one behaviour that was correct all along. Benchmarks saw none of it. A log of who moved saw all of it in a single drag.
+date: '2026-07-22'
+author: Gaurav Gosain
+---
+
+The report came in three stages. First: "when i have multiple terminals and i
+resize one of them sometimes the terminals that dont need to be resized also
+end up stretching or shrinking". After some back and forth it narrowed to
+shared borders only. Then it narrowed again: "when i vertically resize the top
+one the bottom split doesnt maintain its ratio".
+
+Each narrowing read like convergence, one bug slowly coming into focus. It was
+the opposite. There were three distinct defects in that gesture, and each
+rewording was a different one of them showing through. I spent a while looking
+for the single cause of a compound symptom, which is a reliable way to fix a
+third of a bug and be told, correctly, that nothing has changed.
+
+I had also just finished [a round of performance
+work](/blog/measuring-before-optimising) on this exact code path, with
+benchmarks around it, all green. After the first report I ran them again.
+Green. Extended them and ran them a third time. Still green. Three rounds of
+benchmarks vouched for a path that the one person using it kept saying was
+broken.
+
+## An instrument for the actual question
+
+The benchmarks answered "how long does a motion event take". The report was
+about which windows move. Nothing I had measured that, and no amount of
+re-running a timer was going to make it say anything about geometry.
+
+So the fourth round was not a benchmark. I put a trace into the binary itself:
+run with `TUIOS_RESIZE_TRACE=1` and it logs, per input event, the pointer
+position, which window is grabbed and by which corner, and every window whose
+geometry changed as a result. No timing, no statistics. A record of who moved.
+
+One real drag settled what three rounds of benchmarks could not. This is the
+summary of the first captured log, a single grab moving a single divider:
+
+<TerminalCapture
+  title="TUIOS_RESIZE_TRACE=1, one grab, one divider"
+  lines={[
+    { text: "a98a0e4d (grabbed)  786 changes, width 101 -> 88, monotonic", tone: "normal" },
+    { text: "9838fc53            631 changes, widths 52, 54, 53, 55, 54, 55...", tone: "echo" },
+    { text: "                    22 direction reversals", tone: "echo" },
+    { text: "5fd09225            625 changes, width 103 -> 129", tone: "echo" },
+    { text: "28751a55             34 changes, width 51 -> 64", tone: "echo" },
+    { text: "ce84c635             34 changes, width 51 -> 64", tone: "echo" }
+  ]}
+  rows={7}
+  note="Dragging one divider should move the two panes either side of it. Five windows moved, three of them hundreds of times, and one reversed direction twenty-two times while the grabbed window's own width walked monotonically from 101 to 88."
+/>
+
+Everything else in this post fell out of that one log.
+
+## Defect one: neighbours found by geometry
+
+`adjustTilingNeighborsGeneric` decided which windows a drag affects by
+scanning every window in the workspace for an edge within one cell of the
+dragged line. Not by asking the layout tree which panes share the divider. By
+coordinates.
+
+The layout is a binary space partitioning tree, and two dividers in entirely
+different subtrees land on the same screen line whenever their ratios happen
+to agree. Fresh splits all start at 0.5, so they agree by default. Drag a
+divider, and any unrelated divider that happens to be collinear with it gets
+picked up as a neighbour, along with every window attached to it.
+
+Which is also why the bug was intermittent, and why the first report said
+"sometimes". It fired only when two dividers were collinear, and whether they
+were depended on the entire resize history of the workspace. Here it is on a
+2x2 grid, dragging the divider inside the left column:
+
+<TerminalCapture
+  title="2x2 grid, dragging the left column's divider"
+  lines={[
+    { text: "before  win-3=[80 0 80 23]   win-4=[80 23 80 23]", tone: "normal" },
+    { text: "after   win-3=[80 0 80 19]   win-4=[80 19 80 27]", tone: "echo" }
+  ]}
+  rows={3}
+  note="win-3 and win-4 are the right column. The drag happened entirely inside the left one."
+/>
+
+The whole right column re-laid itself out in response to a drag it had no part
+in.
+
+The fix reverses the direction of authority. Resize is now tree-driven: walk
+up from the dragged leaf to the nearest ancestor that splits on the drag axis,
+move that node's ratio, and rebuild the geometry from the tree. Only windows
+under that ancestor can move, because only their geometry depends on its
+ratio. Coordinates stop being evidence of adjacency.
+
+## Defect two: easing toward a target that already moved
+
+The second defect is the one whose discovery [the previous
+post](/blog/measuring-before-optimising) already told: with shared borders on,
+`SyncBSPTreeFromGeometry` calls `ApplyBSPLayout` on every composed frame
+during a drag. What belongs here is what that actually did, counted rather
+than inferred, at nine windows:
+
+```
+52 snap animations created over 20 drag frames    (0 with plain borders)
+205 PTY resizes over 30 frames                    (0 with plain borders)
+```
+
+Each animation cancelled the one before it and started a fresh 300 ms ease
+toward a target that had already moved by the next frame. The panes lived
+permanently in the opening milliseconds of an ease and never arrived anywhere.
+Each of the 205 PTY resizes was a daemon round trip to resize a terminal whose
+size was about to change again.
+
+The per-frame cost predated the performance work. What the performance work
+changed was frequency: raising the drag tick from a fixed 30 FPS to NormalFPS
+made the same per-frame work happen two to eight times more often. The
+optimisation took an existing defect and amplified it, which is a large part
+of why the report arrived when it did.
+
+The benchmarks were structurally incapable of seeing any of this, for three
+independent reasons. Building an animation object is cheap, and the defect is
+that panes never arrive, which is felt rather than timed. `DaemonResizeFunc`
+is nil under test, so 205 round trips in production cost 205 nil checks in the
+benchmark. And the benchmark drove motion into idle terminals, where
+coalescing made almost every frame a cache hit, so `ApplyBSPLayout` ran once
+in twenty motion events under measurement and once per frame in real use.
+
+## Defect three: the ratio that never comes back
+
+The final form of the report, "the bottom split doesnt maintain its ratio",
+was a third defect, and the subtlest. Resizing a pane vertically walked the
+ratio of an untouched split below it.
+
+The mechanism is one line of arithmetic in each direction.
+`applyLayoutRecursive` converts a ratio to a divider position with
+`int(ratio*extent)`, which truncates. `SyncRatiosFromGeometry` reads the
+truncated divider back as `line/extent`. One pass through that pair takes
+0.500 to 0.482759, which is exactly 14/29. The fractional row that truncation
+discarded is now gone from the ratio itself, and nothing ever puts it back.
+
+After that first pass the value is a fixed point: 14/29 of 29 rows truncates
+to divider 14, which reads back as 14/29. That is precisely why
+`TestSyncRoundTripIsStable` never saw the defect. Syncing a pristine layout at
+a fixed size round-trips perfectly, because the loss happens on the first pass
+and the test can only observe the passes after it.
+
+A 1.7 percent loss sounds too small to matter. It compounds at the next resize
+instead: grow the pair from 28 rows to 36 and a stored ratio of 0.482759 hands
+out 17 rows against 19, where 0.5 would have given 18 against 18. The trace
+showed the lifetime of one such ratio across a single drag: it starts at
+0.500, never returns to it, ranges between 0.455 and 0.500, and settles at
+0.480. Across the whole log the same pair ranged from 0.161, five rows against
+26, to 0.654, seventeen against 9. This was a split the user had set once and
+never touched again.
+
+## The theory I got wrong
+
+Partway through, watching the trace, I saw one pane hold at exactly 13 rows
+across six consecutive growth events while its sibling took every new row. I
+concluded that growth and shrinkage took different code paths, one respecting
+the ratio and one ignoring it, and went looking for the second path.
+
+There is no second path. Growth and shrinkage run the same code. The pane held
+at 13 because the truncation loss had already drifted its ratio to a value
+whose product with each new extent kept truncating to 13 rows. A real
+observation, observed carefully, and the explanation I reached for was
+structural where the truth was arithmetic. The same trace that produced the
+wrong theory also killed it, once I started following the ratio value instead
+of the row counts.
+
+## The defect that was not one
+
+One item from the trace still looked wrong after all three fixes: 9838fc53,
+changing width 631 times with 22 direction reversals. It pattern-matched to
+jitter, some feedback loop hunting between two states, and I had it pencilled
+in as defect four.
+
+Then I measured it properly, with a drag swept out and then back, before and
+after the other fixes: 48 height changes each time, zero hysteresis each time.
+Every pointer position produced exactly the same pane heights on the way out
+and on the way back. That is not instability. That is a pane correctly
+tracking a divider one cell at a time as the drag passes over it, and the
+direction reversals were reversals of my hand.
+
+I had flagged it as a bug because it looked like other bugs, without checking
+whether the return path differed from the outbound one. It did not, in any
+run. Zero hysteresis means the system has no memory and is simply following
+the pointer, which is the specification. Anything I had "fixed" there would
+have introduced the very lag the rest of this work removed.
+
+## What the instrument cost
+
+The trace was an evening: an environment variable, a log line per geometry
+change, and a script to summarise the output. It found three defects and
+acquitted a fourth candidate in one drag, after three rounds of benchmarks
+had found nothing, because it recorded the thing the report was about.
+
+A benchmark compresses behaviour into a duration. None of these defects lived
+in a duration. Windows moved that should not have, targets were never reached,
+a ratio drifted one way and stayed there. All of it invisible to a timer, all
+of it plain in a log of who moved. The narrowing reports were never one bug
+coming into focus. They were four phenomena taking turns at the front, and the
+first honest look at the evidence was the one that stopped assuming they were
+the same thing.

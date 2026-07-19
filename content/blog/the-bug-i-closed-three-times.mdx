@@ -1,0 +1,189 @@
+---
+title: The bug I closed three times
+description: A speckled sprite in the browser terminal. Three closures, each resting on a different wrong conclusion, a test suite blind by construction, and an instrument that was corrupting its own measurements.
+date: '2026-07-25'
+author: Gaurav Gosain
+---
+
+The report was visual and specific: half-block sprites in the browser terminal
+showed speckling. `pokemon-colorscripts` draws its sprites out of U+2580 and
+U+2584, upper and lower half blocks, with 24-bit foreground and background
+colours on every cell, so each character cell carries two pixels of artwork.
+Regions that should have been flat colour were scattered with off-colour dots.
+
+I closed that report three times. Each closure rested on a different wrong
+conclusion, and each wrong conclusion failed for a different reason. The bug
+itself turned out to be nearly the least interesting thing in the
+investigation, so this post is mostly the anatomy of the three failures.
+
+## Closure one: it must be the image protocol
+
+I had recently spent [a long stretch inside the kitty graphics
+protocol](/blog/a-terminal-that-lied-about-what-it-could-do), where corruption
+meant image data going wrong somewhere in a pipeline. Sprites, corruption,
+browser terminal: I pattern-matched straight to image transmission and started
+investigating there.
+
+`pokemon-colorscripts` does not transmit images. It prints text. Half blocks
+with colour codes are the oldest trick there is for pixel art in a terminal,
+and one look at the wire would have said so. I did not take that look before
+forming the theory. That is the first failure in its entirety: I assumed the
+category of the data without checking what was on the wire.
+
+## Closure two: the sprite really is like that
+
+The second time, I did look at the data, and did it properly. I rendered
+ground truth from the escape codes with independent code, no terminal and no
+browser in the path, and compared it against a screenshot of the browser
+terminal. It matched. I closed the report as not-a-bug: the artwork is
+speckled.
+
+The artwork genuinely is speckled. Blastoise carries `rgb(255,255,255)` 71
+times and `rgb(189,189,197)` 34 times among its 794 colour runs, so there are
+legitimate near-white dots in the sprite. The reasoning was superficially
+sound: predict the appearance, compare, match, close.
+
+The failure was in what "match" meant. I compared at the level of "does the
+speckle pattern I predicted appear on screen", and it did. What I never did
+was bound the difference. The renderer was adding its own speckling on top of
+the artwork's, one colour step away from correct, and a visual comparison
+between two images that are both speckled absorbs that indefinitely. I had
+confirmed a prediction rather than measured an error, and of the three
+closures this one was the most defensible, which made it the most dangerous. I
+walked away sure.
+
+## Closure three: it is a browser engine difference
+
+The report survived, so the third round compared browsers. Measured in the
+page with `getImageData` over the rendered sprite: Firefox reported 3 distinct
+colours, Helium reported 44.
+
+Conclusion: an engine rendering difference. Firefox tight, Chromium-derived
+Helium loose, nothing for me to fix. Closed again.
+
+This is the closure I find most uncomfortable, because it applied the lesson
+of the previous one. I did not assume. I measured, with a real API, over real
+pixels, and the numbers were unambiguous. They were also both wrong.
+
+## Measuring from outside the box
+
+The measurement that finally held removed the browser's own APIs from the path
+entirely: capture through the Wayland compositor, so the pixels examined are
+the pixels the browser handed to the display server, read back by nothing the
+browser controls.
+
+```
+stock Chromium   95.6% of pixels exactly the specified colour, 12 variants
+Helium           41.2% exact, 45 variants
+Firefox          identical to stock Chromium, 0 differing pixels of 389,120
+```
+
+Firefox does not render this differently from Chromium. Not approximately the
+same: zero differing pixels out of 389,120. The 3 distinct colours it reported
+through `getImageData` were an artefact of the readback, not a property of the
+rendering, and I never did establish what produced that number, because by
+this point I had stopped trusting in-browser readback for anything.
+
+Helium is genuinely different, and now the defect had a precise shape. It
+renders `(123,190,255)` more often than the specified `(123,189,255)`: an
+off-by-one in one channel, spatially distributed as a roughly 50/50 dither.
+Only textured WebGL content is affected. A flat WebGL clear comes back 100
+percent exact, so this is not the swap chain or the page compositor, it is the
+texture path. Switching the terminal's renderer moves the number:
+
+<BenchBars
+  groups={["webgl", "canvas", "dom"]}
+  series={[
+    { label: "pixels exactly the specified colour", values: [41.2, 86.3, 95.1], tone: "subject" }
+  ]}
+  unit="%"
+  groupLabel="renderer"
+  caption="Helium by renderer, measured through the compositor with no browser API in the path. The defect follows the textured WebGL path and mostly disappears under the DOM renderer."
+/>
+
+## The suite that cleared it was blind by construction
+
+Through all of this, a 292-test rendering suite kept passing, and it deserved
+scrutiny it did not get until the end.
+
+The suite compares rendered pixels against expected colours with a tolerance
+of 2. The defect is off-by-one and off-by-two. A correct expectation compared
+under a tolerance wider than the fault cannot see the fault. Not "is unlikely
+to". Cannot, because every affected pixel sits inside the acceptance band, so
+no number of tests, runs or scenarios changes the outcome.
+
+The suite also insets its scan region, 20 percent horizontally and 12 percent
+vertically, to keep cell borders out of the comparison. The dither
+concentrates at cell edges. The sampling was cropping out the region where the
+defect is strongest.
+
+Neither decision is foolish on its own. Tolerance absorbs harmless
+rasterisation differences across platforms and drivers, and the inset avoids
+asserting on the fuzziest pixels. Together they define, exactly, a class of
+defect the suite cannot detect: small in amplitude, concentrated at edges.
+This bug sat in the middle of that class, which is survivorship rather than
+bad luck, since a defect the suite could see would not have lived long enough
+to be reported by a person.
+
+## The instrument was corrupting the sample
+
+One question was left over from closure three: why had `getImageData` painted
+such a wrong picture of Helium as well?
+
+Because Helium perturbs `getImageData` with stochastic anti-fingerprinting
+noise. The demonstration is as small as it gets: fill a canvas with one flat
+colour and read it back. In one session, 74.8 percent of the pixels came back
+exact. In another session, the same fill read back 100 percent. Same page,
+same colour, different answer.
+
+So every in-browser measurement of Helium had been the sum of two signals, the
+renderer's real dither and the API's deliberate noise, in proportions that
+changed between sessions. I had been measuring a browser with that browser's
+own API, and this particular browser treats canvas readback as a
+fingerprinting surface and salts it on purpose.
+
+I tried to remove the salt. Helium ships two named fingerprinting defences,
+`FingerprintingCanvasMeasureTextNoise` and `FingerprintingClientRectsNoise`.
+Disabling both changes nothing about pixel readback, and the noise source that
+actually affected these measurements has no discoverable flag at all.
+
+## Where it ended
+
+Not with a fix. The terminal's output is correct: what it asks the browser to
+draw is what stock Chromium and Firefox draw. The speckling is Helium's WebGL
+texture path, there is no flag that turns it off, and the workaround for
+anyone it bothers is the DOM renderer, at 95.1 percent even inside Helium. No
+source change was made anywhere, and none was warranted. The correct
+resolution of the report was a paragraph of explanation and a renderer toggle,
+both of which had been available from day one.
+
+## Three failures, three shapes
+
+They do not reduce to one moral, which is why I am writing them out
+separately.
+
+The first conclusion failed because I never looked. Category assumed from
+adjacent experience, wire never checked. The cheapest failure and the least
+excusable, and the easiest kind to catch, because the evidence was one command
+away the whole time.
+
+The second failed because I looked and saw my prediction. The ground-truth
+render was real work and a real comparison, and it matched. Matching a
+prediction is not the same as bounding an error. My visual comparison had no
+stated tolerance, which means it had an enormous unstated one, and the
+292-test suite had the same disease in mechanised form. Between my eyes and
+its tolerance of 2, an off-by-one defect fitted under both bars.
+
+The third failed because the instrument was corrupt. This is the one I keep
+returning to, because it was the round where I did everything the earlier
+rounds had taught. I measured, compared browsers, held the scene constant. The
+numbers were precise, repeatable within a session, and partly manufactured by
+the thing being measured. No amount of discipline inside the browser would
+have caught it, because the corruption lives in the only readback path the
+browser offers.
+
+What broke the sequence was not more care of the same kind. It was moving the
+measurement outside the system under test. The compositor does not care what
+the browser thinks it drew. It reports what arrived, and every one of my
+earlier conclusions fell within an afternoon of having that vantage point,
+including the two I had defended in writing.
