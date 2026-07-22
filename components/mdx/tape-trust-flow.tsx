@@ -53,7 +53,7 @@ function Pill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[11px] font-medium',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 font-mono text-[11px] font-medium',
         tone === 'untrusted'
           ? 'bg-amber-500/12 text-amber-700 dark:text-amber-300'
           : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
@@ -176,7 +176,7 @@ export function TapeTrustFlow() {
                   Review .tuios.tape
                 </span>
                 <Pill tone="untrusted">
-                  {edited ? 'untrusted, changed since you trusted it' : 'untrusted'}
+                  {edited ? 'changed since trust' : 'untrusted'}
                 </Pill>
               </div>
               <pre className="overflow-x-auto px-3 py-2 font-mono text-[11px] leading-5">
@@ -264,7 +264,7 @@ export function TapeTrustFlow() {
             <Pill tone="trusted">tape: trusted</Pill>
           ) : (
             <Pill tone="untrusted">
-              {edited ? 'tape: untrusted, file changed since trust' : 'tape: untrusted'}
+              {edited ? 'tape: changed since trust' : 'tape: untrusted'}
             </Pill>
           )}
         </div>
