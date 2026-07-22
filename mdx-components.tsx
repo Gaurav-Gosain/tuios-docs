@@ -18,6 +18,7 @@ import { StartupPreview } from '@/components/mdx/startup-preview';
 import { ShapingCompare } from '@/components/mdx/shaping-compare';
 import { DaemonTilePlacement } from '@/components/mdx/daemon-tile-placement';
 import { KeycastDemo } from '@/components/mdx/keycast-demo';
+import { TilingReplay } from '@/components/mdx/tiling-replay';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -41,6 +42,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ShapingCompare,
     DaemonTilePlacement,
     KeycastDemo,
+    TilingReplay,
     ...components,
   };
 }
