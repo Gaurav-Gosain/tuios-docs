@@ -1,0 +1,191 @@
+---
+title: v0.7.0
+description: Video playback in a pane, the kitty keyboard protocol, a rebuilt copy mode with a real scrollbar, a command palette, and the hundred fixes it took to make graphics passthrough honest.
+date: '2026-03-29'
+author: Gaurav Gosain
+---
+
+157 commits between v0.6.0 and v0.7.0, and the ratio tells the story: 34
+features, over a hundred fixes. This is the release where the terminal inside
+tuios learned the protocols real programs actually speak. You can watch a
+video in a pane now. Fish 4.x's kitty keyboard handshake works instead of
+producing garbage. Copy mode grew a scrollbar you can grab. And nearly every
+one of those hundred fixes is the tax on passing another terminal's protocol
+through a multiplexer correctly: clipping, positioning, flicker, and the
+difference between what a spec says and what mpv actually sends.
+
+## Video playback
+
+`mpv --vo=kitty` plays video inside a tuios pane. So does
+[youterm](https://github.com/Gaurav-Gosain/youterm). Both shared memory and
+base64 modes work; `--vo-kitty-use-shm=yes` is the one to use, because it
+sends a file reference per frame instead of streaming megabytes of pixels
+through the terminal.
+
+Getting there was most of the fix count in this release, because video is the
+adversarial case for graphics passthrough. mpv sets "more data coming" on
+every frame and never sends the final-chunk marker the protocol says to wait
+for, so the passthrough that worked for static images waited forever. Each
+frame used to get a fresh image ID, which forced a delete-and-replace and a
+visible flash between the two; frames now reuse the host's image ID so the
+terminal swaps the data in place. File-based frames are forwarded as a path
+instead of being read, base64-encoded, and chunked, which removed about 4MB
+of allocation per frame at 30fps. And all graphics output is wrapped in
+synchronized updates and flushed with the render cycle, because text and
+graphics arriving as two unsynchronized streams is where the tearing came
+from.
+
+Static images got the same care: icat and yazi previews clip properly at the
+viewport, hide when their window leaves the screen, and follow the window
+during a drag instead of hiding or, worse, staying put.
+
+## The keyboard protocol shells expect
+
+The VT emulator now implements the kitty keyboard protocol: the full
+push/pop/query stack, with keystrokes forwarded in CSI u encoding when a
+child program has the protocol active. The forcing function was fish 4.x,
+which enables the protocol on startup. Before this release that meant capital
+letters arrived as escape sequences fish ignored; the spec's answer, which is
+now what tuios does, is that shifted printable keys send their text directly
+and CSI u is reserved for real modifier combinations.
+
+The same emulator work added OSC 4 palette queries, OSC 52 clipboard, modes
+2026 (synchronized output) and 2027 (unicode core), and sixel in the DA1
+response. OSC 66 text sizing ships as an experimental passthrough; it breaks
+with scrollback and window repositioning, and says so in the docs.
+
+## Copy mode grew up
+
+Mouse wheel scrolling now drops you straight into copy mode, which means
+scrolling up and selecting what you found are finally the same gesture. The
+separate scrollback mode that could look but not touch is gone. While you are
+there: full vim navigation, visual and visual-line selection, search, yank.
+
+The border itself is now a scrollbar. It renders in the theme's border
+colors, sized proportionally, and it is interactive: click to jump, drag to
+scroll. Dragging a selection past the edge of the pane auto-scrolls on a
+timer, so holding the mouse still past the boundary keeps the selection
+growing instead of stalling until you jiggle it.
+
+There is also a scrollback browser, which parses your history into command
+blocks using OSC 133 semantic markers (with a regex fallback for shells that
+do not emit them). Each block is a command plus its output, navigable with
+vim keys, and it can pull JSON fragments and file paths out of the output for
+yanking. If your prompt emits OSC 133, and fish and a configured starship
+both do, tuios knows where every command begins and ends.
+
+<TerminalCapture
+  title="scrollback browser"
+  lines={[
+    { text: '~ $ git status', tone: 'dim' },
+    { text: 'On branch main', tone: 'dim' },
+    { text: "Your branch is up to date with 'origin/main'.", tone: 'dim' },
+    { text: 'nothing to commit, working tree clean', tone: 'dim' },
+    { text: '~ $ curl -s https://api.example.com/health', tone: 'normal' },
+    { text: '{"status":"ok","uptime":13472}', tone: 'normal' },
+  ]}
+  rows={6}
+  note="OSC 133 markers split history into blocks; the selected block is navigable with vim keys."
+/>
+
+## A command palette, and layouts worth keeping
+
+Ctrl+P opens a command palette: every tuios action, fuzzy-searched, with its
+keybinding shown next to it. Matches on the command name rank above matches
+on its category, so typing what you mean finds what you meant. It floats at
+the top of the screen instead of covering the terminal, and it works from
+both terminal and window management modes. A session switcher overlay
+(prefix+S) lists daemon sessions the same way.
+
+Layout templates were rebuilt to save what actually matters: the BSP tree,
+each window's working directory (read from /proc), startup commands, and the
+tiling scheme, with positions scaled proportionally when you load a template
+on a different screen size. Loading is non-destructive: existing windows are
+repositioned to match instead of killed, and extras get minimized. There is a
+CLI for it (`tuios layout list/delete/dir/export`), and `export` turns a
+template into a replayable tape script. The layout submenu lives on Ctrl+B L.
+
+Pane zoom is `z`: fullscreen the focused pane, press again to restore, with a
+Z indicator in the dockbar. And tiled windows can share borders. With
+`--shared-borders`, windows render borderless and single separator lines are
+drawn between panes with proper junction characters, which buys back two
+columns and two rows per split, tmux-style. It is opt-in because it took
+several attempts to get right, and the git log does not pretend otherwise:
+the feature was reverted and reimplemented three times before the separator
+overlay approach stuck. A smart split scheme that picks the split direction
+from the focused pane's aspect ratio also landed, opt-in for the same reason:
+as a default it produced narrow slices, so spiral stays.
+
+<SharedBordersToggle />
+
+## Faster underneath
+
+The rendering loop was rebuilt around PTY events instead of a tick. A PTY
+delivering output signals a render; the tick survives only for animations and
+script playback, and drops to an idle rate when nothing moves. Dock clock,
+CPU, and RAM stats are now off by default and only polled when shown, which
+together gets idle CPU near zero. Unfocused windows without a selection take
+a fast render path that bypasses the cell-by-cell styling machinery, and
+windows on other workspaces skip render work entirely; for tuios-web and SSH
+clients, their PTY output is not even streamed until you switch to that
+workspace.
+
+The graphics path got the same treatment: base64 payloads pass through
+without a decode and re-encode round trip (about 8MB of memory traffic saved
+per 4MB image), /dev/tty is opened once instead of per frame, and only
+placements whose position actually changed get re-placed.
+
+This release also lands on the stable Charm v2 releases: bubbletea, lipgloss,
+wish, and log, after riding the release candidates.
+
+## Fixes
+
+Over a hundred fixes shipped in this window. Most of the graphics ones are
+already described above, because for passthrough the fixes are the feature.
+The rest, grouped:
+
+**Daemon mode.** The daemon's emulator was silently discarding kitty
+graphics capability queries, so icat and chafa concluded there was no
+graphics support and fell back to blocks; the daemon now answers them
+directly. PTY dimensions sync on session reattach instead of leaving windows
+sized for the previous client. The client's pixel dimensions and graphics
+capabilities travel to the daemon at hello, and the subscriber buffer grew
+16x so video frames survive the daemon-to-client socket.
+
+**Input and mouse.** Mouse motion events are only forwarded to programs that
+asked for them; kakoune was being flooded with hundreds of motion events per
+second it never requested (#78). Phantom keypresses from misparsed mouse
+fragments are suppressed. Visual line mode highlights immediately instead of
+on the next cursor move.
+
+**Colors and light themes.** Unstyled cells inherit the terminal's real
+default foreground instead of being forced to white, and SGR 39/49 reset to
+transparent rather than a baked-in default, which fixes light themes (#41,
+#72, #74).
+
+**Responsiveness.** Closing a window via exit or ctrl+d no longer waits out
+a 500ms timeout (now 10ms), and a race that dropped the close notification
+about half the time is gone. Background windows no longer show stale content
+until you poke them.
+
+**Everything else.** A `--confirm-quit` flag and `confirm_quit` option for
+always confirming quit. Tape scripts send CRLF on Windows, contributed by
+@dodorz. And a long tail of smaller fixes across scrollback, tiling
+toggles, and overlay positioning that this page does not enumerate; the
+[full changelog](https://github.com/Gaurav-Gosain/tuios/compare/v0.6.0...v0.7.0)
+does.
+
+## Known limitations
+
+Shipped honestly incomplete: OSC 66 text sizing breaks with scrollback and
+repositioning. Sixel passthrough exists but is disabled until pixel-level
+clipping is implemented, so sixel images cannot yet be cropped to a window;
+use kitty graphics. The kitty animation protocol (a=f, a=a, a=c) was tried
+and dropped, because it requires image IDs to stay consistent between guest
+and host and tuios remaps them; animation-protocol apps should run outside
+tuios for now. Video without shm can flicker depending on frame rate.
+
+v0.7.0 is the release where running a program inside tuios stopped meaning
+running it in a worse terminal. The protocols are there, the fixes are the
+proof of how much work "just pass it through" turns out to be, and the
+limitations section above is the honest list of where that work continues.

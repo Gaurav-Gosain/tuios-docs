@@ -1,0 +1,127 @@
+---
+title: v0.4.0
+description: The web terminal moves out into the sip library, tape scripting gets a recorder and a manager UI, and a ShowKeys overlay draws your keypresses for recordings.
+date: '2025-12-03'
+author: Gaurav Gosain
+---
+
+51 commits between v0.3.0 and v0.4.0, four patch releases along the way. The
+v0.4.0 work itself is three things. The web terminal was added, rebuilt twice,
+and finally moved out into the sip library, taking 10MB of embedded assets
+with it. Tape scripting arrived, with a recorder and a manager UI. And
+ShowKeys, an overlay that draws your keypresses on screen, exists because a
+keyboard-driven window manager is unreadable in a screen recording without
+one. The patches underneath fixed resize in floating mode and taught the quit
+dialog to only ask when something is actually running.
+
+## The web terminal moved out
+
+The web terminal did not exist in v0.3.0 and went through three architectures
+before v0.4.0 shipped. It started as a `tuios web` subcommand: a server
+speaking WebTransport with a WebSocket fallback, xterm.js with WebGL
+rendering on the client, a bundled Nerd Font so icons drew properly. That
+design embedded about 10MB of web assets in the repository and put an HTTP
+server inside the window manager binary.
+
+Both problems were fixed by moving things out. First the command became its
+own binary, `tuios-web`, so the main binary carries no server code and users
+who never touch a browser never install one. Then the server internals were
+replaced by [sip](https://github.com/Gaurav-Gosain/sip), a standalone library
+for serving any Bubble Tea app through the browser. `tuios-web` is now a thin
+wrapper that hands TUIOS instances to sip's Handler interface, and the
+embedded assets moved to sip with it, which is where the 10MB went.
+
+Because `tuios web` was added and removed inside the same release cycle, no
+tagged release ever shipped it. Installing `tuios-web` from v0.4.0 involves
+no migration.
+
+The rebuilds fixed real defects on the way. Web sessions originally spawned
+the tuios binary as a subprocess; they now run TUIOS in-process over pipes,
+the same shape as the SSH server. And the first frame used to render at a
+hardcoded 80x24 before the browser had reported its size, which left
+artifacts on screen. The session is now created only after the browser sends
+its first resize, so the first frame is drawn at the real dimensions.
+
+## Tape scripting, record to replay
+
+v0.4.0 adds a scripting system for driving tuios from a file. A `.tape`
+script can open terminals, type into them, manage windows, switch workspaces
+and modes, and pause between steps. `tuios tape validate` checks a script and
+`tuios tape play` runs it live with a progress indicator. A headless `tape
+run` mode existed briefly during development; it never worked properly and
+was removed rather than shipped broken.
+
+Playback goes through the same Bubble Tea update loop as live input instead
+of mutating state on the side, so a played tape and a human at the keyboard
+exercise the same code paths.
+
+Recording is the other half. The recorder captures the state you started in,
+records window management actions, mode switches, and workspace switches, and
+coalesces consecutive characters into a single Type command instead of
+emitting one command per keystroke, so a recorded tape reads like something
+you might have written by hand. The tape manager, on Ctrl+B T m, is a modal
+for browsing, recording, and managing tapes without leaving the session.
+
+## ShowKeys
+
+tuios can now draw your keypresses on screen as you type: an overlay in the
+bottom right showing the last few keys, inspired by nvzone/showkeys. Enable
+it with `--show-keys` at startup or toggle it live with Ctrl+B D k. Keys
+render as pills styled like the window title decorations, modifiers spelled
+out, repeats collapsed into a count (`j ×3`). Keys stay visible for three
+seconds; the first cut used one, which was too short to read while doing
+anything else.
+
+The same work made the leader key configurable. The prefix was hardcoded to
+Ctrl+B; it now comes from `leader_key` in the `[keybindings]` section, the
+help menu and every chord reference follow it, and the overlay highlights it,
+so a viewer can pick the prefix out of a recording at a glance.
+
+<KeycastDemo />
+
+## The patch releases underneath
+
+v0.3.1 through v0.3.4 shipped in the first week of November, and most of that
+was making resize in floating mode stop being visibly broken.
+
+The fixes stack up as follows. Window geometry now updates immediately during
+a drag while the expensive PTY resize is deferred until release, so shells
+stop receiving a stream of resize signals mid-gesture. The terminal
+emulator's dimensions stay in sync with the window's, so content no longer
+sticks at the old size while the border moves. A centered "Resizing... WxH"
+indicator shows in the window during the drag, and in tiling mode the
+neighbours dragged along by a constraint show it too. When the drag ends, PTY
+buffers are flushed and content polling waits long enough for the shell to
+redraw its prompt at the new width, which is what fixed the half-drawn
+prompts. If the cursor ends up below the viewport after a height reduction,
+the view scrolls to keep the prompt visible. And a race where dragging
+immediately after a resize froze the window is gone.
+
+The quit flow improved in two steps. First, a confirmation dialog before
+quitting with open terminals. Then it learned to check the PTY's foreground
+process group and only ask when a terminal is actually running something;
+quitting a stack of idle shells just quits. The welcome screen became
+per-workspace, appearing for any workspace with no visible windows instead of
+only a globally empty session. And the shell is now configurable, which
+mattered most on Windows, where tuios previously always launched PowerShell
+whether you wanted it or not.
+
+## Smaller changes
+
+- Decimal durations in tape scripts parse correctly, so `1.5s` no longer
+  rounds into something else.
+- The render cache is cleared when leaving resize mode, so the resize
+  indicator disappears instantly instead of lingering a frame.
+- ShowKeys tracks modifiers when comparing consecutive presses, so Ctrl+L
+  followed by L counts as two keys instead of merging into one pill.
+- A contributing guide for new contributors.
+- Package documentation comments across all internal packages, a
+  golangci-lint cleanup, and a modernization pass (`any` over `interface{}`,
+  `slices.Delete`, built-in `min`/`max`).
+- README keybindings render with kbd tags.
+- `tuios.exe` is gitignored.
+
+That was v0.4.0: the web terminal in what turned out to be its permanent
+home, tapes you can record and replay, and an overlay to prove which keys you
+pressed. The `.tape` format introduced here is the same one that project
+tapes grew out of later.

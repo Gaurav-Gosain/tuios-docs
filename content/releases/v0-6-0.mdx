@@ -1,0 +1,88 @@
+---
+title: v0.6.0
+description: Experimental Kitty graphics support, prefix-free window cycling in terminal mode, and a real terminal cursor with vi-mode shapes.
+date: '2026-01-25'
+author: Gaurav Gosain
+---
+
+24 commits between v0.5.0 and v0.6.0, counting the two-fix v0.5.1 patch in
+the middle. Seven of them are about one feature: Kitty graphics. tuios can
+now pass images from a program running inside a window through to the host
+terminal, which is harder than it sounds and shipped experimental for good
+reason. The rest is quality of life: window cycling without the prefix key, a
+real cursor instead of a painted one, and a batch of compatibility fixes,
+several of them contributed.
+
+## Images, experimentally
+
+tuios re-renders guest terminal content into its own grid, so an image drawn
+by a program inside a window cannot just pass through: the graphics commands
+carry positions that mean nothing to the host terminal. The Kitty graphics
+support added here does the translation. The VT emulator picks up the
+graphics commands, tuios tracks each placement against its window, and
+forwards it to the host at the right cell, re-placed when the window moves,
+resizes or scrolls, hidden when it is covered, dragged, or scrolled out of
+the viewport. Shared memory, file and direct transmission all work, with
+chunking for large images, and cell pixel dimensions are reported to the PTY
+so programs size images correctly. The result is that `yazi` and
+`kitty icat` display real images inside tuios windows, given a capable host
+terminal: Kitty, WezTerm, Ghostty, iTerm2, Foot or Contour.
+
+The five fix commits that follow the feature in the log are an honest
+measure of where the edges are: clipping at window borders, placements
+drifting against scrollback, image ID collisions between windows, images
+left behind when a TUI app exits the alternate screen, and virtual
+placements that assume a placeholder grid tuios does not have. All fixed in
+this window, and more shook out later. It shipped experimental, with
+`TUIOS_KITTY_GRAPHICS=0` as the off switch, and two known limits: images
+wider than the viewport were hidden rather than clipped, and sixel was
+parsed but disabled until raster clipping existed.
+
+## Detection by asking
+
+Graphics support used to be inferred from the terminal's name. Now tuios
+asks. A DA1 query detects sixel, the Kitty graphics query detects the Kitty
+protocol, and the reads are poll-based so a terminal that never answers
+cannot hang startup. `TUIOS_DEBUG_CAPS=1` logs what detection saw, and
+`TUIOS_KITTY_GRAPHICS` and `TUIOS_SIXEL_GRAPHICS` override it in either
+direction.
+
+## Cycling without the prefix
+
+Terminal mode keeps the prefix key out of the way, which also meant window
+management was three keystrokes away. Now it is one. Opt+Tab and
+Opt+Shift+Tab cycle windows on macOS, Alt+N and Alt+P do it on Linux and
+Windows, where Alt+Tab belongs to the OS window switcher, and Opt+Esc or
+Alt+Esc drops out of terminal mode entirely. The bindings live in a new
+`[keybindings.terminal_mode]` config section. This section of the release
+came in as contributions, as did several of the fixes below.
+
+## A real cursor
+
+tuios used to paint its own cursor, a cyan block drawn into the grid. It now
+positions and styles the actual terminal cursor, so cursor shape sequences
+from guest programs pass through. A shell with vi-mode shows a block in
+normal mode and a bar in insert mode, blink included, because the terminal
+is rendering its own cursor wherever the guest put it.
+
+## Fixes and smaller changes
+
+- Paste works in daemon mode. Paste content was being written into the same
+  internal pipe the response drainer discards, so it vanished silently.
+- Arrow keys work in cmus and other ncurses apps. Applications that enable
+  application cursor keys mode now get the SS3 sequences they expect
+  instead of CSI.
+- Rapid scrollback no longer trips a crash in color comparison, which
+  Claude Code's output was fast enough to surface. Contributed fix.
+- tuios builds on FreeBSD and OpenBSD.
+- macOS terminal handling split from Linux; the shared ioctl constants were
+  Linux-only.
+- `--hide-clock` and `--window-title-position` survive opening new windows
+  instead of being overwritten by the config loader. These two shipped
+  mid-window as v0.5.1.
+- The terminal mode cycling binds show up in the help menu.
+- Animation bookkeeping is skipped when nothing is animating.
+
+Graphics stayed experimental well past this release; horizontal clipping and
+sixel were still open when it shipped. If an image misbehaved,
+`TUIOS_KITTY_GRAPHICS=0` put things back the way they were.

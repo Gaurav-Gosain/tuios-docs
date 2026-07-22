@@ -1,0 +1,139 @@
+---
+title: v0.1.0
+description: The first tagged release. A floating and tiling terminal window manager with a vim-style copy mode, scrollback, a TOML config with rebindable keys, and packaging for most platforms.
+date: '2025-10-31'
+author: Gaurav Gosain
+---
+
+This is the first release of tuios that got a minor version number. The first
+commit, from September 6, was already a working prototype: floating windows,
+tiling, workspaces, an SSH server, and window animations, all in one flat Go
+package. The 70 commits between that and this tag went through 26 v0.0.x tags
+in under two months and turned the prototype into something you could install,
+configure, and copy text out of. That last part took the most work.
+
+## Copy mode and scrollback
+
+The biggest gap in the prototype was that text which scrolled off screen was
+gone, and text still on screen could not be copied. v0.1.0 closed both.
+
+Scrollback landed first: a 10,000-line buffer per window, entered with
+`Ctrl+B [` or by scrolling the mouse wheel up, navigated with arrows or vim
+keys. The upstream VT library did not support scrollback, so this runs on a
+fork, and the implementation went back upstream as a pull request to
+charmbracelet/x.
+
+On top of that sits a vim-style copy mode: `hjkl`, word motions, `gg`/`G`,
+count prefixes (`10j`, `100G`), character search with `f`/`F`/`t`/`T` that
+handles wide characters, `/` and `?` search with highlighted matches, `%` for
+bracket matching, and `v`/`V` visual selection yanked to the clipboard with
+`y`. Mouse selection works too: click and drag, double-click for a word,
+triple-click for a line. The first version was a single 2,137-line file; it
+got split into six modules before the tag, which is roughly the moment copy
+mode stopped being a feature and started being a subsystem.
+
+## Rendering got 30x faster
+
+The prototype rendered every cell of every window through a fresh lipgloss
+style object on every frame. Profiling put `renderTerminal` at 4.85 seconds
+of a 13.45-second CPU capture. Two changes fixed it: a style cache keyed on
+cell attributes, so a cache hit costs about 99 nanoseconds and zero
+allocations, and direct ANSI escape code generation for terminal content,
+bypassing a style pipeline built for UI boxes that terminal cells never
+needed. Consecutive cells with identical styling are batched, which took
+per-frame style renders from around 2,000 to around 50.
+
+After both, `renderTerminal` measured 0.16 seconds in the same profile and
+overall CPU use dropped from 53% to 24%. The input path also stopped clearing
+the render cache on every keystroke, which is the kind of thing you only find
+by looking.
+
+<BenchBars
+  groups={['renderTerminal']}
+  groupLabel="profiled"
+  unit="s"
+  scale="chart"
+  series={[
+    { label: 'before', values: [4.85], tone: 'baseline' },
+    { label: 'after', values: [0.16], tone: 'subject' },
+  ]}
+  caption="CPU profile of the render hot path before and after the style cache and direct ANSI generation. Same workload, same capture length."
+/>
+
+## A config file and a real CLI
+
+Ten days before the tag, tuios had no configuration at all. v0.1.0 shipped a
+TOML config at `~/.config/tuios/config.toml`, generated with documentation on
+first run, XDG-compliant, with every keybinding in every mode rebindable.
+Keybindings resolve to action names and action names resolve to handlers, so
+rebinding needs no code changes, and the help overlay is generated from the
+config, so it shows the keys you actually have. Defaults are platform-aware:
+macOS gets `opt` where Linux gets `alt`.
+
+The CLI moved from flat flags to Cobra subcommands with Fang for help
+formatting: `tuios` to run, `tuios ssh` for the SSH server, `tuios config`
+and `tuios keybinds` to manage the above, plus generated shell completions
+and man pages. This broke the old flags (`--ssh` became `tuios ssh`, and so
+on), which is the sort of break a 0.x version number exists for.
+
+## Driving it from the keyboard
+
+Everything hangs off a tmux-style `Ctrl+B` prefix, and this window is where
+the prefix grew submenus: `w` for workspaces (switch, or move a window),
+`m` for minimize and restore, `t` for window commands, `[` for scrollback,
+`q` to quit. A which-key style overlay appears after half a second showing
+what is available, context-aware for each submenu.
+
+macOS needed its own work, because Option+number produces characters like
+`¡` and `™` instead of a modifier combination. tuios detects those and treats
+them as workspace switches, and the help text says "Opt" on a Mac and "Alt"
+everywhere else. Tiling mode also learned to respect workspace boundaries:
+swapping, minimizing, and retiling now only touch windows in the current
+workspace instead of pulling in windows from the others.
+
+## Behaving like a terminal
+
+A window manager that hosts terminals inherits every obligation a terminal
+has. Mouse events are forwarded to applications on the alternate screen, so
+drag-to-select works in vim, scrolling works in less, and clicking works in
+htop. Paste works through OSC 52 and bracketed paste, including `Cmd+V`.
+Alternate screen use is detected through VT callbacks rather than guessed.
+
+Two shells found real bugs. nushell cleared its own output because the VT
+library answered cursor position queries with stale coordinates, so tuios now
+intercepts and corrects those responses. And the PTY layer changed twice,
+ending on charmbracelet/x/xpty for Windows ConPTY support, with the forked VT
+package vendored into the tree so that plain `go install` works.
+
+## Ways to install it
+
+A release is partly defined by whether anyone can get it. By the tag,
+GoReleaser built for Linux, macOS, Windows, FreeBSD, and OpenBSD, and
+publishing was automated for a Homebrew tap, the AUR (`tuios-bin`), and a
+one-line curl installer. The Nix package and devshell came from the project's
+first outside contribution. The binary is statically linked, so there is no
+glibc version to argue with. There is also an `--ascii-only` flag for
+machines without a Nerd Font, added four days before the tag after running
+tuios somewhere the icons turned into boxes.
+
+## Fixes worth remembering
+
+- Notifications lasted roughly 17 days instead of 1.5 seconds. A duration
+  already in milliseconds was multiplied by `time.Millisecond`.
+- A nil pointer panic when comparing cell colors: a non-nil `color.Color`
+  interface can still hold a nil value, and comparing two of them blows up.
+  This was the last fix before the tag.
+- Typing over SSH did nothing after the restructure, because the input
+  handler was registered for local mode only.
+- `exit` did not close the window on macOS when the exit message was missed;
+  the tick loop now checks the process directly.
+- Visual selection highlighted the empty cells past the end of each line;
+  it now stops at the content.
+- Mouse selection in copy mode was off by one row.
+- Dragging a window a few pixels no longer corrupts the tiled layout.
+- The Windows build compiled again after resize signalling was split into
+  platform-specific files. Not that anyone had reported running it there.
+
+That was tuios at v0.1.0: a window manager, a terminal you could finally copy
+from, a config file, and enough packaging that installing it was not a
+project. Everything after this builds on that base.

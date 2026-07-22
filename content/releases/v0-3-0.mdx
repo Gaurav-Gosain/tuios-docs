@@ -1,0 +1,89 @@
+---
+title: v0.3.0
+description: Bubble Tea v2 with keyboard enhancements, configurable tiling layouts, theming turned opt-in, and a scrollback rewrite.
+date: '2025-11-05'
+author: Gaurav Gosain
+---
+
+27 commits in the three days after v0.2.0, including the v0.2.1 and v0.2.2
+patch releases tagged along the way. The headline is the migration to Bubble
+Tea v2 and the keyboard enhancements it unlocks: tuios now negotiates the
+Kitty keyboard protocol with terminals that support it, so keys that used to
+arrive ambiguous or not at all now mean what you typed. Around that, tiling
+picked up real layout controls, theming became opt-in after one release of
+being the default, and scrollback got 10 to 20 times faster.
+
+## Keys that mean what you typed
+
+tuios moved to Bubble Tea v2.0.0-rc.1 and now handles its keyboard
+enhancements messages. On terminals that support the Kitty keyboard protocol,
+tuios detects that support and enables it automatically, nothing to configure.
+The payoff is disambiguation. A classic terminal cannot tell Shift+Enter from
+Enter, or report Super+Space at all; with the protocol enabled, those arrive
+as distinct events, complex modifier combinations work, international layouts
+report correctly, and the keys forward to the program running in the pane
+instead of being flattened on the way through.
+
+The same theme, lower tech: in terminal mode, tuios used to intercept the
+tiling resize keys, which meant you could not type `<`, `>`, `{`, or `}` into
+a shell. Now only the Ctrl+B prefix is intercepted in terminal mode and every
+other key goes straight to the PTY.
+
+## Tiling you can shape
+
+The tiling layout stopped being take-it-or-leave-it. The master window ratio
+is configurable from 30% to 70%, there are eight new resize operations with
+directional variants, and each workspace remembers its layout and restores it.
+Two layout bugs went with it: grid layouts with five or more windows no
+longer leave a strip of dead space at the bottom, and mouse-resizing with the
+dock at the top no longer uses boundaries two lines off from where dragging
+would put the same window.
+
+Workspace switching also stopped stranding windows. Switching mid-animation
+used to leave windows stuck at whatever position their animation had reached,
+sometimes one window fullscreen with the rest piled on top. Animations are
+now resolved on switch: the old workspace snaps to its correct tiled layout
+instantly, the new one tiles with its usual animation, and rapid switching
+cannot leave anything in between.
+
+## Theming is now opt-in
+
+v0.2.0 shipped themes on by default and that was the wrong default. Painting
+an opaque themed background under every window fights any TUI application
+that wants to control its own, so the terminal background is now transparent
+and the default theme is none: standard terminal colors unless you set
+`theme = "tokyonight"` or similar in the config. This is a breaking change if
+you liked the v0.2.0 default; one config line brings it back. The parent
+`TERM` variable is also preserved now, with an xterm-256color fallback.
+
+## Appearance and scrollback
+
+The dock can sit at the bottom, at the top, or be hidden, contributed by
+Cjreek. Borders come in nine styles (rounded, normal, thick, double, hidden,
+block, ascii, and two half-block variants), the window control buttons can be
+hidden entirely, and windows now respect application-controlled cursor
+visibility, so cmatrix hides the cursor and nvim shows it without tuios
+guessing. These live in a new `[appearance]` config section alongside
+matching flags.
+
+Scrollback moved from a dynamic slice to a fixed-size ring buffer, which
+turns the common operations from O(n) to O(1) and is 10 to 20 times faster
+once the buffer is full. The size is configurable from 100 to 1,000,000
+lines, default 10,000.
+
+## Smaller changes
+
+- tuios answers XTWINOPS queries (CSI 14, 16, and 18 t), so programs that ask
+  for the window size in pixels or cells get a real answer.
+- PTY setup is split into platform-specific files, fixing the Windows build
+  that broke when Unix-only process attributes hit the Windows compiler.
+- An ANSI escape parsing bug in viewport clipping (a logical AND that should
+  have been OR) is fixed.
+- The repository grew its contributor plumbing, most of it from cr2007: issue
+  forms for bugs and feature requests, an auto-labeler, a PR template, a
+  security policy, and a README pass that moved keybindings to kbd tags.
+- README notes Kitty protocol support, from ShalokShalom.
+
+v0.3.0 was tagged on 2025-11-05, three days and two patch releases after
+v0.2.0. The Bubble Tea v2 migration landed here and everything since builds
+on it.

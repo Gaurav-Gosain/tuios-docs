@@ -1,0 +1,151 @@
+---
+title: v0.5.0
+description: Persistent sessions backed by a daemon, multi-client attach over SSH, a remote control CLI, and BSP tiling with manual splits.
+date: '2025-12-25'
+author: Gaurav Gosain
+---
+
+30 commits between v0.4.0 and v0.5.0, released on Christmas Day 2025. This is
+the release where tuios stopped being a program you run and started being a
+session you attach to. A daemon keeps sessions alive when the client
+disconnects, more than one client can attach to the same session at once, and
+a new set of CLI commands drives a running session from outside. Underneath
+all of it, the codebase moved to the charm.land packages for Bubble Tea v2.
+
+## Sessions that survive a disconnect
+
+`tuios new work` creates a session backed by a daemon, started in-process.
+Detach, close the terminal, lose the SSH connection: the session keeps
+running. `tuios ls` lists what exists and `tuios attach work` puts you back,
+with windows, layouts, BSP trees, terminal content and scrollback where you
+left them. A session lasts as long as the daemon process does.
+
+This works on Windows too. The daemon speaks over Unix sockets and drives
+ConPTY, both of which Windows has had since Windows 10 build 17063.
+
+The bug that took the most rounds to land here was invisible in a
+single-client world. In daemon mode there are two VT emulators, the daemon's
+and the client's, and both were answering terminal queries. The duplicate
+answers printed as literal text, `^[[?62;1;6;9;15;18;22c` appearing in the
+output on reattach. The first fix drained every response, which broke the
+other direction: fish waits two seconds for a Device Attributes answer that
+never comes, so every startup got slow. The shape that shipped is asymmetric
+on purpose. The daemon's emulator answers queries, so applications get the
+responses they asked for; the client's emulator drains its copies, so nothing
+prints twice.
+
+<TerminalCapture
+  title="reattach"
+  lines={[
+    { text: '~ $', tone: 'normal' },
+    { text: '^[[?62;1;6;9;15;18;22c', tone: 'echo' },
+  ]}
+  note="Terminal capability replies, printed as text. Two emulators were answering the same question."
+/>
+
+## More than one client
+
+Multiple clients can attach to the same session at once and see the same
+thing. Focus, mode changes, workspace switches and window lifecycle sync in
+real time over dedicated channels, and the effective render size is the
+smallest attached client, so nobody gets a cropped frame. The practical use
+is pair debugging: one person creates the session, the other attaches from a
+different machine.
+
+SSH is the other way in. The built-in SSH server maps the username to a
+session name, so `ssh -p 2222 work@host` attaches to `work`, and connecting
+without naming one gets a session picker.
+
+Making this stable was most of the fix work in the release. Client teardown,
+daemon goroutines and window callbacks all had races that only fire with two
+clients and one shared state. They got sync.Once on close, WaitGroup
+tracking, an atomic flag, a five second shutdown timeout, and tests that run
+under the race detector.
+
+## A CLI for a running session
+
+A session that stays up is a session worth scripting. `tuios send-keys` sends
+keystrokes, either to tuios itself for window management or, with
+`--literal --raw`, straight to the focused PTY character by character.
+`tuios run-command` executes any tape command by name, `tuios set-config`
+changes configuration at runtime, and `tuios tape exec` runs a whole tape
+file against the session. `tuios list-windows`, `tuios get-window` and
+`tuios session-info` query daemon state directly and work with no TUI
+attached, with `--json` output for scripts. `tuios logs` tails the daemon
+when something needs debugging. All of it has shell completion.
+
+## BSP tiling
+
+Tiling gained a binary space partitioning layout. Automatic placement follows
+a spiral, alternating vertical and horizontal splits, and manual controls
+take over when the spiral guesses wrong: `Ctrl+B -` and `Ctrl+B |` split
+explicitly, `Ctrl+B R` rotates the split at the focused window, preselection
+points where the next window should land, and an equalize command resets
+every ratio to 50/50. The dock shows which direction the next split will go.
+Trees are stored per workspace and serialize into daemon state, so a layout
+survives detach and reattach.
+
+Two fixes rode along. Swapping windows in tiling mode now updates the tree,
+so swaps persist instead of snapping back on the next layout pass. And
+Shift+Tab reaches the PTY as backtab even when the terminal reports extra
+modifier bits in the key event.
+
+## Snapping, appearance, animations
+
+Dragging a window to a screen edge snaps it: top center for fullscreen, left
+or right edge for half the screen, corners for quarters, with minimum bounds
+so a window cannot be dragged into nothing.
+
+Appearance got its first real options. `window_title_position` puts titles at
+the bottom, the top, or nowhere; `hide_clock` removes the clock overlay; and
+titles show the window's custom name or the terminal's own title instead of a
+default ID.
+
+Animations can be switched off, per run with `--no-animations` or live with a
+keybind, and off means off: snap, minimize and restore apply their final
+state instantly instead of playing a zero-length tween that flashes. Recorded
+tapes get `DisableAnimations` prepended automatically, so playback behaves
+the same regardless of the settings on the machine that plays it.
+
+## Under the hood
+
+The module tree moved from github.com/charmbracelet to charm.land: Bubble Tea
+v2.0.0-rc.2, Lipgloss v2, Wish v2, and sip v0.1.11 to match. The CLI monolith
+split into focused command modules, and the VT emulator synced with upstream:
+forty-odd deprecated mode constants renamed, a nil color panic fix ported,
+grapheme width calculation simplified enough to drop two dependencies.
+
+There is also a first cut of tuios as a library. `pkg/tuios` exposes the app
+as an importable Go package with functional options for theme, shell and
+animations, plus the recommended `tea.Program` settings for embedding it.
+
+Two breaking changes if you build on tuios: import paths changed with the
+charm.land move, and session state from before v0.5.0 does not carry
+forward into the new daemon format.
+
+## Fixes and smaller changes
+
+- macOS configs asking for `opt+` bindings were registering some of them as
+  `alt+`.
+- Reattaching to a tiled daemon session sized windows from the stale 80x24
+  handshake; tiling now waits for the real effective size before laying out.
+- `tuios new` and `tuios attach` take the session name as a positional
+  argument; the redundant flags are gone.
+- Remote commands serialize maps and slices correctly over the wire, and the
+  inspection commands work without a TUI client attached.
+- The layout, pool and theme packages got test coverage, and staticcheck and
+  go vet run clean.
+- tuios-web got a `--no-animations` flag, theme initialization, and a curl
+  install script; an AUR packaging conflict between `tuios` and `tuios-bin`
+  was fixed.
+
+## Docs, and a correction
+
+Five new guides landed with this release: BSP tiling, tape recording, the
+showkeys overlay, multi-client sessions, and the library API. The GitHub
+notes for v0.5.0 also list tape recording and showkeys as new features; the
+log says otherwise. Both shipped in v0.4.0, and what this window added was
+their documentation.
+
+Released December 25, 2025. Every release after this one assumes the daemon
+exists.
