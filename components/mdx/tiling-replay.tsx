@@ -49,7 +49,23 @@ export function TilingReplay() {
     // biome-ignore lint/suspicious/noExplicitAny: player instance type is internal
     let player: any = null;
 
-    import('asciinema-player').then((mod) => {
+    // The cast leans on Nerd Font glyphs: the fish prompt's powerline separators
+    // and icons, and box-drawing that only joins in a font built for it. Load the
+    // bundled subset (both weights) BEFORE creating the player so the very first
+    // painted frame is already in TuiosTermNF, never a fallback.
+    const fontReady = (async () => {
+      if (!('fonts' in document)) return;
+      try {
+        await Promise.all([
+          document.fonts.load('400 16px "TuiosTermNF"'),
+          document.fonts.load('700 16px "TuiosTermNF"'),
+        ]);
+      } catch {
+        /* fall back to the terminal default if loading fails */
+      }
+    })();
+
+    Promise.all([import('asciinema-player'), fontReady]).then(([mod]) => {
       if (disposed || !hostEl) return;
       player = mod.create('/casts/tuios-tiling.cast', hostEl, {
         cols: COLS,
@@ -60,9 +76,11 @@ export function TilingReplay() {
         controls: true,
         fit: 'width',
         theme: 'asciinema',
+        terminalFontFamily: '"TuiosTermNF", ui-monospace, monospace',
         // Compress the recorded pauses so the replay stays lively.
         idleTimeLimit: 1,
-        poster: 'npt:0:12',
+        // Poster on the settled final frame (past the last mode toast).
+        poster: 'npt:12.63',
       });
     });
 
