@@ -1,0 +1,127 @@
+---
+title: Everything since v0.7.0
+description: Project tapes, startup settings, a settings menu that covers everything, text shaping in the web client, and the tiling and resize fixes underneath.
+date: '2026-07-22'
+author: Gaurav Gosain
+---
+
+244 commits since v0.7.0. Two of them are new subsystems, project tapes and
+startup settings, and most of the rest are the kind of fix that only shows up
+when someone uses the thing daily, which someone does. The short version: tuios
+can now build a project's layout when you cd into it, launch straight into a
+working session instead of an empty one, and the web client renders Arabic
+correctly. Underneath that, tiling and resize in daemon sessions finally behave.
+
+## Project tapes
+
+A `.tuios.tape` is a file in a project directory that describes the session for
+that project: which windows to open, what to run in them, how to lay them out.
+When the focused shell cd's into a directory that carries one, tuios notices.
+Like direnv, but for terminal layouts.
+
+A tape is arbitrary command execution, so the whole feature is built around a
+trust boundary. A tape is inert until you have read it and chosen what to do
+with it: Run once, Trust and run, or Never. Trust binds to the file's content
+hash, so any edit reverts the tape to untrusted and it prompts again. By
+default nothing opens on its own. A badge in the dock and a notification tell
+you a tape is there, and the review dialog shows the full content before
+anything executes.
+
+Two opt-ins trade friction for convenience without weakening the boundary.
+`auto_review` opens the review dialog on detection instead of waiting for a
+keypress. `autorun = "auto"` runs a tape without asking, but only one you have
+already trusted and not edited since; an untrusted or changed tape falls back
+to asking. Running a tape builds a session named after the project and switches
+you into it.
+
+<TapeTrustFlow />
+
+## Start where you want to be
+
+Every session used to start empty: a blank floating workspace, then the same
+three actions every time. Open a terminal, turn on tiling, enter terminal mode.
+Those are now three startup settings, all off by default so a fresh install
+behaves exactly as before: `open_default_window`, `tiled`, and
+`start_in_terminal_mode`. All three on means tuios launches into a tiled
+session with one terminal and the next keystroke goes to the shell.
+
+The settings menu now covers everything the config file does. Border colors,
+preferred shell, window title format, daemon log level, mouse scroll speed,
+and the rest of what used to be file-only are in the menu and the command
+palette, with an inline text editor for free-text values. Changes persist.
+And when the config file itself has a problem, the error now surfaces inside
+the running TUI instead of being silently ignored.
+
+<StartupPreview />
+
+## The web client can shape text now
+
+The web client moved to sip v0.4.0, which brings an opt-in WebGL renderer with
+real HarfBuzz text shaping. A browser terminal normally draws one glyph per
+codepoint, which for Arabic means isolated, disconnected, wrongly ordered
+letters. With shaping, letters join, ligatures form, and combining marks land
+where they belong. This is the difference between a terminal that technically
+displays Arabic and one that can be read.
+
+The same sip release fixes a class of freeze where a terminal stopped
+repainting under fast output (synchronized output, mode 2026, left engaged),
+matches grapheme cluster widths against a reference terminal instead of a
+guess, and corrects kitty graphics placement.
+
+<ShapingCompare />
+
+## Tiling, resize, and staying responsive
+
+Windows created in a daemon session now tile. Placement used to only run for
+windows the attached client created itself, so daemon-created windows stacked
+on top of each other at the same position or floated over the tiled ones. A
+sync that re-places a window in a tiled session now retiles, and BSP tiles no
+longer overlap when panes shrink past the default size.
+
+<DaemonTilePlacement />
+
+Resize was rebuilt after one bug report unravelled into three distinct
+defects, which got [its own post](/blog/one-divider-five-windows). The short
+form: dragging a shared border now moves the two panes that share it and
+nothing else, an untouched split's ratio no longer drifts every time something
+near it resizes, and the drag sets geometry directly instead of easing toward
+a target that has already moved. Both defects are demonstrated interactively in
+the post.
+
+A busy pane can also no longer starve the rest of the app. A background pane
+flooding output used to hold the emulator lock for its entire pending batch,
+and the renderer, which needs that lock every frame, never got in. Keystrokes
+in the focused pane echoed promptly and then never appeared, which reads as a
+freeze. Output is now written in bounded chunks, so the renderer gets its turn
+and typing stays responsive no matter what another pane is doing.
+
+## Keycast
+
+tuios can now draw your keypresses on screen as you type: a small overlay in
+the bottom right showing the last few keys, with repeats coalesced. I added it
+for screen recordings, where a keyboard-driven window manager is unreadable
+without one. It toggles live from the command palette and the setting
+persists. It also draws correctly over a lone fullscreen window, which took
+two follow-up fixes, so it earns its place in the fixes list too.
+
+<KeycastDemo />
+
+## Fewer papercuts
+
+- Ctrl+P opens the command palette every time. It was silently swallowed when
+  the terminal reported a lock modifier like Num Lock in the key event.
+  Keybindings now resolve through a single registry, so a binding means the
+  same thing everywhere.
+- Quitting a session kills it, and the message says "Killed" instead of
+  "detached". The exit message names the session you were in, not the one you
+  first attached to.
+- A grapheme cluster split across two writes no longer renders as two. Write
+  boundaries fall anywhere; the emulator now treats that as its problem.
+- Erase-character respects the right margin.
+- Programs running inside tuios are told graphics forwarding is available, so
+  image-capable tools stop falling back to blocks.
+- Mouse scroll speed and window title format are configurable, in the file
+  and in the menu.
+
+All of this is on main now and will ship as the next tagged release. If a tape
+prompt ever surprises you, that is the trust boundary doing its job.

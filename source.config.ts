@@ -38,6 +38,22 @@ export const blog = defineDocs({
   },
 });
 
+export const releases = defineDocs({
+  dir: 'content/releases',
+  docs: {
+    schema: frontmatterSchema.extend({
+      date: z.string().date(),
+      author: z.string(),
+    }),
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+  meta: {
+    schema: metaSchema,
+  },
+});
+
 export default defineConfig({
   mdxOptions: {
     remarkPlugins: [remarkMdxMermaid],

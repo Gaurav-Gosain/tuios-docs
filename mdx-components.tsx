@@ -13,6 +13,11 @@ import { BenchBars } from '@/components/mdx/bench-bars';
 import { RunTally } from '@/components/mdx/run-tally';
 import { TapeShrink } from '@/components/mdx/tape-shrink';
 import { TerminalCapture } from '@/components/mdx/terminal-capture';
+import { TapeTrustFlow } from '@/components/mdx/tape-trust-flow';
+import { StartupPreview } from '@/components/mdx/startup-preview';
+import { ShapingCompare } from '@/components/mdx/shaping-compare';
+import { DaemonTilePlacement } from '@/components/mdx/daemon-tile-placement';
+import { KeycastDemo } from '@/components/mdx/keycast-demo';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -31,6 +36,11 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     RunTally,
     TapeShrink,
     TerminalCapture,
+    TapeTrustFlow,
+    StartupPreview,
+    ShapingCompare,
+    DaemonTilePlacement,
+    KeycastDemo,
     ...components,
   };
 }

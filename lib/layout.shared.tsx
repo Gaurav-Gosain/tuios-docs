@@ -22,6 +22,11 @@ export function baseOptions(): BaseLayoutProps {
         url: '/blog',
         active: 'nested-url',
       },
+      {
+        text: 'Releases',
+        url: '/releases',
+        active: 'nested-url',
+      },
     ],
   };
 }

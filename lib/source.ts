@@ -1,4 +1,4 @@
-import { blog, docs } from 'fumadocs-mdx:collections/server';
+import { blog, docs, releases } from 'fumadocs-mdx:collections/server';
 import { type InferPageType, loader } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 
@@ -23,6 +23,34 @@ export function getBlogPosts() {
     .getPages()
     .slice()
     .sort((a, b) => b.data.date.localeCompare(a.data.date));
+}
+
+export const releasesSource = loader({
+  baseUrl: '/releases',
+  source: releases.toFumadocsSource(),
+});
+
+/**
+ * Releases newest first. The date is a plain date string validated by the
+ * frontmatter schema, so lexicographic order is chronological order, the same
+ * ordering the blog uses.
+ */
+export function getReleases() {
+  return releasesSource
+    .getPages()
+    .slice()
+    .sort((a, b) => b.data.date.localeCompare(a.data.date));
+}
+
+export function getReleasePageImage(
+  page: InferPageType<typeof releasesSource>,
+) {
+  const segments = [...page.slugs, 'image.png'];
+
+  return {
+    segments,
+    url: `/og/releases/${segments.join('/')}`,
+  };
 }
 
 export function getBlogPageImage(page: InferPageType<typeof blogSource>) {
