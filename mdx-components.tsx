@@ -18,7 +18,6 @@ import { StartupPreview } from '@/components/mdx/startup-preview';
 import { ShapingCompare } from '@/components/mdx/shaping-compare';
 import { DaemonTilePlacement } from '@/components/mdx/daemon-tile-placement';
 import { KeycastDemo } from '@/components/mdx/keycast-demo';
-import { TilingReplay } from '@/components/mdx/tiling-replay';
 import { SharedBordersToggle } from '@/components/mdx/shared-borders-toggle';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
@@ -43,7 +42,6 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ShapingCompare,
     DaemonTilePlacement,
     KeycastDemo,
-    TilingReplay,
     SharedBordersToggle,
     ...components,
   };
