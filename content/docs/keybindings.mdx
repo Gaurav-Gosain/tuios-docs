@@ -49,6 +49,8 @@ These shortcuts work directly in Terminal Mode without requiring the prefix key.
 On Linux and Windows, <kbd>Alt</kbd>+<kbd>Tab</kbd> is captured by the OS window switcher, so TUIOS uses <kbd>Alt</kbd>+<kbd>N</kbd>/<kbd>Alt</kbd>+<kbd>P</kbd> instead. On macOS, <kbd>Opt</kbd>+<kbd>Tab</kbd> produces a unicode character that TUIOS can intercept.
 </Callout>
 
+<kbd>Alt</kbd>+<kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> move focus directionally between panes without leaving terminal mode (`terminal_focus_left`, `terminal_focus_right`, `terminal_focus_up`, `terminal_focus_down`).
+
 ## Window Management
 
 Window mode, from `[keybindings.window_management]` (and `[keybindings.restore_minimized]` for the last row).
@@ -63,6 +65,9 @@ Window mode, from `[keybindings.window_management]` (and `[keybindings.restore_m
 - <kbd>Shift</kbd>+<kbd>Tab</kbd> - Focus previous window
 - <kbd>1</kbd>-<kbd>9</kbd> - Select window by number
 - <kbd>Shift</kbd>+<kbd>1</kbd>-<kbd>9</kbd> or <kbd>!@#$%^&*(</kbd> - Restore minimized window by number
+- <kbd>c</kbd> - Copy the current selection (`copy_selection`)
+- <kbd>s</kbd> - Focus the session rail (`focus_sidebar`)
+- <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> / <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> - Next and previous session (`next_session`, `prev_session`)
 
 ## Workspaces
 
@@ -213,7 +218,7 @@ Prefix any motion with a number to repeat it:
 - <kbd>Ctrl</kbd>+<kbd>P</kbd> - Open Command Palette (works from any mode)
 - <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>P</kbd> - Open Command Palette (prefix alternative)
 
-The command palette provides fuzzy-searchable access to all TUIOS commands, keybindings, and actions.
+The command palette provides fuzzy-searchable access to all TUIOS commands, keybindings, and actions, plus sessions, windows, and any executable on `$PATH`, which it launches in a new pane. An `@` prefix filters panes by agent state, for example `@n` for needs input.
 
 ## Prefix Commands
 
@@ -252,6 +257,11 @@ Every row below is an action in `[keybindings.prefix_mode]` and can be rebound.
 | <kbd>t</kbd> | `prefix_window` | Enter window prefix menu |
 | <kbd>D</kbd> | `prefix_debug` | Enter debug prefix menu |
 | <kbd>T</kbd> | `prefix_tape` | Enter tape prefix menu |
+| <kbd>X</kbd> | `prefix_close_session` | Close the current session |
+| <kbd>b</kbd> | `prefix_toggle_sidebar` | Toggle the session rail |
+| <kbd>W</kbd> | `prefix_workspace_switcher` | Open the workspace switcher |
+| <kbd>e</kbd> | `prefix_explore` | Focus the session rail |
+| <kbd>j</kbd> | `prefix_jump_notif` | Jump to the pane a notification came from |
 | <kbd>d</kbd> | `prefix_detach` | Detach; a daemon session keeps running |
 | <kbd>Esc</kbd> | `prefix_exit_mode` | Leave terminal mode, never detaches |
 | <kbd>q</kbd> | `prefix_quit` | Quit; in daemon mode this kills the session |
@@ -291,6 +301,7 @@ Record and replay `.tape` automation scripts. Configured in `[keybindings.tape_p
 - <kbd>m</kbd> - `tape_prefix_manager`, open the tape manager
 - <kbd>r</kbd> - `tape_prefix_record`, start recording
 - <kbd>s</kbd> - `tape_prefix_stop`, stop recording
+- <kbd>t</kbd> - `tape_prefix_review`, review a detected project tape
 - <kbd>Esc</kbd> - `tape_prefix_cancel`, cancel
 
 ### Workspace Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>w</kbd>)
@@ -299,6 +310,7 @@ Configured in `[keybindings.workspace_prefix]`.
 
 - <kbd>1</kbd>-<kbd>9</kbd> - `workspace_prefix_switch_1` to `workspace_prefix_switch_9`, switch to workspace
 - <kbd>!</kbd> <kbd>@</kbd> <kbd>#</kbd> <kbd>$</kbd> <kbd>%</kbd> <kbd>^</kbd> <kbd>&</kbd> <kbd>*</kbd> <kbd>(</kbd> - `workspace_prefix_move_1` to `workspace_prefix_move_9`, move window to workspace and follow
+- <kbd>r</kbd> - `workspace_prefix_rename`, rename the current workspace
 - <kbd>Esc</kbd> - `workspace_prefix_cancel`, cancel
 
 ### Debug Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd>)
@@ -337,9 +349,13 @@ Entering this menu is the configurable `prefix_layout` action, but <kbd>l</kbd> 
 - **Mouse Wheel Up** - Enter copy mode and scroll up (when the application is not tracking the mouse and is not on the alternate screen)
 - **Right Border Click/Drag** - Interactive scrollbar for navigating scrollback history
 
+## Session Rail
+
+When the rail owns the keyboard (<kbd>s</kbd> in window mode, or <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>e</kbd>), it has a keybinding section of its own, `[keybindings.sidebar]`: <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>g</kbd>/<kbd>G</kbd> jump to the ends, <kbd>Tab</kbd> switches section, <kbd>Enter</kbd> activates, <kbd>J</kbd>/<kbd>K</kbd> reorder, <kbd>f</kbd> and <kbd>o</kbd> filter and sort the agents section, <kbd>n</kbd> makes a new session, <kbd>/</kbd> opens the palette, <kbd>&lt;</kbd>/<kbd>&gt;</kbd> narrow and widen, <kbd>1</kbd>-<kbd>9</kbd> jump by number, and <kbd>?</kbd> shows the rail's own help.
+
 ## Customization
 
-Every binding on this page lives in one of 14 sections under `[keybindings]` in `config.toml`, and every one is rebindable. The section is named next to each group above. See the [Configuration Guide](/docs/configuration) for the full list and the key syntax.
+Every binding on this page lives in one of 15 sections under `[keybindings]` in `config.toml`, and every one is rebindable. The section is named next to each group above. See the [Configuration Guide](/docs/configuration) for the full list and the key syntax.
 
 ```bash
 # Edit your keybindings
@@ -357,11 +373,11 @@ Six sections used to be parsed and then ignored, so rebinding anything under the
 </Callout>
 
 <Callout title="list-custom is not a full audit" type="warn">
-`tuios keybinds list-custom` compares 9 of the 14 sections. It ignores `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, and `terminal_mode`, and it never reports a customized `leader_key`. A config that changes only those prints "No custom keybindings configured".
+`tuios keybinds list-custom` compares 9 of the 15 sections. It ignores `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `terminal_mode`, and `sidebar`, and it never reports a customized `leader_key`. A config that changes only those prints "No custom keybindings configured".
 </Callout>
 
 <Callout title="Most keybinding changes need a restart" type="warn">
-TUIOS hot-reloads part of `[appearance]`, but keybindings are not in that subset. Restart the client after editing them.
+TUIOS hot-reloads the `[appearance]` table and `leader_key`, but the other keybindings are not in that subset. Restart the client after editing them.
 </Callout>
 
 ## Platform-Specific Notes

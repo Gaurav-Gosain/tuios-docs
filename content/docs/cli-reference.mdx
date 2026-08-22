@@ -24,7 +24,7 @@ tuios [command] [flags]
 
 ## Global Flags
 
-These are registered as persistent flags on the root command, so they are accepted by every subcommand. Most of them only mean something to a command that draws a TUI (`tuios`, `tuios attach`, `tuios new`, `tuios tape play`). Passing `--theme` to `tuios ls` is accepted and ignored.
+Only `--debug`, `--cpuprofile`, and `--pprof` are persistent flags accepted everywhere. The interface flags below are registered only on the commands that draw a TUI (`tuios`, `tuios attach`, `tuios new`, `tuios ssh`, `tuios tape play`). Passing `--theme` to `tuios ls` is an error, not a no-op.
 
 ### --theme
 
@@ -662,7 +662,9 @@ This allows you to run tape scripts without starting a new TUIOS instance. The s
 
 Control a running TUIOS session from external scripts and tools. These commands require a daemon session to be running. They all take `-s/--session` and default to the most recently active session when it is omitted.
 
-These are a convenience layer over the daemon's [JSON control protocol](/docs/control-protocol). If you are writing more than a few calls, go to the protocol directly.
+These are a convenience layer over the daemon's [JSON control protocol](/docs/control-protocol). If you are writing more than a few calls, go to the protocol directly. `tuios --skill` prints the agent skill built into the binary, which documents this whole surface with examples that are tested against the command tree.
+
+Beyond the commands documented in detail below, the layer now covers window arrangement and naming: `send-text` (literal text, no token splitting), `new-window` (with `--workspace`, `--cwd`, `--no-focus`, or an argv to exec), `split-window`, `focus-window`, `move-window`, `set-window`, `select-workspace`, `list-workspaces`, `set-layout`, `list-options`, `wait-for`, `set-session-name`, `set-session-accent`, `set-workspace-name`, and the agent-state group (`set-agent-state`, `get-agent-state`, `explain-agent-detect`, `explain-agent-screen`). Each accepts `--help`, and `tuios list-verbs` describes the protocol-level schema behind it.
 
 #### send-keys
 
@@ -700,12 +702,12 @@ tuios send-keys 'PREFIX q'
 
 **Window targeting.** `--window` resolves its argument in this order, first match wins:
 
-1. Custom name (a name set with `RenameWindow`)
-2. Window title
-3. Exact full UUID
-4. UUID prefix, 8 or more characters
+1. Exact full ID
+2. The index `list-windows` prints (an all-digit target in range)
+3. Unique ID prefix, any length
+4. Custom name (a name set with `RenameWindow`), then window title
 
-A custom name that happens to equal another window's title therefore wins. Use a full or prefixed ID when you need certainty.
+Names come last, so an index or ID always wins over a window that happens to be named `2`. Use a full or prefixed ID when you need certainty.
 
 <Callout type="warn">
 `--literal` and `--raw` both disable key parsing: the string is written to the PTY as-is. `tuios send-keys --literal Enter` types the six letters `Enter` rather than pressing the key. Send the text with `--literal --raw`, then send `Enter` in a second call without those flags.
@@ -958,7 +960,7 @@ Query the state of a running TUIOS session. These commands are designed for scri
 
 #### list-windows
 
-List all windows in a TUIOS session.
+List all windows in a TUIOS session. The table prints index, ID, name, workspace, size, and the detected agent, and the index it prints is accepted by `-w` everywhere a window target is taken.
 
 ```bash
 tuios list-windows [flags]

@@ -69,7 +69,7 @@ export default function HomePage() {
         <FeatureCard
           icon="layout-dashboard"
           title="Automatic Tiling"
-          description="Grid-based layouts with master-stack tiling algorithm. Or manual snapping."
+          description="Automatic BSP tiling with spiral splits by default. Master-stack mode and manual snapping too."
         />
         <FeatureCard
           icon="scroll-text"

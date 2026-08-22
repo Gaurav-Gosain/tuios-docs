@@ -19,7 +19,7 @@ TUIOS is built on the Bubble Tea v2 framework following the Model-View-Update (M
 - **[Cobra](https://github.com/spf13/cobra)** - CLI framework, wrapped by **[fang](https://github.com/charmbracelet/fang)** for styled help, errors, and version output
 - **[bubbletint](https://github.com/lrstanley/bubbletint)** - Theme palettes
 - **[sip](https://github.com/Gaurav-Gosain/sip)** - Browser terminal transport used by `tuios-web`
-- **Vendored VT emulator** - Custom ANSI/VT100 terminal emulator (`internal/vt`)
+- **Vendored VT emulator** - Terminal emulation behind a `Terminal` interface (`internal/vt`), with two backends: the pure-Go `Emulator` by default, and a [libghostty-vt](https://github.com/ghostty-org/ghostty) backed implementation behind the `ghostty` build tag (`go.mitchellh.com/libghostty`), held together by a differential test suite
 
 > **Note:** As of December 2025, the Charm stack packages have migrated from `github.com/charmbracelet/*` to `charm.land/*` module paths.
 
@@ -43,6 +43,15 @@ TUIOS is built on the Bubble Tea v2 framework following the Model-View-Update (M
 | `internal/pool` | Reusable buffer and builder pools |
 | `internal/ui` | Animation easing and timing helpers |
 | `internal/testutil` | A fake shell used to make PTY tests deterministic |
+| `internal/harness` | Agent harness manifests and detection: which program a pane is running |
+| `internal/transcript` | Reads an agent harness's own session log to derive its state |
+| `internal/sessiontree` | The rail's model: sessions, panes, and agent ranking |
+| `internal/sound` | Notification sound cues, played through system players |
+| `internal/fuzz` | Grammar-based terminal input generation for fuzzing |
+| `internal/perf` | Latency distributions and measurement helpers |
+| `internal/tape` | Tape scripts: parser, executor, recorder, project tapes |
+| `pkg/fuzzy` | The one fuzzy matcher behind every search box |
+| `pkg/applist` | `$PATH` scanning and frecency ranking for the launcher |
 | `cmd/tuios` | The main binary and every CLI subcommand |
 | `cmd/tuios-web` | Serves TUIOS over HTTP through sip. See [Web Terminal](/docs/web) |
 | `e2e` | Control-plane tests, plus `e2e/tui`, a separate module that drives a real TUIOS in a PTY |
@@ -110,7 +119,7 @@ Layout work is split across `os_layout.go`, `tiling.go`, `tiling_bsp.go`, `tilin
 
 ### Terminal Emulation (`internal/vt`)
 
-Custom ANSI/VT100 emulator:
+Terminal emulation lives behind a `Terminal` interface, so the implementation can be swapped at build time: the pure-Go `Emulator` is the default, and a libghostty-vt backed backend builds with `-tags ghostty`. A differential suite feeds identical bytes to both and compares screens, cursor, scrollback, modes, and rendered output, per chunk, and runs in CI on every emulator change. The pure-Go emulator:
 
 - Full CSI, OSC, ESC, DCS sequence support
 - Scrollback buffer, 10,000 lines by default (`appearance.scrollback_lines`)
@@ -145,7 +154,7 @@ TUIOS supports terminal graphics protocols for inline image display:
 - Shared memory support (`t=s` for mpv `--vo-kitty-use-shm`)
 - File path forwarding (`t=f`) to avoid read+encode overhead
 - Mode 2026 synchronized output wrapping
-- Animation protocol (a=f, a=a, a=c) **not supported** due to ID remapping constraints
+- Animation protocol (a=f, a=a, a=c) supported and forwarded, with animated guests streamed as damage-rectangle frame edits rather than whole bitmaps
 
 **Sixel Graphics** (`internal/app/sixel_*.go`, `internal/vt/sixel_*.go`):
 
@@ -217,6 +226,8 @@ Rendering is event-driven: PTY output wakes the model through a `PTYDataMsg`, so
 
 - `NormalFPS` defaults to 60 and is configurable through `appearance.max_fps`. Values are clamped to 10 at the low end and `MaxFPSCap` (240) at the high end. The settings UI offers 30, 60, 90, 120, 144, and `unlimited`, which pins it to the cap.
 - The tick drops to `IdleFPS` (10) when there are no animations, no active prefix, no running tape, and nothing needing dock updates.
+- Each pane's render coalescer paces its render signals by what a frame actually costs, with a floor of 8ms, and a pane whose output backlog exceeds 4MiB drops to a catch-up rate until it recovers, so a flooding pane cannot starve input.
+- The pane renderer reports the exact rectangle it produced, and when it matches the pane, the box is assembled without re-measuring or re-wrapping content the emulator already laid out.
 
 <Callout type="warn">
 `IdleThresholdFrames` and `BackgroundWindowUpdateCycle` are declared in `internal/config/constants.go` but are not referenced anywhere else in the tree. Documentation describing a per-frame idle counter or a background-window skip cycle is describing constants that nothing reads.
@@ -388,7 +399,7 @@ go build -o tuios ./cmd/tuios
 
 **Requirements:**
 
-- Go 1.25.9 (per `go.mod`)
+- Go 1.26.0 (per `go.mod`)
 - Nerd Font (for icons; `--ascii-only` avoids it)
 
 No C compiler is needed. There is no cgo in the tree, and the PTY layer is pure Go.

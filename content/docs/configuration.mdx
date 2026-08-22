@@ -7,7 +7,7 @@ icon: Settings
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-TUIOS reads a single TOML file, `~/.config/tuios/config.toml`, following the XDG Base Directory specification. It has exactly four top-level tables: `[appearance]`, `[keybindings]`, `[daemon]`, and `[hooks]`.
+TUIOS reads a single TOML file, `~/.config/tuios/config.toml`, following the XDG Base Directory specification. It has eight top-level tables: `[appearance]`, `[notifications]`, `[keybindings]`, `[daemon]`, `[startup]`, `[tape]`, `[hooks]`, and `[debug]`.
 
 Custom colour themes are a separate mechanism. They are JSON files in `~/.config/tuios/themes/`, not entries in the TOML file. See [Custom themes](#custom-themes).
 
@@ -60,21 +60,17 @@ close_window = ["ctrl+w"]
 
 TUIOS watches the config file and reloads it automatically. A write is debounced for 200ms, the file is re-parsed, and the result is applied on the render loop. There is also a **Reload Config** entry in the command palette (<kbd>Ctrl</kbd>+<kbd>P</kbd>) if you want to force it.
 
-<Callout type="warn" title="Only part of the config reloads">
-Hot reload re-applies a specific subset of `[appearance]`. Everything else needs a restart, and nothing tells you which is which at the time you edit.
+<Callout type="info" title="Most of the config reloads">
+Hot reload now applies essentially the whole `[appearance]` table live, including `theme`, `border_style`, `zen_mode`, `dockbar_position`, the `[appearance.sidebar]` and `[appearance.scrollbar]` tables, the dock and window-button options, `scrollback_lines`, `max_fps`, mouse behaviour options, and `leader_key`.
 
-**Reloads live:** `animations_enabled`, `confirm_quit`, `shared_borders`, `whichkey_enabled`, `whichkey_position`, `window_title_format`, `scroll_lines`, `zoom_max_width`, `border_focused_color`, `border_unfocused_color`. Also `window_title_position`, but only while the current value is still the default `bottom`.
-
-**Needs a restart:** every keybinding, `leader_key`, `theme`, `border_style`, `dockbar_position`, `hide_window_buttons`, `hide_scrollbar`, `show_clock`, `show_cpu`, `show_ram`, `scrollback_lines`, `max_fps`, `niri_reverse_scroll`, `preferred_shell`, the whole `[daemon]` table, and the whole `[hooks]` table.
-
-Hooks in particular are read once at startup. Editing `[hooks]` and saving does nothing until you restart the client.
+**Still needs a restart:** every keybinding other than `leader_key`, `preferred_shell`, the whole `[daemon]` table, and the whole `[hooks]` table. Hooks in particular are read once at startup.
 </Callout>
 
-If the reloaded file fails to parse or has errors, the reload is abandoned and the running config stays in place. The failure is written to the log, not shown on screen, so a silently unchanged setting usually means the file did not parse.
+If the reloaded file fails to parse or has errors, the reload is abandoned and the running config stays in place. The failure is shown as an error notification in the running TUI, and written to the log.
 
 ## Appearance
 
-The `[appearance]` table controls visual presentation. All 24 keys:
+The `[appearance]` table controls visual presentation. `tuios list-options` describes every settable path with its type, default, and accepted values, and is always in sync with the binary. The flat keys:
 
 | Key | Type | Default | CLI flag |
 |-----|------|---------|----------|
@@ -102,6 +98,28 @@ The `[appearance]` table controls visual presentation. All 24 keys:
 | `hide_clock` | bool, deprecated | `false` | `--hide-clock` |
 | `preferred_shell` | string | `""` | none |
 | `niri_reverse_scroll` | bool | `false` | none |
+| `zen_mode` | enum: `disabled`, `always`, `mouse` | `"disabled"` | none |
+| `window_button_style` | enum: `pill`, `dots` | `"pill"` | `--window-button-style` |
+| `window_button_position` | enum: `right`, `left` | `"right"` | `--window-button-position` |
+| `copy_on_select` | bool | `true` | none |
+| `focus_follows_mouse` | bool | `false` | none |
+| `focus_follows_mouse_in_terminal` | bool | `false` | none |
+| `alt_drag` | bool | `true` | none |
+| `click_to_type` | enum: `single`, `double`, `off` | `"single"` | none |
+| `word_characters` | string | `"@-./_~?&=%+#"` | none |
+| `dock_workspace_tabs` | bool | `true` | none |
+| `dock_workspace_tab_format` | string, `{index}` and `{name}` | `""`, meaning `{name}` | none |
+| `dock_workspace_tooltip` | bool | `true` | none |
+| `dock_pill_caps` | bool | `false` | none |
+| `session_colors` | bool | `true` | none |
+
+Two nested tables hold the rest. `[appearance.scrollbar]` takes `style`
+(`thin` or `track`), `thumb` and `track` (one-cell glyphs), and `tint`
+(`quiet`, `border`, `muted`, or a `#RRGGBB` literal). `[appearance.sidebar]`
+configures the session rail: `enabled` (default `false`), `position` (`left`,
+`right`, `hidden`), `width`, `show_windows`, `show_glyphs`, `show_counts`,
+`show_agents`, `marquee`, and `tooltips`. The old flat `sidebar_*` keys are
+migrated into the table when an older file is read.
 
 ### border_style
 
@@ -252,7 +270,7 @@ leader_key = "ctrl+a"
 
 Other useful values: `"alt+space"`, `"ctrl+space"`.
 
-### The 14 sections
+### The 15 sections
 
 Every one of these is a table under `[keybindings]`, and every one resolves through the keybind registry, so every action in every one of them is rebindable.
 
@@ -272,6 +290,7 @@ Every one of these is a table under `[keybindings]`, and every one resolves thro
 | `debug_prefix` | After leader then `D` |
 | `tape_prefix` | After leader then `T` |
 | `terminal_mode` | Direct binds in terminal mode, no prefix needed |
+| `sidebar` | While the session rail owns the keyboard |
 
 <Callout type="info" title="The prefix sections used to be inert">
 Six of these sections were parsed and then ignored. Rebinding anything under the leader key was a silent no-op: your config was accepted, and the hard-coded key kept working instead.
@@ -283,7 +302,7 @@ If you wrote bindings for these sections against an older version and gave up on
 
 ### Section contents
 
-`window_management` actions: `new_window`, `close_window`, `rename_window`, `minimize_window`, `restore_all`, `toggle_zoom`, `next_window`, `prev_window`, `select_window_1` through `select_window_9`.
+`window_management` actions: `new_window`, `close_window`, `rename_window`, `minimize_window`, `restore_all`, `toggle_zoom`, `next_window`, `prev_window`, `copy_selection`, `focus_sidebar`, `next_session`, `prev_session`, `select_window_1` through `select_window_9`.
 
 `workspaces` actions: `switch_workspace_1` through `switch_workspace_9`, `move_and_follow_1` through `move_and_follow_9`.
 
@@ -295,7 +314,7 @@ If you wrote bindings for these sections against an older version and gave up on
 
 `restore_minimized` actions: `restore_minimized_1` through `restore_minimized_9`.
 
-`terminal_mode` actions: `terminal_next_window`, `terminal_prev_window`, `terminal_exit_mode`.
+`terminal_mode` actions: `terminal_next_window`, `terminal_prev_window`, `terminal_exit_mode`, and `terminal_focus_left`, `terminal_focus_right`, `terminal_focus_up`, `terminal_focus_down` (default <kbd>Alt</kbd>+arrows).
 
 The prefix sections are listed in full on the [Keybindings reference](/docs/keybindings), alongside their default keys.
 
@@ -376,14 +395,7 @@ Use `alt+` and `ctrl+`. `opt+` and `option+` are not valid.
 
 ## The in-app settings page
 
-TUIOS has a settings page that edits the config for you. It exposes 19 options in four categories:
-
-| Category | Options |
-|----------|---------|
-| Appearance | Theme, Border style, Window title, Shared borders, Window buttons, Scrollbar |
-| Dock | Dock position, Clock, CPU meter, RAM meter |
-| Behavior | Animations, Confirm quit, Which-key, Which-key position, Reverse scroll, Max FPS |
-| Advanced | Scrollback lines, Scroll lines, Zoom width |
+TUIOS has a settings page that edits the config for you. It covers everything the config file does, in eight categories: appearance, sidebar, dock, behavior, startup, advanced, daemon, and tape. Colour-valued options, the two border colours and the scrollbar tint among them, open a colour picker rather than a text field, and every row shows the value in force, so an unset colour shows what it inherits.
 
 Three ways in:
 
@@ -458,9 +470,9 @@ tuios keybinds list-custom
 ```
 
 <Callout type="warn" title="This is not a complete audit">
-`list-custom` diffs 9 of the 14 keybinding sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`.
+`list-custom` diffs 9 of the 15 keybinding sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`.
 
-It does not look at `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, or `terminal_mode`, and it does not report a customised `leader_key` at all. A config that changes only those will print "No custom keybindings configured", which is wrong.
+It does not look at `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `terminal_mode`, or `sidebar`, and it does not report a customised `leader_key` at all. A config that changes only those will print "No custom keybindings configured", which is wrong.
 
 Treat the output as a partial view. For the whole picture, read the file.
 </Callout>

@@ -46,7 +46,7 @@ function bspRects(n: number): Rect[] {
 
 export function DaemonTilePlacement() {
   const [count, setCount] = useState(3);
-  const [mode, setMode] = useState<'v0.7.0' | 'now'>('v0.7.0');
+  const [mode, setMode] = useState<'before' | 'now'>('before');
 
   const tiled = useMemo(() => bspRects(count), [count]);
 
@@ -129,7 +129,7 @@ export function DaemonTilePlacement() {
           role="group"
           aria-label="placement version"
         >
-          {(['v0.7.0', 'now'] as const).map((m) => (
+          {(['before', 'now'] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -149,7 +149,7 @@ export function DaemonTilePlacement() {
       </div>
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
-        Open a few windows in the <strong>v0.7.0</strong> position: they land at
+        Open a few windows in the <strong>before</strong> position: they land at
         the same origin and pile up, though the dock still reads TILING. Flip to{' '}
         <strong>now</strong> and the same windows split and tile. Placement used
         to run only for windows the attached client created; daemon-created

@@ -33,6 +33,7 @@ An unrecognised name is not an error. TOML parses it happily, TUIOS writes one l
 | `after-detach` | You detach from a daemon session |
 | `after-layout-change` | The tiling layout changes (cycled, toggled, or disabled) |
 | `after-resize` | A window is resized by keyboard or by dragging its border |
+| `after-agent-state` | A detected agent in a pane changes state. Gated by the `[notifications.agent]` policy, including its settle window, rather than firing on every raw transition |
 
 ## Both value forms parse
 
@@ -56,7 +57,7 @@ The commands in an array run **concurrently**, each in its own goroutine. They a
 
 The command string is handed to `sh -c` verbatim. There is no argument list, no stdin, and no JSON payload. Everything a hook knows arrives as environment variables.
 
-All nine variables are set on every event. Fields that do not apply to the event are present but empty (`""` for strings, `0` for numbers), so a script can read them unconditionally without guarding.
+All thirteen variables are set on every event. Fields that do not apply to the event are present but empty (`""` for strings, `0` for numbers), so a script can read them unconditionally without guarding.
 
 | Variable | Meaning |
 |----------|---------|
@@ -69,6 +70,10 @@ All nine variables are set on every event. Fields that do not apply to the event
 | `TUIOS_LAYOUT` | One of `bsp`, `master-stack`, `scrolling`, `floating` |
 | `TUIOS_WIDTH` | New window width in cells |
 | `TUIOS_HEIGHT` | New window height in cells |
+| `TUIOS_AGENT_STATE` | The state the pane's agent moved into |
+| `TUIOS_AGENT_PREV_STATE` | The state it left |
+| `TUIOS_AGENT_HARNESS` | The detected harness, for example `claude-code` |
+| `TUIOS_AGENT_MESSAGE` | The last message the agent reported, free text |
 
 ### Which variables carry data for which event
 
@@ -82,6 +87,7 @@ All nine variables are set on every event. Fields that do not apply to the event
 | `after-detach` | `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
 | `after-layout-change` | `TUIOS_LAYOUT`, `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
 | `after-resize` | `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_WIDTH`, `TUIOS_HEIGHT`, `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
+| `after-agent-state` | `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_AGENT_STATE`, `TUIOS_AGENT_PREV_STATE`, `TUIOS_AGENT_HARNESS`, `TUIOS_AGENT_MESSAGE`, `TUIOS_SESSION_ID` |
 
 `TUIOS_SESSION_ID` is the session name for a daemon session. In a plain local `tuios` run there is no session name, so it is empty.
 
