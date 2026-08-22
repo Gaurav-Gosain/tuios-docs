@@ -1,0 +1,130 @@
+---
+title: A fifth of every frame went to changing nothing
+description: The renderer's second-hottest call was a word wrapper running over text a terminal emulator had already laid out to exactly the right width. Deleting it was easy. Proving the deletion safe was the actual work.
+date: '2026-08-22'
+author: Gaurav Gosain
+---
+
+Profiling the tuios client under a DOOM-fire flood at 158x40 put 40.6% of its
+samples in frame composition, and 19.8%, nearly half of that, in
+`lipgloss.Wrap` alone. One call, a fifth of everything the client did.
+
+Which would be unremarkable if the call did anything. The content being
+wrapped is a terminal pane's body: the output of a terminal emulator whose
+entire job is producing a grid of exactly the pane's width and height. Every
+line is already precisely as wide as the wrap width. The wrapper walks the
+whole frame, finds nothing to break, and returns its input. The
+second-hottest call in the client was, on this content, the identity
+function.
+
+## How it got there
+
+Nobody calls `Wrap` in the tuios codebase. It comes free with the box. A pane
+is drawn by wrapping the emulator's content in a lipgloss border style, and
+setting `Width` on that style is what arms it: inside `Style.Render`, a
+width means the content might need wrapping to fit, so it is wrapped.
+Reasonable for the general case lipgloss serves. Redundant for content that a
+grid-based emulator has already shaped.
+
+It is also expensive out of proportion to what it does, because `Wrap` is two
+passes. The first pass is the actual word wrap, which finds nothing. The
+second pass streams the result through a writer whose job is repairing styles
+across the line breaks wrapping introduces, and it does this one byte at a
+time: for every byte of the frame, one ANSI parser advance and one one-byte
+heap-allocating write. On this content it changes nothing, which the tests
+below prove byte for byte. What it costs is the copy itself, byte by byte,
+allocation by allocation, twice per pane per frame at flood rates.
+
+The waste has a sibling: before the box is rendered, the content is measured
+with `lipgloss.Size` and clamped with `MaxWidth` and `MaxHeight`, a full
+ANSI-aware walk over a string the renderer itself just produced to known
+dimensions. Measuring what you just made, then wrapping what cannot wrap.
+
+## Deleting work is a correctness claim
+
+The fix is obvious and the fix is not the point. Do not set `Width` when the
+content is already the right shape, and the wrap never runs. The point is the
+guard, because "already the right shape" is a claim about every frame tuios
+will ever compose, including the ones where a pane is mid-resize and the grid
+has not caught up, the ones where the terminal is closed, the ones where a
+frame came out of a cache. Skip the wrap on one frame where the claim is
+false and the box misassembles on screen.
+
+The rule I held the change to: nothing on the fast path is allowed to count
+bytes or runes. Counting is how this kind of guard goes wrong, because byte
+count, rune count and column count are three different numbers the moment the
+content stops being ASCII. Instead, the renderer reports the rectangle it
+produced, from the inside. As the cell loop emits each row it sums the
+printed cell widths, and only if every row landed exactly on the content
+width, and the row count matched, does it publish the dimensions. Any early
+exit, any row that fell short or overshot, any path the renderer cannot
+vouch for, publishes zero, and zero means the old wrapping path runs. The
+cached-frame path stores the rectangle alongside the frame, so a cached
+answer can never be trusted further than the frame it describes.
+
+The claim then gets attacked from three directions.
+
+A 13-case corpus of the content most likely to break width accounting: CJK
+text, combining marks, ZWJ emoji families, flag pairs from regional
+indicators, block elements, styled runs, and wide or combining characters
+placed deliberately at the last column, where a two-column glyph cannot fit
+and the accounting is most likely to be off by one. Over that corpus, one
+test asserts the reported rectangle fills the content box, and another
+asserts the literal proposition being relied on:
+
+```go
+if wrapped := lipgloss.Wrap(body, win.ContentWidth(), ""); wrapped != body {
+    t.Errorf("wrap must be an identity on a pre-shaped pane body")
+}
+```
+
+If the wrap is the identity function, skipping it is unobservable. That test
+turns the whole optimisation into a checkable statement.
+
+Second, a differential test renders every corpus case through both paths,
+skip on and skip off, and compares the finished boxes byte for byte. And
+third, two adversarial tests desynchronise the grid from the pane on purpose,
+resizing one out from under the other in both directions, and assert the
+renderer declines to publish a rectangle rather than publishing a wrong one.
+
+Above the unit tests, an end-to-end test runs the real binary in a PTY, fills
+rows to exactly the terminal width with `你`, `é`, and `❤️`, a heart made two
+columns wide by a variation selector, and compares every screen cell,
+including colors, against the same binary with the skip disabled via an
+escape hatch that ships in the build. The negative control is recorded next
+to the test: inject the fault, report a rectangle one column wide of the
+truth, and both tests fail on the broken binary. A guard you have never seen
+fail is a guard you have not tested.
+
+## The numbers
+
+Same binary, wrap on against wrap off, 158x40 under flood:
+
+<BenchBars
+  groups={["focused", "unfocused", "box alone"]}
+  series={[
+    { label: "wrap on", values: [8.5, 10.1, 6.71], tone: "baseline" },
+    { label: "wrap off", values: [4.62, 3.82, 2.8], tone: "subject" }
+  ]}
+  unit="ms"
+  groupLabel="path"
+  caption="renderWindowBox under a DOOM-fire flood at 158x40. The box-alone row pre-renders the content once, so it isolates what the box assembly itself costs."
+/>
+
+The allocation numbers say it more plainly than the milliseconds: assembling
+the box alone went from 107,260 allocations to 660. That is the one-byte
+writes. A hundred thousand allocations per pane per frame, every one of them
+in service of returning the input unchanged.
+
+## What I keep from this
+
+The cheapest optimisation is deleting work, and deleted work is the only
+optimisation that needs a proof rather than a benchmark. A benchmark tells
+you the fast path is fast. It cannot tell you the fast path is right on the
+frame where the grid is three columns behind the pane, which is why the guard
+is derived from what the renderer actually produced rather than from any
+prediction about what it should produce. The identity test is the part I
+would keep even if the performance win evaporated: it converts "this call
+does nothing here" from a belief the optimisation rests on into a sentence
+the suite checks against real Unicode on every run. Beliefs rot. Sentences
+fail loudly.

@@ -1,0 +1,149 @@
+---
+title: The daemon said yes to an option that did not exist
+description: Driving the control socket the way a machine would, instead of testing its handlers the way I had been, found a typed command that lost its spaces, a parameter that was silently discarded, and a settings surface where six paths out of 88 were real.
+date: '2026-08-21'
+author: Gaurav Gosain
+---
+
+tuios has a control socket: a JSON protocol a program can speak to the daemon
+to open windows, send input, read screens, change settings. It exists so that
+agents and scripts can drive a session without faking keystrokes at a TUI.
+Every verb had tests. The tests were green. Then I sat down to write the
+documentation that teaches an agent to use it, and did the one thing the
+tests had never done: ran the documented examples over a real socket against
+a real daemon, and looked at what actually happened.
+
+Four findings, in ascending order of how much they changed my mind about
+what a passing test means.
+
+## The command that lost its spaces
+
+`send-keys` takes a token string in the tmux style: key names and text,
+comma-separated. So the obvious way to run a command is:
+
+```
+tuios send-keys "echo hello,Enter"
+```
+
+The pane receives `echohello`, followed by Enter. The tokenizer aliases
+commas to spaces and then splits on whitespace, so `echo`, `hello` and
+`Enter` are three tokens, each sent as its content, with the separators
+dropped. That is correct behaviour for a key-token language, where the
+separator is punctuation rather than payload, and it is a trap for exactly
+the caller this surface exists to serve: a machine that composed a shell
+command and reached for the verb with "keys" in the name. Nothing warns you.
+The call exits zero, and the pane runs a command that does not exist.
+
+This one is not fixed in code, because the tokenizer is behaving as
+specified. The fix is in the surface: the skill documentation now carries the
+failure inline, annotated with exactly what gets typed, and steers text
+toward `send-text`, which sends its argument verbatim, and whole commands
+toward `run-command`. And the examples in that documentation are held by a
+test that parses every one of them against the real command tree, so the docs
+cannot drift from the binary.
+
+## The parameter that fell on the floor
+
+`new-window` takes a session and a name. I asked it for a workspace too:
+
+```json
+{"verb": "new-window", "params": {"session": "dev", "workspace": 2}}
+```
+
+A window came back: created, named, success envelope, everything in order.
+On workspace 1. Dropping an unknown field is what `encoding/json` does by
+default, and it is the worst answer available to a machine caller: the call
+did less than it was asked, reported success, and left no trace of the
+difference. A human notices the window opened in the wrong place. An agent
+reads `"type": "window_created"` and moves on, wrong about the world from
+then on.
+
+The fix has two halves. `workspace` became real, along with `cwd` and
+`focus`. And the protocol layer now checks every incoming parameter against
+the verb's published schema before the handler runs, refusing anything
+unrecognised with the closest-match suggestion and the full accepted list.
+The refusal earns its keep beyond typos: a parameter the verb does not take
+yet is exactly what a caller built against a newer tuios sends an older one,
+and a refusal is the only answer that tells the truth in that situation.
+Turning the check on also caught two parameters that were real but missing
+from their verbs' declared schemas, which would have become unreachable the
+moment enforcement landed. The declared surface and the implemented surface
+had already drifted; there was just nothing comparing them.
+
+## The option that did not exist
+
+```
+tuios set-option appearance.totally_made_up whatever
+```
+
+came back `option_set`. Not an error. The response did include
+`"applied": false`, which sounds like a signal until you learn it was one bit
+meaning two things: "no client is attached to apply this right now" and
+"that key means nothing and never will". A caller cannot tell a setting that
+will take effect on next attach from a typo. Both were filed as success.
+
+Now the path is resolved against the option registry first, and a miss is an
+error, `option_not_found`, carrying the closest match and the complete list
+of valid paths. The value is validated too, by attempting the assignment
+against a throwaway default config before touching the session, so the check
+and the apply cannot disagree about what is assignable. And when
+`applied` is false, the response says why.
+
+## Six paths out of 88
+
+The last one was the quietest and the largest. Applying a setting to a
+running tuios went through a hand-written switch, and the switch knew six
+paths, all of them appearance options: border style, dock position,
+animations, three flavours of window button. The option registry at that
+commit declared 88. Everything else, most of the sidebar's settings and all
+but one of the dock's, could be written into the config file, read at
+startup, listed by the CLI, accepted by `set-option`, and would do nothing
+whatsoever to the running program. Not rejected. Accepted, recorded,
+inert.
+
+So the whole sidebar could be configured over the socket, verb by verb,
+success by success, without a single visible consequence. The fix deleted the
+dead end rather than extending the switch: unknown paths now route through
+the same funnel a config file load uses, one assignment function driven by
+the registry, then the same live-apply step. The registry itself is held to
+the config struct by a reflection test that walks every scalar field and
+fails in both directions, a field without a registry entry or an entry
+without a field. The number 88 can never again be quietly larger than the
+number six, because there is no six.
+
+## Why every test was green
+
+The tests were not thin. They were pointed at the wrong layer.
+
+The end-to-end suite really did drive `set-option` over the socket, and here
+is the assertion it made: set `mouse` to `on`, get `mouse` back, expect
+`on`. `mouse` is not a tuios option. The test proved the daemon's key-value
+store round-trips a string, which it does beautifully, and proved nothing
+about any option existing or taking effect. It now sets a real registry path
+and asserts the value came back from the session, not from defaults.
+
+The unit tests called verb handlers as functions, with a fake client wired to
+answer every command with a hardcoded success. A handler under test like that
+cannot fail for any of the four reasons above. It cannot even fail for not
+being registered. The commit that replaced them says it plainly: a handler
+test would pass for a verb that was never registered, and registration is
+half of what these are.
+
+The replacement suite starts a real daemon, connects over the socket, sends
+the verb as bytes, and asserts on the response and then on the state the
+daemon holds afterwards. It is slower, and it is the only kind of test on
+this surface whose passing means what it appears to mean.
+
+## What I keep from this
+
+An API for machines has a different failure economics than a UI for people.
+A person who asks for a window on workspace 2 and watches it open on
+workspace 1 has already noticed; the interface self-reports through their
+eyes. A program has only the response envelope, so every gap between what
+was reported and what was done becomes a false belief in the caller,
+compounding silently. For this kind of surface, "accepted and ignored" is
+strictly worse than any error, and the couple of hours spent driving my own
+API the way its real callers would found more product defects than the
+entire handler-level suite had in its lifetime. The features were not
+broken. They were never wired to anything, and there is no green so
+untrustworthy as the green of a test that cannot reach the wire.

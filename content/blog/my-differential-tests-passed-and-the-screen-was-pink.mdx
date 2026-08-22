@@ -1,0 +1,164 @@
+---
+title: My differential tests passed and the screen was pink
+description: A second terminal emulator, a differential suite comparing it against the first from day one, and every filename in ls rendered on hot pink. The suite compared the right things at the wrong time, in the wrong representation.
+date: '2026-08-22'
+author: Gaurav Gosain
+---
+
+tuios now has a second terminal emulator. Behind a `ghostty` build tag, the
+panes can be driven by libghostty-vt, the emulation core extracted from the
+ghostty terminal, instead of the pure-Go emulator tuios has always used. Two
+implementations of the same contract is the setup for differential testing,
+so the backend arrived with a differential suite in the same commit: feed
+identical bytes to both emulators, compare screen contents cell by cell,
+compare the cursor, compare scrollback, compare the mode table. A corpus of
+captured real-world terminal output runs through both. Divergences that are
+known and accepted are pinned in their own test so they cannot silently grow.
+
+The suite was green. The first `ls` I ran in a real build painted every
+filename on a block of hot pink.
+
+## The cache
+
+The backend converts libghostty's cell styles into the style type the rest of
+tuios consumes. Conversion walks foreground, background, underline, all the
+attributes, so it is not free, and libghostty hands you a convenient handle
+to cache on: every distinct style in the terminal is interned and named by a
+16-bit style ID. Same style, same ID. The conversion cache wrote itself:
+
+```go
+// styleCache maps a libghostty style ID to its uv conversion. Reset
+// when the theme changes, since conversion depends on the theme.
+styleCache map[uint16]uv.Style
+```
+
+Invalidated when the theme changes, and when OSC 4 rewrites the palette,
+because the conversion depends on those. Otherwise it lived as long as the
+terminal did. Within one frame the hit rate is excellent, since a screen full
+of text is mostly a handful of styles repeated thousands of times.
+
+The part I had not priced in: interning works by reference counting, and a
+refcount means reuse. The moment a style's last cell disappears, its ID goes
+back in the pool, and the next new style can be issued the same number. A
+style ID is not a name for a style. It is a name for a style while that style
+is on screen, which is a much shorter lease than the cache had assumed.
+
+## The sequence
+
+My prompt draws a powerline segment: truecolor background
+`\x1b[48;2;255;105;180m`, hot pink, white foreground. So the sequence that
+produces a pink `ls` is nothing exotic:
+
+1. The prompt renders. A frame is composed, the cache converts the prompt's
+   styles and files them under their IDs. One of those conversions carries
+   the pink background.
+2. `clear`. The prompt's cells are gone, the refcounts hit zero, the IDs
+   return to the pool.
+3. `ls` prints filenames with foreground-only colors. New styles, interned,
+   and the allocator hands them the freshly freed IDs.
+4. The next frame syncs, asks the cache about those IDs, and gets the
+   answer that was true one generation ago: white on hot pink.
+
+The rendered frame in step 1 is load-bearing. Without a compose between the
+prompt and the `clear`, nothing caches the doomed conversions and nothing goes
+wrong. The bug only exists when reads interleave writes, which is exactly how
+the application behaves and exactly how a test suite does not.
+
+## Why the suite could not see it
+
+Three reasons, and they compound.
+
+The corpus test fed each capture to both emulators in 4096-byte chunks, to
+exercise chunk-boundary handling, and then compared the screens once, after
+the last chunk. One comparison means one read, which means one snapshot, one
+generation of style IDs, and nothing ever recycled. The very structure that
+makes the bug possible, a read between two writes, was the structure the test
+avoided.
+
+The hand-written sequence tests each made a single write, so they had no
+intermediate state to get wrong even in principle.
+
+And every comparison was of internal grid state: walk both grids, compare
+cells, with an equivalence that knows a color can be spelled more than one
+way. That is the right comparison for most divergences and it is entirely
+blind to this one, because the bug does not live in the grid. libghostty's
+grid was correct the whole time. The corruption happened in the conversion
+layer on the way out, which means it only exists in what the host terminal is
+shown, and nothing compared that.
+
+A differential harness is a claim with two parameters: what you compare and
+when. I had the objects right and both parameters wrong.
+
+## The fix is two lines, the tests are the work
+
+The fix: clear the cache at every render snapshot, in both places that take
+one.
+
+```go
+// Style IDs are only stable within one render snapshot: the library
+// interns styles and recycles an ID as soon as its last cell is gone.
+clear(t.styleCache)
+```
+
+Cleared, not reallocated, so the map's capacity survives. The cache keeps
+earning its keep within a frame, which is where the hit rate was anyway, and
+stops asserting anything across frames, which is where it was lying.
+
+Then the suite got the holes closed. The corpus test now compares after every
+chunk, not once at the end, because a sync per chunk is what the running
+application actually does. A new comparison renders both emulators' output,
+the actual byte stream a host would receive, and when the bytes differ it
+re-parses each stream through a fresh emulator and compares what displays, so
+two spellings of the same color stay equal but a wrong color has nowhere to
+hide. And a churn test runs twelve generations of clear-and-recolor, the
+minimal loop that forces ID recycling, comparing both representations after
+every generation. On the pre-fix code it fails immediately.
+
+There is also an end-to-end guard that works at the level the bug was found:
+paint a pink prompt segment, wait for a rendered frame, `clear`, print
+foreground-only filenames, and assert on the final screen that every filename
+cell has a default background. The waiting step is commented for what it is:
+the trigger, the frame that caches conversions the `clear` is about to free.
+
+The differential suite now runs in CI on every change that touches the
+emulator, in both backends.
+
+## The same shape, two panes over
+
+The same week, the kitty graphics passthrough had a bug with a different
+surface and the identical skeleton. Drag a pane narrower while a program
+inside it streams frames, and the image stretched and spilled 40 columns into
+the neighbouring pane. The host had been told the placement was 118 columns
+wide, once, and kept scaling 780-pixel frames into that rectangle while the
+pane underneath had long since shrunk to 78 columns.
+
+The re-placement was held back during a resize by a flag that is set on mouse
+press and cleared on mouse release. Release is precisely the event that goes
+missing when the pointer leaves the surface mid-drag, so the hold could
+outlive the gesture indefinitely. The fix keys the hold on the geometry
+still changing, pass over pass, instead of on how the gesture ends: when the
+size stops moving, the hold releases, whatever the flag says.
+
+Two caches of a fact, both keyed to an event that was allowed to never
+arrive. The style cache waited for a theme change that had nothing to do with
+style lifetime. The placement hold waited for a mouse release that never
+came. The fix in both cases was the same move: stop trusting the event,
+derive the lease from the data itself. A converted style is good for one
+snapshot. A placement rectangle is good while the geometry it describes still
+holds.
+
+## What I keep from this
+
+Caching something keyed by an identifier you do not own means inheriting that
+identifier's lifetime rules, whether or not you have read them. Nothing in
+the code was wrong about what a style ID meant at any instant. It was wrong
+about how long the answer stayed true.
+
+And a differential suite passing is a statement about its comparison points,
+not about the system. Mine compared internal state at the end of input, and
+the bug lived in output in the middle. Neither "compare more things" nor
+"compare more often" would have found it alone; it took both, plus the
+humility of re-checking the suite's blind spots against how the application
+actually interleaves reads and writes. The suite is better now because the
+screen was pink. I would rather have learned it the other way around, but I
+have yet to find where correct-looking screens teach you anything.
