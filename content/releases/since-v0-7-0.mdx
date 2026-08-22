@@ -69,7 +69,7 @@ alongside the default ones.
 
 ## A control surface a program can trust
 
-The daemon speaks 34 verbs over its socket now, wrapped in CLI commands, and
+The daemon speaks 35 verbs over its socket now, wrapped in CLI commands, and
 the batch that added the arrangement and settings verbs also changed what
 the existing ones were allowed to say. A parameter a verb does not take is
 refused with the closest spelling and the full accepted list, instead of
@@ -93,14 +93,44 @@ and watching what actually happened, which
 
 ## Run anything
 
-The command palette can now launch programs: anything on `$PATH`,
-fuzzy-matched with frecency ranking in the same box that already finds
-commands, windows, and panes. Underneath it, the four separate search
-boxes in the app were collapsed onto one matcher that scores instead of
-shrugging, with its invariants held by fuzz tests on random input. A window
-can be born running an argv, and the launcher execs the program directly
-instead of typing its name into a shell, so what you launched is what runs,
-with no shell history entry and no prompt flash.
+tuios can now launch programs: anything on `$PATH`, fuzzy-matched with
+frecency ranking. This started inside the command palette and then earned
+its own overlay, on `alt+space`, because a palette row is a verb tuios
+performs and a launcher row is a thing you start, and ranking the two
+against each other meant a handicap constant whose whole job was to stop
+"new" from offering `newgrp` above New Window. The launcher shows names
+and icons from desktop entries where the platform has them; Enter execs
+the selection directly in a new pane, so what you launched is what runs,
+with no shell history entry and no prompt flash, and Tab types the command
+into the focused shell instead for when you want to add arguments.
+Underneath both, the four separate search boxes in the app were collapsed
+onto one matcher that scores instead of shrugging, with its invariants held
+by fuzz tests on random input.
+
+## Your keys, inspected
+
+Every key tuios answers to now lives in the keybind registry, including
+the two that used to be literals in the input path: the palette on
+`ctrl+p` and the launcher on `alt+space` sit in a `[keybindings.global]`
+section consulted in every mode, because a key nobody can rebind is a key
+nobody can inspect. On top of that registry sits a keybind manager, on
+`ctrl+b k`: four tabs over one analysis, what is bound, where tuios argues
+with itself, where tuios argues with the pane's program, and a Record tab
+that captures the next key you press and tells you all three about it. The
+same analysis runs headlessly as `tuios keybinds doctor` and
+`tuios keybinds explain <key>`, and every finding says how it knows:
+`certain` from tuios routing, `observed` read from a live pane,
+`reference` from a curated list of program defaults, so a claim about what
+`nvim` wants never masquerades as detection.
+
+## Bring your colours with you
+
+`tuios import-theme` converts a kitty, ghostty, alacritty, or wezterm
+colour scheme into a tuios theme, sniffing the format from the file's
+content, and `tuios list-themes` lists everything the daemon can apply,
+342 built-ins and whatever the themes directory holds, re-read on every
+call so an imported theme is usable without a restart. Switching re-palettes
+every open pane in place.
 
 ## tuios in your pocket
 

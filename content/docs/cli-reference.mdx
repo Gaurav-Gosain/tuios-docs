@@ -241,7 +241,7 @@ This opens an unauthenticated HTTP server that exposes profiling data and the pr
 
 ### -v, --version
 
-Print the version, commit, build date, and builder, then exit.
+Print the version, the VT backend the binary was built with (`pure-Go` or `ghostty`), the commit, build date, and builder, then exit.
 
 ```bash
 tuios --version
@@ -587,6 +587,26 @@ List only customized keybindings.
 tuios keybinds list-custom
 ```
 
+#### keybinds doctor
+
+Audit the effective bindings: keys claimed twice inside TUIOS, keys TUIOS takes from the pane, and which of those a common program wants. Every finding carries an evidence tier: `certain` comes from TUIOS routing, `observed` was read from a live pane, `reference` comes from a curated list of program defaults.
+
+```bash
+tuios keybinds doctor
+tuios keybinds doctor --json
+tuios keybinds doctor --guest nvim
+```
+
+#### keybinds explain
+
+Everything one key does: every scope it acts in, whether the pane's program would receive it, and which common programs bind it. Same `--json` and `--guest` flags as `doctor`.
+
+```bash
+tuios keybinds explain ctrl+b
+```
+
+The same analysis is available inside the app as the keybind manager, on <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>k</kbd>.
+
 ### tape
 
 Manage and run tape automation scripts.
@@ -664,7 +684,7 @@ Control a running TUIOS session from external scripts and tools. These commands 
 
 These are a convenience layer over the daemon's [JSON control protocol](/docs/control-protocol). If you are writing more than a few calls, go to the protocol directly. `tuios --skill` prints the agent skill built into the binary, which documents this whole surface with examples that are tested against the command tree.
 
-Beyond the commands documented in detail below, the layer now covers window arrangement and naming: `send-text` (literal text, no token splitting), `new-window` (with `--workspace`, `--cwd`, `--no-focus`, or an argv to exec), `split-window`, `focus-window`, `move-window`, `set-window`, `select-workspace`, `list-workspaces`, `set-layout`, `list-options`, `wait-for`, `set-session-name`, `set-session-accent`, `set-workspace-name`, and the agent-state group (`set-agent-state`, `get-agent-state`, `explain-agent-detect`, `explain-agent-screen`). Each accepts `--help`, and `tuios list-verbs` describes the protocol-level schema behind it.
+Beyond the commands documented in detail below, the layer now covers window arrangement and naming: `send-text` (literal text, no token splitting), `new-window` (with `--workspace`, `--cwd`, `--no-focus`, or an argv to exec), `split-window`, `focus-window`, `move-window`, `set-window`, `select-workspace`, `list-workspaces`, `set-layout`, `list-options`, `wait-for`, `set-session-name`, `set-session-accent`, `set-workspace-name`, and the agent-state group (`set-agent-state`, `get-agent-state`, `explain-agent-detect`, `explain-agent-screen`). `list-themes` lists every theme the daemon can apply, filterable and with `--json`, and `import-theme` converts a kitty, ghostty, alacritty, or wezterm colour scheme into a TUIOS theme file. Each accepts `--help`, and `tuios list-verbs` describes the protocol-level schema behind it.
 
 #### send-keys
 

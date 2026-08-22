@@ -218,7 +218,15 @@ Prefix any motion with a number to repeat it:
 - <kbd>Ctrl</kbd>+<kbd>P</kbd> - Open Command Palette (works from any mode)
 - <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>P</kbd> - Open Command Palette (prefix alternative)
 
-The command palette provides fuzzy-searchable access to all TUIOS commands, keybindings, and actions, plus sessions, windows, and any executable on `$PATH`, which it launches in a new pane. An `@` prefix filters panes by agent state, for example `@n` for needs input.
+The command palette provides fuzzy-searchable access to all TUIOS commands, keybindings, and actions, plus sessions and windows. An `@` prefix filters panes by agent state, for example `@n` for needs input. Programs live in their own overlay, the app launcher, and the palette keeps one row that opens it.
+
+## App Launcher
+
+- <kbd>Alt</kbd>+<kbd>Space</kbd> - Open the app launcher (works from any mode)
+
+The launcher lists every executable on `$PATH`, fuzzy-matched and frecency-ranked, with names and icons from desktop entries on platforms that have them. <kbd>Enter</kbd> execs the selection in a new pane, with no shell in between, so what you launched is what runs. <kbd>Tab</kbd> types the command into the focused shell instead, for when you want to add arguments.
+
+Both this key and <kbd>Ctrl</kbd>+<kbd>P</kbd> live in `[keybindings.global]`, a section consulted in window mode and terminal mode alike.
 
 ## Prefix Commands
 
@@ -238,6 +246,7 @@ Every row below is an action in `[keybindings.prefix_mode]` and can be rebound.
 | <kbd>x</kbd> | `prefix_close_window` | Close current window |
 | <kbd>r</kbd> | `prefix_rename_window` | Rename window |
 | <kbd>,</kbd> | `prefix_settings` | Open the settings page |
+| <kbd>k</kbd> | `prefix_keybinds` | Open the keybind manager |
 | <kbd>n</kbd> or <kbd>Tab</kbd> | `prefix_next_window` | Next window |
 | <kbd>p</kbd> or <kbd>Shift</kbd>+<kbd>Tab</kbd> | `prefix_prev_window` | Previous window |
 | <kbd>0</kbd>-<kbd>9</kbd> | `prefix_select_0` to `prefix_select_9` | Jump to window |
@@ -355,7 +364,7 @@ When the rail owns the keyboard (<kbd>s</kbd> in window mode, or <kbd>Ctrl</kbd>
 
 ## Customization
 
-Every binding on this page lives in one of 15 sections under `[keybindings]` in `config.toml`, and every one is rebindable. The section is named next to each group above. See the [Configuration Guide](/docs/configuration) for the full list and the key syntax.
+Every binding on this page lives in one of 18 sections under `[keybindings]` in `config.toml`, and every one is rebindable. The section is named next to each group above. See the [Configuration Guide](/docs/configuration) for the full list and the key syntax.
 
 ```bash
 # Edit your keybindings
@@ -366,14 +375,26 @@ tuios keybinds list
 
 # View your customizations
 tuios keybinds list-custom
+
+# Audit for conflicts, with evidence tiers
+tuios keybinds doctor
+
+# Everything one key does, and who else wants it
+tuios keybinds explain ctrl+b
 ```
+
+### Keybind Manager
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>k</kbd> opens the keybind manager inside the app: four tabs over one analysis. **Bindings** lists every binding, searchable. **Conflicts** shows keys claimed twice inside TUIOS. **Guests** shows keys TUIOS takes that the pane's program also wants. **Record** captures the next key you press and reports all three answers for it.
+
+The same analysis runs headlessly: `tuios keybinds doctor` reports duplicate claims and keys taken from the pane, each finding tagged with how it knows, `certain` from TUIOS routing, `observed` from the pane, or `reference` from a curated list of program defaults. `tuios keybinds explain <key>` answers for one key. Both take `--json` and `--guest <program>`.
 
 <Callout title="Prefix bindings work now" type="info">
 Six sections used to be parsed and then ignored, so rebinding anything under the leader key silently did nothing: `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`, `debug_prefix`, and `tape_prefix`. They all resolve properly now, as does `terminal_mode`. If you gave up on customizing your prefix menus, try again.
 </Callout>
 
 <Callout title="list-custom is not a full audit" type="warn">
-`tuios keybinds list-custom` compares 9 of the 15 sections. It ignores `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `terminal_mode`, and `sidebar`, and it never reports a customized `leader_key`. A config that changes only those prints "No custom keybindings configured".
+`tuios keybinds list-custom` compares 9 of the 18 sections. It ignores `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `layout_prefix`, `terminal_mode`, `global`, `script`, and `sidebar`, and it never reports a customized `leader_key`. A config that changes only those prints "No custom keybindings configured".
 </Callout>
 
 <Callout title="Most keybinding changes need a restart" type="warn">
