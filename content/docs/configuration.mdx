@@ -421,6 +421,37 @@ Most of the page applies as you adjust it. Two exceptions worth knowing:
 - **Scrollback lines** applies to windows opened afterwards, not to windows already on screen.
 - **Theme**, if you point it at a custom `.json` you just added, needs a restart. The themes directory is only read once per process.
 
+## Notifications
+
+The `[notifications]` table has four flat keys and an `[notifications.agent]` sub-table.
+
+```toml
+[notifications]
+duration = 0          # seconds an info or success message stays up; 0 uses the built-in default
+warning_duration = 0  # same, for warnings
+error_duration = 0    # seconds an error stays up when error_sticky is false
+error_sticky = true   # errors wait for esc instead of expiring
+```
+
+`[notifications.agent]` governs agent-state alerts, the "your agent needs you" machinery:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `enabled` | `true` | Master switch for agent-state alerts |
+| `notify` | `true` | Send a desktop notification to the attached terminal (OSC 9, so it survives SSH) |
+| `sound` | `false` | Make an alert audible |
+| `sound_mode` | | How it sounds: a played cue, a BEL, or both |
+| `sound_cooldown_seconds` | `3` | Shortest gap between two cues across every pane; 0 uses 3 |
+| `dock` | `true` | Show the alert in the dock, where it jumps to the pane that raised it |
+| `command` | | Shell command run on an alert; empty runs nothing |
+| `settle_seconds` | `2` | Hold an alert this long and drop it if the pane leaves the state |
+| `suppress_focused` | `true` | Drop alerts for the pane you are already looking at |
+| `quiet_hours` | | Local-time window written `HH:MM-HH:MM` in which nothing alerts |
+
+Per-state switches live under `[notifications.agent.states]`: `needs_input` (default `true`), `errored` (`true`), `done` (`true`), `idle` (`false`), and `working` (`false`).
+
+The `after-agent-state` [hook](/docs/hooks) fires under this same policy, settle window included.
+
 ## The daemon table
 
 ```toml
@@ -429,6 +460,8 @@ log_level = "off"
 ```
 
 `log_level` sets the daemon's debug verbosity. Valid values, in increasing order: `off` (default), `errors`, `basic`, `messages`, `verbose`, `trace`. It is read when a foreground daemon starts, and only if the level was not already set another way.
+
+Two more daemon keys govern agent detection: `agent_autodetect` (default `true`) turns the foreground-process scan on or off, and `agent_detect_seconds` sets seconds between detector polls, where `0` (the default) means 2 and a negative value turns detection off.
 
 <Callout type="warn" title="default_codec and socket_path are declared and inert">
 The default config file that TUIOS writes for you contains two more daemon keys:
@@ -477,7 +510,7 @@ tuios keybinds list-custom
 <Callout type="warn" title="This is not a complete audit">
 `list-custom` diffs 9 of the 18 keybinding sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`.
 
-It does not look at `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `terminal_mode`, or `sidebar`, and it does not report a customised `leader_key` at all. A config that changes only those will print "No custom keybindings configured", which is wrong.
+It does not look at `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `layout_prefix`, `terminal_mode`, `global`, `script`, or `sidebar`, and it does not report a customised `leader_key` at all. A config that changes only those will print "No custom keybindings configured", which is wrong.
 
 Treat the output as a partial view. For the whole picture, read the file.
 </Callout>

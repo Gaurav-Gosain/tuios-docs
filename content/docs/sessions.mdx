@@ -239,6 +239,24 @@ Resurrection restores the shape of your session, not its contents. It is crash r
 
 A restored window announces itself so you are not misled into thinking your work survived. It prints a dimmed `-- tuios: session restored, fresh shell in <cwd> --` banner, dropping the `in <cwd>` part when the working directory could not be captured, and sets `TUIOS_RESTORED=1` in the environment so your shell profile can react to it.
 
+### The four tiers, side by side
+
+Four tiers of interruption, and what comes back after each. "Structure" means window count, geometry, workspace assignment, custom names, minimize state, the BSP tree and the layout mode.
+
+| | Client exits (detach, crash, SSH drop) | Daemon restart (`kill-server`, `SIGTERM`) | Daemon crash (`SIGKILL`, OOM) | Reboot |
+|---|---|---|---|---|
+| Session exists afterwards | Yes | Yes, restored on daemon start | Yes, restored on daemon start | Yes, restored on daemon start |
+| Window structure | Yes | Yes | Partial: as of the last save, a couple of seconds stale | Partial: as of the last save |
+| Shell processes | Yes, they keep running | No, fresh shells are spawned | No, fresh shells are spawned | No, fresh shells are spawned |
+| Working directories | Yes | Yes, on Linux (see below) | Partial: the cwd from the last save | Partial: the cwd from the last save |
+| Screen contents | Yes | No | No | No |
+| Scrollback | Yes | No | No | No |
+| Running programs (vim, tail, a build) | Yes | No | No | No |
+| Copy-mode position, selection | No, per-client | No | No | No |
+| Input mode (window vs terminal) | No, per-client | No | No | No |
+
+The client column is the important one: a detach costs you nothing, because the daemon holds the PTYs and keeps a terminal emulator fed for each. On reattach the client asks the daemon for each window's screen and scrollback and repaints it.
+
 ### Controlling resurrection
 
 ```bash
