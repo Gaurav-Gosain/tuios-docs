@@ -1,16 +1,211 @@
 ---
 title: Everything since v0.7.0
-description: Project tapes, startup settings, a settings menu that covers everything, text shaping in the web client, and the tiling and resize fixes underneath.
-date: '2026-07-22'
+description: An agent-aware sidebar, a second terminal emulator, a control surface a program can trust, a launcher, a phone-usable web client, the kitty animation protocol, and two conformance rounds against what real terminals assert.
+date: '2026-08-22'
 author: Gaurav Gosain
 ---
 
-244 commits since v0.7.0. Two of them are new subsystems, project tapes and
-startup settings, and most of the rest are the kind of fix that only shows up
-when someone uses the thing daily, which someone does. The short version: tuios
-can now build a project's layout when you cd into it, launch straight into a
-working session instead of an empty one, and the web client renders Arabic
-correctly. Underneath that, tiling and resize in daemon sessions finally behave.
+1,404 commits since v0.7.0. This page was last written in July; the sections
+from that round are still at the bottom, still accurate, and everything above
+them is new. The short version of the new work: the sidebar
+now knows which of your panes is running a coding agent and whether it needs
+you, tuios can run on a second terminal emulator with a differential suite
+standing between the two, a program can drive a session over a socket and
+trust the answers, the web client works from a phone, and the emulator went
+through two conformance rounds against the test suites real terminals are
+held to.
+
+## The sidebar knows what your agents are doing
+
+The rail was rebuilt from a collapsible session tree into three flat
+sections: sessions, terminals, and agents. The agents section is the point.
+Every pane running a recognised coding agent shows up there with its state,
+ordered by who needs you: errored first, then waiting for input, then
+finished but unseen, then working. A finished agent you have looked at decays
+down the list instead of staying green forever. Rows carry the harness name
+and the last thing the agent said it was doing, and the command palette can
+filter panes by state, `@n` for needs input, `@w` for working, across every
+session at once.
+
+Detection is data, not code: nine harnesses ship as TOML manifests, matched
+against what the foreground process actually is rather than what it is
+named, and `tuios explain-agent-detect` shows the reasoning for a pane when
+it guesses wrong. State comes from ranked sources rather than one flag: an
+agent's own report outranks its transcript, which outranks escape codes,
+which outrank screen heuristics, and a lower tier can never overwrite a
+higher one that is still fresh. Where a harness keeps a session log, the
+daemon reads the agent's own record of its turn; the reader looks at the
+last 128KB and no further, so a 151MB transcript costs 652 microseconds.
+
+When a state changes, tuios can tell you about it: a dock message, an OSC 9
+notification that reaches you over SSH because it travels in-band, and an
+optional sound cue, all governed by a `[notifications.agent]` table with
+per-state switches, a settle window so flapping states do not spam, and
+quiet hours. An `after-agent-state` hook hands the transition to any script,
+through environment variables rather than argv so a harness's free text
+cannot become shell arguments.
+
+Around the agents, the rail grew the rest of what it was missing: every
+session gets a colour of its own, derived from its name so it is stable
+across clients and restarts; sessions and workspaces can be renamed from one
+dialog; the collapsed strip mirrors all three sections; and the dock's
+workspace pills can be dragged into an order, display order only, because a
+workspace's number stays its identity.
+
+## A second emulator, and the suite that stands between two
+
+Behind a `ghostty` build tag, panes can be driven by libghostty-vt, the
+emulation core from the ghostty terminal, instead of the pure-Go emulator.
+The `Terminal` interface the rest of the app consumes was extracted first,
+so both backends implement one contract, and a differential suite feeds
+identical bytes to both and compares screens, cursor, scrollback, and modes,
+now after every chunk and on the rendered output a host would receive, not
+just on internal state at the end of input. That "now" is load-bearing: the
+suite as first written passed while the ghostty backend painted `ls` on hot
+pink, and [the post about why](/blog/my-differential-tests-passed-and-the-screen-was-pink)
+is the most instructive bug of the batch. The suite runs in CI on every
+change that touches the emulator, and releases ship ghostty-tagged artifacts
+alongside the default ones.
+
+## A control surface a program can trust
+
+The daemon speaks 34 verbs over its socket now, wrapped in CLI commands, and
+the batch that added the arrangement and settings verbs also changed what
+the existing ones were allowed to say. A parameter a verb does not take is
+refused with the closest spelling and the full accepted list, instead of
+being silently dropped by the JSON decoder. `set-option` validates the path
+against a registry of every settable option and returns `option_not_found`
+with suggestions for a path that does not exist, instead of recording
+nonsense and reporting success. The registry is held to the config struct by
+a reflection test that fails in both directions, and applying a setting at
+runtime goes through the same funnel a config file does, which retired a
+hand-written switch that supported exactly six paths out of 88. Colour-valued
+options validate their values too.
+
+The protocol carries a wire version in both directions of the handshake, and
+each side refuses a peer outside its range with a message that says which
+side is newer. An agent skill ships in the binary, printed by
+`tuios --skill`, and every command example in it is parsed against the real
+command tree by a test, so the documentation cannot drift from the binary.
+Most of this hardening came from driving the socket the way a machine would
+and watching what actually happened, which
+[got its own post](/blog/the-daemon-said-yes-to-an-option-that-did-not-exist).
+
+## Run anything
+
+The command palette can now launch programs: anything on `$PATH`,
+fuzzy-matched with frecency ranking in the same box that already finds
+commands, windows, and panes. Underneath it, the four separate search
+boxes in the app were collapsed onto one matcher that scores instead of
+shrugging, with its invariants held by fuzz tests on random input. A window
+can be born running an argv, and the launcher execs the program directly
+instead of typing its name into a shell, so what you launched is what runs,
+with no shell history entry and no prompt flash.
+
+## tuios in your pocket
+
+`tuios-web` can serve a LAN address over TLS, and `--auto-tls` generates and
+keeps a certificate covering the hostname and every interface address, with
+`tuios-web cert` subcommands to inspect or replace it. On a phone, the web
+client shows a collapsible row of tuios commands nearest the thumb, built
+from the keybind registry so a rebound command moves its button; a long
+press opens the pane menu, and pane dividers get a touch target big enough
+to grab. Settings changed from a served browser session apply to that
+session only, instead of writing the operator's config file.
+
+## Animated graphics, without the flood
+
+The kitty animation protocol, tried and dropped in v0.7.0, is implemented:
+frame transmission, composition, and control, covered end to end by tests.
+Animated guests stream damage patches instead of whole bitmaps, which took
+one measured page from 330MB forwarded in 21.6 seconds at 17fps to 22MB at
+73fps with input still responsive. A graphics flood is paced so it cannot
+starve the keyboard, every frame of a stream gets placed instead of just the
+first, a placement hold during a pane resize releases when the geometry
+settles rather than waiting for a mouse release that may never arrive, and
+shared-memory transmissions are unlinked after reading so they do not
+accumulate.
+
+## Colour, chrome, and zen
+
+Colour options in the settings menu open a real picker: a hue strip, a
+shades grid, saturation and lightness sliders, RGB sliders, a typeable hex
+field, a harmony wheel, and the theme's own colours as a first row of slots.
+A slot re-resolves when the theme changes; a picked colour stays what was
+picked. Session accents, window accents, border colours, and the scrollbar
+tint all route through it, and settings rows show a swatch of the colour in
+force, so an unset row shows what it inherits.
+
+`appearance.zen_mode` hides unfocused window borders, always or only while
+the mouse is still; the focused frame stays as an anchor, and the melt is a
+repaint, not a layout change, so content never shifts. Window buttons can
+sit on the left, and a `dots` style draws macOS-like traffic lights, with
+their colours nudged toward the pane's text colour where they would miss a
+3:1 contrast floor. The scrollbar got two deliberate styles, a single stroke
+at two weights in the pane's own ink, or a track with a half-cell thumb
+borrowed from opentui, and its default tint is measured against the pane
+background rather than hoping the border colour is visible.
+
+## Held to what real terminals assert
+
+Two conformance rounds, both built on a corpus in the style of ghostty's
+terminal tests: a byte string into a 6x4 screen compared against a literal
+text dump, because on 6x4 the diff is the bug. The corpus cites esctest and
+vttest per test, a differential mode compares against a real tmux, and a
+grammar-based generator fuzzes the emulator with the sequences that have
+historically broken terminals, which found two cursor-clamping bugs in its
+first six seeds.
+
+Round one found sequences that were simply missing: NEL, which terminfo uses
+to move down a line; DECALN, the alignment pattern vttest opens with, so a
+terminal that ignores it looks like it passed everything that follows; and
+DECOM homing. Round two produced eleven fixes, among them a cursor position
+report that had line and column transposed, so every program that asked
+where the cursor was got the answer backwards; SO and SI registered where
+the parser could not reach them, so under `TERM=screen`, `linux`, or `vt100`
+every box drawn through terminfo came out as `lqk` instead of line art; ED 3
+clearing the visible screen along with the saved lines; REP repeating the
+last ASCII byte instead of the last grapheme cluster; and a mode map read
+without its lock, which in Go is a runtime throw rather than a recoverable
+panic, inside the daemon that hosts every session.
+
+## Faster underneath
+
+Idle first: with idle shells and the sidebar on, tuios now schedules zero
+timer-driven renders, the maintenance tick skips its scans when nothing
+moved, and the session poll only runs while something on screen consumes it.
+Startup asks the terminal everything in one round trip and stops reading at
+the DA1 reply, which took exec-to-first-frame from 566ms to 68ms on any
+terminal that answers. Switching workspaces stopped resending scrollback the
+client already had, which at four panes turns 11.5MB of daemon encode into
+0.6MB.
+
+Under load, the render coalescer paces each pane by what its frames actually
+cost instead of asking for one every 8ms, and a pane that falls more than
+4MiB behind drops to catch-up rate until it recovers; typing into a pane
+while another one floods went from a 18 to 28ms median round trip to one to
+five, against tmux's one. The pane renderer stopped word-wrapping content
+the emulator had already laid out to exactly the pane's width, which is
+[a fifth of every frame spent changing nothing](/blog/a-fifth-of-every-frame-went-to-changing-nothing).
+And the frames tuios sends the host are bracketed in synchronized output
+with a hold that survives invalidation, with an e2e harness that now answers
+the terminal queries bubbletea asks, because until it did, the entire suite
+had been running in the one configuration real terminals never present.
+
+## The daemon, when you want it
+
+`startup.daemon = true` makes a bare `tuios` start or join the daemon and
+restore every saved session, off by default so nothing changes for anyone
+who did not ask. `tuios ls` with no daemon running now lists the sessions
+saved on disk, marked as saved, and exits 3, so a script can finally tell a
+stopped daemon from a running one holding nothing. And `tuios attach` starts
+the daemon instead of refusing and pointing you at `new`; your sessions were
+one process away the whole time.
+
+---
+
+Everything below is the earlier round of this page, from July, unchanged
+because it still holds.
 
 ## Project tapes
 
@@ -56,14 +251,14 @@ the running TUI instead of being silently ignored.
 
 ## The web client can shape text now
 
-The web client moved to sip v0.4.0, which brings an opt-in WebGL renderer with
-real HarfBuzz text shaping. A browser terminal normally draws one glyph per
-codepoint, which for Arabic means isolated, disconnected, wrongly ordered
-letters. With shaping, letters join, ligatures form, and combining marks land
-where they belong. This is the difference between a terminal that technically
-displays Arabic and one that can be read.
+The web client moved to sip's WebGL renderer with real HarfBuzz text shaping,
+opt-in. A browser terminal normally draws one glyph per codepoint, which for
+Arabic means isolated, disconnected, wrongly ordered letters. With shaping,
+letters join, ligatures form, and combining marks land where they belong.
+This is the difference between a terminal that technically displays Arabic
+and one that can be read.
 
-The same sip release fixes a class of freeze where a terminal stopped
+The same sip work fixed a class of freeze where a terminal stopped
 repainting under fast output (synchronized output, mode 2026, left engaged),
 matches grapheme cluster widths against a reference terminal instead of a
 guess, and corrects kitty graphics placement.
@@ -90,10 +285,10 @@ the post.
 
 A busy pane can also no longer starve the rest of the app. A background pane
 flooding output used to hold the emulator lock for its entire pending batch,
-and the renderer, which needs that lock every frame, never got in. Keystrokes
-in the focused pane echoed promptly and then never appeared, which reads as a
-freeze. Output is now written in bounded chunks, so the renderer gets its turn
-and typing stays responsive no matter what another pane is doing.
+and the renderer, which needs that lock every frame, never got in. Output is
+now written in bounded chunks, so the renderer gets its turn and typing stays
+responsive no matter what another pane is doing. The August pacing work above
+built on top of this.
 
 ## Keycast
 
@@ -101,8 +296,7 @@ tuios can now draw your keypresses on screen as you type: a small overlay in
 the bottom right showing the last few keys, with repeats coalesced. I added it
 for screen recordings, where a keyboard-driven window manager is unreadable
 without one. It toggles live from the command palette and the setting
-persists. It also draws correctly over a lone fullscreen window, which took
-two follow-up fixes, so it earns its place in the fixes list too.
+persists.
 
 <KeycastDemo />
 
@@ -123,5 +317,5 @@ two follow-up fixes, so it earns its place in the fixes list too.
 - Mouse scroll speed and window title format are configurable, in the file
   and in the menu.
 
-All of this is on main now and will ship as the next tagged release. If a tape
-prompt ever surprises you, that is the trust boundary doing its job.
+All of this is on main now and will ship as the next tagged release. If a
+tape prompt ever surprises you, that is the trust boundary doing its job.
