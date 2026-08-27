@@ -19,6 +19,9 @@ import { ShapingCompare } from '@/components/mdx/shaping-compare';
 import { DaemonTilePlacement } from '@/components/mdx/daemon-tile-placement';
 import { KeycastDemo } from '@/components/mdx/keycast-demo';
 import { SharedBordersToggle } from '@/components/mdx/shared-borders-toggle';
+import { InvariantBlind } from '@/components/mdx/invariant-blind';
+import { CellShape } from '@/components/mdx/cell-shape';
+import { SpentFrames } from '@/components/mdx/spent-frames';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -43,6 +46,9 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     DaemonTilePlacement,
     KeycastDemo,
     SharedBordersToggle,
+    InvariantBlind,
+    CellShape,
+    SpentFrames,
     ...components,
   };
 }
