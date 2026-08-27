@@ -7,9 +7,9 @@ icon: Settings
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-TUIOS reads a single TOML file, `~/.config/tuios/config.toml`, following the XDG Base Directory specification. It has eight top-level tables: `[appearance]`, `[notifications]`, `[keybindings]`, `[daemon]`, `[startup]`, `[tape]`, `[hooks]`, and `[debug]`.
+TUIOS reads a single TOML file, `~/.config/tuios/config.toml`, following the XDG Base Directory specification. It has twelve top-level tables: `[appearance]`, `[notifications]`, `[keybindings]`, `[daemon]`, `[startup]`, `[tape]`, `[hooks]`, `[debug]`, `[screenshot]`, `[screensaver]`, `[dock]`, and `[hosts]`.
 
-Custom colour themes are a separate mechanism. They are JSON files in `~/.config/tuios/themes/`, not entries in the TOML file. See [Custom themes](#custom-themes).
+Two things are configured outside that file, in directories of their own. Custom colour themes are JSON files in `~/.config/tuios/themes/`. Custom glyph sets are JSON files in `~/.config/tuios/glyphs/`. See [Custom themes](#custom-themes) and [Glyph sets](#glyph-sets).
 
 ## Quick Start
 
@@ -103,7 +103,6 @@ The `[appearance]` table controls visual presentation. `tuios list-options` desc
 | `window_button_position` | enum: `right`, `left` | `"right"` | `--window-button-position` |
 | `copy_on_select` | bool | `true` | none |
 | `focus_follows_mouse` | bool | `false` | none |
-| `focus_follows_mouse_in_terminal` | bool | `false` | none |
 | `alt_drag` | bool | `true` | none |
 | `click_to_type` | enum: `single`, `double`, `off` | `"single"` | none |
 | `word_characters` | string | `"@-./_~?&=%+#"` | none |
@@ -112,18 +111,26 @@ The `[appearance]` table controls visual presentation. `tuios list-options` desc
 | `dock_workspace_tooltip` | bool | `true` | none |
 | `dock_pill_caps` | bool | `false` | none |
 | `session_colors` | bool | `true` | none |
+| `links` | enum: `off`, `marked`, `all` | `"all"` | none |
+| `glyphs` | string | `"default"` | none |
+| `clock_format` | Go time layout | `"15:04:05"` | none |
+| `dim_unfocused` | int, 0 to 90, percent | `0` | none |
+| `gap` | int, cells | `0` | none |
+| `master_ratio` | int, percent | `50` | none |
+| `scroll_column_width` | int, percent | `55` | none |
+| `panel_padding` | int, columns | `2` | none |
 
 Two nested tables hold the rest. `[appearance.scrollbar]` takes `style`
 (`thin` or `track`), `thumb` and `track` (one-cell glyphs), and `tint`
 (`quiet`, `border`, `muted`, or a `#RRGGBB` literal). `[appearance.sidebar]`
-configures the session rail: `enabled` (default `false`), `position` (`left`,
-`right`, `hidden`), `width`, `show_windows`, `show_glyphs`, `show_counts`,
-`show_agents`, `marquee`, and `tooltips`. The old flat `sidebar_*` keys are
-migrated into the table when an older file is read.
+configures the session rail and has a section of its own below. The old flat
+`sidebar_*` keys are migrated into the table when an older file is read.
 
 ### border_style
 
-**Valid values:** `"rounded"` (default), `"normal"`, `"thick"`, `"double"`, `"hidden"`, `"block"`, `"ascii"`, `"outer-half-block"`, `"inner-half-block"`.
+**Valid values:** `"rounded"` (default), `"normal"`, `"thick"`, `"double"`, `"hidden"`, `"block"`, `"ascii"`, `"outer-half-block"`, `"inner-half-block"`, `"glyphs"`.
+
+`"glyphs"` means "whatever border the active glyph set draws". See [Glyph sets](#glyph-sets).
 
 `"hidden"` does more than remove the border characters. It also suppresses the window control buttons and the scrollbar thumb, because both are drawn on the border and there is no border left to draw them on. You do not need to set `hide_window_buttons` or `hide_scrollbar` alongside it.
 
@@ -193,6 +200,193 @@ The shell to launch in new windows. Empty means auto-detect for the platform.
 ### niri_reverse_scroll
 
 Reverses the mouse scroll direction in the scrolling (niri-style) layout.
+
+### links
+
+**Valid values:** `"all"` (default), `"marked"`, `"off"`.
+
+What counts as a link the pointer may pick up.
+
+A program that emits an OSC 8 escape has said outright that a run of cells is a link and where it points. `"marked"` trusts only that. Almost no program does it, though, and the links you actually read in a pane are plain text, so `"all"` also finds bare `http`, `https` and `file` URLs. `"off"` leaves pane content alone.
+
+**Shift and the left mouse button on a link acts on it.** Shift is the terminal's own "this click is mine, not the program's" modifier, so the gesture reaches past a program that is tracking the mouse. A plain click is deliberately not this: a left press on a pane already focuses it, starts typing in it, and selects text in it.
+
+A link is opened by the desktop's own handler, and only these schemes are handed to it: `http`, `https`, `mailto`, `ftp`, `ftps`. Anything else is copied to the clipboard instead, with a notification saying so. The restriction exists because a marked link's address is chosen by the program that printed it, while its visible label is chosen by the same program.
+
+`file://` never reaches the desktop handler. A file opens in a new pane running your editor, and a directory opens in the rail's files section. A path that is gone is reported rather than guessed at.
+
+A remote client cannot open a link on your behalf. It copies the address and says so.
+
+### The session rail
+
+`[appearance.sidebar]` configures the rail down the side of the screen.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `enabled` | bool | `false` | Show the rail |
+| `position` | enum: `left`, `right`, `hidden` | `"left"` | Edge the rail sits on |
+| `width` | int | `28` | Preferred width in columns on a wide screen |
+| `sections` | string | `"sessions:25,terminals,files:25,agents:34"` | The layout. See below |
+| `show_glyphs` | bool | `true` | Agent-state glyph on each row |
+| `show_counts` | bool | `true` | Window count on each session row |
+| `marquee` | bool | `true` | Scroll a hovered row's overflowing title |
+| `tooltips` | bool | `true` | Label the collapsed strip on hover |
+| `file_icons` | bool | `true` | A Nerd Font icon per file type in the files section |
+| `file_icon_colors` | bool | `true` | Draw each file icon in its file type's own colour |
+| `folder_click` | enum: `navigate`, `cd`, `both` | `"navigate"` | What a click on a folder row does |
+| `file_actions` | bool | `true` | Let the files section create, rename, delete, copy, cut and paste |
+| `file_delete` | enum: `trash`, `permanent` | `"trash"` | Where a delete sends the file |
+
+#### sections
+
+The rail's layout is one string. It owns three things at once: which sections the rail draws, the order it stacks them in from the top, and the share of the rail each may claim.
+
+```toml
+[appearance.sidebar]
+sections = "sessions:25,terminals,files:25,agents:34"
+```
+
+One section per comma, each optionally followed by `:` and a percent. The four section names are `sessions`, `terminals`, `files`, and `agents`. A name left out of the list is a section the rail does not draw, and that is the only way to turn one off.
+
+The percent is a ceiling, not a reservation. A section only ever claims the lines its own rows can fill, so the three quarters the default spends on sessions, files and agents are spent only when there are that many of each. A section with no percent is flexible and takes whatever the others leave.
+
+`spacer` is a fifth name. It draws nothing and takes lines, which is how you put a gap between two sections or push what follows it to the bottom. It is the one name the layout may carry more than once, because it names a place rather than a section. A spacer with a share takes that percent and keeps it. A spacer with no share takes the lines nothing else wants.
+
+```toml
+[appearance.sidebar]
+# Sessions at the top, files pushed to the bottom
+sections = "sessions:30,terminals,spacer,files:40"
+```
+
+The parser is forgiving. An unknown name, a percent that is not a number, and a repeated section name are all dropped rather than refused, because a rail that refuses to lay itself out is worse than one that lays itself out slightly differently from what you typed. What was dropped is reported as a config warning.
+
+<Callout type="info" title="show_windows and show_agents are deprecated">
+There used to be a boolean per section. `show_windows` and `show_agents` still parse and still work, and they fold into `sections` when the file is read: setting one to `false` leaves that section out of the layout.
+
+They are deprecated because a boolean cannot say where a thing goes, and two spacers would have no boolean to share. Leave the section out of `sections` instead.
+</Callout>
+
+There is an editor for this, reached from the settings page: the **Sections** row under Sidebar, on Enter. It shows two lists, "On the rail" and "Not on the rail", and uses the dock editor's keys: arrows select, <kbd>Shift</kbd>+arrows move the selected entry, <kbd>Enter</kbd> puts a section on the rail or takes it off, <kbd>←</kbd>/<kbd>→</kbd> walk the share, <kbd>r</kbd> restores the defaults and <kbd>u</kbd> undoes the session's edits. Every edit is applied and saved as it is made.
+
+#### The files section
+
+The files section lists what is in the focused pane's directory. It follows the focus: when a shell `cd`s, when the focus moves, and when a client attaches, the listing is read again. Nothing polls, so a client sitting on an open rail does no filesystem work at all. A file written into the directory by something else does not appear until the listing is asked for again.
+
+With `file_icons` on, a Nerd Font codepoint is drawn per file type, in that file type's own colour unless `file_icon_colors` is off. With it off, or in `--ascii-only` mode, the glyph set's `folder`, `parent` and `file` roles are drawn instead.
+
+`folder_click` decides what clicking a folder row does. `navigate` walks the listing into it. `cd` sends the focused pane there. `both` does the two together. A `cd` is only ever typed into a pane sitting at a shell prompt, never into one that is running something.
+
+The six file actions are keyboard-driven, from `[keybindings.sidebar_files]`, and are live only while the rail owns the keyboard and the cursor is on a row of the listing:
+
+| Key | Action |
+|-----|--------|
+| <kbd>a</kbd> | `file_create` - a name to make. A trailing slash makes a folder |
+| <kbd>r</kbd> | `file_rename` |
+| <kbd>d</kbd> | `file_delete` |
+| <kbd>D</kbd> | `file_delete_forever` |
+| <kbd>y</kbd> | `file_copy` |
+| <kbd>x</kbd> | `file_cut` |
+| <kbd>p</kbd> | `file_paste` |
+
+Each prompt is a centred dialog, not a row in the rail, because a confirmation that does not fit its own question is not a confirmation. The delete dialog opens on Cancel, so <kbd>Enter</kbd> on a dialog nobody has touched destroys nothing.
+
+A delete goes to the trash by default, following the freedesktop.org Trash specification directly rather than shelling out to `gio`, so a file it puts in the trash is the file your desktop's own trash shows and is restorable by the usual means. <kbd>D</kbd> is the permanent delete, and it is a key of its own rather than a second answer inside the dialog: a file on another disk cannot go to the home trash at all, and somebody who means it should not have to edit a config file. Set `file_delete = "permanent"` to make <kbd>d</kbd> permanent too.
+
+<Callout type="info" title="It is not a file manager">
+It lists, it walks in and out, it hands a path to the clipboard and a directory to a shell, and it does those six actions. There is no multi-select, no tree, no filter and no drag and drop. Twenty-six columns beside a terminal is not the place for those.
+
+Only the home trash is implemented, not the per-volume trash the specification also describes.
+</Callout>
+
+## Glyph sets
+
+A theme decides what colour the chrome is. A glyph set decides what shape it is: which corner the border turns, what the window controls are pictures of, what a rule and a separator are drawn with, which mark the rail wears on the row you are on.
+
+That is one option, `appearance.glyphs`, plus a file format for writing your own.
+
+```toml
+[appearance]
+glyphs = "heavy"
+```
+
+```bash
+# At runtime, with no restart
+tuios set-config appearance.glyphs heavy
+
+# What is available, and what each one draws
+tuios list-glyphs
+tuios list-glyphs heavy
+```
+
+Four sets ship, and they are also the sets to inherit from.
+
+| Id | What it is |
+|----|------------|
+| `default` | What TUIOS ships: rounded frame, Nerd Font powerline caps, `✕` and `□` controls |
+| `unicode` | Box drawing and geometric shapes, with no Nerd Font private-use glyphs among them, for a good font that is not a patched one |
+| `heavy` | One stroke weight heavier throughout, border and junctions included |
+| `ascii` | Nothing outside 7-bit ASCII |
+
+### The border is opt-in
+
+A set may carry a border and most do not. The border that draws is whichever `border_style` names, and `glyphs` is the value meaning "the active set's".
+
+```toml
+[appearance]
+glyphs = "heavy"
+border_style = "glyphs"
+```
+
+A set could have been allowed to win whenever it defines a border. That would also mean selecting a set silently turned a setting you had already made into a no-op, with nothing on screen to say why. A set that names only some of the border's runes gets the rounded border for the rest.
+
+### Writing a set
+
+Write `<id>.json` into `~/.config/tuios/glyphs/`. The exact path is printed by `tuios list-glyphs`.
+
+```json
+{
+  "display_name": "Mine",
+  "inherits": "heavy",
+  "bullet": "◦",
+  "focus": "▐",
+  "border": {
+    "top_left": "╔",
+    "top_right": "╗",
+    "bottom_left": "╚",
+    "bottom_right": "╝"
+  }
+}
+```
+
+Every field is optional. An absent `id` is taken from the filename, and an absent role keeps whatever the inherited set says, falling through in the end to the glyph TUIOS ships. Inheritance is followed up to eight levels, and a loop stops rather than hangs.
+
+The roles, in groups:
+
+- **Window controls:** `close`, `maximize`, `minimize`, `dot`, `pill_left`, `pill_right`
+- **Rules and separators:** `rule`, `separator`, `arrow_left`, `arrow_right`
+- **Rail marks:** `focus`, `attention`, `bullet`, `add`, `collapse`, `expand`
+- **Files section:** `folder`, `parent`, `file`
+- **Scrollbar:** `scrollbar_thumb`, `scrollbar_track`
+- **Text:** `ellipsis`, `sigil`, `dash_rule`
+- **Border:** `border.top`, `border.bottom`, `border.left`, `border.right`, the four corners, and the five junctions `middle`, `middle_top`, `middle_bottom`, `middle_left`, `middle_right`
+
+Most roles must be exactly one cell. A glyph that misses is dropped back to the default and reported:
+
+```bash
+tuios list-glyphs mine --json | jq -r '.problems[]?'
+```
+
+The reason is the window controls: their press rectangles are fixed offsets from the border's trailing corner, so a two-cell emoji in `close` would move every cell after it and put the button under a different column than the one the pointer is tested against. `separator`, `ellipsis`, `collapse` and `expand` take any width.
+
+Unlike the themes directory, the glyphs directory is re-read whenever a set is looked up, so a file you have just written is selectable immediately. A file that does not parse is skipped rather than applied, and `list-glyphs` reports it under `problems` with the reason. Only `*.json` files directly under the directory are loaded.
+
+`--ascii-only` overrules a set **per role** rather than throwing the set away, so a set keeps every role it happened to spell in ASCII and gives up only the ones it did not.
+
+<Callout type="warn" title="A set changes shape, not colour">
+Every glyph is still drawn in the ink the contrast model picks for the surface it lands on, so a set cannot make chrome illegible. The dock's semantic icons are not roles either: the mode chip, the counts and the session controls are pictures of a meaning rather than shapes in a frame, and a glyph set does not touch them.
+</Callout>
+
+The settings page has a **Glyph set** row directly under **Theme**, with a searchable picker. Each row draws that set's own corner, controls and rail marks, and moving the selection applies the set so the chrome behind the panel is the preview.
 
 ## Themes
 
@@ -270,7 +464,7 @@ leader_key = "ctrl+a"
 
 Another useful value: `"ctrl+space"`. `"alt+space"` is taken by default: it opens the app launcher, via `[keybindings.global]`.
 
-### The 18 sections
+### The 19 sections
 
 Every one of these is a table under `[keybindings]`, and every one resolves through the keybind registry, so every action in every one of them is rebindable.
 
@@ -294,6 +488,7 @@ Every one of these is a table under `[keybindings]`, and every one resolves thro
 | `global` | Consulted in window mode and terminal mode alike |
 | `script` | Live only while a `.tape` is playing back |
 | `sidebar` | While the session rail owns the keyboard |
+| `sidebar_files` | While the rail's cursor is on a row of the files section |
 
 <Callout type="info" title="The prefix sections used to be inert">
 Six of these sections were parsed and then ignored. Rebinding anything under the leader key was a silent no-op: your config was accepted, and the hard-coded key kept working instead.
@@ -305,7 +500,9 @@ If you wrote bindings for these sections against an older version and gave up on
 
 ### Section contents
 
-`window_management` actions: `new_window`, `close_window`, `rename_window`, `minimize_window`, `restore_all`, `toggle_zoom`, `next_window`, `prev_window`, `copy_selection`, `focus_sidebar`, `next_session`, `prev_session`, `select_window_1` through `select_window_9`.
+`window_management` actions: `new_window`, `close_window`, `rename_window`, `minimize_window`, `restore_all`, `toggle_zoom`, `start_screensaver`, `copy_selection`, `focus_sidebar`, `next_window`, `prev_window`, `next_session`, `prev_session`, `select_window_1` through `select_window_9`.
+
+`sidebar_files` actions: `file_create`, `file_rename`, `file_delete`, `file_delete_forever`, `file_copy`, `file_cut`, `file_paste`. They are looked up before `sidebar`, and only while the rail's cursor is on a file row, because three of them collide with a rail key that already exists. See [The files section](#the-files-section).
 
 `workspaces` actions: `switch_workspace_1` through `switch_workspace_9`, `move_and_follow_1` through `move_and_follow_9`.
 
@@ -400,7 +597,7 @@ Use `alt+` and `ctrl+`. `opt+` and `option+` are not valid.
 
 ## The in-app settings page
 
-TUIOS has a settings page that edits the config for you. It covers everything the config file does, in eight categories: appearance, sidebar, dock, behavior, startup, advanced, daemon, and tape. Colour-valued options, the two border colours and the scrollbar tint among them, open a colour picker rather than a text field, and every row shows the value in force, so an unset colour shows what it inherits.
+TUIOS has a settings page that edits the config for you. It covers everything the config file holds as a scalar option, in eleven categories: appearance, sidebar, dock, behavior, notifications, startup, screenshot, screensaver, advanced, daemon, and tape. Two of its rows open editors of their own rather than a field: the rail's [sections](#sections) and the dock's [components](#the-dock-table). Colour-valued options, the two border colours and the scrollbar tint among them, open a colour picker rather than a text field, and every row shows the value in force, so an unset colour shows what it inherits.
 
 Three ways in:
 
@@ -461,7 +658,12 @@ log_level = "off"
 
 `log_level` sets the daemon's debug verbosity. Valid values, in increasing order: `off` (default), `errors`, `basic`, `messages`, `verbose`, `trace`. It is read when a foreground daemon starts, and only if the level was not already set another way.
 
-Two more daemon keys govern agent detection: `agent_autodetect` (default `true`) turns the foreground-process scan on or off, and `agent_detect_seconds` sets seconds between detector polls, where `0` (the default) means 2 and a negative value turns detection off.
+Three more daemon keys govern agent detection. `agent_autodetect` (default `true`) turns the foreground-process scan on or off. `agent_detect_seconds` sets seconds between detector polls, where `0` (the default) means 2 and a negative value turns detection off. `agent_binaries` is a list of extra binary names to treat as agents, merged with the built-in set rather than replacing it.
+
+```toml
+[daemon]
+agent_binaries = ["my-agent", "aider"]
+```
 
 <Callout type="warn" title="default_codec and socket_path are declared and inert">
 The default config file that TUIOS writes for you contains two more daemon keys:
@@ -476,6 +678,165 @@ Both are parsed, both are given defaults, both are written into every user's con
 
 They are documented here only so you do not spend an evening working out why they have no effect. The socket location is fixed; see [Sessions](/docs/sessions#daemon-location).
 </Callout>
+
+## The startup table
+
+`[startup]` decides what a new session looks like when it opens. None of it reaches a session that is already running.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `open_default_window` | bool | `false` | Open one terminal automatically when a session starts empty |
+| `tiled` | bool | `false` | Start a new session tiled instead of floating |
+| `start_in_terminal_mode` | bool | `false` | Start focused in terminal mode, when a window is present, so typing goes straight to the shell |
+| `layout` | enum: `bsp`, `master-stack`, `scrolling` | `"bsp"` | Tiling scheme a new session starts in |
+| `daemon` | bool | `false` | Make a bare `tuios` attach to a daemon-backed session instead of running standalone |
+
+`layout` only ever decides where a session starts. Once one is running, the scheme is the session's own and travels in its state, so attaching to a session laid out one way never rearranges it to match the config of whoever attached.
+
+`daemon = true` changes a bare `tuios` and nothing else. Every subcommand already says which it wants. `TUIOS_NO_DAEMON=1` and `--standalone` both override it, so a daemon that will not start never leaves you without a way in.
+
+## The tape table
+
+`[tape]` governs project tapes, the `.tape` file a directory can carry. See [Tape scripting](/docs/tape-scripting).
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `autorun` | enum: `off`, `ask`, `auto` | `"ask"` | What happens on entering a directory with a project tape |
+| `auto_review` | bool | `false` | Open the review dialog on detection instead of only badging it |
+
+## The debug table
+
+`[debug]` has one key.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `show_key_events` | bool | `false` | Show the on-screen keycast of recent keypresses |
+
+This is the same overlay `--show-keys` turns on. See [Showkeys](/docs/showkeys).
+
+## The screenshot table
+
+`[screenshot]` sets the defaults for [`tuios screenshot`](/docs/cli-reference#screenshot) and for the in-app capture. Every key here has a flag on the command that overrides it for one call.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `format` | enum: `png`, `svg`, `ansi`, `html`, `txt` | `"png"` | Default output format |
+| `directory` | path | `"~/Pictures/tuios"` | Where capture files are saved |
+| `copy` | bool | `true` | Try to copy the capture to the clipboard |
+| `preview` | bool | `true` | Open the preview panel after a capture |
+| `frame` | enum: `window`, `plain`, `none` | `"window"` | A window card, a plain card, or nothing |
+| `background` | string | `"auto"` | Wash behind the card. `auto` derives it from the theme. `none`, a hex colour, or `hex..hex` for a gradient also work |
+| `padding` | int, 0 to 128 | `48` | Space around the card, in pixels |
+| `radius` | int, 0 to 32 | `10` | Card corner radius, in pixels |
+| `shadow` | bool | `true` | Draw a soft shadow under the card |
+| `controls` | enum: `auto`, `macos`, `glyphs`, `none` | `"auto"` | Window control marks: the macOS lights, your glyph set, or none |
+| `title_format` | string | `"{title}"` | Title bar text, with `{title}`, `{index}` and `{cwd}` |
+| `font_family` | string | `"JetBrains Mono, monospace"` | Font to draw with when your terminal does not say which it uses |
+| `font_file` | path | `""` | Font file to draw a PNG with, also embedded in SVG and HTML. It wins over every other font choice |
+| `scale` | int, 1 to 4 | `2` | PNG size multiplier |
+| `cursor` | bool | `false` | Draw the cursor cell |
+
+```toml
+[screenshot]
+format = "svg"
+frame = "plain"
+background = "none"
+padding = 24
+```
+
+`png` and `svg` carry the frame. `ansi` and `txt` are the bare stream, so the frame keys do not apply to them.
+
+## The screensaver table
+
+`[screensaver]` animates the screen after a spell with no input. It is off by default, because a screen that starts animating on its own is not something to give someone without asking.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `enabled` | bool | `false` | Start after a spell with no input |
+| `idle_minutes` | int, 1 to 240 | `10` | Minutes of quiet before it starts |
+| `effect` | string | `"random"` | Which effect runs, or `random` for a different one each time |
+| `while_busy` | bool | `false` | Start even when a pane is running a command or an agent |
+
+```toml
+[screensaver]
+enabled = true
+idle_minutes = 5
+effect = "matrix"
+```
+
+There are 35 text effects, supplied by the `tuiffects` dependency, plus `random`, which resolves to a real one each time it is built. `tuios list-options screensaver.effect` prints the names.
+
+Because the names say very little about what lands on the screen, the settings page opens a picker instead of a stepper: it captures the screen you opened it from and runs the selected effect over that real capture, so what you see previewed is the screen you have. The list is fuzzy-searchable.
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>S</kbd> starts the screen saver now, whatever `enabled` says. The action is `start_screensaver`, in `[keybindings.window_management]`.
+
+## The dock table
+
+`[dock]` is the bar, as three ordered lists of named components plus a table per component that needs one. It is the one part of the config that is not a set of scalar options, so `tuios list-options` does not carry it and `set-config` cannot reach it. It is a file edit, or the **Dock → Components** editor on the settings page.
+
+```toml
+[dock]
+left   = ["mode", "workspaces", "trail", "tape"]
+center = ["windows"]
+right  = ["notifications", "copy-help", "cpu", "ram", "clock", "session-controls"]
+
+[dock.clock]
+format = "15:04"
+
+[dock.custom.branch]
+command  = "~/.config/tuios/dock/git-branch.sh"
+refresh  = "event:after-focus-change"
+on-click = "tuios new-window log git log --oneline -20"
+```
+
+Those three lists are the default. Omit the whole table and the bar is unchanged. A missing list takes the default arrangement, and an explicitly empty one draws nothing on that side, so `left = []` and no `left` key at all are different answers.
+
+The built-in component names are `mode`, `workspaces`, `trail`, `tape`, `windows`, `notifications`, `copy-help`, `cpu`, `ram`, `clock`, and `session-controls`. Naming a component makes it eligible to draw, not certain to: each keeps whatever condition it always had, so the workspace strip still needs two workspaces and the meters still need `show_cpu`.
+
+`[dock.clock]` takes `format`, a Go time layout. The refresh cadence is derived from it: a layout showing seconds is scheduled to the next second, one without to the next minute.
+
+`[dock.custom.NAME]` puts your own cell on the bar, and a list entry of `custom/NAME` places it. The contract is small enough to have no version: environment variables in, one line of text out.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `command` | | Run through `sh -c`. Its first line of stdout is the cell |
+| `refresh` | `"once"` | When to run it: `once`, a duration such as `"30s"`, `push` (the command stays running and each line it writes is an update), or `event:TYPE[,TYPE]` |
+| `on-click` | | Run through `sh -c` when the cell is clicked, like a hook |
+| `max-width` | `24` | Cap the cell in cells |
+
+A custom component is hidden when its command fails. `tuios list-dock-components` says which and why. `examples/dock/README.md` in the repository is the full contract with working recipes.
+
+## The hosts table
+
+`[hosts]` names the other machines this daemon may ask for listings. It is the whole configuration surface of federation stage 1.
+
+```toml
+[hosts.build]
+addr = "gaurav@buildbox"
+
+[hosts.work]
+addr = "workstation.local"
+connect_timeout = 5
+```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `addr` | required | Anything ssh understands, `ssh_config` aliases included. A host with no `addr` is ignored, and the daemon logs why |
+| `connect_timeout` | `10` | Seconds one dial may take before the host is called unreachable. Also handed to ssh, so a machine that is powered off is reported rather than waited on |
+| `command` | `"tuios"` | The TUIOS binary on the far side. Set it when a per-user install is not on the non-interactive `PATH` |
+| `ssh_options` | | Extra arguments passed to ssh before the address, for a host that needs a flag `ssh_config` cannot carry |
+
+<Callout type="warn" title="Listings cross the link and nothing else">
+You cannot start a session on another machine, attach to one, type into one, message it, or kill it. There is no verb that would let you. Three read verbs cross a link and that is all: list hosts, list sessions, list agents. Remote rows on the rail are shown and never selected.
+
+To work on another machine, ssh to it and run TUIOS there.
+</Callout>
+
+The daemon holds one ssh link per host and reads the table when it starts, so a new host needs a daemon restart. It runs ssh with `BatchMode` on, so a link never asks for a password and never asks about a host key. Ssh to the host once by hand to accept its key.
+
+Hosts are not discovered. A host exists because you named it, and a name resolves exactly or not at all. `[hosts]` is also outside the option registry for the same reason `[hooks]` and `[keybindings]` are: it is a map of named tables, not a scalar with a settable value.
+
+See [`tuios hosts`](/docs/cli-reference#hosts) for the link states, and `--all-hosts` on [`ls`](/docs/cli-reference#ls) and [`list-agents`](/docs/cli-reference#list-agents).
 
 ## Hooks
 
@@ -508,9 +869,9 @@ tuios keybinds list-custom
 ```
 
 <Callout type="warn" title="This is not a complete audit">
-`list-custom` diffs 9 of the 18 keybinding sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`.
+`list-custom` diffs 9 of the 19 keybinding sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`.
 
-It does not look at `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `layout_prefix`, `terminal_mode`, `global`, `script`, or `sidebar`, and it does not report a customised `leader_key` at all. A config that changes only those will print "No custom keybindings configured", which is wrong.
+It does not look at `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `layout_prefix`, `terminal_mode`, `global`, `script`, `sidebar`, or `sidebar_files`, and it does not report a customised `leader_key` at all. A config that changes only those will print "No custom keybindings configured", which is wrong.
 
 Treat the output as a partial view. For the whole picture, read the file.
 </Callout>
