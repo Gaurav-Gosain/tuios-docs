@@ -834,6 +834,36 @@ To work on another machine, ssh to it and run TUIOS there.
 
 The daemon holds one ssh link per host and reads the table when it starts, so a new host needs a daemon restart. It runs ssh with `BatchMode` on, so a link never asks for a password and never asks about a host key. Ssh to the host once by hand to accept its key.
 
+### Reaching a host you cannot ssh to directly
+
+A host entry says how to reach a machine, and `ssh_options` is where you say it.
+So a machine behind NAT, with no port forwarding and no jump host, is a
+reachability problem to solve below tuios rather than inside it. Any tool that
+pipes stdio to a remote port works as an ssh `ProxyCommand`.
+
+Tailscale's [tailcat](https://github.com/tailscale/tailcat) is one such tool. It
+carries a connection over WireGuard with no Tailscale account and no open port.
+Run it on the far side against sshd:
+
+```sh
+tailcat --serve=22
+```
+
+then name it in the host entry:
+
+```toml
+[hosts.laptop]
+addr = "gaurav@laptop"
+ssh_options = ["-o", "ProxyCommand=tailcat <token> 22"]
+```
+
+Ssh still decides who may connect. The tunnel only carries the bytes to sshd,
+which asks for your key as it always does. A leaked tailcat token costs
+reachability, not access.
+
+This holds for any transport of that shape. TUIOS adds no second identity system
+and opens no new listening port.
+
 Hosts are not discovered. A host exists because you named it, and a name resolves exactly or not at all. `[hosts]` is also outside the option registry for the same reason `[hooks]` and `[keybindings]` are: it is a map of named tables, not a scalar with a settable value.
 
 See [`tuios hosts`](/docs/cli-reference#hosts) for the link states, and `--all-hosts` on [`ls`](/docs/cli-reference#ls) and [`list-agents`](/docs/cli-reference#list-agents).
