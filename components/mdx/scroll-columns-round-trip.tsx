@@ -61,12 +61,37 @@ const totalOf = (cols: Column[]) => xOf(cols, cols.length);
 const clampView = (cols: Column[], x: number) =>
   Math.max(0, Math.min(x, Math.max(totalOf(cols) - SCREEN, 0)));
 
-/** Centre the focused column on the screen, as keyboard focus does. */
-const reveal = (s: Strip): Strip => {
+// Cells of the neighbouring column kept on screen beside the focused one, as
+// scrollPeek in internal/layout/scrolling.go.
+const PEEK = 4;
+
+/**
+ * Scroll by the least amount that shows the focused column with `margin` cells
+ * to spare on each side, and not at all when it is already there. This is
+ * `ScrollingLayout.reveal`. Keyboard steps call it with a margin of 4
+ * (ScrollToFocusedColumn). A click calls it with 0, and only when no part of
+ * the column is on screen (EnsureFocusedVisible).
+ */
+const reveal = (s: Strip, margin: number): Strip => {
   const col = s.cols[s.focused];
   if (!col) return s;
-  const x = xOf(s.cols, s.focused) + widthOf(col) / 2 - SCREEN / 2;
-  return { ...s, viewportX: clampView(s.cols, Math.round(x)) };
+  const x = xOf(s.cols, s.focused);
+  const w = widthOf(col);
+  let m = margin;
+  if (w + 2 * m > SCREEN) m = Math.max(Math.trunc((SCREEN - w) / 2), 0);
+  let vx = s.viewportX;
+  if (x - m < vx) vx = x - m;
+  if (x + w + m > vx + SCREEN) vx = x + w + m - SCREEN;
+  return { ...s, viewportX: clampView(s.cols, vx) };
+};
+
+/** EnsureFocusedVisible: move only when none of the column is on screen. */
+const ensureVisible = (s: Strip): Strip => {
+  const col = s.cols[s.focused];
+  if (!col) return s;
+  const x = xOf(s.cols, s.focused);
+  if (x < s.viewportX + SCREEN && x + widthOf(col) > s.viewportX) return s;
+  return reveal(s, 0);
 };
 
 const focusedPane = (s: Strip) => {
@@ -106,12 +131,14 @@ export function ScrollColumnsRoundTrip() {
     if (mode === 'after') setPeerCols(cloneCols(next.cols));
   };
 
-  const act = (fn: (s: Strip) => Strip | null) => {
+  // Keyboard actions show the whole column with a peek beside it. A click
+  // leaves the strip alone unless the column is entirely off screen.
+  const act = (fn: (s: Strip) => Strip | null, click = false) => {
     if (away) return;
     const next = fn({ ...local, cols: cloneCols(local.cols) });
     if (!next) return;
     setResult('');
-    commit(reveal(next));
+    commit(click ? ensureVisible(next) : reveal(next, PEEK));
   };
 
   const focusStep = (d: number) =>
@@ -157,7 +184,7 @@ export function ScrollColumnsRoundTrip() {
     act((s) => {
       s.cols[ci].active = pi;
       return { ...s, focused: ci };
-    });
+    }, true);
 
   const reset = () => {
     window.clearTimeout(timer.current);
