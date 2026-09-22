@@ -1,6 +1,6 @@
 ---
 title: 'A full scrollback cost 232MB per pane, twice: once in the daemon and once in each client'
-description: 'A 112-byte cell made every scrollback line cost the full pane width. Packing cells, then storing lines as text, took a full ring from 232MB to 4.2MB.'
+description: 'A 112-byte cell made every scrollback line cost the full pane width. Packing cells, then storing lines as text, took a full ring from 232MB to 2.2MB.'
 date: '2026-09-06'
 author: Gaurav Gosain
 ---
@@ -36,8 +36,8 @@ attached client. Any saving per line is also multiplied by that count.
 
 ## Measure both sides first
 
-The memory tests that existed watched the daemon only. The first commit of
-this work added one that watches both. `TestPerfMemoryClientAndDaemon` starts
+The memory tests that existed watched the daemon only. This work added
+one that watches both. `TestPerfMemoryClientAndDaemon` starts
 a daemon with `--pprof`, attaches a client at 207x55, opens eight tiled panes,
 floods each one past its ring, and logs the resident size and the heap after
 a collection for both processes at each step.
@@ -122,10 +122,12 @@ line at 207 columns in libghostty's pages, 18MB for a full pane on each side.
 That is what [`scrollback_lines`](/docs/configuration#scrolling) asks for. The
 backend had been using less than the setting promised.
 
-**The decoded line cache.** It was emptied only when the pane next wrote. A
+The ghostty backend also keeps its own cache of decoded history lines, separate
+from the pure Go one in step one, which was capped at 256 rows from the start.
+The ghostty cache had no cap and was emptied only when the pane next wrote. A
 capture of the whole history decoded every line into it, so after one capture
 of three quiet panes the daemon held 29MB of decoded 112-byte cells for as long
-as the panes stayed quiet. It is now capped at 256 rows.
+as the panes stayed quiet. It is now capped at 256 rows too.
 
 ## Step two: stop storing cells
 
@@ -152,10 +154,11 @@ sequence, so a reader can tell a token from the start of a character without
 a length prefix. A style is written once where it changes rather than once per
 cell, and a single rune of any script goes in as its own UTF-8 bytes.
 
-The same 175-character line now costs 216 bytes, ring header included, and the
-filled ring holds 4.2MB. The ring's slice of line headers also grows as lines
-arrive instead of being allocated at full capacity, which was 320KB per pane
-before the pane had printed anything.
+The same 175-character line now costs 216 bytes, ring header included, so the
+filled ring holds about 2.2MB per copy: 216 bytes times 10,000 lines. The
+ring's slice of line headers also grows as lines arrive instead of being
+allocated at full capacity, which was 320KB per pane before the pane had
+printed anything.
 
 Here is the line, in the three encodings. The byte strips are computed the way
 `internal/vt/scrollback.go` computes them, and I checked each preset against
@@ -253,7 +256,7 @@ The same two minutes of the same gif: 5,323MB to 189MB resident, and 10.4GB to
 |---|---|---|
 | 8 flooded panes, daemon | 527MB | 67MB (24-byte cells) |
 | 8 flooded panes, client | 533MB | 71MB (24-byte cells) |
-| full 10,000-line ring, 207 columns | 232MB (uv.Cell) | 4.2MB (text) |
+| full 10,000-line ring, 207 columns | 232MB (uv.Cell) | 2.2MB (text) |
 | one 175-character line | 4,864 B (24-byte cells) | 216 B (text) |
 | empty 207x55 pane | 1.7MB | 28KB |
 | 8 empty panes, heap | 47.5MiB | 14.9MiB |
