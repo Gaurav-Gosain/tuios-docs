@@ -6,10 +6,10 @@ author: Gaurav Gosain
 ---
 
 Images displayed fine in my terminal. Fine in the multiplexer running inside
-it. Fine in the browser client. Run all three at once, browser client hosting a
-shell hosting the multiplexer, and `icat` produced nothing at all. No error, no
-placeholder, no partial image, just the prompt sitting where the image should
-have been.
+it. Fine in the browser client. Stack all three (the browser client hosting a
+shell that runs the multiplexer) and `icat` produced nothing at all. No error,
+no placeholder, no partial image. Just the prompt, sitting where the image
+should have been.
 
 ## What icat is actually doing
 
@@ -23,9 +23,9 @@ _Ga=q,f=24,t=t,s=1,v=1,S=47,i=2   can you read a temp file
 _Ga=q,f=24,t=s,s=1,v=1,S=18,i=3   can you read shared memory
 ```
 
-It commits to whichever answers first with `OK`, which is sensible. A file is
-much cheaper than base64 inline, so if the terminal can read files, everyone
-wins.
+It uses the first medium the terminal answers `OK` to, which is sensible. A
+file is much cheaper than inline base64, so if the terminal can read files,
+everyone wins.
 
 ## The lie
 
@@ -39,8 +39,8 @@ ptyInput(response)
 It never asked its own host anything. It just said yes.
 
 So `icat` picked a file medium, wrote the image to `/tmp`, and sent a path. The
-multiplexer forwarded that path outward, to a browser, which cannot read `/tmp`
-on the server, so it dropped the transmission and drew nothing.
+multiplexer forwarded that path out to the browser. The browser cannot read
+`/tmp` on the server, so it dropped the transmission and drew nothing.
 
 Captured at the browser, the failure looks like this:
 
@@ -66,10 +66,10 @@ In the browser client alone, nothing lies. The client answers `ENOTSUPPORTED`
 to the file media, `icat` falls back to streaming the bytes inline, and
 everything works.
 
-To hit the bug you need a dishonest middle layer sitting in front of a host
-that cannot do the thing, and that only happens in the three-layer stack. Each
-component was correct in the environment its author tested it in, which is what
-made staring at any one of them so unproductive.
+To hit the bug you need a dishonest middle layer in front of a host that cannot
+do the thing, and that only happens in the three-layer stack. Each component
+was correct in the environment its author tested it in. That is why staring at
+any one of them got me nowhere.
 
 ## The fix
 
@@ -90,7 +90,7 @@ still gets the plain path with no extra copy, so the fast case stays fast.
 
 There was a second bug hiding in the same function. Quiet mode has two levels,
 `q=1` to suppress success responses and `q=2` to suppress everything, and the
-code treated both as "say nothing". So a guest that asked for `q=1` and hit an
+code treated both as "say nothing". A guest that asked for `q=1` and hit an
 error got silence, waited out its timeout, and never tried the next medium. An
 error has to reach a guest that only suppressed successes.
 
@@ -98,13 +98,12 @@ error has to reach a guest that only suppressed successes.
 
 A proxy answering capability questions on behalf of something else has two
 honest options: ask the far end, or say no and let the guest fall back to the
-medium that always works. Saying yes because yes usually works is how you get a
-failure that only appears in composition, only for people running unusual
-stacks, with nothing logged anywhere and every individual component pointing at
+medium that always works. Saying yes because yes usually works gets you a
+failure that only appears when the layers are combined, only for people running
+unusual stacks, with nothing logged anywhere and every component pointing at
 its own passing tests.
 
-The part that actually annoys me is that the multiplexer already had the
-machinery to handle this. A function that re-encodes file transmissions as
-inline data was sitting in the codebase, gated behind a build-specific flag
-rather than behind "can the host actually read files". I did not so much write
-the fix as move it.
+What annoys me is that the multiplexer already had the machinery to handle
+this. A function that re-encodes file transmissions as inline data was sitting
+in the codebase, gated behind a build-specific flag instead of behind "can the
+host actually read files". I did not so much write the fix as move it.

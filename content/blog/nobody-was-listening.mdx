@@ -1,6 +1,6 @@
 ---
 title: Three bugs in one month turned out to be one bug
-description: A terminal is a request-response protocol that most people write as if it were one-way. I hit the same bug three times in a month, in three different codebases, pointing three different directions.
+description: A terminal is a request-response protocol that most people write as if it were one-way. I hit the same bug three times in a month, in three different codebases, and each time the reply went somewhere different.
 date: '2026-06-19'
 author: Gaurav Gosain
 ---
@@ -39,7 +39,7 @@ Here is what `glow` sends before it draws anything at all:
 
 lipgloss uses that background colour to decide whether to render a light or
 dark palette, which means most Bubble Tea programs do this. It is not an edge
-case, it is the common path.
+case. It is the common path.
 
 ## One: the replies were generated and then dropped
 
@@ -68,16 +68,15 @@ producer, documented the consumer, and never written it.
 
 One follow-up change mattered beyond the fix itself, because "a confident
 report of nothing" is a failure mode in its own right. A capture that succeeds
-and comes back empty now exits 5 with a diagnostic, and that code is kept
-separate from the assertion and harness exit codes. A blank screen can be
-legitimate, since a program is allowed to draw nothing, but it is rare enough
-and suspicious enough that it should never again be indistinguishable from
-success.
+and comes back empty now exits 5 with a diagnostic, a code kept separate from
+the assertion and harness exit codes. A blank screen can be legitimate, since a
+program is allowed to draw nothing. But it is rare and suspicious enough that it
+should never again look the same as success.
 
 ## Two: the wrong terminal answered
 
-Making a screen recording of a test run, I got a burst of garbage on screen
-right as the program exited:
+While making a screen recording of a test run, I got a burst of garbage on
+screen right as the program exited:
 
 <TerminalCapture
   title="visible for about two seconds after the program quit"
@@ -153,13 +152,12 @@ the bytes. `glow` sending OSC 11 three times in a row is unmistakable once you
 have seen it.
 
 If it does, does something answer? Drive the emulator directly with those exact
-bytes and read the output. One command, and it collapses the search space
-enormously.
+bytes and read the output. It is one command, and it narrows the search a lot.
 
 If something answers, does the answer reach the program that asked? This is the
 one that bit me twice, and the one nobody checks, because generating a correct
-reply feels like the hard part. Routing it turns out to be where everyone
-actually fails, me included.
+reply feels like the hard part. Routing it is where people actually fail, me
+included.
 
 There is a fourth question I have started asking about my own code: if a
 component produces something, who consumes it? `bufpipe.go` documented a

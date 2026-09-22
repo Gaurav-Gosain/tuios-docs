@@ -78,8 +78,8 @@ report. Twelve sequential runs, then twenty-four across four parallel lanes:
 
 No `DATA RACE` ever fired. Not once, in any of those runs. `-race` mattered
 here because it slows the process down and reshuffles scheduling, not because
-it detects anything, and I now reach for it as a timing perturbation about as
-often as I reach for it as a race detector.
+it detected anything. I now reach for it to perturb timing about as often as I
+reach for it to find races.
 
 ## Reading the tape I had been ignoring
 
@@ -108,7 +108,7 @@ master and arrived at the screen model as though the program had printed it,
 which quietly corrupted both the screen state and the byte counter the hang
 detector reads.
 
-All three of those are reproducible by hand:
+You can reproduce all three by hand:
 
 <LineDiscipline />
 
@@ -122,7 +122,8 @@ of the package running, it got scheduled slower.
 ## The shrinker was helping the bug
 
 The shrinker is delta debugging. Remove chunks in decreasing sizes, simplify
-what survives, accept a candidate if it still fails. Still fails on one replay.
+what survives, and accept a candidate if it still fails. "Still fails" meant
+failing on one replay.
 
 That criterion is fine for deterministic failures. For a race it is actively
 harmful. Every command that takes time gives the program more time to reach raw
@@ -144,8 +145,8 @@ inputs. It will find them whether you asked for that or not.
 Configure the PTY before the child exists, so there is never a moment where a
 signal-generating line discipline sits in front of a running program.
 
-The real decision is how much to clear, and my instinct was wrong. The instinct
-is `MakeRaw`. But tuitest tests what programs do under a real terminal, and a
+The real decision is how much to clear. My instinct was `MakeRaw`, and it was
+wrong. tuitest tests what programs do under a real terminal, and a
 real terminal does apply line editing to a program that has not gone raw yet.
 If the harness strips all of that, it stops reproducing the environment it
 exists to reproduce.
@@ -171,7 +172,7 @@ Forty-four runs after the fix, zero failures. The two-command tape reproduces
 ## While I was in there
 
 The same audit turned up a second hole, unrelated to the PTY. The emulator
-generated correct replies to terminal queries and nothing ever carried them
+generated correct replies to terminal queries, but nothing ever carried them
 back to the program that asked, which is why `tuitest snap -- glow -p file.md`
 captured a blank screen and exited 0. That turned out to be one instance of a
 bug I had already hit twice in other codebases, so it has
@@ -197,10 +198,10 @@ A blank capture now exits 5 instead of 0, with a note about `--timeout` and
 
 The fuzzer found almost nothing in the program it was pointed at. It found
 bugs in the harness, a bug in a test, and a bug in its own shrinker. For a tool
-whose entire job is telling the truth about what a program did, I think that is
+whose whole job is to tell the truth about what a program did, I think that is
 the better outcome, though it did not feel like one at the time.
 
-The habit I am actually keeping is counting. "Sometimes" cost me an evening in
+The habit I am keeping is counting. "Sometimes" cost me an evening in
 the wrong file. Seventeen in thirty-six took two minutes to establish and
 immediately ruled out half of what I had been considering. And I will read the
 minimised output even when it looks stupid, especially when it looks stupid,
