@@ -1,0 +1,203 @@
+---
+title: TUIOS compared with tmux and zellij
+description: How TUIOS differs from tmux and zellij, what each is good at, and when to pick one of the others instead.
+icon: Scale
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+TUIOS, tmux and zellij all do the same basic job. They run many shells inside one terminal, keep them running when you disconnect, and let you attach again later. They differ in how they arrange panes, how you script them, and what they add on top.
+
+This page is for choosing between them. The TUIOS parts are checked against the TUIOS source and a current build. The tmux parts are checked against the tmux 3.7 manual. The zellij parts stay with well-known features, because zellij changes quickly and details differ between versions. When in doubt, read the other project's own docs.
+
+<Callout type="info">
+This page does not compare speed. No side-by-side benchmark of the three has been run, so there are no numbers here to trust. [Performance](#performance) says what TUIOS measures about itself.
+</Callout>
+
+## At a glance
+
+| | TUIOS | tmux | zellij |
+|---|---|---|---|
+| Written in | Go | C | Rust |
+| Model | A window manager: floating windows, or tiled with BSP, master-stack or scrolling columns | Panes split inside windows, with preset layouts. Popups and floating panes in recent versions | Tiled panes inside tabs, plus floating and stacked panes |
+| Grouping | Nine workspaces per session | Windows in a session | Tabs in a session |
+| Input model | Two modes, like vim: window management and terminal. Also a tmux-style prefix key | A prefix key (<kbd>Ctrl</kbd>+<kbd>B</kbd>) | Modes (pane, tab, resize and more), shown in a status bar |
+| Detach and reattach | Yes, a daemon holds the sessions | Yes, a server holds the sessions | Yes, a server holds the sessions |
+| After a reboot | Layout and working directories come back. Programs and scrollback do not | Not built in. Plugins such as tmux-resurrect do this | Session resurrection is built in |
+| Several clients on one session | Yes. All clients have full control | Yes. Clients can be read-only | Yes. Each user gets their own cursor and focus |
+| Serving over SSH | `tuios ssh` is an SSH server with key auth. Remote hosts over ssh | Run it on the remote machine over ssh | Run it on the remote machine over ssh |
+| Browser client | `tuios-web`, a separate binary | None built in | Built in, in recent versions |
+| Scripting | CLI verbs, a JSON control protocol with waits and events, tape scripts, hooks | tmux commands, control mode, hooks, format strings | `zellij action` commands, WebAssembly plugins |
+| Coding agents | Per-pane agent state, alerts, messages between agents, worktrees | Nothing in the manual | Not covered on this page |
+| Images | Kitty graphics and sixel, passed through (experimental) | Sixel, when built with it. Other protocols through `allow-passthrough` | Sixel |
+| Configuration | `config.toml`, a settings page, runtime `set-config` | `tmux.conf`, written as tmux commands | KDL files for config and layouts |
+| Release platforms | Linux, macOS, Windows, FreeBSD, OpenBSD | Unix-like systems | See the zellij docs |
+
+The rest of the page goes through these rows in more detail.
+
+## The model
+
+**TUIOS** treats the terminal like a desktop. Each shell is a window with a title bar. With tiling off, windows float: you drag them with the mouse or move them with keys, and they can overlap. With tiling on, windows fill the screen in one of three [layout modes](/docs/layout-modes): BSP (the default), master-stack, or niri-style scrolling columns. Zoom shows one window at a time. Each session has nine workspaces.
+
+**tmux** divides each window into panes that never overlap. `select-layout` offers `even-horizontal`, `even-vertical`, `main-horizontal`, `main-vertical`, `tiled` and mirrored variants. Popups (`display-popup`) float over the panes, and the 3.7 manual also documents floating panes.
+
+**zellij** tiles panes inside tabs, and also has floating panes that sit above the tiled ones and stacked panes that collapse to a title line. Its layouts are written as files.
+
+If you want windows that overlap and can be dragged, TUIOS is the one built around that. If you think of your screen as a grid, all three do that, and tmux and zellij have done it for longer.
+
+## Layouts
+
+TUIOS keeps a BSP tree per workspace. You split, preselect where the next window goes, swap and resize. Layout templates save and apply arrangements, and a project can carry a [`.tuios.tape`](/docs/project-tapes) that builds its layout when you open it, after you have reviewed and trusted it.
+
+tmux has the preset layouts above plus manual splits. `list-windows` prints each window's layout as a string that `select-layout` can apply again.
+
+zellij describes layouts in KDL files, which can set panes, tabs and the commands to run in them.
+
+## Sessions and detaching
+
+All three keep sessions alive in a background process. Closing the terminal does not stop the shells.
+
+In TUIOS the daemon also saves each session's layout to disk. After `kill-server`, a daemon crash or a reboot, windows come back in their places with a fresh shell in the same working directory. Running programs, screen contents and scrollback do not come back. [Sessions](/docs/sessions#session-resurrection) lists exactly what survives which kind of interruption. Working directories are restored on Linux and macOS only.
+
+tmux does not save sessions across a server restart by itself. The common answer is a plugin such as tmux-resurrect.
+
+zellij has session resurrection built in.
+
+TUIOS also has standalone sessions (`tuios --standalone`), which run with no daemon and save nothing, and headless sessions (`tuios new name --detach`), which a script can drive before any client attaches.
+
+## Several clients
+
+TUIOS lets several clients attach to one session: two terminals, a terminal and an SSH login, or a browser. They see the same windows and output. The session is drawn at the size of the smallest attached client. Each client has its own input mode and copy mode position.
+
+There are no read-only clients in TUIOS. Every attached client can type into every shell. tmux does have read-only clients, so if you want to show a session to someone without giving them a keyboard, tmux does that and TUIOS does not.
+
+zellij's multiplayer mode gives each user their own cursor and focus in a shared session.
+
+## Remote machines and SSH
+
+With tmux and zellij, the usual way to work on a remote machine is to ssh in and start or attach there.
+
+That works with TUIOS too. TUIOS adds two more ways:
+
+- **`tuios ssh`** runs TUIOS as an SSH server. Users log in with a public key, and the SSH user name picks the session. On a non-local address with no keys configured, it refuses to start unless you pass `--no-auth`. See [Architecture](/docs/architecture#ssh-server).
+- **[Remote hosts](/docs/remote-hosts)** let your local TUIOS open a session on another machine in your own client, or run a single pane on another machine inside a local session. Your daemon keeps one ssh link per host. There is no new port and no new login system.
+
+## Browser client
+
+`tuios-web` serves TUIOS to a browser, drawn with WebGL, over WebTransport or WebSocket. It is a separate binary, so the main `tuios` binary has no web server in it. It has no login of its own: keep it on `localhost` or put an authenticating proxy in front. See [Web Terminal](/docs/web).
+
+tmux has no browser client. Recent zellij versions include one.
+
+## Scripting and automation
+
+tmux is scripted with its own commands: `send-keys`, `capture-pane`, `new-window` and so on, run from the shell or bound to keys. Control mode (`tmux -C`) is a text protocol for programs that embed tmux. Hooks run commands on events, and format strings expose pane and session state.
+
+TUIOS keeps many of the same command names, so the habits carry over:
+
+```bash
+tuios new build --detach
+tuios send-text -s build 'make test
+'
+tuios wait-for window-output -s build --pattern 'PASS|FAIL'
+tuios capture-pane -s build
+```
+
+What TUIOS adds:
+
+- **A JSON [control protocol](/docs/control-protocol)** on the daemon socket, one line per request. `list-verbs` prints every verb and its parameters, so a program can discover the protocol from the daemon itself.
+- **Blocking waits.** `wait-for` blocks until output matches, a window exits, or an agent changes state, instead of polling `capture-pane` in a loop.
+- **An event stream.** `subscribe` sends window, session and bell events as they happen.
+- **[Tape scripts](/docs/tape-scripting)** to script the UI itself, and [tape recording](/docs/tape-recording) to capture what you did as a script.
+- **[Hooks](/docs/hooks)** that run shell commands on window, session and agent events.
+
+zellij is scripted with `zellij action` from the shell, and extended with plugins compiled to WebAssembly. TUIOS has no plugin system. It extends through hooks, the control protocol and custom dock components, which are shell commands.
+
+## Coding agents
+
+This is the area where TUIOS does the most that the others leave to you.
+
+- Each pane has an [agent state](/docs/agents): working, needs input, idle, done, errored. TUIOS learns it from the agent reporting for itself, from progress sequences, from process detection and from screen rules for known agents such as Claude Code, Codex and Gemini CLI.
+- The state shows on the title bar and in the [session rail](/docs/session-rail), can raise an alert, and scripts can wait on it: `tuios wait-for` can block until an agent needs a person.
+- Agents can [message each other](/docs/agent-messaging) and ask each other questions.
+- [Worktrees](/docs/worktrees) give each git worktree its own session, and `tuios fan` sends one prompt to several agents, each in its own worktree.
+- `tuios --skill` prints instructions an agent can read to drive TUIOS from inside a pane.
+
+The tmux 3.7 manual has nothing like this. With tmux, you watch the panes yourself or build it from `capture-pane` and hooks.
+
+## Images
+
+TUIOS passes Kitty graphics and sixel through to the host terminal. Kitty images follow their window as it moves and scrolls and are cropped where another window covers them, and `mpv --vo=kitty` video plays. Sixel images that do not fit their window are hidden rather than clipped. TUIOS asks the host terminal what it supports and turns graphics off if it gets no answer. This support is marked experimental. See [Graphics](/docs/architecture#graphics).
+
+tmux supports sixel when it is built with sixel support and the outer terminal supports it. Programs can send other sequences, such as Kitty graphics, through with the `allow-passthrough` option, but tmux does not track where those images are.
+
+zellij supports sixel.
+
+## Configuration
+
+TUIOS reads `config.toml`. Most options can also be changed in a running session with `tuios set-config` or from the in-app settings page, and a saved edit to the file applies without a restart. It ships more than 340 themes with a live picker. See [Configuration](/docs/configuration).
+
+tmux reads `tmux.conf`, which is a list of tmux commands. That makes it very flexible, and there are many shared configs and plugins for it.
+
+zellij uses KDL for its config and its layouts.
+
+## Performance
+
+TUIOS does not draw on a fixed timer. Output from a shell wakes the renderer, and when nothing changes nothing is drawn. Frames are capped at 60 per second by default, windows that are off screen or minimized are not rendered, and a window flooding output is slowed to a catch-up rate so it cannot starve your typing.
+
+The TUIOS repository keeps measured baselines in `docs/perf.md`, and a test (`TestIdleCostStaysLow`) boots the real binary with three idle shells and checks that nothing is drawn over ten seconds of idle.
+
+tmux and zellij have their own designs, and this page makes no claim about which is faster. If speed matters for your workload, measure it on your machine.
+
+## Coming from tmux
+
+TUIOS uses the same leader key as tmux, and several prefix keys match:
+
+| Action | tmux | TUIOS |
+|---|---|---|
+| New window | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>c</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>c</kbd> |
+| Detach | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> |
+| Copy mode | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> |
+| Zoom | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>z</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>z</kbd> |
+| Split left and right | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>%</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>&#124;</kbd> |
+| Split top and bottom | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>"</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> |
+
+The difference to learn is the two modes. Keys typed in window management mode move windows. Keys typed in terminal mode go to the shell. <kbd>i</kbd> enters terminal mode and <kbd>Alt</kbd>+<kbd>Esc</kbd> leaves it. The prefix key works in both. [Keybindings](/docs/keybindings) lists everything, and every key can be rebound.
+
+## When to pick something else
+
+**Pick tmux when:**
+
+- You need it on servers you do not control. tmux is packaged almost everywhere and is often already installed.
+- You want read-only clients.
+- You rely on a terminal that integrates with tmux control mode, or on an existing tmux config and its plugins.
+- You want a tool that has been stable for a long time. TUIOS is young: its first commit is from September 2025.
+
+**Pick zellij when:**
+
+- You want the available keys shown on screen at all times.
+- You want plugins, written in any language that compiles to WebAssembly.
+- You want each user in a shared session to have their own cursor.
+
+**Pick TUIOS when:**
+
+- You want floating windows and several tiling modes in one tool, with the mouse as well as the keyboard.
+- You run coding agents in panes and want to know which one needs you.
+- You script your terminal and want blocking waits, an event stream and JSON instead of screen scraping.
+- You want to reach sessions on other machines from one client, or serve TUIOS over SSH or to a browser.
+- You need native Windows builds with daemon sessions (Windows build 17063 or later).
+
+## Other tools
+
+**GNU screen** is the oldest of these, and still common on older systems. It detaches and reattaches sessions, and can also open a serial line itself (`screen /dev/ttyUSB0 115200`).
+
+**WezTerm** is a terminal emulator with its own multiplexer. It splits panes inside its own windows, can keep a mux server running on a remote machine, and has a `wezterm cli` command to split panes, send text and read pane contents. Its config is written in Lua. It fits if you want one program for both the terminal and the multiplexer. TUIOS, tmux and zellij run inside any terminal instead.
+
+## Related
+
+<Cards>
+  <Card title="Getting Started" href="/docs/getting-started" description="Install, first session, and the keys you need on day one" />
+  <Card title="Layout Modes" href="/docs/layout-modes" description="Floating, BSP, master-stack, scrolling columns and zoom" />
+  <Card title="Sessions" href="/docs/sessions" description="Detach, reattach, sharing and what survives a restart" />
+  <Card title="Control Protocol" href="/docs/control-protocol" description="Drive the daemon from scripts and programs" />
+</Cards>
