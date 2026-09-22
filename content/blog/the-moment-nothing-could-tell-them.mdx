@@ -1,0 +1,339 @@
+---
+title: The one moment an agent needed you was the one moment tuios could not see
+description: A coding agent blocked on a permission prompt paints it once and goes silent. How tuios learned to tell that silence apart from a finished turn.
+date: '2026-09-09'
+author: Gaurav Gosain
+---
+
+The rail in tuios has an agents section. Every pane running a coding agent is
+listed there, ordered by who needs you: errored first, then waiting for input,
+then working, then finished and not yet seen, then finished and seen or idle.
+If you run four agents in four worktrees, that list is supposed to answer one
+question without you looking at any of them. Which one is waiting for me?
+
+That question turned out to be much harder than drawing the list. This post is
+about the weeks it took to answer it, and mostly about the one case every
+version got wrong: an agent sitting on a permission prompt.
+
+## Version one: ask the kernel
+
+The first commit, on 9 August, added the state model. Each pane got an agent
+state (`none`, `working`, `needs_input`, `idle`, `done`, `errored`), held by the
+daemon so it survives a detach. A pane could report its own state with
+`tuios set-agent-state`, and a reference shim mapped Claude Code's lifecycle
+hooks onto it.
+
+It also added a fallback for agents that report nothing: a pane that said
+`working` and then produced no output for 30 seconds was demoted to `idle`.
+The commit message calls it conservative. It only ever reads `working` and
+only ever writes `idle`, so an explicit report is never overridden.
+
+The next day I added detection that needs no setup at all. Every two seconds
+the daemon reads the pane shell's `tpgid` from `/proc`, finds the foreground
+process group leader, and, if that process is a known agent CLI, marks the pane
+`working`. When the agent leaves the foreground, the pane clears.
+
+Two things could now set a pane's state: the agent's own report and the
+detector. One bool per pane recorded whether the detector had claimed it. The
+detector only promoted a pane with no state, and yielded to any explicit
+report. With two sources, a bool is enough.
+
+## A bool cannot rank
+
+Within days I wanted more sources. Harnesses already emit OSC 9;4, the progress
+bar sequence, and tuios had been parsing it only to throw it away. Some
+harnesses change the window title when they need you. Some things can only be
+read off the screen.
+
+The commit that replaced the bool, on 12 August, says it directly: a bool "cannot
+say which of three sources should win". So each source got a rank, and one
+rule: a source may write over a claim ranked at or below its own, and never
+over one ranked above it.
+
+| Source | Rank | What it is |
+|---|---|---|
+| report | 40 | the agent or its hook calling `set-agent-state` |
+| transcript | 35 | the record file the agent writes as it runs |
+| osc | 30 | an escape sequence the pane emitted, such as OSC 9;4 |
+| screen | 20 | a rule matched against the pane's rendered text |
+| detect | 10 | the foreground process detector |
+| stall | 0 | the silence timer |
+
+The numbers are spaced so a tier can go between two others without
+renumbering. That paid off four days later: the transcript tier slotted in at
+35 and nothing else moved.
+
+Two days after the ranking, OSC 9;4 was wired in (a bar means working,
+clearing it means idle, the error state means errored), and a small hold went
+in beside it. A harness that clears its progress bar between two steps of one
+task would blink the pane through idle and straight back. Now a state that
+lowers how much the pane wants a human has to stand for 700ms before it is
+published, and anything at or above the current level is published at once.
+Being slow to say an agent needs you costs the user the thing the feature is
+for. Being slow to say it went quiet costs nothing.
+
+## Silence looks the same on every channel
+
+Then I watched what a pane actually does when Claude Code stops to ask
+permission. The comment in its manifest records the measurement: a session
+sitting on a permission prompt emitted nothing at all. No further output, no
+title change, no progress sequence. The prompt is painted once, and then the
+pane is silent.
+
+Every channel tuios was listening to carried that silence. So 30 seconds later
+the stall timer did exactly what it was built to do and called the pane
+`idle`. And the alert policy ignores `idle`, because idle means fine. The one
+moment a user needed to be told about was the one moment nothing could tell
+them.
+
+A harness that finished and a harness waiting on a human produce byte for byte
+the same silence. No timer can separate them. Only looking can.
+
+The manifest schema already had screen rules. They had been parsed and
+validated since the registry landed, and nothing read them. The fix on 15
+August wired them up: read the bottom lines of the pane's active screen,
+match the manifest's rules, and report through the screen tier. For Claude
+Code the permission rule needs the question stem and the numbered list
+together, so a single stray string cannot fire it:
+
+```toml
+[[screen.rule]]
+state    = "needs_input"
+priority = 30
+message  = "Waits for approval of a tool call."
+all      = ["Do you want"]
+any      = ["1. Yes", "❯ 1."]
+```
+
+The trigger was the hard part. Scanning on every output chunk is wasteful, so
+scans are throttled to one per 250ms. But a throttle drops exactly the chunk
+that matters. The prompt is painted by the last chunk before the pane goes
+quiet, the throttle swallows it, and then nothing else ever arrives to trigger
+a scan. So each pane also arms one timer on output, pushed back by every new
+chunk, that fires 400ms after the last one. There is no ticker, so a silent
+pane still costs nothing.
+
+Only `needs_input` rules ship enabled. Working is already carried by OSC 9;4
+and by output arriving at all, and a rule keyed on a spinner glyph is the first
+thing to break when an agent restyles its TUI in a patch release.
+
+An hour and a half later a second commit closed the other half. The stall
+timer now hands each stalled pane to the screen tier first and leaves alone any
+pane whose screen answers. Later still, a stalled pane whose screen says
+nothing got `unknown` instead of `idle`: the screen was read and said nothing,
+and `idle` would claim nothing needs you when nothing here knows that.
+
+Here is one pane through a permission prompt. The toggle switches between the
+first version and the ranked one. Add events, or click a column to see why the
+rail shows what it shows.
+
+<AgentSourceTimeline />
+
+## The claim that would not let go
+
+The screen tier fixed agents that report nothing. It broke on agents that
+report something.
+
+With the hook installed, Claude Code reports `working` for itself, at rank 40.
+Then it stops on a permission prompt and says nothing further. The screen rule
+sees the prompt, reports `needs_input` at rank 20, and is refused, because
+rank 20 cannot write over rank 40. So the pane showed `working` for as long as
+the user was being waited for. The better integrated the agent was, the worse
+this case got.
+
+The ranking was not wrong. It was being applied to a claim that had gone
+stale. The fix on 16 August is one exception to the ranking, and it is
+narrow:
+
+```go
+func blockerOverridesClaim(w *WindowState, r AgentReport, now time.Time) bool {
+	if r.Source != AgentSourceScreen || !agentStateBlocks(r.State) || w.AgentState == r.State {
+		return false
+	}
+	if r.paneWroteAt <= w.AgentStateAt {
+		return false
+	}
+	return now.UnixNano()-w.AgentStateAt >= int64(agentBlockerOverrideGrace)
+}
+```
+
+A screen rule that matches a blocking state may take a higher claim only if the
+pane has painted since that claim was stamped, and the claim has stood
+unrefreshed for two seconds. The two seconds give a hook the chance to describe
+the new screen first. If it does, the hook wins as before.
+
+The part I almost left out is what happens after. The screen tier only ever
+asserts `needs_input`. If the override simply took the pane, nothing would
+ever move it off again, and the pane would stick on `needs_input` exactly the
+way it used to stick on `working`. So the override records what it displaced.
+The next look that finds no rule matching, which is the look triggered by the
+agent painting over its prompt, hands the old claim back as it was. The
+exception is a loan.
+
+A few weeks later that loan became the rule for every screen claim, not only
+the ones that jumped a rank. A pane the detector held had stayed on
+`needs_input` through the turn after the answer, because its screen claim had
+displaced nothing worth remembering.
+
+## Reading the agent's own record, and nothing else
+
+Screen rules are coupled to how one version of one TUI happened to look.
+Claude Code also writes a JSON record per line to a file under
+`~/.claude/projects/`, appended at every message boundary. That file says what
+the agent did rather than what it looked like. It is also the whole
+conversation, which made me careful about how it is read.
+
+The reader is built so that leaking the conversation is a property of the
+types, not of care. Records decode into a struct with six scalar fields and one
+nested `stop_reason`. `encoding/json` walks an unknown field to find its end
+and never builds a Go value for it, so message content, tool results and
+prompts are never constructed. There is no `map[string]any` and no
+`json.RawMessage` in the package. Nothing logs. A line that fails to parse
+increments a counter and is dropped, and the error, which would quote it, is
+not kept. The read buffer is a field on the reader, zeroed after every parse,
+so a heap dump taken later holds no stale page. It is a field and not a
+parameter because a panic traceback prints argument words. The only thing
+that leaves the package is a turn, one of three constants.
+
+Size was the other constraint. These files reach 150MB. A cold read looks at
+the last 128KB and no further, and after that the reader resumes from where it
+stopped. Against 20 real transcripts on my machine, a 151MB file read in 652
+microseconds with zero unparseable lines. The largest files are among the
+fastest, because the cold read is a fixed window whatever the size.
+
+Two details give a confident wrong answer if you get them wrong. The last line
+of a live file is usually half written, so everything past the final newline is
+dropped and read again when it completes. And subagents write to their
+parent's file, so sidechain records are skipped. Without that, a subagent
+finishing would report the whole pane done while the agent that spawned it
+kept working.
+
+The transcript ranks below the report because of latency, not trust. A hook
+speaks about now. Records land at message boundaries, and one measurement found
+a live transcript 44 seconds behind during active work. It also does not claim
+`needs_input` at all. The signature for that would be an inference, never
+checked against a live permission prompt, and it is the one state that raises
+an alert. The screen tier already reads that prompt, and the visible-blocker
+exception is what lets it say so over the transcript.
+
+The transcript also exposed a gap the ranking had all along. A claim is held
+until something ranked at least as high replaces it. That is right while the
+source can still speak, and wrong once it cannot: a reader whose agent died
+would hold its pane against every weaker tier forever. So a source can now
+yield its claim, saying it has nothing further to add without asserting
+anything in its place. A file that is gone for three consecutive reads ends
+the join and yields.
+
+Watching is per directory, not per file. inotify on a directory reports writes
+to the files inside it, so forty panes across twelve projects is twelve
+watches. Directories are refcounted, so the twelfth pane in a project adds
+nothing. Idle cost is zero by construction: one goroutine for the whole daemon,
+blocked in a channel receive, and a burst of appends collapses into one read
+through a one-shot timer. Two tests assert it. An idle join holds no timer and
+grows no goroutines, and twenty events produce one read.
+
+## Two ways detection lied
+
+All of that assumes the daemon knows which agent is in the pane. That part had
+its own bugs.
+
+On 14 August the list of known agents moved from a slice of ten strings in the
+detector into TOML manifests, one per harness, so supporting a new agent no
+longer meant shipping tuios. A manifest can match a process by `comm`,
+`argv0`, a package path in `argv` (`argv_path`), or a glob over the real
+executable (`exe_glob`). Five days later I found that two of those four were
+broken in opposite directions.
+
+`exe_glob` matched nothing, ever. `path.Match`'s `*` does not cross `/`:
+
+```go
+path.Match("*/claude", "/home/u/.local/bin/claude") // false
+path.Match("*/claude", "bin/claude")                // true
+```
+
+The executable path is always absolute, so all six patterns in the three
+manifests that had them were dead. Matching is now component-wise: `*` stays
+inside a component, `**` spans any number, and a pattern without a leading `/`
+matches any suffix, which is what `*/claude` was always written to mean.
+
+`argv_path` matched far too much. The registry asked whether any argument
+contained a manifest's string, and every manifest carried one: `/opencode/`,
+`/aider/`, `@anthropic-ai/claude-code`. So `tail -f ~/dev/opencode/main.go`
+was opencode. A scan of every process on a real machine found six matches, and
+five of them were not agents. Now `argv` is read only when the process is an
+interpreter, and only the one token it was asked to run, so
+`python3 -m pytest tests/aider/test_x.py` is pytest.
+
+Neither bug was caught by tests, and neither could be seen from outside. A pane
+was an agent or it was not, with nothing said about why. So the same day I
+added `tuios explain-agent-detect`. It reads the pane's process at the moment
+of the call and prints what the daemon saw, which manifest matched and on which
+predicate, and for every manifest that did not match, what it compared against.
+After a later round of detection work in September, it also leads with a
+verdict in plain words. This is its output for an agent behind a wrapper, from
+the [agents reference](/docs/agents#when-a-pane-is-marked-wrong):
+
+<TerminalCapture
+  title="tuios explain-agent-detect"
+  lines={[
+    { text: "This pane runs claude-code behind timeout." },
+    { text: "  The foreground process timeout is a wrapper, so tuios read the processes behind it.", tone: "dim" },
+    { text: "  The process claude matched the manifest claude-code on comm=claude.", tone: "dim" },
+    { text: "  A process name is strong evidence.", tone: "dim" }
+  ]}
+  rows={4}
+  note="The September version also lists every word on the command line it saw and did not count, which is the case the argv bug needed."
+/>
+
+That September round made identity rest on what a process calls itself, so a
+directory called `claude` or `codex` is no longer an agent, and it reads
+through wrappers like `sh -c`, `timeout`, `npx` and `nix develop`. The
+benchmark in that commit records 14 microseconds per pane when the leader is
+the agent and 201 microseconds in the bounded worst case behind a wrapper.
+
+## What herdr already knew
+
+[herdr](https://github.com/herdrdev/herdr) publishes a curated set of agent
+detection manifests (Apache-2.0) covering 20 agents. When I compared them with
+tuios's, the overlap was large and the format was close
+enough that conversion is mechanical for most rules. So on 22 August I wrote a
+converter rather than transcribing by hand.
+
+The converter does not pretend the formats are the same. herdr keeps process
+detection in code, so the `[detect]` block it emits is a placeholder. herdr's
+rules nest predicate groups, and tuios rules are flat, so a compound rule is
+split into one rule per alternative, which keeps the OR exact. A rule that
+reads a region tuios cannot see, such as the OSC title or prompt-box geometry,
+is dropped with that reason written into the output. Where the flattening had
+to bend, it bends toward suppressing a match, never toward a false one. The
+output is a draft for review, not a manifest to ship.
+
+From it came manifests for the 13 agents herdr detected and tuios did not:
+amp, antigravity, cline, devin, github-copilot, grok, hermes, kilo, kimi, kiro,
+maki, qoder and qwen. Each file carries herdr's attribution and version, a
+`[detect]` block written for tuios from that agent's real install layouts, and
+only the blocked-prompt rules enabled. herdr's working and idle rules read
+spinners and footers, which is exactly what the bundled policy leaves out.
+Fixtures pin the rules against the prompts as herdr documents them, and
+detection against the process shapes each agent runs as, node shims included.
+There are 22 manifests now.
+
+The comparison mostly confirmed the shape of the problem. herdr's manifests,
+too, find the blocked prompt by reading what the agent drew. That is the one
+fact no agent reliably tells anything else.
+
+## What I keep from this
+
+Every version before the screen tier was correct about every signal it
+received. The bug was a state that sends no signal. Silence was being read as
+an answer, and it was the same answer for a finished agent and a blocked one.
+
+The second lesson was about precedence. A ranking says who to trust, but not
+for how long. The report outranked the screen for good reasons, and a report
+that had not been refreshed while the pane painted a prompt over it was still
+outranking the one source that could see the prompt. The fix was not to change
+the ranks. It was to notice staleness, and to give back what was borrowed.
+
+The details are in the [agents docs](/docs/agents), the
+[session rail docs](/docs/session-rail#agent-rows), and the
+[changes since v0.7.0](/releases/since-v0-7-0#detection).
