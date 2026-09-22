@@ -1,6 +1,6 @@
 ---
 title: I dragged one divider and five windows moved
-description: One resize report turned out to be three separate defects, a wrong theory, and one behaviour that was correct all along. The benchmarks saw none of it. A log of which windows moved saw all of it in a single drag.
+description: 'Dragging one divider in the tuios tiling layout moved five windows. It was three defects: neighbours found by geometry, a restarting ease, a truncated ratio.'
 date: '2026-07-16'
 author: Gaurav Gosain
 ---
@@ -61,7 +61,7 @@ scanning every window in the workspace for an edge within one cell of the
 dragged line. Not by asking the layout tree which panes share the divider. By
 coordinates.
 
-The layout is a binary space partitioning tree, and two dividers in entirely
+The layout is a [binary space partitioning tree](/docs/bsp-tiling), and two dividers in entirely
 different subtrees land on the same screen line whenever their ratios happen
 to agree. Fresh splits all start at 0.5, so they agree by default. Drag a
 divider, and any unrelated divider that happens to be collinear with it gets
@@ -95,10 +95,29 @@ move that node's ratio, and rebuild the geometry from the tree. Only windows
 under that ancestor can move, because only their geometry depends on its
 ratio. Coordinates stop being evidence of adjacency.
 
+On the 2x2 grid above, the tree makes the answer plain. The drag is
+vertical, so the walk stops at the first horizontal split above the dragged
+pane, and that node owns only the left column:
+
+```mermaid
+graph TD
+    R["root: left | right"] --> L["left column: top / bottom"]
+    R --> RC["right column: top / bottom"]
+    L --> W1[win-1]
+    L --> W2[win-2]
+    RC --> W3[win-3]
+    RC --> W4[win-4]
+    style L stroke-width:3px
+```
+
+Its ratio moves, win-1 and win-2 are rebuilt from it, and the right column's
+node is never read. Whether the two dividers happen to share a row no longer
+enters into it.
+
 ## Defect two: easing toward a target that already moved
 
 [The previous post](/blog/measuring-before-optimising) already told how I
-found the second defect: with shared borders on, `SyncBSPTreeFromGeometry`
+found the second defect: with [shared borders](/docs/bsp-tiling#shared-borders) on, `SyncBSPTreeFromGeometry`
 calls `ApplyBSPLayout` on every composed frame during a drag. What belongs
 here is what that actually did, counted rather than inferred, at nine
 windows:
@@ -207,3 +226,7 @@ and plain in a log of who moved. The narrowing reports were never one bug
 coming into focus. They were four phenomena taking turns at the front, and I
 only saw that once I stopped assuming they were the same thing and looked at
 the evidence.
+
+_Note, September 2026: the trace never landed. `TUIOS_RESIZE_TRACE` is not in
+the tuios repository or its history, so setting it on a released binary does
+nothing._
