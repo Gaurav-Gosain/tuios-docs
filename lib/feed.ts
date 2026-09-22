@@ -45,6 +45,8 @@ type TextPage = {
  * The source is the processed markdown, which still holds the MDX widgets as
  * JSX. A feed reader cannot run them, so each block-level widget becomes a
  * short note that links to the page, and an inline one keeps only its text.
+ * Prose containers such as Callout are kept as blockquotes, because their text
+ * is part of the post.
  * Links and images are made absolute because a feed reader has no base URL.
  * If the markdown cannot be parsed the item falls back to its description.
  */
@@ -77,6 +79,15 @@ async function markdownToHtml(markdown: string, pageUrl: string) {
 
   visit(mdast, (node, index, parent) => {
     if (!parent || index === undefined) return;
+    if (
+      node.type === "mdxJsxFlowElement" &&
+      node.name &&
+      proseContainers.has(node.name)
+    ) {
+      parent.children.splice(index, 1, proseContainer(node) as never);
+      // Visit the replacement so its children are rewritten too.
+      return index;
+    }
     if (node.type === "mdxJsxFlowElement") {
       const note: RootContent = {
         type: "paragraph",
@@ -121,6 +132,40 @@ async function markdownToHtml(markdown: string, pageUrl: string) {
 
   const hast = await processor.run(mdast);
   return toHtml(hast);
+}
+
+/**
+ * Components that hold prose rather than draw a figure. The feed keeps their
+ * text as a blockquote instead of replacing them with a link to the page.
+ */
+const proseContainers = new Set([
+  "Callout",
+  "Accordion",
+  "Accordions",
+  "Step",
+  "Steps",
+  "Tab",
+  "Tabs",
+]);
+
+type JsxFlowElement = Extract<RootContent, { type: "mdxJsxFlowElement" }>;
+
+/** A prose container as a blockquote, with its title in bold on top. */
+function proseContainer(node: JsxFlowElement): RootContent {
+  const title = node.attributes.find(
+    (attribute) =>
+      attribute.type === "mdxJsxAttribute" && attribute.name === "title",
+  );
+  const children = [...node.children] as RootContent[];
+  if (title && typeof title.value === "string" && title.value !== "") {
+    children.unshift({
+      type: "paragraph",
+      children: [
+        { type: "strong", children: [{ type: "text", value: title.value }] },
+      ],
+    });
+  }
+  return { type: "blockquote", children } as RootContent;
 }
 
 export function escapeXml(value: string) {
