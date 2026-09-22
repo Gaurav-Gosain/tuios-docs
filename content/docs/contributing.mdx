@@ -1,225 +1,172 @@
 ---
 title: Contributing
-description: Guidelines for contributing to TUIOS
+description: Build TUIOS from source, run the tests, and send a pull request
 icon: GitPullRequest
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
 
-Thank you for your interest in contributing to TUIOS!
+Contributions are welcome: bug reports, fixes, tests and documentation. This page covers building from source, the checks CI runs, and how to send a change.
 
-## Getting Started
+The tuios repository has an [`AGENTS.md`](https://github.com/Gaurav-Gosain/tuios/blob/main/AGENTS.md) with a package map and the test commands. Read it before a larger change.
 
-### Prerequisites
+## Build
 
-- Go 1.26.0 or later (the version pinned in `go.mod`)
-- Git
-- Nerd Font (for testing UI; `--ascii-only` works without one)
-
-No C toolchain is needed. There is no cgo in the tree.
-
-### Development Setup
+You need Go 1.26.6 or later (the version in `go.mod`), Git, and a [Nerd Font](https://www.nerdfonts.com/) to see the icons. `--ascii-only` works without one.
 
 ```bash
-# Clone repository
 git clone https://github.com/Gaurav-Gosain/tuios
 cd tuios
 
-# Install dependencies
-go mod download
-
-# Build
 go build -o tuios ./cmd/tuios
 go build -o tuios-web ./cmd/tuios-web
 
-# Run
-./tuios --debug
-
-# Run tests
-go test ./...
-go test -race ./...
+./tuios --standalone --debug
 ```
 
-The alternative emulator backend builds with `go build -tags ghostty ./cmd/tuios` and has its own test suite behind the same tag.
+`--standalone` runs TUIOS without the daemon, which is simpler while you work on the UI. Without it, TUIOS starts or reuses a daemon from the same binary.
 
-### Nix Development
+The default build uses the pure Go terminal emulator and needs no C toolchain. The libghostty-vt backend uses cgo and needs [Zig](https://ziglang.org/) 0.16 or later:
 
 ```bash
-nix develop    # Enter dev shell
-nix build      # Build package
-nix run        # Run directly
+./scripts/ghostty-lib.sh
+PKG_CONFIG_PATH="$PWD/.ghostty-vt/native/pkgconfig" go build -tags ghostty ./cmd/tuios
 ```
 
-## Code Style
+`./scripts/install.sh` builds and installs the ghostty backend by default. See `docs/ghostty-vt.md` in the repository for details.
 
-There is no `.golangci.yml` and no configured linter in this repository. The entire automated bar is:
+With Nix:
 
 ```bash
-go fmt ./...
+nix develop    # development shell
+nix build      # build the package
+nix run        # build and run
+```
+
+## Checks
+
+CI runs these on every pull request. Run them before you push:
+
+```bash
+gofmt -l .          # must print nothing
 go vet ./...
+go build ./...
+go test ./... -count=1 -timeout 20m
 ```
 
-Run both before committing. Everything else is convention, enforced by review rather than tooling:
+CI also checks that `go.mod` is tidy in both the root module and `e2e/tui`, and runs `go test -race ./...` every night. There is no `golangci-lint` config. If you run a linter locally, keep unrelated lint fixes out of your pull request.
 
-- Follow [Effective Go](https://go.dev/doc/effective_go) conventions
-- Add doc comments for exported types/functions
-- Keep functions focused and testable
-
-If you run `golangci-lint` or `staticcheck` locally, treat their output as advisory. The existing tree is not clean under every linter's default rule set, so do not mix unrelated lint fixes into a feature PR.
-
-## Testing
-
-### Running Tests
+The full suite is slow and uses every core. To leave the machine usable while it runs:
 
 ```bash
-# All tests
-go test ./...
-
-# Specific package
-go test ./internal/vt/...
-
-# With coverage
-go test -cover ./...
-
-# With race detection
-go test -race ./...
-
-# Verbose output
-go test -v ./internal/config/...
+nice -n 10 go test ./... -timeout 20m
 ```
+
+### Other test suites
+
+`go test ./...` from the root does not run these:
+
+| Suite | Command | Covers |
+|-------|---------|--------|
+| End-to-end TUI | `cd e2e/tui && TUIOS_E2E=1 go test -count=1 ./...` | A real `tuios` in a real PTY, checked on screen. A separate Go module |
+| Control plane | `go test -tags e2e ./e2e/...` | Real daemons driven through the CLI |
+| ghostty backend | `PKG_CONFIG_PATH="$PWD/.ghostty-vt/native/pkgconfig" go test -tags ghostty -count=1 -short ./internal/vt/ ./internal/session/ ./internal/terminal/` | The libghostty-vt emulator |
+| Differential | `go test -tags differential ./internal/vt/ -run TestDifferential` | The emulator against tmux. Needs `tmux` |
+| Browser | `cd clienttests && npm install && npm test` | `tuios-web` in the system Chromium, with Playwright |
 
 <Callout type="warn">
-`e2e/tui` is a separate Go module and is **not** covered by `go test ./...` from the repository root. It drives a real TUIOS in a PTY and has to be run on its own:
-
-```bash
-cd e2e/tui && go test ./...
-```
-
-If you change rendering, input handling, or the daemon protocol, run it before opening a PR.
+Without `TUIOS_E2E=1` the end-to-end suite skips every test and reports success. Always pass `-count=1` too: a cached result can survive a change of binary. Run this suite if you change rendering, input handling or the daemon protocol.
 </Callout>
 
-### Writing Tests
+## Writing tests
 
-- Use table-driven tests where appropriate
-- Test file naming: `*_test.go`
-- Prefer unit tests over integration tests
-- Use `t.Run()` for subtests
-
-Example:
+- Put tests in `*_test.go` next to the code.
+- Prefer table-driven tests with `t.Run` subtests.
+- Name benchmarks `Benchmark*`.
+- For emulator changes, add a case to the conformance corpus in `internal/vt/`. The repository's `AGENTS.md` explains how it works.
 
 ```go
 func TestFeature(t *testing.T) {
-    tests := []struct {
-        name     string
-        input    string
-        expected string
-    }{
-        {"case1", "input1", "output1"},
-        {"case2", "input2", "output2"},
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := Feature(tt.input)
-            if result != tt.expected {
-                t.Errorf("got %v, want %v", result, tt.expected)
-            }
-        })
-    }
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", ""},
+		{"word", "abc", "ABC"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Feature(tt.in); got != tt.want {
+				t.Errorf("Feature(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
 }
 ```
 
-## Pull Request Process
+## Code style
 
-1. **Fork & Branch**
+- Follow [Effective Go](https://go.dev/doc/effective_go) and run `gofmt`.
+- Every package has a package comment, and exported names have doc comments.
+- Wrap errors with context: `fmt.Errorf("failed to load config: %w", err)`.
+- Keep functions small and testable.
+
+## Pull requests
+
+1. Fork the repository and create a branch:
+
    ```bash
-   git checkout -b feature/your-feature
+   git checkout -b fix/close-last-window
    ```
 
-2. **Make Changes**
-   - Write code
-   - Add/update tests
-   - Update documentation if needed
+2. Make the change, with tests. Update the docs if behavior changes.
+3. Commit with a [conventional commit](https://www.conventionalcommits.org/) prefix:
 
-3. **Commit**
+   | Prefix | Use for |
+   |--------|---------|
+   | `feat:` | A new feature |
+   | `fix:` | A bug fix |
+   | `docs:` | Documentation |
+   | `refactor:` | A change that does not alter behavior |
+   | `test:` | Tests |
+   | `chore:` | Maintenance |
+
    ```bash
-   git commit -m "feat: add feature description"
+   git commit -m "fix: panic when closing the last window"
    ```
-   
-   Use conventional commit format:
-   - `feat:` - New feature
-   - `fix:` - Bug fix
-   - `docs:` - Documentation
-   - `refactor:` - Code refactoring
-   - `test:` - Tests
-   - `chore:` - Maintenance
 
-4. **Push & PR**
-   ```bash
-   git push origin feature/your-feature
-   ```
-   
-   Create PR on GitHub with:
-   - Clear description
-   - Link to related issues
-   - Screenshots/demos if UI changes
+4. Push and open a pull request. The template asks what changed, why, and how you tested it. Include a screenshot or recording for UI changes, and link the related issue.
+5. Address review comments. Keep commits focused, and rebase on `main` if asked.
 
-5. **Review**
-   - Address feedback
-   - Keep commits clean
-   - Rebase if needed
+## Reporting issues
 
-## Areas to Contribute
+Open an issue on [GitHub](https://github.com/Gaurav-Gosain/tuios/issues). The bug template asks for:
 
-### High Priority
+- the TUIOS version (`tuios --version`),
+- your platform and how you installed TUIOS,
+- steps to reproduce, and what you expected,
+- logs, if you have them (`tuios logs` for the daemon, `tuios --debug` for the client).
 
-- Test coverage improvements
-- Bug fixes
-- Performance optimizations
-- Documentation improvements
+Use [Discussions](https://github.com/Gaurav-Gosain/tuios/discussions) for questions and ideas. Issues labeled [`good first issue`](https://github.com/Gaurav-Gosain/tuios/labels/good%20first%20issue) are a good place to start.
 
-### Feature Ideas
-
-- Additional keybinding actions
-- New layout algorithms
-- Theme improvements
-- Terminal emulation enhancements
-
-### Good First Issues
-
-Check GitHub issues labeled `good-first-issue`.
-
-## Architecture
-
-See [Architecture](/docs/architecture) for:
-- Project structure
-- Key components
-- Coding patterns
-
-## Reporting Issues
-
-### Bug Reports
-
-Include:
-- TUIOS version (`tuios --version`)
-- OS and terminal emulator
-- Steps to reproduce
-- Expected vs actual behavior
-- Relevant logs (`tuios --debug`)
-
-### Feature Requests
-
-Include:
-- Use case description
-- Proposed solution
-- Alternative solutions considered
-
-## Community
-
-- GitHub Issues: Bug reports & features
-- Discussions: Questions & ideas
-- PRs: Code contributions
-
-<Callout type="info">
-All contributors are expected to follow our Code of Conduct: be respectful, inclusive, and constructive.
+<Callout type="info" title="Security issues">
+Do not open a public issue for a vulnerability. Email the maintainer as described in [SECURITY.md](https://github.com/Gaurav-Gosain/tuios/blob/main/SECURITY.md).
 </Callout>
+
+## Related
+
+<Cards>
+  <Card
+    title="Architecture"
+    href="/docs/architecture"
+    description="How the code is organized"
+  />
+  <Card
+    title="Library Usage"
+    href="/docs/library"
+    description="Embed TUIOS in your own program"
+  />
+</Cards>
