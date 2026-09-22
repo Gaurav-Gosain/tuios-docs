@@ -12,9 +12,9 @@ colours on every cell, so each character cell carries two pixels of artwork.
 Regions that should have been flat colour were scattered with off-colour dots.
 
 I closed that report three times. Each closure rested on a different wrong
-conclusion, and each wrong conclusion failed for a different reason. The bug
-itself turned out to be nearly the least interesting thing in the
-investigation, so this post is mostly the anatomy of the three failures.
+conclusion, and each one failed for a different reason. The bug itself turned
+out to be one of the least interesting things in the investigation, so this
+post is mostly about the three failures.
 
 ## Closure one: it must be the image protocol
 
@@ -25,14 +25,14 @@ browser terminal: I pattern-matched straight to image transmission and started
 investigating there.
 
 `pokemon-colorscripts` does not transmit images. It prints text. Half blocks
-with colour codes are the oldest trick there is for pixel art in a terminal,
-and one look at the wire would have said so. I did not take that look before
-forming the theory. That is the first failure in its entirety: I assumed the
-category of the data without checking what was on the wire.
+with colour codes are the oldest trick for pixel art in a terminal, and one
+look at the wire would have said so. I did not take that look before forming
+the theory. That is the whole of the first failure: I assumed what kind of
+data it was without checking what was on the wire.
 
 ## Closure two: the sprite really is like that
 
-The second time, I did look at the data, and did it properly. I rendered
+The second time, I did look at the data, and I did it properly. I rendered
 ground truth from the escape codes with independent code, no terminal and no
 browser in the path, and compared it against a screenshot of the browser
 terminal. It matched. I closed the report as not-a-bug: the artwork is
@@ -43,14 +43,13 @@ times and `rgb(189,189,197)` 34 times among its 794 colour runs, so there are
 legitimate near-white dots in the sprite. The reasoning was superficially
 sound: predict the appearance, compare, match, close.
 
-The failure was in what "match" meant. I compared at the level of "does the
-speckle pattern I predicted appear on screen", and it did. What I never did
-was bound the difference. The renderer was adding its own speckling on top of
-the artwork's, one colour step away from correct, and a visual comparison
-between two images that are both speckled absorbs that indefinitely. I had
-confirmed a prediction rather than measured an error, and of the three
-closures this one was the most defensible, which made it the most dangerous. I
-walked away sure.
+The failure was in what "match" meant. I asked "does the speckle pattern I
+predicted appear on screen", and it did. I never put a bound on the
+difference. The renderer was adding its own speckling on top of the
+artwork's, one colour step away from correct, and a visual comparison between
+two speckled images hides that forever. I had confirmed a prediction rather
+than measured an error. Of the three closures this one was the most
+defensible, which made it the most dangerous. I walked away sure.
 
 ## Closure three: it is a browser engine difference
 
@@ -86,10 +85,10 @@ this point I had stopped trusting in-browser readback for anything.
 
 Helium is genuinely different, and now the defect had a precise shape. It
 renders `(123,190,255)` more often than the specified `(123,189,255)`: an
-off-by-one in one channel, spatially distributed as a roughly 50/50 dither.
+off-by-one in one channel, spread across the sprite as a roughly 50/50 dither.
 Only textured WebGL content is affected. A flat WebGL clear comes back 100
-percent exact, so this is not the swap chain or the page compositor, it is the
-texture path. Switching the terminal's renderer moves the number:
+percent exact, so the cause is not the swap chain or the page compositor. It
+is the texture path. Switching the terminal's renderer moves the number:
 
 <BenchBars
   groups={["webgl", "canvas", "dom"]}
@@ -119,11 +118,11 @@ defect is strongest.
 
 Neither decision is foolish on its own. Tolerance absorbs harmless
 rasterisation differences across platforms and drivers, and the inset avoids
-asserting on the fuzziest pixels. Together they define, exactly, a class of
+asserting on the fuzziest pixels. Together they define exactly the class of
 defect the suite cannot detect: small in amplitude, concentrated at edges.
-This bug sat in the middle of that class, which is survivorship rather than
-bad luck, since a defect the suite could see would have died long before I
-ever looked at it with my own eyes.
+This bug sat in the middle of that class. That is survivorship, not bad luck:
+a defect the suite could see would have died long before I looked at it with
+my own eyes.
 
 <ToleranceBlind />
 
@@ -153,22 +152,22 @@ actually affected these measurements has no discoverable flag at all.
 ## Where it ended
 
 Not with a fix. The terminal's output is correct: what it asks the browser to
-draw is what stock Chromium and Firefox draw. The speckling is Helium's WebGL
-texture path, there is no flag that turns it off, and the workaround for
-anyone it bothers is the DOM renderer, at 95.1 percent even inside Helium. No
-source change was made anywhere, and none was warranted. The correct
-resolution of the report was a paragraph of explanation and a renderer toggle,
-both of which had been available from day one.
+draw is what stock Chromium and Firefox draw. The speckling comes from
+Helium's WebGL texture path, no flag turns it off, and the workaround for
+anyone it bothers is the DOM renderer, at 95.1 percent even inside Helium. I
+changed no source anywhere, and none needed changing. The right answer to the
+report was a paragraph of explanation and a renderer toggle, both available
+from day one.
 
 ## Three failures, three shapes
 
 They do not reduce to one moral, which is why I am writing them out
 separately.
 
-The first conclusion failed because I never looked. Category assumed from
-adjacent experience, wire never checked. The cheapest failure and the least
-excusable, and the easiest kind to catch, because the evidence was one command
-away the whole time.
+The first conclusion failed because I never looked. I assumed the category
+from recent experience and never checked the wire. It was the cheapest failure
+and the least excusable, and the easiest kind to catch, because the evidence
+was one command away the whole time.
 
 The second failed because I looked and saw my prediction. The ground-truth
 render was real work and a real comparison, and it matched. Matching a
@@ -187,6 +186,6 @@ browser offers.
 
 What broke the sequence was not more care of the same kind. It was moving the
 measurement outside the system under test. The compositor does not care what
-the browser thinks it drew. It reports what arrived, and every one of my
-earlier conclusions fell within an afternoon of having that vantage point,
-including the two I had defended in writing.
+the browser thinks it drew. It reports what arrived. Once I measured from
+there, every one of my earlier conclusions fell within an afternoon, including
+the two I had defended in writing.

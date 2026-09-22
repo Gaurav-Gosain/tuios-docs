@@ -27,33 +27,33 @@ JetBrainsMono's own metrics are a 0.600 em advance in a 1.320 em line box,
 a ratio of 0.455. kitty on this machine draws that font in a 10 by 22 pixel
 cell, which is that ratio exactly. The half-guessed cell measured 0.486.
 Every capture came out about seven percent wider per cell than the screen
-it pictured, uniformly, which is precisely what "horizontally stretched"
-looks like to someone holding the picture next to their own terminal.
+it pictured, uniformly. That is exactly what "horizontally stretched" looks
+like to someone holding the picture next to their own terminal.
 
 The fix was satisfying in the way that makes you stop checking. The height
-now comes from the face's own line box, ascent minus descent plus line gap,
+now came from the face's own line box, ascent minus descent plus line gap,
 the same box kitty and ghostty size their cells from. Both halves of the
-cell measured, from the same font file, no invented constants anywhere. I
-shipped it as done.
+cell were measured from the same font file, with no invented constants
+anywhere. I shipped it as done.
 
 ## Round two: the font was the wrong oracle
 
 The next round of reports came from the preview panel, and this time I
-measured the output against a real kitty instead of against the font: frame
-turned off, so the PNG is exactly the grid, held against the host cell for
-cell. The host's cell was 9 by 20 pixels, a ratio of 0.450. The picture's
-cell was 5.76 by 14.4, a ratio of 0.400. Every column of the picture was
-eleven percent narrower than the column it pictured.
+measured the output against a real kitty instead of against the font. I
+turned the frame off, so the PNG is exactly the grid, and held it against
+the host cell for cell. The host's cell was 9 by 20 pixels, a ratio of
+0.450. The picture's cell was 5.76 by 14.4, a ratio of 0.400. Every column
+of the picture was eleven percent narrower than the column it pictured.
 
 <CellShape />
 
-Round one had been wrong for guessing. Round two was wrong with every
-number measured, because they were measured from the wrong thing. A
-terminal's cell is not the font's cell. The width the terminal uses is
-whatever it chose, from its own rounding of the advance at its own pixel
-size, its cell height from its own leading rules, both snapped to integer
-pixels. The face's advance and line box agree with that choice only by
-luck, and on this machine, at this size, they did not.
+Round one had been wrong because it guessed. Round two measured every
+number and was still wrong, because it measured the wrong thing. A
+terminal's cell is not the font's cell. The terminal picks its own: the
+width from its own rounding of the advance at its pixel size, the height
+from its own leading rules, both snapped to whole pixels. The face's
+advance and line box agree with that choice only by luck, and on this
+machine, at this size, they did not.
 
 Both rounds have the same shape. The obviously correct move, twice, was to
 read the answer off the font, and the font was never the authority. The
@@ -68,8 +68,9 @@ raster's cell is grown to match it.
 
 Grown, never shrunk. A cell narrower than the advance runs neighbouring
 glyphs into each other, and a cell shorter than the line box clips them. A
-cell wider than the advance costs a glyph centred in it, which the renderer
-already did. So the aspect correction only ever widens one axis:
+cell wider than the advance only means the glyph sits centred in it, which
+the renderer already did. So the aspect correction only ever grows one
+axis:
 
 ```go
 if want := ch * f.CellAspect; want > cw {
@@ -86,10 +87,10 @@ places: 0.4545 against 0.4545.
 The tests that came out of this take their expected values from something
 other than the code under test: the PNG's own header, a cell size forced
 through the environment, the panel's footer rule as it was actually drawn.
-That is the trap this feature fell into twice. Both wrong cells were
-internally consistent, derived from real data by defensible arithmetic, and
-would have passed any test built from the same font metrics that produced
-them.
+Taking the expected value from the same source as the code is the trap this
+feature fell into twice. Both wrong cells were internally
+consistent, derived from real data by defensible arithmetic, and would have
+passed any test built from the same font metrics that produced them.
 
 The claim being made was never about the font. It was "the picture is the
 shape of the screen", and there is exactly one oracle for that claim: a

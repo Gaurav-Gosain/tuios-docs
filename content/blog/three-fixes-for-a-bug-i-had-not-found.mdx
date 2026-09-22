@@ -9,8 +9,8 @@ It was easy to describe and hard to catch. Focus a different terminal, and
 sometimes one of the other panes goes blank. Focus it again and the content
 comes back.
 
-It took four rounds. Three of those ended with me handing over a build and
-saying it was fixed. Every one of those three fixes was a real bug, which is
+It took four rounds. Three of them ended with me handing over a build and
+saying it was fixed. Each of those three fixes was for a real bug, which is
 exactly what made it so easy to keep doing.
 
 ## Round one: a lock taken twice
@@ -23,29 +23,29 @@ their own, but if a writer queues between them, the second read blocks behind
 the writer and the writer blocks behind the first read. Everything stops.
 
 A profiler is useless on a stopped program, because nothing is hot. What shows
-a deadlock is the goroutine dump: `SIGQUIT` with `GOTRACEBACK=all`, and there
-in a single goroutine's stack is the same lock, held at one frame and wanted
-at a deeper one.
+a deadlock is the goroutine dump: `SIGQUIT` with `GOTRACEBACK=all`. There, in
+a single goroutine's stack, is the same lock, held at one frame and wanted at
+a deeper one.
 
-Real freeze, reachable, fixed by hoisting the cursor query above the lock. I
-also believed it explained the blank pane, because a render that deadlocks
-partway could plausibly leave a pane unpainted.
+It was a real, reachable freeze, and I fixed it by moving the cursor query
+above the lock. I also believed it explained the blank pane, because a render
+that deadlocks partway could plausibly leave a pane unpainted.
 
 It did not explain it. The blank pane came back.
 
 ## Round two: alt-screen cache invalidation
 
 Next I found that switching focus could leave a stale cached layer for a window
-in alternate-screen mode. Which is exactly the sort of thing that leaves a pane
+in alternate-screen mode. That is exactly the sort of thing that leaves a pane
 showing nothing.
 
-Fixed it. Shipped it. Hit it again the same afternoon.
+Fixed it. Shipped it. Hit the blank pane again the same afternoon.
 
 ## Round three: shared border state
 
-Then a discrepancy in how tiled windows tracked border state across a focus
-change. Real, worth fixing, and once again my mental model let me connect it to
-a blank pane if I did not look too hard.
+Then I found a discrepancy in how tiled windows tracked border state across a
+focus change. It was real and worth fixing, and once again I could connect it
+to a blank pane if I did not look too hard.
 
 The reply I got was, roughly: your stuff is still broken.
 
@@ -56,15 +56,14 @@ That was the moment the approach should have changed. It did not.
 The pattern is obvious in hindsight and slightly embarrassing.
 
 Each round I read code, found something genuinely wrong, and stopped. The fix
-was plausible. Plausible is doing a lot of work in that sentence, because a
-multiplexer has many ways to leave a pane unpainted, and I could construct a
-story connecting almost any of them to the symptom.
+was plausible. "Plausible" is doing a lot of work there, because a multiplexer
+has many ways to leave a pane unpainted, and I could build a story connecting
+almost any of them to the symptom.
 
 I never reproduced it deliberately. Not once, across three rounds. I had no
-case where I could make a pane go blank on demand, so I had no way to tell
-whether a fix worked. The loop was: find bug, fix bug, ship it, go back to
-using the thing and wait to notice. Three rounds of that before I changed
-approach.
+way to make a pane go blank on demand, so I had no way to tell whether a fix
+worked. The loop was: find a bug, fix it, ship it, go back to using the thing
+and wait to notice. Three rounds of that before I changed approach.
 
 What I had was three real bugs found by auditing, which is a fine activity, and
 zero evidence about the one I was chasing.
@@ -73,9 +72,9 @@ zero evidence about the one I was chasing.
 
 Different approach. Instead of reading, drive the thing and check the pixels.
 
-Set up the layout I kept hitting it in. One tall pane on the left, two stacked on
-the right. Focus one, focus another, and after each step compose the frame and
-check whether any pane's content came out empty.
+I set up the layout I kept hitting it in: one tall pane on the left, two
+stacked on the right. Focus one, focus another, and after each step compose
+the frame and check whether any pane's content came out empty.
 
 It reproduced in about a minute. The cause was one line:
 
@@ -104,8 +103,8 @@ off-screen.
 
 Which panes have a blank first line? The ones running full-screen applications
 that just repainted, and the ones scrolled so row zero is empty. That is why it
-was intermittent, and why it correlated with focus changes, because a focus
-change triggers a repaint.
+was intermittent, and why it followed focus changes: a focus change triggers a
+repaint.
 
 The fix takes the maximum width across all lines instead of trusting the first.
 
@@ -115,8 +114,8 @@ For anything visual, reproduce it in the rendered output before claiming a fix.
 Not in a unit test of the function you suspect. In the frame that reaches the
 screen.
 
-That reads as obvious. What made it non-obvious in the moment is that each of
-my three wrong fixes had a passing test. I could demonstrate, with a green
+That sounds obvious. It was not obvious in the moment, because each of my
+three wrong fixes had a passing test. I could demonstrate, with a green
 test, that the lock nesting was gone, the cache invalidation correct, the
 border state consistent. All true. None of it evidence about the actual
 symptom, because none of those tests composed a frame and looked at it.
@@ -136,11 +135,10 @@ The first is the negative control. After a fix lands with its test, revert the
 fix, confirm the test fails, restore it. A green test with the fix in place
 only proves the test can pass. A red test without the fix proves the test is
 actually connected to the change. In a later stretch of work I ran that
-revert-and-confirm step on every single fix, and it caught five cases where a
-fix had looked settled and was not. Five, from a check that takes a
-minute each.
+revert-and-confirm step on every fix, and it caught five cases where a fix
+had looked settled and was not. Five, from a check that takes a minute each.
 
-Note what it would not have caught here. My three wrong fixes all pass the
+It would not have caught anything here. My three wrong fixes all pass the
 negative control, because each one really did fix the bug its test guarded.
 The negative control proves the test measures the fix. Only reproducing the
 symptom proves the fix addresses the bug, which is why both checks exist and
