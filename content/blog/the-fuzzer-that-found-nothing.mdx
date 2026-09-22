@@ -13,18 +13,17 @@ cursor or scrolls a region. The targets draw from a generator that builds
 real sequences carrying hostile parameters, and they check invariants after
 every step rather than only watching for a panic.
 
-A campaign of 590,000 executions found nothing. During the same stretch, a
+A campaign of 590,000 executions found nothing. In the same stretch, a
 conformance round done by hand found eleven bugs. The fuzzer found none of
 them. Not a reduced form of one, not a hint. None.
 
 ## Not a coverage problem
 
-The first suspect was reach, so I measured it. Over `internal/vt`, the
-generated-input targets cover 55.3% of the package. The unit suite covers
-75.4%. That gap looks like the answer, and it is not, because the structured
-generator beats raw random bytes by only 3.4 points, and the generator
-demonstrably produces the traffic: DECSED, DECSTBM and the rest, thousands
-of times each across a campaign.
+The first suspect was reach, so I measured it. The generated-input targets
+cover 55.3% of `internal/vt`. The unit suite covers 75.4%. That gap looks
+like the answer, and it is not. The structured generator beats raw random
+bytes by only 3.4 points, and it demonstrably produces the traffic: DECSED,
+DECSTBM and the rest, thousands of times each across a campaign.
 
 The sequences were reaching the code. The code was running. Whatever the
 code did next, nobody looked.
@@ -64,8 +63,8 @@ parser whatever the kernel had ready, so the same program output arrives in
 different pieces on every run. If the screen depends on the pieces, a pane
 renders differently depending on machine load.
 
-Neither property knows what any sequence means. Both are as strong as the
-emulator is self-consistent, and a violation is a bug by construction.
+Neither property knows what any sequence means. Both only ask the emulator
+to be consistent with itself, so any violation is a bug by construction.
 
 I wrote both. Both fail, and both failures are real.
 
@@ -73,27 +72,27 @@ I wrote both. Both fail, and both failures are real.
 
 ## The E that was on screen and not in the frame
 
-The render round trip fails on two sequences. DECALN fills the screen with
-E, and then one zero-width character with nothing to attach to is enough:
+The render round trip fails on an input of two sequences. DECALN fills the
+screen with E, and then one zero-width character with nothing to attach to
+is enough:
 
 ```
 \x1b#8      DECALN, fill every cell with E
 \u0301      a combining acute, with no base to combine with
 ```
 
-A zero-width character with nothing to attach to, a combining mark at the
-start of a row, a bidi control, was stored as a cell of its own, taken from
-whatever was there. The row then held one more cell than it had columns.
-`Render` emitted the row without it, everything after shifted one column
-left, and the last column fell off the end. The frame was missing an E the
-emulator still believed was on screen: a character visible in the pane's own
-grid that never reaches the host.
+Such a character (a combining mark at the start of a row, a bidi control)
+was stored as a cell of its own, taken from whatever was there. The row then
+held one more cell than it had columns. `Render` emitted the row without it,
+everything after shifted one column left, and the last column fell off the
+end. The frame was missing an E the emulator still believed was on screen: a
+character visible in the pane's own grid that never reaches the host.
 
 The ghostty differential suite reached the same defect from the other side.
-The library discards a baseless mark rather than storing it, and the
+The library discards a baseless mark rather than storing it, and that
 divergence was already pinned in its own test. Two oracles, one asking "do
-you agree with ghostty" and one asking "do you agree with yourself",
-pointing at the same decision: what to do with a mark that has no base.
+you agree with ghostty" and one asking "do you agree with yourself", pointed
+at the same decision: what to do with a mark that has no base.
 
 ## Seed 28
 
@@ -109,7 +108,8 @@ the bad one. Only how much of it the kernel had ready on each read.
 ## Two ways the harness could have lied
 
 Both are worth recording, because both would have produced confident
-nonsense in the other direction: failures that were the harness's fault.
+nonsense in the other direction: failures that were the harness's own
+fault.
 
 `Render` separates rows with a bare LF, the way a host with ONLCR expects.
 Replay a frame into a fresh emulator without adding the carriage return and
@@ -132,24 +132,25 @@ environment variable, because with the bugs open a default-on sweep is a
 permanently red test people learn to ignore.
 
 Then the fix. A zero-width character now combines with the cell before the
-cursor, or is dropped when there is nothing there or the code point cannot
-extend that cell's cluster, one rune at a time with a final verdict per
-rune. That is what ghostty and xterm do, and the per-rune finality is what
-makes the outcome independent of write boundaries, which closes the split
-side too: a cluster left open across a write now records the margins it was
-drawn under, a widened cluster that no longer fits wraps whole exactly as it
-would have arriving unsplit, and a refused cluster is never left reopenable.
+cursor. It is dropped when there is nothing there, or when the code point
+cannot extend that cell's cluster. The decision is made one rune at a time
+and is final for each rune. That is what ghostty and xterm do, and the
+per-rune finality is what makes the outcome independent of write boundaries.
+That closes the split side too. A cluster left open across a write now
+records the margins it was drawn under. A widened cluster that no longer
+fits wraps whole, exactly as it would have if it had arrived unsplit. A
+refused cluster is never left open to be extended later.
 
 Both properties now hold across the first 10,000 generated seeds. The sweep
 and both fuzz targets lost their opt-in gates and run on every build.
 
 ## What I keep from this
 
-Structural invariants are cheap, worth having, and mute on the only question
-that matters. They catch the emulator being broken. They cannot catch it
-being wrong, because a wrong screen is still a well-formed one, and 590,000
-executions of a question the system cannot fail is a measurement of the
-question.
+Structural invariants are cheap, worth having, and silent on the only
+question that matters. They catch the emulator being broken. They cannot
+catch it being wrong, because a wrong screen is still a well-formed one.
+590,000 executions of a question the system cannot fail measure the
+question, not the system.
 
 The properties that worked cost nothing the invariants did not. No
 expectations, no second implementation, no oracle to maintain. They ask the

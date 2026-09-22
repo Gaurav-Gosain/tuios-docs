@@ -9,8 +9,8 @@ Emoji were breaking layout in the browser terminal. A family emoji would claim
 the wrong number of columns, everything after it on the line would shift, and
 box drawing further along would stop lining up.
 
-The obvious fix was sitting right there. ghostty has a VT implementation that
-gets this right, compiled to wasm, with width tables I could extract. Take its
+The obvious fix was right there. ghostty has a VT implementation that gets
+this right, compiled to wasm, with width tables I could extract. Take its
 answers, use them instead of mine, done.
 
 I built the table offline, wired it in, and measured against a corpus of hard
@@ -36,8 +36,8 @@ eight columns. The terminal advances two, because it is one grapheme cluster
 and a cluster gets one advance.
 
 No table of per-codepoint values can produce that. The information is not in
-the codepoints, it is in the boundaries between them, which is UAX 29
-segmentation and a completely different algorithm. I had spent a day importing
+the codepoints. It is in the boundaries between them, which is UAX 29
+segmentation, a completely different algorithm. I had spent a day importing
 correct answers to a question nobody was asking.
 
 ## What the corpus said
@@ -63,18 +63,18 @@ oracle.
 
 That distinction turned out to be the useful part. As a runtime dependency,
 ghostty-vt was a large coupling for a benefit I had not verified. As a test
-oracle, it is the thing that tells me whether my output is right, costs nothing
-at runtime, and gets to be as heavy as it likes because it only runs in CI.
+oracle, it tells me whether my output is right, costs nothing at runtime, and
+can be as heavy as it likes because it only runs in CI.
 
-I would not have found that framing if the optimisation had worked. It only
-came up because I had to ask what the wasm build was still good for after the
-reason I built it evaporated.
+I would not have found that framing if the table had worked. It only came up
+because I had to ask what the wasm build was still good for once the reason I
+built it was gone.
 
 ## What parity means once pixels are involved
 
-The corpus asserts integers, and integers can be compared with equality: a
+The corpus asserts integers, and integers can be compared for equality: a
 cluster advances two columns or it does not. The renderer's own tests do not
-get that luxury, and deciding what "matches" should mean for pixels took
+have that luxury, and deciding what "matches" should mean for pixels took
 longer than wiring up the oracle did.
 
 Pixel parity is a tolerance, not equality. Four golden scenarios pass under a
@@ -87,15 +87,15 @@ are mostly background, and that is exactly what makes a per-pixel comparison
 useless on them: a subpixel shift in glyph position swings the differing-pixel
 fraction wildly while nothing is actually wrong, so the number measures jitter
 rather than correctness. Those rows are compared by ink coverage per cell
-instead. Does the right cell contain the right amount of glyph, not are the
-exact pixels identical.
+instead. The question is whether the right cell contains the right amount of
+glyph, not whether the exact pixels are identical.
 
 Every threshold in that list is a claim about the size of defect I am prepared
-not to notice. Choosing them felt like bookkeeping at the time. It was not,
-and the same choice made carelessly in another suite later
-[cost me three wrong closures on one bug](/blog/the-bug-i-closed-three-times),
-because a tolerance wider than a defect does not make the defect unlikely to
-be seen. It makes it invisible.
+not to notice. Choosing them felt like bookkeeping at the time. It was not.
+The same choice, made carelessly in another suite, later
+[cost me three wrong closures on one bug](/blog/the-bug-i-closed-three-times).
+A tolerance wider than a defect does not make the defect unlikely to be seen.
+It makes it invisible.
 
 ## What the benchmarks refuse to claim
 
