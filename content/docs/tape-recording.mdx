@@ -1,6 +1,6 @@
 ---
 title: Tape Recording
-description: Record your TUIOS sessions for playback, testing, and documentation
+description: Record what you do in TUIOS into a tape you can edit and replay
 icon: Circle
 ---
 
@@ -8,454 +8,199 @@ import { Callout } from 'fumadocs-ui/components/callout';
 import { Steps, Step } from 'fumadocs-ui/components/steps';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-# Tape Recording
+TUIOS can record what you do into a `.tape` file. A recording holds actions, such as "open a window" and "type this text", not terminal output. The result is a plain text [tape](/docs/tape-scripting) that you can read, edit and replay.
 
-TUIOS can record your terminal sessions into `.tape` files that can be replayed, shared, or used for automated testing. Think of it as recording a macro of everything you do in TUIOS.
-
-<Callout type="info">
-Recording captures **actions**, not output. The tape file contains commands like "create window", "type text", "switch workspace" rather than raw terminal bytes. This makes recordings portable and editable.
-</Callout>
-
-## Quick Start
+## Record a tape
 
 <Steps>
 
 <Step>
 
-### Start Recording
+### Start
 
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>T</kbd> then <kbd>r</kbd>
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>r</kbd>. Type a name, or keep the suggested `recording_<date>_<time>`, and press <kbd>Enter</kbd>.
 
-Enter a name when prompted (e.g., "my-workflow")
-
-</Step>
-
-<Step>
-
-### Perform Your Workflow
-
-Create windows, type commands, switch workspaces - everything gets recorded automatically.
+The dock shows `[REC]` while recording is on. If a window is focused, TUIOS switches to terminal mode so your typing is recorded.
 
 </Step>
 
 <Step>
 
-### Stop Recording
+### Work as usual
 
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>T</kbd> then <kbd>s</kbd>
+Open windows, type commands, switch workspaces. Each action is added to the recording.
 
 </Step>
 
 <Step>
 
-### Playback
+### Stop
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>s</kbd>. TUIOS writes the tape to disk and shows the file name.
+
+</Step>
+
+<Step>
+
+### Replay
 
 ```bash
-tuios tape play ~/.local/share/tuios/tapes/my-workflow.tape
+tuios tape play "$(tuios tape dir)/my-workflow.tape"
 ```
 
 </Step>
 
 </Steps>
 
-## Recording Keybindings
+## Keys
 
-All recording commands use the tape prefix menu:
+The tape prefix is <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd>, followed by:
 
-| Key Sequence | Action |
-|--------------|--------|
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>r</kbd> | Start recording (prompts for name) |
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>s</kbd> | Stop recording and save |
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>Esc</kbd> | Cancel tape menu |
+| Key | Action |
+|-----|--------|
+| <kbd>r</kbd> | Start recording (asks for a name) |
+| <kbd>s</kbd> | Stop recording and save |
+| <kbd>m</kbd> | Open the tape manager |
+| <kbd>t</kbd> | Review a detected [project tape](/docs/tape-scripting#project-tapes) |
+| <kbd>Esc</kbd> | Cancel the prefix |
 
-<Callout type="tip">
-Recording status appears in the status bar while active. Look for the "REC" indicator.
-</Callout>
+The tape manager lists your recordings. Use <kbd>j</kbd> and <kbd>k</kbd> or the arrow keys to select, <kbd>Enter</kbd> to play in the current session, <kbd>r</kbd> to record and <kbd>d</kbd> to delete.
 
-## What Gets Recorded
-
-The recorder maps a fixed set of action names to tape commands. Anything outside that set is dropped silently.
-
-### Captured
-
-- **Window Operations**: New, close, minimize, restore all
-- **Navigation**: Next/previous window, select window by number
-- **Workspaces**: Switch workspace
-- **Layout**: Toggle tiling, snap left, snap right, snap fullscreen
-- **Mode Switches**: Window management to terminal mode and back
-- **Keyboard Input**: Text typed in terminals, special keys
-- **Timing**: Automatic delays between actions, emitted as `Sleep`
-
-### Not Captured
-
-- **Mouse Events**: Clicks, drags, resizes
-- **Terminal Output**: Only input is recorded
-- **Visual State**: Window positions in non-tiling mode
-- **Copy Mode**: Scrollback navigation
-- **Splits**: `Split`, `SmartSplit`, `RotateSplit`, `EqualizeSplits`, and `ToggleZoom` have no recorder mapping. A BSP session records as if you never split anything.
-- **Renames**: `RenameWindow` is not recorded
-- **Move to workspace**: only the switch is recorded, not moving a window across
-
-<Callout type="warn">
-The gaps above are not configurable. If your workflow depends on splits or renames, you will have to add those lines to the tape by hand after recording. `RenameWindow "name"` and `SmartSplit` both work on playback; only the capture side is missing.
-</Callout>
-
-## Managing Recordings
-
-### List Recordings
+## What a recording looks like
 
 ```bash
-tuios tape list
-```
+# my-workflow
+# Recorded: 2026-09-22T10:15:04+04:00
 
-Shows all recordings with sizes and modification times.
+# Disable animations for consistent playback
+DisableAnimations
 
-### View Contents
-
-```bash
-tuios tape show my-workflow
-```
-
-Display the tape file. The `.tape` extension is optional.
-
-### Delete Recording
-
-```bash
-tuios tape delete my-workflow
-```
-
-### Show Directory
-
-```bash
-tuios tape dir
-```
-
-<Callout type="warn">
-This prints `~/.local/share/tuios`, one level above where tapes are actually stored. Recordings live in the `tapes/` subdirectory of that path. This is a bug in `internal/app/tapemanager.go`, which calls `filepath.Dir` on a path that already ends in `/tapes`. Do not pipe the output of `tape dir` straight into a glob.
-
-The correct directory is `~/.local/share/tuios/tapes/`.
-</Callout>
-
-## Recording Workflow
-
-### Initial State Capture
-
-When recording starts, TUIOS captures:
-
-- Current mode (Window Management or Terminal)
-- Active workspace number
-- Tiling enabled/disabled
-
-The tape file begins with commands to restore this state during playback.
-
-### Timing Capture
-
-Time delays between actions are automatically calculated and inserted as `Sleep` commands:
-
-```bash
+EnableTiling
+WindowManagementMode
 NewWindow
-Sleep 500ms
+Sleep 1.204113s
 TerminalMode
 Type "ls -la"
-Sleep 200ms
+Sleep 612.40875ms
 Enter
+
+# Re-enable animations
+EnableAnimations
 ```
 
-### Typing Buffer
+Every recording has the same frame:
 
-Rapid typing is merged into single `Type` commands. A flush occurs when:
+- A header comment with the name and the start time.
+- `DisableAnimations` at the start and `EnableAnimations` at the end, so playback does not depend on your animation setting.
+- The state at the moment you started: `SwitchWorkspace` if you were not on workspace 1, then `EnableTiling` or `DisableTiling`, then the mode.
 
-- 500ms passes with no typing
-- Mode switches occur
-- Window management actions occur
-- Recording stops
+Between actions, a pause longer than 100 ms becomes a `Sleep` with the exact measured time. Round the values by hand if you want a tidier file.
 
-## Use Cases
+Printable keys you type into a pane are joined into one `Type` command. The text is written out when the next non-text key, action, mode switch or workspace switch happens, or when you stop recording.
 
-<Cards>
-  <Card
-    title="Reproducible Workflows"
-    description="Create once, replay anytime"
-  >
-    Record your development environment setup and replay it on new machines.
-  </Card>
-  
-  <Card
-    title="Automated Testing"
-    description="Test TUIOS workflows in CI/CD"
-  >
-    Record test scenarios and run them automatically in your build pipeline.
-  </Card>
-  
-  <Card
-    title="Documentation"
-    description="Show instead of tell"
-  >
-    Create self-documenting demos for README files and tutorials.
-  </Card>
-  
-  <Card
-    title="Team Sharing"
-    description="Share complex workflows"
-  >
-    Record multi-step procedures and share with teammates.
-  </Card>
-</Cards>
+## What is recorded
 
-## Best Practices
+| Recorded | As |
+|----------|----|
+| New, close, next and previous window | `NewWindow`, `CloseWindow`, `NextWindow`, `PrevWindow` |
+| Minimize | `MinimizeWindow` |
+| Restore all minimized | `RestoreWindow` |
+| Toggle tiling | `ToggleTiling` |
+| Snap left, right, fullscreen | `SnapLeft`, `SnapRight`, `SnapFullscreen` |
+| Select window by number | `FocusWindow <n>` |
+| Workspace switch | `SwitchWorkspace <n>` |
+| Mode switch | `TerminalMode`, `WindowManagementMode` |
+| Text typed into a pane | `Type "..."` |
+| Special keys and key combinations sent to a pane | `Enter`, `Tab`, `Up`, `ctrl+c` and so on |
 
-### Naming Conventions
+Not recorded:
 
-Use descriptive names:
+- Mouse actions: clicks, drags and resizes.
+- Splits, zoom and other BSP actions. A session built from splits replays as if you never split.
+- Renames, and moving a window to another workspace.
+- Copy mode, overlays and anything else not in the table above.
+
+Some recorded commands do not replay the way you performed them:
+
+- `RestoreWindow` restores only the focused window, not every minimized one.
+- `FocusWindow <n>` looks for a window named or with the ID `n`, not the window at position `n`, so it usually does nothing.
+- `SnapFullscreen` snaps to the top-left quarter.
+
+Fix these by hand after recording. `SmartSplit`, `RenameWindow "name"` and `FocusWindow <name>` all work on playback. See [Tape Scripting](/docs/tape-scripting#commands) for every command.
+
+## Managing recordings
 
 ```bash
-# Good
-dev-setup.tape
-project-build.tape
-multi-workspace-demo.tape
-
-# Bad
-recording-1.tape
-test.tape
-tmp.tape
+tuios tape list              # name, size and date of each recording
+tuios tape show my-workflow  # print a recording
+tuios tape delete my-workflow
+tuios tape dir               # print the recordings directory
 ```
 
-### Recording for Playback
+`show` and `delete` take the name with or without `.tape`. `delete` asks for confirmation.
 
-<Callout type="tip">
-**Use tiling mode**: Tiled layouts are reproducible across different terminal sizes. Manual window positioning is not recorded.
-</Callout>
+Recordings are saved in the `tuios` folder of your data directory, which `tuios tape dir` prints:
 
-**Keep recordings focused**: One task per tape rather than entire sessions.
+| Platform | Default location |
+|----------|------------------|
+| Linux and BSD | `~/.local/share/tuios/` |
+| macOS | `~/Library/Application Support/tuios/` |
 
-**Start in a clean state**: Begin with no windows or a known configuration.
+Setting `XDG_DATA_HOME` moves it on every platform. Only files ending in `.tape` are listed.
 
-**Avoid mistakes**: If you make an error, stop and start over. Editing tapes is tedious.
+## Editing a recording
 
-### Recording for Documentation
+A recording is a normal tape, so you can:
 
-**Add comments after recording**: Document what each section does:
+- add comments,
+- replace the exact `Sleep` values with round ones,
+- add `WaitUntilRegex` so playback waits for real output,
+- add the splits and renames the recorder missed,
+- delete mistakes.
 
-```bash
-# Setup development environment
-WindowManagementMode
-EnableTiling
-
-# Create editor window
-NewWindow
-Sleep 500ms
-TerminalMode
-Type "vim main.go"
-Enter
-```
-
-**Use meaningful window titles**: Rename windows during recording for clarity.
-
-## Technical Details
-
-### Storage Location
-
-Default: `~/.local/share/tuios/tapes/`
-
-Follows XDG Base Directory specification. Created automatically on first recording.
-
-### File Format
-
-Standard `.tape` files using the TUIOS tape scripting language. See [Tape Scripting](/docs/tape-scripting) for the complete language reference.
-
-### Overhead
-
-Recording appends a small struct per action to an in-memory slice and writes the file once, when you stop. There is no per-keystroke disk I/O and no extra work in the render path.
-
-<Callout type="info">
-There is no benchmark for recording overhead in the repo, so this page does not quote memory, CPU, or file-size figures. If you need numbers for your workload, measure them.
-</Callout>
-
-## Examples
-
-### Example 1: Development Environment
+For example, a recording that starts a dev server can wait for it before opening a second pane:
 
 ```bash
-# Recorded: 2024-12-18
-# Development environment setup
-
-WindowManagementMode
-EnableTiling
-Sleep 300ms
-
-# Editor window
-NewWindow
-Sleep 500ms
-TerminalMode
-Type "vim main.go"
-Enter
-Sleep 800ms
-
-# Terminal window
-WindowManagementMode
-NewWindow
-Sleep 500ms
-TerminalMode
-Type "go run ."
-Enter
-```
-
-### Example 2: Multi-Workspace Setup
-
-```bash
-# Setup project workspaces
-
-WindowManagementMode
-
-# Workspace 1: Coding
-SwitchWorkspace 1
 EnableTiling
 NewWindow
-TerminalMode
-Type "vim main.go"
-Enter
-
-# Workspace 2: Testing
-WindowManagementMode
-SwitchWorkspace 2
-NewWindow
-TerminalMode
-Type "go test -v ./..."
-Enter
-
-# Return to main workspace
-WindowManagementMode
-SwitchWorkspace 1
-```
-
-### Example 3: CI/CD Testing
-
-Record the workflow interactively first. Start TUIOS, press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>r</kbd>, name it `ci-test-suite`, create a window with <kbd>n</kbd>, enter terminal mode with <kbd>i</kbd>, run your test command, then stop with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>s</kbd>.
-
-The saved tape at `~/.local/share/tuios/tapes/ci-test-suite.tape` will look like this:
-
-```bash
-WindowManagementMode
-NewWindow
-Sleep 500ms
-TerminalMode
-Type "npm test"
-Enter
-WaitUntilRegex "Tests passed" 30000
-```
-
-Run it in CI with `tape play`, which is the subcommand that honours `WaitUntilRegex`:
-
-```bash
-#!/bin/bash
-set -euo pipefail
-tuios tape play ~/.local/share/tuios/tapes/ci-test-suite.tape
-```
-
-<Callout title="Do not swap play for exec here" type="error">
-`tuios tape exec` silently skips `Wait` and `WaitUntilRegex`. Under `exec` this tape would press Enter and finish immediately, reporting success before the tests have run.
-
-If you need the headless daemon path, drop the `WaitUntilRegex` line from the tape and gate on output from the shell instead:
-
-```bash
-tuios new ci --detach
-tuios tape exec -s ci ci-test-suite.tape
-timeout 60 bash -c 'until tuios capture-pane -s ci | grep -q "Tests passed"; do sleep 1; done'
-tuios kill-session ci
-```
-</Callout>
-
-## Editing Recordings
-
-Tape files are plain text. Edit them to:
-
-- Add comments explaining steps
-- Insert additional `Sleep` commands for pacing
-- Add `WaitUntilRegex` for output synchronization, if you will replay with `tape play`
-- Remove mistakes
-- Combine multiple recordings
-
-<Callout type="warn">
-`Wait` and `WaitUntilRegex` only take effect under `tuios tape play`. `tuios tape exec` skips them without warning. If a tape is meant for both, pace it with `Sleep`.
-</Callout>
-
-**Before editing:**
-
-```bash
-WindowManagementMode
-NewWindow
-Sleep 500ms
-TerminalMode
-Type "echo hello"
-Enter
-```
-
-**After editing:**
-
-```bash
-WindowManagementMode
-NewWindow
-Sleep 500ms
-
-# Start server and wait for it
-TerminalMode
+RenameWindow "server"
 Type "npm start"
 Enter
-WaitUntilRegex "Server listening" 10000
+WaitUntilRegex "listening on" 15000
 
-# Open another window for testing
-WindowManagementMode
-NewWindow
-Sleep 300ms
+SmartSplit
+RenameWindow "shell"
 ```
 
-## Troubleshooting
+Run `tuios tape validate` on the file after editing.
 
-### Recording Not Starting
+<Callout type="warn">
+`Wait` and `WaitUntilRegex` only work under `tuios tape play`. `tuios tape exec` skips them, so a tape meant for both should pace itself with `Sleep`.
+</Callout>
 
-**Check tape directory:**
+## Tips
 
-```bash
-ls -la ~/.local/share/tuios/tapes/
-```
+- Turn tiling on before you record. Tiled layouts replay the same way at any terminal size. Floating window positions are not recorded.
+- Keep one task per tape. Short tapes are easier to fix than a whole afternoon.
+- Start from a known state. `tape play` starts with no windows, so a recording made in a busy session will not replay the same way.
+- Recording writes the file once, when you stop. Nothing is written per keystroke.
 
-If it doesn't exist, TUIOS creates it automatically. Check filesystem permissions if creation fails.
-
-**Only one recording at a time**: Stop any existing recording with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>s</kbd> before starting a new one.
-
-### Playback Issues
-
-**Validate syntax:**
-
-```bash
-tuios tape validate my-recording.tape
-```
-
-**Add timing:** If playback is too fast, add `Sleep` commands:
-
-```bash
-NewWindow
-Sleep 500ms  # Add pauses
-```
-
-**Clean starting state**: Recordings assume a fresh TUIOS session. Start fresh before playback.
-
-## Related Documentation
+## Related
 
 <Cards>
   <Card
     title="Tape Scripting"
     href="/docs/tape-scripting"
-    description="Complete DSL reference for editing tapes"
+    description="Every tape command, and how to run tapes"
   />
   <Card
-    title="CLI Reference"
-    href="/docs/cli-reference"
-    description="All tape-related CLI commands"
+    title="Showkeys"
+    href="/docs/showkeys"
+    description="Show your keypresses while you record a demo"
   />
   <Card
     title="Keybindings"
     href="/docs/keybindings"
-    description="Recording keybindings reference"
+    description="The tape prefix and every other binding"
   />
 </Cards>
