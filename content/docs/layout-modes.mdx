@@ -1,0 +1,214 @@
+---
+title: Layout Modes
+description: Floating, BSP, master-stack, scrolling columns and zoom, and how to switch between them
+icon: LayoutDashboard
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+Tiling is a switch: on or off. When it is on, the panes follow one of three layouts. When it is off, the panes float and you place them yourself. Zoom sits on top of all of them and shows one pane large for a moment.
+
+| Mode | What it does |
+|------|--------------|
+| BSP | A tree of splits. Any number of panes, each resizable on its own. The default. See [BSP Tiling](/docs/bsp-tiling). |
+| Master-stack | Fixed arrangements by pane count, with one master pane on the left. |
+| Scrolling | Niri-style columns on a strip wider than the screen. The screen scrolls instead of every pane shrinking. |
+| Floating | Tiling off. Panes can overlap, and you move, snap and resize them. |
+
+## Switching modes
+
+Turn tiling on or off:
+
+| Key | Where |
+|-----|-------|
+| <kbd>t</kbd> | Window management mode |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Space</kbd> | Any mode |
+
+Pick the layout from the command palette (<kbd>Ctrl</kbd>+<kbd>P</kbd>):
+
+- `Layout: BSP tiling`
+- `Layout: master-stack`
+- `Layout: scrolling (niri-style)`
+- `Layout: disable tiling`
+
+Picking a layout also turns tiling on. There is no default key for a layout. Bind one yourself if you switch often.
+
+The layout mode belongs to the session. It is kept in the daemon's session state, so a scrolling session is still scrolling after you detach and reattach, and turning tiling off does not forget which layout you had. The layout itself (the BSP tree, the scrolling columns) is kept per workspace, so each of the nine workspaces has its own.
+
+`startup.layout` sets the mode a **new** session starts in: `bsp`, `master-stack` or `scrolling`. `startup.tiled` (default `true`) decides whether a new session starts tiled at all. A session that already exists keeps its own mode.
+
+```toml
+[startup]
+layout = "scrolling"
+tiled = true
+```
+
+From a script, `tuios set-layout` turns tiling on or off and tidies the splits:
+
+```bash
+tuios set-layout --tiling true
+tuios set-layout --equalize
+tuios set-layout --rotate
+```
+
+It needs an attached client.
+
+## Master-stack
+
+The arrangement depends on how many panes the workspace has:
+
+| Panes | Arrangement |
+|-------|-------------|
+| 1 | Full screen |
+| 2 | Side by side, or stacked when the screen is taller than it is wide as drawn |
+| 3 | A master pane on the left, two panes stacked on the right |
+| 4 or more | A grid: two columns up to six panes, three columns beyond. A short last row shares its width |
+
+`appearance.master_ratio` is the master pane's share of the screen, as a percent from 30 to 70 (default `50`). <kbd>&lt;</kbd> and <kbd>&gt;</kbd> in window management mode move it for the workspace you are on. A workspace nobody has changed starts at the configured value.
+
+<Callout type="warn" title="Percentage resizes do not stick in master-stack">
+Master-stack recomputes every rectangle from `master_ratio` each time it retiles. A resize to a percentage (below) is dropped on the next retile. BSP keeps the split ratio, so the resize survives there.
+</Callout>
+
+## Scrolling
+
+The scrolling layout is modeled on the [niri](https://github.com/YaLTeR/niri) window manager. Each pane is a **column** on a horizontal strip, and the screen is a window onto that strip. A new pane gets a new column right after the focused one, and the strip scrolls to show it. The other columns keep their width.
+
+A column holds one pane by default. It can hold several stacked vertically, which split its height evenly. Closing the last pane in a column removes the column and moves focus to the column on its left.
+
+### Moving around
+
+| Input | Action |
+|-------|--------|
+| <kbd>Alt</kbd>+<kbd>Left</kbd> / <kbd>Alt</kbd>+<kbd>Right</kbd> (terminal mode) | Focus the column to the left or right |
+| <kbd>Alt</kbd>+<kbd>P</kbd> / <kbd>Alt</kbd>+<kbd>N</kbd> | Focus the column to the left or right |
+| <kbd>H</kbd> / <kbd>L</kbd>, or <kbd>Ctrl</kbd>+<kbd>Left</kbd> / <kbd>Ctrl</kbd>+<kbd>Right</kbd> (window mode) | Move the focused column left or right along the strip |
+| <kbd>&lt;</kbd> / <kbd>&gt;</kbd> (window mode) | Shrink or grow the focused column by four cells |
+| <kbd>Alt</kbd> or <kbd>Shift</kbd> + mouse wheel | Scroll the strip sideways |
+
+Keyboard focus centers the focused column, so its neighbours peek in at the edges. Clicking a column that is partly off screen brings all of it on screen (`appearance.niri_click_reveals`). With `focus_follows_mouse` on, hovering does the same (`appearance.niri_hover_reveals`).
+
+The plain mouse wheel belongs to the pane under the pointer. The strip only scrolls while <kbd>Alt</kbd> or <kbd>Shift</kbd> is held. This stops a trackpad's sideways drift from sliding the strip while you scroll a pane's history.
+
+### Column commands
+
+These have palette entries and no default key. The action names can be bound in `[keybindings]`.
+
+| Palette entry | Action | What it does |
+|---------------|--------|--------------|
+| `Scroll: cycle column width` | `scroll_cycle_width` | Cycle the focused column through 33%, 50%, 55%, 67% and 90% of the screen |
+| `Scroll: move window into the column below` | `scroll_consume` | Pull the pane from the next column into the focused one, stacked below |
+| `Scroll: move window out to its own column` | `scroll_expel` | Push the bottom pane of the focused column out into a new column |
+| none | `scroll_focus_left`, `scroll_focus_right` | Focus the column to the left or right |
+| none | `scroll_move_left`, `scroll_move_right` | Move the focused column left or right |
+
+A column's width is a share of the screen until you resize it with <kbd>&lt;</kbd> or <kbd>&gt;</kbd>, which pins it to a cell count. Cycling the width unpins it again.
+
+### Settings
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `appearance.scroll_column_width` | `55` | Width of a new column, as a percent of the screen (20 to 100) |
+| `appearance.scroll_column_max` | `90` | The widest a column may be set, as a percent. `100` lets a column fill the screen, and the next column no longer peeks in |
+| `appearance.niri_scroll_cells` | `8` | Cells the strip moves per wheel event (1 to 200) |
+| `appearance.niri_reverse_scroll` | `false` | Reverse the wheel direction on the strip |
+| `appearance.niri_click_reveals` | `true` | Clicking a partly hidden column scrolls it fully into view |
+| `appearance.niri_hover_reveals` | `true` | With focus-follows-mouse, hovering does the same |
+
+The default column width of 55% is over half on purpose: two columns never quite fit, so the strip reads as something you scroll.
+
+The scroll offset and the columns are part of the session. Every client attached to the session sees the same columns at the same offset, and the columns come back after a session switch or a reattach.
+
+**Limits:** shared borders draw no dividers in the scrolling layout, since each column keeps its own border. The strip always animates when it slides, even with animations off, because a jump is hard to follow.
+
+## Floating
+
+With tiling off, panes float. Drag a pane by its title bar to move it, or <kbd>Alt</kbd>+drag anywhere on it. Right-drag resizes it from the nearest corner. In window management mode:
+
+| Key | Action |
+|-----|--------|
+| <kbd>h</kbd> / <kbd>l</kbd> | Snap to the left or right half |
+| <kbd>f</kbd> | Snap to full screen |
+| <kbd>u</kbd> | Unsnap |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>1</kbd>-<kbd>4</kbd> | Snap to a corner |
+
+Dragging a pane to a screen edge or corner snaps it there too. See [Keybindings](/docs/keybindings).
+
+The palette entry `Toggle floating` lifts only the focused pane out of the tiling and lets it float over the others. Run it again to put the pane back.
+
+For a short-lived floating pane that closes when its program exits, use a popup:
+
+```bash
+tuios popup --width 90% --height 80% -- htop
+```
+
+## Zoom
+
+Zoom shows the focused pane over the whole layout. The layout underneath is not changed.
+
+| Key | Where |
+|-----|-------|
+| <kbd>z</kbd> | Window management mode |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>z</kbd> | Any mode |
+
+On a tiled pane, the third title bar control toggles zoom too (`appearance.window_button_zoom`).
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `appearance.zoom_size` | `100` | Share of the screen a zoomed pane takes, as a percent (50 to 100). Below 100 the layout stays visible around it |
+| `appearance.zoom_max_width` | `0` | Width cap in cells. `0` fills the screen. Useful on an ultrawide display |
+| `appearance.zoom_follows_focus` | `true` | Moving focus while zoomed zooms the pane you moved to |
+| `appearance.zoom_animation` | `true` | Slide between the tile and the zoomed box instead of switching in one frame |
+
+## Gaps and sizing
+
+`appearance.gap` keeps empty cells between neighbouring panes, in every tiling mode (0 to 8, default `0`). It is an inner gap only: there is no margin at the screen edge.
+
+The layout prefix sizes the focused pane to a percentage:
+
+| Key | Action |
+|-----|--------|
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>5</kbd>-<kbd>9</kbd> | Width to 50%, 60%, 70%, 80% or 90% of the content area |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>Shift</kbd>+<kbd>5</kbd>-<kbd>9</kbd> | Height to 50% through 90% |
+
+Each percentage is its own action (`resize_width_50` to `resize_width_90`, `resize_height_50` to `resize_height_90`), so any of them can be rebound in `[keybindings.layout_prefix]`. The layout still applies its minimum pane size and gaps. In the scrolling layout only the width actions do anything.
+
+`gap`, `master_ratio`, `scroll_column_width` and `shared_borders` decide how many cells each pane gets, so they are shared across the session: change one on any client and every attached client follows. Purely visual settings such as the theme, border style and glyphs stay per client.
+
+## Finding a pane
+
+The palette entry `All windows` opens a searchable list of every pane on every workspace, with a short preview of each. It has no default key.
+
+| Key | Action |
+|-----|--------|
+| Type | Filter by title, workspace number, preview text or directory |
+| <kbd>Up</kbd> / <kbd>Down</kbd>, <kbd>Ctrl</kbd>+<kbd>P</kbd> / <kbd>Ctrl</kbd>+<kbd>N</kbd> | Move the selection |
+| <kbd>Enter</kbd> | Go to the pane: switch workspace, restore it if minimized, focus it |
+| <kbd>Ctrl</kbd>+<kbd>U</kbd> | Clear the query |
+| <kbd>Esc</kbd> | Close |
+
+The preview is the first three non-empty lines of the pane, taken when the list opens. The directory is only read on Linux.
+
+## Typing into several panes
+
+Multifocus sends your typing to several panes at once, like tmux's `synchronize-panes`.
+
+| Input | Action |
+|-------|--------|
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+click on a pane | Add or remove it from the set |
+| Palette: `Toggle multifocus` | Add or remove the focused pane |
+| Palette: `Clear multifocus` | Empty the set |
+
+Panes in the set get a distinct border colour. While the set is not empty and you are in terminal mode, every key that goes to the focused pane also goes to each pane in the set. Keys TUIOS handles itself, such as the leader key, are not copied.
+
+The set belongs to your client. It is not shared with other clients, it does not survive a detach, and switching sessions clears it.
+
+## Related
+
+<Cards>
+  <Card title="BSP Tiling" href="/docs/bsp-tiling" description="Splits, preselection, edge resizing and layout templates" />
+  <Card title="Keybindings" href="/docs/keybindings" description="Every default key, by mode" />
+  <Card title="Configuration" href="/docs/configuration" description="The appearance and startup tables" />
+  <Card title="Session Rail" href="/docs/session-rail" description="The sidebar of sessions, panes, files and agents" />
+</Cards>
