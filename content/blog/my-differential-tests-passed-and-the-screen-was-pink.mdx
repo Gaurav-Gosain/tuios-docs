@@ -8,11 +8,11 @@ author: Gaurav Gosain
 tuios now has a second terminal emulator. Behind a `ghostty` build tag, the
 panes can be driven by libghostty-vt, the emulation core extracted from the
 ghostty terminal, instead of the pure-Go emulator tuios has always used. Two
-implementations of the same contract is the setup for differential testing,
-so the backend arrived with a differential suite in the same commit: feed
-identical bytes to both emulators, compare screen contents cell by cell,
-compare the cursor, compare scrollback, compare the mode table. A corpus of
-captured real-world terminal output runs through both. Divergences that are
+implementations of one contract invite differential testing, so the backend
+landed with a differential suite in the same commit. It feeds identical bytes
+to both emulators and compares the screen cell by cell, the cursor, the
+scrollback and the mode table. A corpus of captured real-world terminal output
+runs through both. Divergences that are
 known and accepted are pinned in their own test so they cannot silently grow.
 
 The suite was green. The first `ls` I ran in a real build painted every
@@ -21,8 +21,8 @@ filename on a block of hot pink.
 ## The cache
 
 The backend converts libghostty's cell styles into the style type the rest of
-tuios consumes. Conversion walks foreground, background, underline, all the
-attributes, so it is not free, and libghostty hands you a convenient handle
+tuios consumes. Conversion walks foreground, background, underline and every
+other attribute, so it is not free, and libghostty hands you a convenient handle
 to cache on: every distinct style in the terminal is interned and named by a
 16-bit style ID. Same style, same ID. The conversion cache wrote itself:
 
@@ -89,7 +89,7 @@ shown, and nothing compared that.
 A differential harness is a claim with two parameters: what you compare and
 when. I had the objects right and both parameters wrong.
 
-## The fix is two lines, the tests are the work
+## The fix is two lines. The tests are the work
 
 The fix: clear the cache at every render snapshot, in both places that take
 one.
@@ -104,7 +104,7 @@ Cleared, not reallocated, so the map's capacity survives. The cache keeps
 earning its keep within a frame, which is where the hit rate was anyway, and
 stops asserting anything across frames, which is where it was lying.
 
-Then the suite got the holes closed. The corpus test now compares after every
+Then I closed the holes in the suite. The corpus test now compares after every
 chunk, not once at the end, because a sync per chunk is what the running
 application actually does. A new comparison renders both emulators' output,
 the actual byte stream a host would receive, and when the bytes differ it
@@ -126,8 +126,8 @@ emulator, in both backends.
 ## The same shape, two panes over
 
 The same week, the kitty graphics passthrough had a bug with a different
-surface and the identical skeleton. Drag a pane narrower while a program
-inside it streams frames, and the image stretched and spilled 40 columns into
+surface and the identical skeleton. Dragging a pane narrower while a program
+inside it streamed frames made the image stretch and spill 40 columns into
 the neighbouring pane. The host had been told the placement was 118 columns
 wide, once, and kept scaling 780-pixel frames into that rectangle while the
 pane underneath had long since shrunk to 78 columns.
@@ -157,8 +157,8 @@ about how long the answer stayed true.
 And a differential suite passing is a statement about its comparison points,
 not about the system. Mine compared internal state at the end of input, and
 the bug lived in output in the middle. Neither "compare more things" nor
-"compare more often" would have found it alone; it took both, plus the
-humility of re-checking the suite's blind spots against how the application
+"compare more often" would have found it alone. It took both, plus the
+humility to recheck the suite's blind spots against how the application
 actually interleaves reads and writes. The suite is better now because the
 screen was pink. I would rather have learned it the other way around, but I
 have yet to find where correct-looking screens teach you anything.

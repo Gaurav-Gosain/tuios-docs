@@ -95,7 +95,7 @@ export function SpentFrames() {
           className="h-40 w-full"
           preserveAspectRatio="none"
           role="img"
-          aria-label={`Queue depth over time. Drawing every frame keeps the pane painting ${every.tailMs} ms after the writer died; pacing down cuts that to ${paced.tailMs} ms.`}
+          aria-label={`Queue depth over time. Drawing every frame keeps the pane painting ${every.tailMs} ms after the source exited; pacing down cuts that to ${paced.tailMs} ms.`}
         >
           <line
             x1={deathX}
@@ -126,7 +126,7 @@ export function SpentFrames() {
           />
         </svg>
         <div className="mt-1 flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs text-fd-muted-foreground">
-          <span>dashed line: the writer dies at 1.0 s</span>
+          <span>dashed line: the source exits at 1.0 s</span>
           <span>grey: draw every frame</span>
           <span className="text-fd-primary">
             highlighted: pace down past 4 MiB
@@ -157,7 +157,7 @@ export function SpentFrames() {
 
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-fd-border px-4 py-3 font-mono text-sm">
         <span className="text-fd-muted-foreground">
-          still painting after the death: {(every.tailMs / 1000).toFixed(2)}s /{' '}
+          still painting after exit: {(every.tailMs / 1000).toFixed(2)}s /{' '}
           {every.framesAfter} frames
         </span>
         <span className="text-fd-primary">
@@ -168,11 +168,11 @@ export function SpentFrames() {
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         A model, not a capture: the parse rate is a round 256 KiB per 5 ms and
-        the flood writes at twice it for one second. The 4 MiB threshold, the
+        the flood writes at twice that for one second. The 4 MiB threshold, the
         250 ms catch-up interval, the 8 ms floor and the pace factor of 2 are
         the repo's real constants. Drag the frame cost up. The grey queue grows
         faster and drains slower at once, because every frame composed is drain
-        time spent, and the tail after the writer dies stretches with it. The
+        time spent, and the tail after the source exits stretches with it. The
         paced line pays for a frame four times a second while it is behind, so
         nearly all of its time goes to catching up.
       </figcaption>
