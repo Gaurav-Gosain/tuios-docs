@@ -1,0 +1,226 @@
+---
+title: A session switch forgot my column widths
+description: Switching sessions and back reset a widened column in the scrolling layout and split stacked panes apart. The daemon's state carried where the strip was scrolled to and nothing about its columns, and the same gap had two clients on one session drawing different widths.
+date: '2026-09-22'
+author: Gaurav Gosain
+---
+
+The report was one line: "if i switched between sessions, the window size if
+its full width or smth in scrolling mode, it reset the width to 50%".
+
+The scrolling layout is the niri-style one. Each pane is a column on a
+horizontal strip and the screen is a window onto that strip. A column can be
+widened with `scroll_cycle_width`, which steps through 33, 50, 55, 67 and 90
+percent of the screen, and a column can hold several panes stacked on top of
+each other with `scroll_consume`. The report says the width came back at 50
+percent. The default for a new column is actually 55 percent
+(`appearance.scroll_column_width`), and by eye the two are hard to tell apart.
+Either way, the width the user chose was gone.
+
+## What a session switch does
+
+A tuios client does not keep a session alive. The daemon does. When you
+switch from one session to another, the client asks the daemon to detach it
+from the first and attach it to the second, and the daemon hands back that
+session's state. The client then throws away everything it held.
+`rebuildForSession` closes every window, and resets the BSP trees, the
+scrolling layouts, and the window ID maps to empty. Then it calls
+`RestoreFromState` on the state it was handed.
+
+So switching back to a session is not returning to something the client
+kept. It is building that session again from the daemon's copy. Whatever the
+copy does not carry, the switch loses.
+
+The copy carried the BSP layout. `WorkspaceTrees` has been part of
+`SessionState` for a long time, with every split and every ratio, which is why
+a BSP workspace comes back the way you left it. For the scrolling layout it
+carried one thing: `ScrollStrip`, a struct with a single field, `ViewportX`,
+which is how far the strip is scrolled from its left end. Nothing said which
+panes were in which column, or how wide any column was.
+
+With no columns in the state, the client built the strip the way it builds a
+strip from nothing: one column per visible pane, each at the default width.
+That produces both symptoms. A widened column comes back at 55 percent. Two
+panes stacked in one column come back as two columns.
+
+Here is a model of it. Widen a column or stack two panes, then switch session
+and back, in each mode:
+
+<ScrollColumnsRoundTrip />
+
+## I had written it down
+
+This was not a surprise to the documentation. A month earlier, on 28 August, I
+fixed a different scrolling bug: with two clients on one session, moving the
+focus on one left the other's viewport where it was, so the focused pane could
+be entirely off the second screen. The fix in `d7299aeb` made the strip's
+offset session state. That is where `ScrollStrip` came from. In the same
+commit I updated the limitation in `docs/LAYOUT_MODES.md` to read:
+
+```
+Column widths and the strip order are not shared or saved. The layout mode
+and the scroll offset are session state; the column arrangement is not, and is
+rebuilt from the window list on reattach and on each client.
+```
+
+That was accurate. It was also the whole bug, written down as a known limit.
+The same commit's message says that sharing the offset is safe because "one
+offset puts the same columns on every screen whatever size the terminals are".
+That holds only if every client has the same columns. The limitation two
+paragraphs away says they might not. I shared the position on the strip and
+not the strip itself.
+
+## The second bug in the same gap
+
+The words "on each client" in that limitation point at a second problem, one
+the report did not mention. Two clients attached to one session each built their own strip from
+the window list. Widen a column on one, and the other kept its default widths.
+Stack two panes on one, and the other kept three columns.
+
+This is worse than it sounds, for two reasons. A pane's PTY has one size, so
+two clients that disagree about a column's width disagree about the size of
+the pane in it. And since `d7299aeb` both clients share `ViewportX`. The same
+offset on two strips with different columns shows different panes. The second
+row of the widget above is that client.
+
+## The fix
+
+The fix is in `209cb44c`. The state now carries the columns.
+`SessionState.WorkspaceScrollColumns` maps a workspace number to a list of
+`SerializedScrollColumn`:
+
+```go
+type SerializedScrollColumn struct {
+	Windows    []string `json:"windows"`
+	Proportion float64  `json:"proportion,omitempty"`
+	FixedWidth int      `json:"fixed_width,omitempty"`
+	Active     int      `json:"active,omitempty"`
+}
+```
+
+`Windows` are the panes in the column, top to bottom. `Proportion` is the
+width as a share of the screen, and zero means the default. `FixedWidth` is a
+width in cells, which is what the `<` and `>` keys pin a column to. `Active`
+is which pane in the column has focus.
+
+Panes are named by window ID, not by the integer the strip uses internally.
+Those integers are numbered by each client for itself. Naming panes by them
+would make the columns mean something only next to a mapping that also has to
+be restored first and kept in step.
+
+It is the same kind of field as `WorkspaceTrees`: layout intent. A nil value
+means the sender did not say, and a client that receives nil keeps the columns
+it has. That is how a client that predates the field behaves anyway.
+
+### Where the strip gets built
+
+The obvious place to rebuild the strip is in `RestoreFromState`: read the
+columns, build a `ScrollingLayout`, put it in the map. I did not do that,
+because there is already one place a strip comes into being,
+`GetOrCreateScrollingLayout`, and it does two more things after it fills in
+the columns. It points the strip's focused column at the pane that has focus,
+and it reveals that column, so you are not typing into a pane that is off the
+edge of the screen. A strip built somewhere else would skip both.
+
+So the restore does not build anything. It sets the columns aside in
+`pendingScrollColumns`, keyed by workspace. When `GetOrCreateScrollingLayout`
+creates a strip, it checks that map first. If there are pending columns for
+this workspace, it takes them and deletes the entry. If not, it falls back to
+one column per visible pane, as before. The focus sync and the reveal run the
+same way in both cases.
+
+Order matters in `RestoreFromState`. Entering the scrolling layout mode is
+what creates the strip, so the columns are set aside before
+`ApplyLayoutModeName` runs, not after.
+
+The saved columns can name panes this client should not place: one that has
+closed, one on another workspace, one minimized or floating, or one an earlier
+column already placed. `scrollColumnsFromState` skips those, the way a strip
+built from nothing skips them. A pane on the workspace that no column names,
+which is one opened since the state was written, gets its own column at the
+end, which is where a new pane goes. And a workspace that was restored but not
+visited yet still has its columns in the pending map, so
+`scrollColumnsState` sends those too. Leaving them out would tell a peer that
+workspace has no columns.
+
+### Peers adopt in place
+
+A push from another client takes a different path, `ApplyStateSyncFrom`. Here
+the strip usually exists already, and throwing it away would lose its offset
+and its focus. So `adoptScrollColumns` replaces the columns of an existing
+strip in place. It remembers the pane the strip was focused on, swaps the
+columns, and puts the focus back on the column that now holds that pane. Only
+a workspace with no strip yet goes through the pending map.
+
+That closes the second bug. When one client widens a column, the others take
+the new width on the next sync.
+
+### The fingerprint
+
+Every push is compared against the last one by `StateFingerprint`, so a push
+that changes nothing is not forwarded. That was added after two attached
+clients produced 32 peer broadcasts for 31 keystrokes, all of them identical
+to the one before. The fingerprint hashes by hand every field a peer acts on.
+A new field that a peer acts on and the fingerprint leaves out is a field
+whose changes can be dropped as repeats. So the columns went into the
+fingerprint too: workspace, pane IDs, proportion, fixed width, active index.
+
+I wanted to know whether that part was load-bearing, so I took it out of a
+scratch copy of the fixed tree and ran the tests again. They still passed. A
+widened column also moves the rectangles of the panes in it and after it, and
+window geometry is already in the fingerprint, so in the tests the push was
+never a repeat. The columns entry covers a change to the columns that moves no
+rectangle, and I have no test that produces one. I kept it because the rule in
+the fingerprint's own comment is that every field a peer acts on is covered,
+not because I saw it fail.
+
+## The tests
+
+The commit adds three tests in `internal/app/scroll_columns_session_test.go`.
+They run on a real daemon session, not a mock. Each one sets up the scrolling
+layout with three panes, does the gesture, and pushes the state.
+
+```
+TestAColumnKeepsItsWidthAcrossASessionSwitch
+TestAStackedColumnStaysStackedAcrossASessionSwitch
+TestAPeerTakesAWidenedColumn
+```
+
+- The first presses the width key until the column is at the widest preset,
+  switches to another session and back, and checks the width in cells.
+- The second consumes a pane into the first column, round-trips, and counts
+  the columns.
+- The third joins a second client, widens a column on the first, lets the two
+  exchange state, and checks the proportion the second client holds.
+
+I ran the new test file against the tree just before the fix, to be sure the
+tests catch the bug and not something next to it. All three fail, each with
+the symptom it was written for:
+
+<TerminalCapture
+  title="go test ./internal/app/ at 209cb44c^, with the new test file"
+  lines={[
+    { text: "--- FAIL: TestAColumnKeepsItsWidthAcrossASessionSwitch", tone: "normal" },
+    { text: "    the column came back 44 cells wide, want the 72 it was widened to", tone: "echo" },
+    { text: "--- FAIL: TestAStackedColumnStaysStackedAcrossASessionSwitch", tone: "normal" },
+    { text: "    the strip came back with 3 columns, want the 2 it had with two panes stacked", tone: "echo" },
+    { text: "--- FAIL: TestAPeerTakesAWidenedColumn", tone: "normal" },
+    { text: "    the peer's column 2 is at proportion 0, want the 0.9 the other client widened it to", tone: "echo" }
+  ]}
+  rows={7}
+  note="The screen in the test rig is 80 cells wide, so 44 cells is the default 55 percent and 72 is the 90 percent preset. At 209cb44c all three pass."
+/>
+
+The widget above uses the same sizes, which is why its columns start at 44
+cells.
+
+## What I take from it
+
+The session state is the only copy of a layout that outlives a client. The BSP
+layout was in it, so BSP survived a switch, and I had stopped thinking of a
+switch as a rebuild at all. The scrolling layout arrived later, and when I
+made its offset session state I added the one field that bug needed and wrote
+the rest down as a limitation. The limitation was accurate, and it sat in the
+docs for a month before the report came in. When it did, that one line
+explained the bug exactly, and a second bug with it that I had not gone
+looking for.
