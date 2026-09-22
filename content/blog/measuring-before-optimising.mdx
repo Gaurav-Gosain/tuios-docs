@@ -1,12 +1,12 @@
 ---
 title: The benchmark said 27x faster. It felt worse.
-description: Resizing a pane in TUIOS lagged behind the mouse. Go's profiling tools found the cause, killed two theories I was sure about, and then spent three rounds accurately measuring the wrong thing.
+description: Fixing pane resize lag in TUIOS with Go benchmarks and pprof. Two of four theories were wrong, and the benchmark measured the wrong thing for three rounds.
 date: '2026-07-11'
 author: Gaurav Gosain
 ---
 
-Dragging a pane divider in TUIOS trailed the mouse. Worse the longer you
-dragged.
+Dragging a [pane divider](/docs/bsp-tiling) in TUIOS trailed the mouse.
+Worse the longer you dragged.
 
 That last detail is the whole diagnosis, though I nearly skipped past it. A
 uniformly slow frame feels the same at the start of a gesture as at the end.
@@ -21,7 +21,9 @@ drag across a terminal easily outpaces that.
 
 So the queue grows for the duration of the drag, and what you see is wherever
 the pointer was some number of events ago. Stop moving and it catches up. That
-is why it read as lag rather than as slowness.
+is why it read as lag rather than as slowness. (A flooded pane
+[fell behind the same way](/blog/drawing-the-backlog) later, with PTY output
+in place of mouse events.)
 
 The fix bounds redraws to one per frame interval. Every event's geometry is
 still applied before the draw decision, so no input is dropped and the layout
@@ -172,7 +174,7 @@ Two bugs where tuning the hot path would have been wasted effort.
 
 ### A quadratic behind a passing benchmark
 
-Typing in the browser client was unusable. `getLine` walked the whole viewport
+Typing in the [browser client](/docs/web) was unusable. `getLine` walked the whole viewport
 for every row, making a frame O(rows squared times cols).
 
 No amount of constant-factor work closes a quadratic gap. It took three
@@ -204,6 +206,18 @@ The render path took a window's I/O read lock, then called a function that took
 the same lock again. Go's `RWMutex` is not reentrant for readers. If a writer
 queues between the two acquisitions, the second read blocks behind the writer,
 the writer blocks behind the first read, and everything stops.
+
+```mermaid
+sequenceDiagram
+    participant UI as render path
+    participant L as window I/O lock
+    participant PTY as PTY reader
+    UI->>L: RLock for the cell walk
+    PTY->>L: Lock for a chunk of shell output
+    Note over PTY,L: waits for the read lock to go
+    UI->>L: RLock again, for the cursor
+    Note over UI,L: waits behind the queued writer
+```
 
 There is no hot path to profile here. The program is not slow, it is stopped.
 What finds it is `SIGQUIT` with `GOTRACEBACK=all`, reading the goroutine dump,

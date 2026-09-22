@@ -27,6 +27,10 @@ import { ExtentScan } from '@/components/mdx/extent-scan';
 import { RenderPathAttrs } from '@/components/mdx/render-path-attrs';
 import { AuditChurn } from '@/components/mdx/audit-churn';
 import { HelpKeyDrift } from '@/components/mdx/help-key-drift';
+import { PreshapedGuard } from '@/components/mdx/preshaped-guard';
+import { MediumProbe } from '@/components/mdx/medium-probe';
+import { StyleIdRecycle } from '@/components/mdx/style-id-recycle';
+import { QueryPath } from '@/components/mdx/query-path';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -59,6 +63,10 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     RenderPathAttrs,
     AuditChurn,
     HelpKeyDrift,
+    PreshapedGuard,
+    MediumProbe,
+    StyleIdRecycle,
+    QueryPath,
     ...components,
   };
 }

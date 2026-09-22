@@ -1,6 +1,6 @@
 ---
-title: Three bugs in one month turned out to be one bug
-description: A terminal is a request-response protocol that most people write as if it were one-way. I hit the same bug three times in a month, in three different codebases, and each time the reply went somewhere different.
+title: Three terminal bugs in one month turned out to be one bug
+description: 'Terminals answer queries like OSC 11 and CPR. Three bugs in three codebases were one bug: the reply was dropped, sent to the wrong place, or echoed.'
 date: '2026-06-19'
 author: Gaurav Gosain
 ---
@@ -43,7 +43,9 @@ case. It is the common path.
 
 ## One: the replies were generated and then dropped
 
-`tuitest snap -- glow -p file.md` captured a blank screen and exited 0. Not a
+`tuitest snap -- glow -p file.md` captured a blank screen and exited 0. (tuitest
+is my PTY test harness, and the rest of that audit is in
+[a later post](/blog/fuzzing-a-terminal-test-harness).) Not a
 crash, not a timeout. A confident report of nothing.
 
 My first diagnosis was a `nil` guard in the OSC handler that looked like it
@@ -139,6 +141,8 @@ each time, and the visible symptom is different every time too: a blank
 capture, a burst of garbage after exit, text appearing at a prompt nobody
 typed.
 
+<QueryPath />
+
 None of those symptoms says "terminal query". That is what made it three
 separate investigations instead of one.
 
@@ -163,6 +167,10 @@ There is a fourth question I have started asking about my own code: if a
 component produces something, who consumes it? `bufpipe.go` documented a
 consumer that did not exist for months. The comment was aspirational, and I
 read it every time as a description of something real.
+
+Later I found a fourth shape, in TUIOS itself: a component that
+[answered a capability query without asking](/blog/a-terminal-that-lied-about-what-it-could-do).
+The answer arrived. It was made up.
 
 ## The test that had never run
 
