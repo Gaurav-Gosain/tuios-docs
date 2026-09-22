@@ -22,6 +22,10 @@ import { SharedBordersToggle } from '@/components/mdx/shared-borders-toggle';
 import { InvariantBlind } from '@/components/mdx/invariant-blind';
 import { CellShape } from '@/components/mdx/cell-shape';
 import { SpentFrames } from '@/components/mdx/spent-frames';
+import { PreshapedGuard } from '@/components/mdx/preshaped-guard';
+import { MediumProbe } from '@/components/mdx/medium-probe';
+import { StyleIdRecycle } from '@/components/mdx/style-id-recycle';
+import { QueryPath } from '@/components/mdx/query-path';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -49,6 +53,10 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     InvariantBlind,
     CellShape,
     SpentFrames,
+    PreshapedGuard,
+    MediumProbe,
+    StyleIdRecycle,
+    QueryPath,
     ...components,
   };
 }
