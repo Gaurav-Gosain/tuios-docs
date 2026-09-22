@@ -1,0 +1,306 @@
+---
+title: Most of a scroll was spent on blank cells
+description: A ten-character line scrolling off a 207-column screen walked the whole row twice, once to find the text and once to erase it. One int per row cut the short-line scroll from 1,120 ns to 240 ns. Here is how it was measured on a machine that would not sit still, and how I checked it was still right.
+date: '2026-09-22'
+author: Gaurav Gosain
+---
+
+Every tuios pane runs an in-process terminal emulator, `internal/vt`. It
+started as a fork of `charmbracelet/x/vt` and is pure Go. In September I did
+a performance pass over it: the parser, the print path and the scroll path.
+Five commits came out of it. One of them matters much more than the others,
+so most of this post is about that one.
+
+The benchmark it moved is the most boring one in the package.
+`BenchmarkEmulatorShortLineScroll` makes a 207x55 emulator with 10,000 lines
+of scrollback and writes this, over and over:
+
+```
+tuiosflood\r\n
+```
+
+Ten characters and a newline. The screen is full, so every newline scrolls
+it: the top row goes into the scrollback and a fresh blank row appears at the
+bottom. That is what a shell does all day. It is `ls`, a build log, `tail -f`.
+
+## Where the time went
+
+The profile of that benchmark said 72% of the time was the blank part of each
+row. Two functions:
+
+- `isBlankCell`, 39%. Before a row goes into the scrollback, `PushLine` trims
+  its trailing blanks, so the scrollback does not store 197 spaces after
+  every short line. It found the end of the text by starting at column 206
+  and walking left until it met a non-blank cell. For `tuiosflood` that is
+  198 cells read to find one.
+- `blankRows`, 33%. The screen scrolls by rotating its rows, so the row that
+  left the top is reused as the new bottom row. It has to be blanked first,
+  and `blankRows` wrote a blank into all 207 of its cells.
+
+A cell here is a `uv.Cell`, 112 bytes with pointers in it. 207 of them is
+about 22 KB. So a ten-character line cost two walks over 22 KB of cells, one
+reading and one writing, and nearly all of it was over cells that were
+already blank.
+
+## A lever I had already written down
+
+This was not a surprise, and that is the embarrassing part. In August I had
+looked at exactly this blanking loop. An earlier pass had tried replacing it
+with one bulk copy from a prototype row and reverted it, and I wanted a
+number instead of an inherited conclusion. So I wrote `BenchmarkBlankFill`.
+It said the plain loop that stores one blank per cell was already the
+fastest arrangement I could find:
+
+<BenchBars
+  groups={["fill-loop: what the code does", "fill-copy: the reverted bulk copy", "byte-move: copy() of the same bytes", "fill-zero: zeroing without pointers"]}
+  series={[
+    { label: "one row", values: [473.0, 547.1, 523.1, 440.5], tone: "subject" }
+  ]}
+  unit="ns"
+  groupLabel=""
+  caption="BenchmarkBlankFill, August 2026. The loop moved 207 pointer-carrying cells faster than copy() moved the same number of bytes, and zeroing without pointers would buy at most 7%. No rearrangement of the same stores could win."
+/>
+
+The note I left in `docs/perf.md` ended with: the only lever left is moving
+fewer bytes, a smaller `uv.Cell` (an upstream type) or not blanking eagerly.
+Then I left it there for a month. The profile in September was the same
+conclusion from the other side. The loop was as fast as a loop can be. It
+just did not need to run over most of the row.
+
+## One int per row
+
+The fix is small. The grid now keeps, for every row, an extent: a column
+past which every cell is a plain blank.
+
+- A write raises it. `SetCell` raises it to the end of the cell it wrote,
+  and handing out a row for arbitrary writes raises it to the full width.
+- A full-width line shift, and the whole-screen rotation, carry each extent
+  with its row.
+- Blanking a whole row resets it to zero. Nothing else lowers it.
+
+It is an upper bound, not the exact end of the text. Overwriting the last
+letter of a line with a space leaves the extent where it was. That is fine:
+the trim still checks the cells it reads, it just starts closer to them.
+
+The two walks now start or stop at the extent. The blanking:
+
+```go
+row := g.rows[i]
+for x := range row[:g.ext[i]] {
+    row[x] = uv.EmptyCell
+}
+g.ext[i] = 0
+```
+
+and the push into the scrollback:
+
+```go
+n := min(ext, len(line))
+for n > 0 && isBlankCell(&line[n-1]) {
+    n--
+}
+sb.push(line[:n], len(line))
+```
+
+Try it. The row below is one line of the 207-column benchmark screen as it
+leaves the top. Type a line, or pick one, and press Enter to scroll it. The
+top strip is what the old code touched, the bottom one what it touches now.
+
+<ExtentScan />
+
+The widget counts cells, not time. For `tuiosflood` it says 405 cells before
+and 11 after, but the scroll does other work that did not change: parsing the
+bytes, writing the ten letters, encoding them for the scrollback, rotating
+the rows. That is why the benchmark below got about 4.7 times faster and not
+37.
+
+The clock checkbox is the honest case. A prompt that draws something at the
+right edge raises that row's extent to the full width, and then the blanking
+costs what it always did. The extent does not make wide rows cheaper. It
+makes short rows cost what they hold.
+
+## The numbers
+
+<BenchBars
+  groups={["with scrollback", "alt screen, no scrollback"]}
+  series={[
+    { label: "before", values: [1120, 555], tone: "baseline" },
+    { label: "after", values: [240, 195], tone: "subject" }
+  ]}
+  unit="ns"
+  groupLabel=""
+  caption="BenchmarkEmulatorShortLineScroll, CPU time per written line, before and after the extent commit. -78.6% and -64.9%, both p=0.002. The alternate screen keeps no scrollback, so only the blanking walk was saved there."
+/>
+
+Everything that scrolls short lines moved with it:
+
+| CPU per op | before | after | |
+|---|---|---|---|
+| `EmulatorWriteHeavyOutput/plain-log` | 46.3 us | 24.2 us | -47.8% |
+| `EmulatorWriteHeavyOutput/colored-log` | 50.0 us | 26.7 us | -46.7% |
+| `BackendScroll` | 71.3 ms | 47.1 ms | -33.9% |
+| `Emulator_ANSIColorWrite` | 993 ns | 693 ns | -30.2% |
+
+All at p=0.002. No other vt benchmark moved. The cost is one `int` per row.
+
+## Measuring on a machine that would not sit still
+
+The machine was shared with other agents the whole time. The load average
+sat between 13 and 18 on 11 cores, and wall time swung by as much as 100%
+between identical runs. A `go test -bench` number from that machine
+means nothing.
+
+So nothing above is wall time. Each figure is process CPU time, user plus
+sys, per iteration. I built the test binary for the commit before and the
+commit after, ran each benchmark at a fixed iteration count
+(`-test.benchtime Nx`) on one CPU (`-test.cpu 1`), alternated the old and new
+binaries for six rounds each, and compared them with `benchstat`.
+
+CPU time still counts the process start and the benchmark setup. That
+dilutes a change towards zero. It never makes one look bigger.
+
+Before believing any of it I measured the noise floor: the base binary
+against a copy of itself, under the same alternation. All fifteen benchmarks
+came out as no change (`~`, p=0.37 to 1.00), geomean -1.0%, with confidence
+intervals from +/-4% to +/-43%. I only quote a result that clears that at
+p < 0.05. Allocation counts are exact, so they need none of this.
+
+One thing this does not give you is a stable absolute number across
+comparisons. `BackendScroll` read 86.7 ms after one change and 71.3 ms before
+the next, and nothing between them touched it. The load had changed. Each
+before and after pair ran interleaved, so the pair is comparable. Two
+numbers from different pairs are not.
+
+## Keeping it right
+
+Skipping work is a correctness claim. The extent is only safe if every path
+that writes a non-blank cell raises it. Miss one, and the scroll blanks too
+little of a row, or leaves the end of a line out of the scrollback. The
+screen keeps working. The text is just wrong.
+
+Two tests hold the invariant directly. The random grid test, which already
+drove the grid and ultraviolet's buffer side by side, now also checks the
+extents after every grid operation. A new test,
+`TestGridExtentHoldsUnderGeneratedInput`, runs the `vtgen` input generator
+through a whole emulator and checks the invariant on both screens after
+every step. The first one covers the grid's own methods. The second covers
+the writes that reach a row from outside the grid.
+
+There is one of those that worried me. The commit just before this one made
+a run of ASCII store its cells straight into the row, without going through
+`SetCell`. That store has to raise the extent itself:
+
+```go
+// Written behind the grid's back, so its extent is raised here
+// (see grid.ext).
+e.scr.buf.raiseExt(y, x+n)
+```
+
+While writing this post I deleted that line in a copy of the tree and ran
+the suite, to see what would notice. The conformance corpus passed. The
+tmux differential test passed, all 63 cases. The screen those tests compare
+was right, so they had nothing to say.
+
+Six tests failed:
+
+- `TestGridExtentHoldsUnderGeneratedInput`, at seed 0, step 9: a cell
+  holding `e` past its row's extent.
+- `TestScrollUpFillsScrollback`: scrollback line 8 was `""`, want
+  `"line-08"`. The lines had left the screen and arrived in the scrollback
+  empty.
+- The test that scrollback storage is reused when the ring is full failed
+  the same way.
+- `TestASCIIRunMatchesPerCharacterPath`, because the run path and the
+  per-character path now drew different screens.
+- `TestVTGen_Metamorphic`, the split-equivalence test from
+  [the fuzzer post](/blog/the-fuzzer-that-found-nothing), reduced to two
+  steps: 42 `x` characters and a full reset (`ESC c`). Fed in one piece, the
+  reset cleared the screen. Split at a different boundary, an `x` survived
+  it, because the reset stops clearing at the extent and the extent was
+  stale.
+- `FuzzEmulatorWriteChunked`, on its seed corpus.
+
+I also removed the rotation of the extents in the whole-screen scroll. That
+one is loud: `blankRows` panics with a slice out of range, and one of the 63
+tmux cases disagrees.
+
+The quiet failure is the one I care about. With that line gone, a shell
+scrolling short lines would lose them from the scrollback, and outside a
+case like that reset, nothing on screen would look wrong. The tests that check what the screen looks like,
+the corpus and tmux, could not see it. The tests that check what the
+emulator believes about itself could.
+
+## The rest of the pass
+
+The other four commits are smaller, and each one is a fast path held to the
+slow path it skips by a test that runs both on random input.
+
+**CSI parameters skip the transition table.** Every byte of `38;2;r;g;b`
+went through the parser's transition table and an action switch to reach
+three lines of arithmetic. In a truecolor repaint those bytes are most of
+the stream. In the CSI parameter state the table maps `0` to `;` to a
+parameter update and leaves the state alone, so the parser now does that
+update directly. `TestSeqParserCsiParamsMatchUpstream` feeds random CSI input
+to this parser and to upstream's and requires the same action, state and
+dispatch for every byte.
+
+**A plain letter enters the scrollback as its byte.** Encoding a line for the
+scrollback packed the style and compared the link of every cell, about 20 ns
+a cell, to find nothing had changed. While no style or link is in force, a
+narrow unstyled ASCII cell now appends its byte, which is exactly what the
+full path wrote. `TestEncodeLinePlainShortcutWritesTheSameBytes` compares
+the two on random mixed lines.
+
+**An ASCII run is stored straight into its row.** Printing a run of ASCII
+went through three calls and two bounds-checked reads per byte. When every
+cell under the run is one column wide, no wide character can be cut, and all
+of that comes down to one store. Anything wide under the run takes the old
+path. This is the direct store the extent had to learn about.
+
+**SGR colours stop allocating.** A truecolor repaint made four allocations
+per cell. Two were a `color.RGBA` boxed into a `color.Color`, for the
+foreground and the background. The exact `38;2;r;g;b` shapes now take the
+boxed value from a small cache on the emulator. A third was a string made
+from the open grapheme cluster, to test whether the next character extends
+it. That test now runs on a reused byte buffer.
+`TestRGBParamsMatchReadStyleColor` and `TestHandleSgrMatchesReadStyle` hold
+the colour path to the upstream readers on random parameter lists.
+
+| commit | benchmark | before | after | |
+|---|---|---|---|---|
+| CSI parameters | `BackendDoomFire158x40` | 99.4 ms | 82.0 ms | -17.5% |
+| plain scrollback | `EmulatorScrollThroughput/with-scrollback` | 3.45 us | 2.78 us | -19.6% |
+| plain scrollback | `PrintASCII` | 915 us | 700 us | -23.5% |
+| ASCII run | `Emulator_PlainTextWrite` | 17.1 us | 12.9 us | -25.0% |
+| ASCII run | `BackendTUI` | 6.37 ms | 5.17 ms | -18.9% |
+| SGR colours | `BackendDoomFire158x40` | 83.8 ms | 78.8 ms | -6.0% |
+
+The SGR change is the one where CPU time is the wrong number to look at:
+
+<BenchBars
+  groups={["BackendDoomFire158x40"]}
+  series={[
+    { label: "before", values: [757200], tone: "baseline" },
+    { label: "after", values: [189600], tone: "subject" }
+  ]}
+  unit="allocs/op"
+  groupLabel=""
+  caption="Allocations per iteration of the 158x40 truecolor fire benchmark: -75.0%. Bytes allocated went from 5.83 MiB to 1.51 MiB (-74.2%). CPU time moved 6%."
+/>
+
+The fourth allocation per truecolor cell is still there. It keeps the open
+cluster's text across an escape sequence. Removing the other three saved 6%
+of CPU, so this one is worth a third of that at most, and the fix is one more
+piece of state on every emulator. I measured it and left it.
+
+## What I keep from this
+
+The August benchmark was right, and it even named the fix. It said the loop
+could not go faster, which I read as "leave the loop alone" when it meant
+"run it less". When the work is already at the speed of memory, the only
+thing left is to touch less memory, and on a terminal full of short lines
+most of the memory is blanks.
+
+The other part is the negative control. The extent itself is a small change.
+Trusting it took a test that watches the emulator's own bookkeeping, because
+the tests that watch the screen passed with the bookkeeping broken.
