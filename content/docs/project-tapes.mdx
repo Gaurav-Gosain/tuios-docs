@@ -1,0 +1,146 @@
+---
+title: Project Tapes
+description: A .tuios.tape file that builds a project's session and layout when you cd into it, after you review and trust it
+icon: FolderCog
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+A project tape is a `.tuios.tape` file in a project directory. When the focused shell `cd`s into that directory, TUIOS offers to build the project's session and layout from it: an editor in one pane, a dev server in another, a shell in a third. It works like `.envrc` does for direnv.
+
+A tape can type any command, so it is treated as code you must approve. **An untrusted tape never runs.** TUIOS only reads it, hashes it and shows it to you. Nothing happens until you review it and choose to run it.
+
+<TapeTrustFlow />
+
+## Quick start
+
+Put a `.tuios.tape` in your project:
+
+```
+# .tuios.tape
+Session "myproject"
+Require "pnpm"
+
+RenameWindow "edit"
+Type "nvim ." Enter
+
+Split vertical
+RenameWindow "serve"
+Run "pnpm dev"
+
+Split horizontal
+RenameWindow "sh"
+
+Focus "edit"
+```
+
+Then, in a TUIOS pane, `cd` into the project:
+
+1. A banner appears and the dock shows a `tape ?` badge. Nothing has run.
+2. Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd> <kbd>t</kbd>, or run `Tape: review the project tape` from the palette.
+3. The review dialog shows the tape's path, its trust status, what it will build, and its full content. Scroll it with the arrow keys.
+4. Choose:
+   - <kbd>r</kbd> **Run once**: run it now and ask again next time.
+   - <kbd>t</kbd> **Trust and run**: remember this exact file and run it.
+   - <kbd>n</kbd> **Never**: never offer this path again.
+   - <kbd>Esc</kbd> **Not now**: close the dialog. The badge stays.
+
+Next time the badge reads `tape ✓`, and one key takes you to the project session.
+
+## What running a tape does
+
+With the default `Scope session`, TUIOS:
+
+1. Picks a session name: the `Session` directive, or the project directory's name.
+2. If that session exists, switches to it and builds nothing. Entering the project again never duplicates panes.
+3. Otherwise creates the session with one pane at the project root, runs the tape body in it, and switches you there.
+
+Because the tape always starts from a fresh session with one pane, the same keystrokes give the same layout every time. Session scope needs the daemon. In a standalone TUIOS, the tape runs in the current session instead, and TUIOS says so.
+
+`Scope current` runs the tape in the current session, starting from the focused pane. It adds to whatever is already there, so keep such tapes small.
+
+## The header
+
+Optional directives at the very top of the file, before any other command:
+
+| Directive | Meaning | Default |
+|-----------|---------|---------|
+| `Session "name"` | Session to build or switch to | The project directory's name |
+| `Scope session` or `Scope current` | Where the tape runs | `session` |
+| `Workspace N` | Workspace to build in | None |
+| `Require "command"` | Skip the tape, with a notice, if this program is not on `PATH` | None |
+
+A directive that comes after a body command is read as part of the body.
+
+## The body
+
+The body is a small layout language, one command per line. Keywords are not case sensitive.
+
+| Command | Effect |
+|---------|--------|
+| `Type "text"` | Type text into the focused pane. Add `Enter` on the same line to submit it |
+| `Run "cmd"` | Short for `Type "cmd" Enter` |
+| `Enter` | Press Enter in the focused pane |
+| `Split vertical` or `Split horizontal` | Split the focused pane (`v` and `h` also work) |
+| `NewWindow "name"` | Open a new tiled pane. The name is optional |
+| `RenameWindow "name"` | Name the focused pane. `Rename` also works |
+| `Focus "name"` | Focus a pane by name |
+| `Sleep 500ms` | Pause |
+| `EnableTiling`, `DisableTiling` | Turn tiling on or off |
+
+Blank lines and lines starting with `#` are ignored, and so is any command not in this table. TUIOS waits briefly after each `Split` and `NewWindow`, so the new pane is ready before the next line types into it.
+
+This is not the full [tape scripting](/docs/tape-scripting) language. It is a smaller set made for building a layout.
+
+## Trust
+
+Trust is granted to a pair: the file's real path and the SHA-256 hash of its content.
+
+- **Any edit makes the tape untrusted again.** If a `git pull` changes a trusted tape, you see it as "changed since you trusted it" and review it again. It never runs silently.
+- **What you approve is what runs.** TUIOS reads the file once, and shows and runs that same copy. Replacing the file after you approve it changes nothing.
+- **Never** is recorded by path only, so editing the file does not bring the prompt back. A denied path shows no banner, no badge and no dialog.
+
+Decisions are stored in `$XDG_DATA_HOME/tuios/tape-trust.toml`, readable only by you. They belong to this machine and do not travel with your dotfiles.
+
+A tape is not offered at all, and the dialog only lets you dismiss it, if it:
+
+- is not a regular file owned by you,
+- is writable by group or others,
+- sits under a world-writable directory without the sticky bit, or
+- is larger than 64 KiB.
+
+TUIOS also ignores shells running over ssh, since it cannot read or verify a file on another machine. While a tape runs, detection is paused, so a tape that `cd`s elsewhere cannot start another one.
+
+## Configuration
+
+```toml
+[tape]
+autorun = "ask"       # off, ask or auto
+auto_review = false   # open the review dialog as soon as a tape is found
+```
+
+| `autorun` | Behaviour |
+|-----------|-----------|
+| `off` | No scanning. The feature is invisible |
+| `ask` | The default. Every tape gets a banner and a badge, and nothing runs until you choose Run |
+| `auto` | A trusted, unchanged tape runs as soon as you enter the directory. Untrusted or changed tapes behave as in `ask` |
+
+No mode runs a tape you have not reviewed.
+
+`auto_review = true` opens the review dialog on its own, at most once per directory per session, instead of waiting for you to press the key. You still have to choose Run.
+
+`TUIOS_TAPE_AUTORUN=off` overrides the config for one run, for example in CI or when you look at code you do not trust:
+
+```bash
+TUIOS_TAPE_AUTORUN=off tuios
+```
+
+## Related
+
+<Cards>
+  <Card title="Tape Scripting" href="/docs/tape-scripting" description="The full tape language" />
+  <Card title="Tape Recording" href="/docs/tape-recording" description="Record what you do as a tape" />
+  <Card title="Sessions" href="/docs/sessions" description="The sessions a project tape builds" />
+  <Card title="Keybindings" href="/docs/keybindings" description="The tape prefix keys" />
+</Cards>

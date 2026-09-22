@@ -1,0 +1,253 @@
+---
+title: Agents
+description: Track what coding agents in your panes are doing, get alerted when one needs you, and let agents drive TUIOS
+icon: Bot
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+TUIOS keeps an agent state for every pane. When a pane runs a coding agent such as Claude Code, Codex or Gemini CLI, the state says whether it is working, waiting for you, or done. The state is drawn on the pane's title bar and in the rail, it can raise an alert, and scripts can read it and wait on it.
+
+## States
+
+| State | Glyph | ASCII | Meaning |
+|-------|-------|-------|---------|
+| `none` | | | Not an agent, or not reporting. The default |
+| `working` | `●` | `*` | Working on a task |
+| `needs_input` | `▲` | `!` | Blocked, waiting for a person |
+| `idle` | `○` | `o` | Not working and not blocked |
+| `done` | `■` | `#` | Finished its task |
+| `errored` | `×` | `x` | Stopped on an error |
+| `unknown` | `□` | `?` | An agent is there and nothing says what it is doing |
+
+The glyphs are different shapes, not the same shape in different colours, so they still read in a monochrome screenshot. The ASCII column is what `--ascii-only` draws.
+
+`needs_input` and `errored` are the two states where a person has to act. `get-agent-state` and `list-agents` report that as `needs_you: true`, so a script does not need to know which states mean it.
+
+The state is held by the daemon, per pane. Every attached client sees it, and it survives a detach. It does not survive a daemon restart.
+
+## Where it shows
+
+- **Title bar:** the glyph sits in each pane's title.
+- **Rail:** the agents section lists every agent pane with its state and how long it has been in it. Each session row carries the loudest state among its panes. See [Session Rail](/docs/session-rail#agent-rows).
+- **Alerts:** a state change can raise a notification, a sound and a dock message. See [Alerts](#alerts).
+
+## How TUIOS learns the state
+
+Several sources can report on a pane. From most to least trusted:
+
+| Source | What it is |
+|--------|------------|
+| `report` | The agent reports for itself with `tuios set-agent-state` |
+| `transcript` | The daemon reads the record file the agent's harness writes |
+| `osc` | An escape sequence the agent printed: OSC 9;4 progress, or its window title |
+| `screen` | A rule matched text on the pane's screen |
+| `detect` | The daemon saw an agent CLI in the pane's foreground |
+| `stall` | The pane was `working` and then went quiet |
+
+A source can overwrite a claim from its own rank or lower, never from a higher one. So a screen rule cannot overwrite what an agent said about itself. There is one exception: a screen rule that sees a permission prompt can mark a pane `needs_input` over a stale `working` claim, and the old claim comes back as soon as the prompt is gone.
+
+### The agent reports for itself
+
+This is the most accurate source, and the only one that can reliably say `needs_input`.
+
+```bash
+tuios set-agent-state working -m "running the test suite"
+tuios set-agent-state needs_input -m "waiting for approval to push"
+tuios set-agent-state done
+tuios set-agent-state none        # clear it
+```
+
+From inside a pane, name the pane and the harness, since the focused pane may be a different one:
+
+```bash
+tuios set-agent-state working -s "$TUIOS_SESSION" -w "$TUIOS_PANE_ID" --harness claude-code
+```
+
+A report that loses to a higher-ranked source still exits 0 and prints `Not applied: ...` on stderr.
+
+The usual way to report is to wire the agent's lifecycle hooks to these calls once. The TUIOS repository has a working shim for Claude Code:
+
+<Steps>
+<Step>
+
+Copy the shim somewhere stable:
+
+```bash
+mkdir -p ~/.config/tuios/integrations
+cp integrations/claude-code/tuios-agent-state.sh ~/.config/tuios/integrations/
+chmod +x ~/.config/tuios/integrations/tuios-agent-state.sh
+```
+
+</Step>
+<Step>
+
+In `~/.claude/settings.json`, point the `SessionStart`, `UserPromptSubmit`, `Notification` and `Stop` hooks at it:
+
+```json
+{
+  "hooks": {
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "~/.config/tuios/integrations/tuios-agent-state.sh" }] }
+    ]
+  }
+}
+```
+
+Repeat the same entry for the other three events. The shim reads the event from its input, so one command serves all four.
+
+</Step>
+<Step>
+
+Run Claude Code in a TUIOS pane. Start and prompt submit report `working`, a notification reports `needs_input` with its message, and stop reports `done`.
+
+</Step>
+</Steps>
+
+The shim needs `tuios` and `python3` on `PATH`. Outside TUIOS it does nothing, so it is safe to leave in place. The same pattern works for any agent that can run a command on its lifecycle events. See `integrations/claude-code/README.md` in the repository.
+
+### Progress sequences
+
+An agent that prints OSC 9;4 progress sequences needs no wiring. Setting a progress bar maps to `working`, clearing it to `idle`, the error state to `errored`, and the warning state to `needs_input`.
+
+### Process detection
+
+With no report at all, the daemon checks each pane's foreground process every two seconds. If it is a known agent CLI, the pane is marked `working`. It reads the process name, its executable, and for an interpreter such as `node` or `python3`, the script it runs. It also looks behind wrappers such as `sh -c`, `timeout`, `npx`, `uvx` and `mise exec`. A directory named after an agent is never counted.
+
+TUIOS ships manifests for 22 agent CLIs, including Claude Code, Codex, Gemini CLI, Cursor Agent, Aider, OpenCode, Crush, Amp and Copilot. Add your own manifest as a TOML file in `~/.config/tuios/harnesses/` (or `$TUIOS_HARNESS_DIR`). It is picked up on the next daemon start.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `daemon.agent_autodetect` | `true` | Detect agent CLIs in the foreground |
+| `daemon.agent_detect_seconds` | `0` | Seconds between checks. `0` uses 2. A negative number turns checks off |
+
+Detection alone can say that an agent is present. It cannot say the agent is waiting for you.
+
+### Screen and title rules
+
+An agent sitting on a permission prompt often prints nothing more: no output, no title, no progress. The only evidence is the text on the screen. A manifest can carry screen rules that match the bottom of the pane and report `needs_input`, and title rules that match the window title. The Codex manifest, for example, reads `Action Required` from the title.
+
+Rules only run on a pane already attributed to a harness, and only when the pane writes, so a quiet pane costs nothing.
+
+### The stall timer
+
+If a pane reported `working` and then prints nothing for 30 seconds, the daemon looks at its screen one last time. If no rule matches, the pane becomes `unknown`. The timer only ever moves a pane out of `working`, so it never overrides `needs_input`, `done` or `errored`.
+
+Set `TUIOS_AGENT_STALL_SECONDS` in the daemon's environment to change the window. `0` or a negative value turns the timer off.
+
+## Reading the state
+
+```bash
+# One pane
+tuios get-agent-state -w build
+tuios get-agent-state -w build --json
+
+# Every agent pane in the session
+tuios list-agents
+tuios list-agents --all          # every pane, including ones not seen as agents
+tuios list-agents --all-hosts    # every machine in [hosts]
+
+# Block until an agent needs a person
+tuios wait-for agent-state -s work --until needs_input
+tuios wait-for agent-state -w build --until idle,done --timeout 600000
+```
+
+`get-agent-state --json` includes `state`, `message`, `needs_you`, the winning `source`, the `harness_id`, and `identity` and `confidence` saying how the harness was recognised. `list-windows --json` carries each pane's `agent_state` too.
+
+## When a pane is marked wrong
+
+Two commands show exactly what the daemon saw.
+
+```bash
+tuios explain-agent-detect -w build
+```
+
+This starts with a verdict in plain words, then the process name, arguments and executable the daemon read, any wrapper it looked behind, and what every manifest made of it:
+
+```
+This pane runs claude-code behind timeout.
+  The foreground process timeout is a wrapper, so tuios read the processes behind it.
+  The process claude matched the manifest claude-code on comm=claude.
+  A process name is strong evidence.
+```
+
+```bash
+tuios explain-agent-screen -w build
+tuios explain-agent-screen -w build --harness codex --lines 20
+```
+
+This prints the pane's screen tail exactly as the rules read it, then each rule, which one fired, and for each rule that did not, which string was the reason. Use it when writing a rule.
+
+## Alerts
+
+A state change can raise a desktop notification, a sound or terminal bell, a dock message you can click to go to the pane, and a shell command. The `[notifications.agent]` table controls all of it:
+
+```toml
+[notifications.agent]
+enabled = true
+notify = true              # notification in the terminal you are using
+dock = true                # clickable message in the dock
+sound = false
+sound_mode = "audio"       # audio, bell or both
+suppress_focused = true    # nothing for the pane you are looking at
+settle_seconds = 2         # drop the alert if the state changes within this time
+quiet_hours = "22:00-07:00"
+command = ""               # shell command to run on an alert
+
+[notifications.agent.states]
+needs_input = true
+errored = true
+done = true
+idle = false
+working = false
+```
+
+The notification is written into the stream your terminal draws, so it reaches the terminal in front of you even when the session runs on another machine. Alerts are raised by an attached client, so a detached session tracks state without announcing it. See [Configuration](/docs/configuration#notifications) and [Hooks](/docs/hooks) for the command contract.
+
+## Environment in a pane
+
+Every daemon pane gets these variables, which is how a shim or an agent finds TUIOS:
+
+| Variable | Value |
+|----------|-------|
+| `TUIOS_ENV` | `1` inside TUIOS |
+| `TUIOS_SOCKET` | The daemon socket |
+| `TUIOS_PANE_ID` | The pane's window id |
+| `TUIOS_WINDOW_ID` | The same id |
+| `TUIOS_SESSION` | The session name |
+| `TUIOS_HOST` | The hostname of the machine the pane's process runs on |
+| `TUIOS_RESTORED` | `1` in a shell started again after a restore |
+
+A pane whose process runs on another machine has a different set. See [Remote Hosts](/docs/remote-hosts#panes-on-another-machine).
+
+## Letting an agent drive TUIOS
+
+TUIOS ships a skill: a guide written for an agent running inside a pane. It covers addressing panes, reading and writing them, opening panes to run work in, waiting on conditions instead of polling, reporting state, and working with other agents. It is built into the binary, so it always matches the version you run.
+
+```bash
+tuios --skill
+```
+
+To install it for Claude Code:
+
+```bash
+mkdir -p ~/.claude/skills/tuios
+tuios --skill > ~/.claude/skills/tuios/SKILL.md
+```
+
+Run it again after you update TUIOS.
+
+<Callout type="info">
+Everything an agent does goes through the same `tuios` commands and [control protocol](/docs/control-protocol) you can use from a shell. There is no separate agent API.
+</Callout>
+
+## Related
+
+<Cards>
+  <Card title="Agent Messaging" href="/docs/agent-messaging" description="Messages, questions and shared files between agents" />
+  <Card title="Worktrees" href="/docs/worktrees" description="One agent per git worktree, and one prompt across several" />
+  <Card title="Session Rail" href="/docs/session-rail" description="The agents section and its filters" />
+  <Card title="Control Protocol" href="/docs/control-protocol" description="The verbs behind every command here" />
+</Cards>

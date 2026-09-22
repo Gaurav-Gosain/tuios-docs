@@ -1,0 +1,127 @@
+---
+title: Screenshots
+description: Capture a pane, a region or the whole screen as a styled PNG, SVG, HTML or text file
+icon: Camera
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+TUIOS renders screenshots from the pane's own cells, not from pixels on your screen. Colours, bold, italics and links are exact, and it works over SSH, in the browser, and on a detached session. A PNG or SVG gets a frame: padding, a background derived from the theme, rounded corners, a shadow and a title bar.
+
+## In the app
+
+| How | What it captures |
+|-----|------------------|
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>C</kbd> | Enter capture mode, then pick a pane |
+| Palette: `Screenshot this window` | The focused pane, at once |
+| Palette: `Screenshot a region` | Enter capture mode and drag over the area you want |
+| Palette: `Screenshot the screen` | The whole screen: panes, rail and dock |
+| Right-click a pane: `Screenshot this window` | That pane |
+
+In capture mode:
+
+| Key | Action |
+|-----|--------|
+| <kbd>Tab</kbd>, arrows, <kbd>h</kbd><kbd>j</kbd><kbd>k</kbd><kbd>l</kbd> | Move between panes |
+| <kbd>Enter</kbd> or <kbd>Space</kbd> | Capture the highlighted pane |
+| Mouse drag | Capture a region |
+| <kbd>f</kbd> | Capture the full screen |
+| <kbd>Esc</kbd>, <kbd>q</kbd> | Cancel |
+
+After a capture a preview panel opens (`screenshot.preview`). On a terminal with kitty graphics it shows the framed image. Elsewhere it shows the cells.
+
+| Key | Action |
+|-----|--------|
+| <kbd>Enter</kbd>, <kbd>q</kbd> | Keep the file and close |
+| <kbd>Esc</kbd> | Delete the file and close |
+| <kbd>c</kbd> | Copy the image to the clipboard |
+| <kbd>o</kbd> | Open the file |
+| <kbd>r</kbd> | Retake |
+| Arrows, <kbd>PgUp</kbd>/<kbd>PgDn</kbd>, <kbd>Home</kbd> | Scroll the preview |
+
+Files are saved under `screenshot.directory`, which defaults to `~/Pictures/tuios`.
+
+The action names `screenshot_window` and `screenshot_screen` have no default key. Bind them in `[keybindings]` if you want one-key captures.
+
+## From the command line
+
+`tuios screenshot` asks the daemon to render a pane, so nobody needs to be attached.
+
+```bash
+# The focused pane, as a PNG in screenshot.directory
+tuios screenshot
+
+# A named pane in a named session
+tuios screenshot -s work -w build
+
+# Include the last 200 lines of history above the screen
+tuios screenshot --scrollback --lines 200
+
+# An SVG for a README
+tuios screenshot --format svg --out demo.svg
+
+# Render in a different theme
+tuios screenshot --theme catppuccin_mocha
+```
+
+| Flag | Meaning |
+|------|---------|
+| `-s`, `--session` | Target session |
+| `-w`, `--window` | Target pane, by name or id |
+| `-f`, `--format` | `png`, `svg`, `html`, `ansi` or `txt` |
+| `--frame` | `window`, `plain` or `none` |
+| `--theme` | Render in this theme instead of the session's |
+| `-o`, `--out` | Output path instead of a generated name |
+| `-S`, `--scrollback` | Put the pane's history above the screen |
+| `--lines` | Limit the history to the last N rows |
+| `--cursor` | Draw the cursor |
+| `--copy`, `--no-copy` | Copy to the clipboard, or do not |
+| `--json` | Print the result as JSON: `path`, `format`, `cols`, `rows`, `bytes`, `copied`, `warnings` |
+
+A tape can take a screenshot too, with the `Screenshot` command. It renders the focused pane.
+
+## Formats
+
+| Format | What you get |
+|--------|--------------|
+| `png` | An image with the frame. `screenshot.scale` sets the pixel density |
+| `svg` | A vector image with the frame. Text stays text |
+| `html` | A page with the styled cells |
+| `ansi` | The pane as text with colour escape codes, no frame |
+| `txt` | Plain text, no frame |
+
+<Callout type="info" title="Set a theme for exact colours">
+With no theme set, TUIOS does not know your terminal's palette, so the 16 basic colours fall back to the xterm defaults and the result says so. Set `appearance.theme`, or pass `--theme`, to render in a known palette.
+</Callout>
+
+## The frame
+
+Every part of the frame is a `[screenshot]` option. `--frame`, `--format`, `--cursor` and `--copy`/`--no-copy` override the matching option for one capture.
+
+```toml
+[screenshot]
+format = "png"
+directory = "~/Pictures/tuios"
+frame = "window"         # window, plain or none
+background = "auto"      # auto, none, #rrggbb, or #rrggbb..#rrggbb for a gradient
+padding = 48             # pixels, 0 to 128
+radius = 10              # corner radius, 0 to 32
+shadow = true
+controls = "auto"        # auto, macos, glyphs or none
+title_format = "{title}" # {title}, {index}, {cwd}
+scale = 2                # PNG size multiplier, 1 to 4
+copy = true
+preview = true
+```
+
+To draw text in a particular font, set `font_family`, or `font_file` to a font file. `font_file` is used for PNG and embedded in SVG and HTML. The full table is in [Configuration](/docs/configuration#the-screenshot-table).
+
+## Related
+
+<Cards>
+  <Card title="Themes and Appearance" href="/docs/themes" description="Pick the palette a capture renders in" />
+  <Card title="Configuration" href="/docs/configuration#the-screenshot-table" description="Every screenshot option" />
+  <Card title="CLI Reference" href="/docs/cli-reference#screenshot" description="capture-pane for text, screenshot for pictures" />
+  <Card title="Tape Recording" href="/docs/tape-recording" description="Record a session as a replayable tape" />
+</Cards>
