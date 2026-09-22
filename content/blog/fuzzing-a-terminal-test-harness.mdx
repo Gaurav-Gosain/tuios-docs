@@ -1,6 +1,6 @@
 ---
 title: My fuzzer was optimising for my own bug
-description: A flaky fuzz suite turned out to be a PTY I never configured, and a minimiser that hill-climbed straight toward the defect. It handed me the answer for two days while I ignored it.
+description: A flaky TUI fuzz suite came down to a PTY line discipline I never configured, and a shrinker that minimised straight toward the race.
 date: '2026-07-07'
 author: Gaurav Gosain
 ---
@@ -14,7 +14,8 @@ supposed to interpret.
 
 So I wrote [tuitest](https://github.com/Gaurav-Gosain/tuitest). It spawns a
 program on a PTY, drives it, keeps a terminal emulator's worth of screen state
-on the other side, and lets you assert on what the program drew. Once that
+on the other side, and lets you assert on what the program drew. TUIOS's own
+[end-to-end suite](/docs/contributing#other-test-suites) runs on it. Once that
 worked, writing the input by hand started to feel silly.
 
 ## Fuzzing a TUI
@@ -154,6 +155,16 @@ exists to reproduce.
 So it clears only what reinterprets or manufactures bytes: `ISIG`, `IEXTEN`,
 the echo flags, `IXON`, `IXOFF`, `IXANY`. `ICANON` and CR/NL mapping stay.
 
+| setting | what it does before the program goes raw | tuitest |
+| --- | --- | --- |
+| `ISIG` | turns `^C`, `^Z` and `^\` into signals | cleared |
+| `IEXTEN` | `^V` and `^O` rewrite the input | cleared |
+| `ECHO`, `ECHOE`, `ECHOK`, `ECHONL` | writes the input back down the master, where it looks like output | cleared |
+| `IXON`, `IXOFF`, `IXANY` | `^S` stops the output stream until a `^Q` | cleared |
+| `ICANON` | line editing, input delivered a line at a time | kept |
+| CR/NL mapping (`ICRNL`) | Enter arrives as a newline | kept |
+| output processing | what the kernel does to the program's output | kept |
+
 I know that boundary is right because I put it in the wrong place first. My
 first attempt also cleared `ICRNL`, and the tape roundtrip tests failed
 immediately. That was the codebase telling me I had crossed from "stop the
@@ -199,7 +210,9 @@ A blank capture now exits 5 instead of 0, with a note about `--timeout` and
 The fuzzer found almost nothing in the program it was pointed at. It found
 bugs in the harness, a bug in a test, and a bug in its own shrinker. For a tool
 whose whole job is to tell the truth about what a program did, I think that is
-the better outcome, though it did not feel like one at the time.
+the better outcome, though it did not feel like one at the time. (A later fuzzer,
+pointed at the terminal emulator itself, found nothing for a different reason,
+and that got [its own post](/blog/the-fuzzer-that-found-nothing).)
 
 The habit I am keeping is counting. "Sometimes" cost me an evening in
 the wrong file. Seventeen in thirty-six took two minutes to establish and
