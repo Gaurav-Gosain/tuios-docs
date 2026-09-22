@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArticleLayout } from "@/components/article/article-layout";
 import {
   blogSource,
-  formatPostDate,
   getBlogPageImage,
   getBlogPosts,
+  getReadingMinutes,
 } from "@/lib/source";
 import { getMDXComponents } from "@/mdx-components";
 
@@ -17,36 +17,25 @@ export default async function Page(props: {
   if (!page) notFound();
 
   const MDX = page.data.body;
+  const posts = getBlogPosts();
+  const index = posts.findIndex((post) => post.url === page.url);
+  const newer = index > 0 ? posts[index - 1] : undefined;
+  const older = index >= 0 ? posts[index + 1] : undefined;
 
   return (
-    <main className="container mx-auto max-w-3xl px-4 py-12 md:py-16">
-      <Link
-        href="/blog"
-        className="text-fd-muted-foreground text-sm no-underline hover:text-fd-foreground"
-      >
-        Back to the blog
-      </Link>
-
-      <header className="mt-6 mb-10 border-fd-border border-b pb-8">
-        <h1 className="mb-3 font-bold text-3xl text-fd-foreground md:text-4xl">
-          {page.data.title}
-        </h1>
-        <p className="mb-4 text-base text-fd-muted-foreground leading-relaxed">
-          {page.data.description}
-        </p>
-        <p className="m-0 text-fd-muted-foreground text-sm">
-          {page.data.author}
-          <span aria-hidden="true"> / </span>
-          <time dateTime={page.data.date}>
-            {formatPostDate(page.data.date)}
-          </time>
-        </p>
-      </header>
-
-      <div className="prose">
-        <MDX components={getMDXComponents()} />
-      </div>
-    </main>
+    <ArticleLayout
+      back={{ href: "/blog", label: "All posts" }}
+      title={page.data.title}
+      description={page.data.description}
+      date={page.data.date}
+      author={page.data.author}
+      minutes={await getReadingMinutes(page)}
+      toc={page.data.toc}
+      newer={newer && { url: newer.url, title: newer.data.title }}
+      older={older && { url: older.url, title: older.data.title }}
+    >
+      <MDX components={getMDXComponents()} />
+    </ArticleLayout>
   );
 }
 
