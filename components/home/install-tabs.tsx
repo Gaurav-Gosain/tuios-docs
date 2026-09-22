@@ -3,31 +3,7 @@
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-
-const methods = [
-  {
-    id: "brew",
-    label: "Homebrew",
-    command: "brew install Gaurav-Gosain/tap/tuios",
-  },
-  {
-    id: "script",
-    label: "Script",
-    command:
-      "curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/tuios/main/install.sh | bash",
-  },
-  { id: "aur", label: "AUR", command: "yay -S tuios-bin" },
-  {
-    id: "nix",
-    label: "Nix",
-    command: "nix run github:Gaurav-Gosain/tuios#tuios",
-  },
-  {
-    id: "go",
-    label: "Go",
-    command: "go install github.com/Gaurav-Gosain/tuios/cmd/tuios@latest",
-  },
-] as const;
+import { installMethods as methods } from "@/lib/install-methods";
 
 /** Install commands, one tab per package manager, each with a copy button. */
 export function InstallTabs({ className }: { className?: string }) {

@@ -1,30 +1,37 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
 import type { Metadata } from 'next';
+import { feedAlternates } from '@/lib/metadata';
+import { site } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | TUIOS',
-    default: 'TUIOS: a window manager for your terminal',
+    template: `%s | ${site.name}`,
+    default: site.title,
   },
-  description:
-    'TUIOS is a terminal window manager with vim-style keys, tiling, nine workspaces, and sessions that keep running when you detach.',
-  metadataBase: new URL('https://tuios.gaurav.zip'),
+  description: site.description,
+  metadataBase: new URL(site.url),
+  applicationName: site.name,
+  authors: [{ name: site.author.name, url: site.author.url }],
+  creator: site.author.name,
+  alternates: {
+    types: feedAlternates,
+  },
   openGraph: {
-    title: 'TUIOS: a window manager for your terminal',
+    title: site.title,
     description:
       'Panes, tiling and nine workspaces inside the terminal you already use, with sessions that keep running when you detach.',
-    url: 'https://tuios.gaurav.zip',
-    siteName: 'TUIOS',
+    url: '/',
+    siteName: site.name,
     type: 'website',
-    images: '/og/site/image.png',
+    images: site.image,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'TUIOS: a window manager for your terminal',
+    title: site.title,
     description:
       'Panes, tiling and nine workspaces inside the terminal you already use, with sessions that keep running when you detach.',
-    images: '/og/site/image.png',
+    images: site.image,
   },
   icons: {
     icon: '/tuios-icon.png',

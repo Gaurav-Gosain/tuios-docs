@@ -3,6 +3,14 @@ import { notFound } from "next/navigation";
 import { ArticleLayout } from "@/components/article/article-layout";
 import { ReleaseTag } from "@/components/article/release-tag";
 import {
+  breadcrumbLd,
+  JsonLd,
+  personLd,
+  publisherLd,
+} from "@/components/json-ld";
+import { pageMetadata } from "@/lib/metadata";
+import { absoluteUrl } from "@/lib/site";
+import {
   getReadingMinutes,
   getReleasePageImage,
   getReleases,
@@ -45,6 +53,32 @@ export default async function Page(props: {
       newer={newer && { url: newer.url, title: newer.data.title }}
       older={older && { url: older.url, title: older.data.title }}
     >
+      <JsonLd
+        data={[
+          {
+            "@type": "TechArticle",
+            headline: page.data.title,
+            description: page.data.description,
+            datePublished: page.data.date,
+            url: absoluteUrl(page.url),
+            mainEntityOfPage: absoluteUrl(page.url),
+            image: absoluteUrl(getReleasePageImage(page).url),
+            inLanguage: "en",
+            author: personLd(page.data.author),
+            publisher: publisherLd,
+            about: {
+              "@type": "SoftwareApplication",
+              name: "TUIOS",
+              ...(tag ? { softwareVersion: tag.replace(/^v/, "") } : {}),
+            },
+          },
+          breadcrumbLd([
+            { name: "TUIOS", path: "/" },
+            { name: "Releases", path: "/releases" },
+            { name: page.data.title, path: page.url },
+          ]),
+        ]}
+      />
       <MDX components={getMDXComponents()} />
     </ArticleLayout>
   );
@@ -61,13 +95,15 @@ export async function generateMetadata(props: {
   const page = releasesSource.getPage([params.slug]);
   if (!page) notFound();
 
-  return {
+  return pageMetadata({
     title: page.data.title,
-    description: page.data.description,
-    openGraph: {
-      type: "article",
+    description: page.data.description ?? "",
+    path: page.url,
+    image: getReleasePageImage(page).url,
+    article: {
       publishedTime: page.data.date,
-      images: getReleasePageImage(page).url,
+      author: page.data.author,
+      section: "Releases",
     },
-  };
+  });
 }

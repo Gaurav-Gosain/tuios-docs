@@ -39,7 +39,11 @@ app/
   og/blog/[...slug]/          Open Graph images for posts
   og/releases/[...slug]/      Open Graph images for releases
   api/search/                 static search index (staticGET)
+  llms.txt/                   index of every page for language models
   llms-full.txt/              every docs page as one text file
+  sitemap.ts, robots.ts       sitemap.xml and robots.txt, built from the content
+  blog/rss.xml, blog/atom.xml           blog feeds, full text
+  releases/rss.xml, releases/atom.xml   release note feeds, full text
 components/
   layout/                     customized Fumadocs docs layout and sidebar
   toc/                        table of contents
@@ -52,8 +56,11 @@ content/
 lib/
   source.ts                   Fumadocs loaders for the three collections,
                               date sorting, OG image paths, llms text
+  site.ts                     site URL, name, description, feed paths
+  metadata.ts                 pageMetadata: canonical, feed links, OG and Twitter cards
+  feed.ts, feeds.ts           RSS and Atom rendering, markdown to HTML for feeds
   layout.shared.tsx           nav title and top links (Docs, Blog, Releases)
-public/                       icon, demo.gif, fonts, CNAME, _headers, robots.txt, sitemap.xml
+public/                       icon, demo.gif, fonts, CNAME, _headers
 mdx-components.tsx            registers the MDX widgets
 source.config.ts              the docs, blog and releases collections
 next.config.mjs               output: 'export'
@@ -91,5 +98,5 @@ A widget that shows TUIOS behavior should match the code. Check it against the t
 
 1. **Static export**: there is no server at runtime. Route handlers must be static (search uses `staticGET`, and every route sets `revalidate = false`).
 2. **Generated files**: do not edit `.source/`. `fumadocs-mdx` regenerates it.
-3. **Sitemap**: `public/sitemap.xml` is written by hand and lists only a few early pages. It is not generated from the content.
+3. **Search engines**: `app/sitemap.ts` lists every docs page, post and release note, so a new page needs no sitemap edit. Every page's metadata goes through `pageMetadata` in `lib/metadata.ts`, which sets the canonical URL and the feed links; Next.js replaces `alternates` as a whole, so a page that builds its own metadata loses the feed links. Docs, posts and release notes also emit JSON-LD (`components/json-ld.tsx`). A docs page's frontmatter `description` is its meta description, so keep it a real sentence.
 4. **Headers**: `public/_headers` sets a Content-Security-Policy. An external script, font or image host must be allowed there.

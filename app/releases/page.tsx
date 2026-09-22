@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FeedLinks } from "@/components/article/feed-links";
 import { ReleaseTag } from "@/components/article/release-tag";
+import { breadcrumbLd, JsonLd } from "@/components/json-ld";
 import { cn } from "@/lib/cn";
+import { pageMetadata } from "@/lib/metadata";
+import { absoluteUrl, feeds } from "@/lib/site";
 import {
   formatShortDate,
   getReadingMinutes,
@@ -9,11 +13,12 @@ import {
   getReleaseTag,
 } from "@/lib/source";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Releases",
   description:
     "What changed in each release of TUIOS, with interactive figures for the fixes.",
-};
+  path: "/releases",
+});
 
 export default async function ReleasesIndex() {
   const all = getReleases();
@@ -28,6 +33,27 @@ export default async function ReleasesIndex() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 pt-14 pb-20 md:px-6 md:pt-20">
+      <JsonLd
+        data={[
+          {
+            "@type": "CollectionPage",
+            name: "TUIOS releases",
+            description: metadata.description,
+            url: absoluteUrl("/releases"),
+            inLanguage: "en",
+            hasPart: releases.map(({ release }) => ({
+              "@type": "TechArticle",
+              headline: release.data.title,
+              url: absoluteUrl(release.url),
+              datePublished: release.data.date,
+            })),
+          },
+          breadcrumbLd([
+            { name: "TUIOS", path: "/" },
+            { name: "Releases", path: "/releases" },
+          ]),
+        ]}
+      />
       <header className="mb-12 max-w-2xl">
         <p className="mb-3 font-mono text-fd-primary text-sm">
           {latestTagged
@@ -50,6 +76,7 @@ export default async function ReleasesIndex() {
           </a>
           .
         </p>
+        <FeedLinks rss={feeds.releases.rss} atom={feeds.releases.atom} />
       </header>
 
       <ol className="relative">

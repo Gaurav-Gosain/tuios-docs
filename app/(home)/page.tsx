@@ -7,10 +7,15 @@ import {
   ServerCog,
   SquareTerminal,
 } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ReleaseTag } from "@/components/article/release-tag";
 import { InstallTabs } from "@/components/home/install-tabs";
+import { JsonLd, personLd } from "@/components/json-ld";
+import { installMethods } from "@/lib/install-methods";
+import { pageMetadata } from "@/lib/metadata";
+import { absoluteUrl, site } from "@/lib/site";
 import {
   formatShortDate,
   getBlogPosts,
@@ -18,14 +23,74 @@ import {
   getReleaseTag,
 } from "@/lib/source";
 
+export const metadata: Metadata = pageMetadata({
+  description: site.description,
+  path: "/",
+});
+
 export default function HomePage() {
   const releases = getReleases();
   const latestTagged = releases.find((release) => getReleaseTag(release));
   const newestNote = releases[0];
   const posts = getBlogPosts().slice(0, 3);
+  const latestTag = latestTagged ? getReleaseTag(latestTagged) : null;
 
   return (
     <>
+      <JsonLd
+        data={[
+          {
+            "@type": "WebSite",
+            name: site.name,
+            url: site.url,
+            description: site.description,
+            inLanguage: "en",
+          },
+          {
+            "@type": "SoftwareApplication",
+            name: site.name,
+            alternateName: "Terminal UI Operating System",
+            description: site.description,
+            url: site.url,
+            image: absoluteUrl(site.image),
+            screenshot: absoluteUrl("/demo-poster.jpg"),
+            applicationCategory: "DeveloperApplication",
+            applicationSubCategory: "Terminal multiplexer",
+            operatingSystem: "Linux, macOS, Windows, FreeBSD",
+            ...(latestTag
+              ? {
+                  softwareVersion: latestTag.replace(/^v/, ""),
+                  releaseNotes: absoluteUrl(latestTagged?.url ?? "/releases"),
+                }
+              : {}),
+            license: "https://opensource.org/licenses/MIT",
+            isAccessibleForFree: true,
+            offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+            author: personLd(),
+            downloadUrl: `${site.repository}/releases`,
+            installUrl: absoluteUrl("/docs/getting-started"),
+            softwareHelp: {
+              "@type": "CreativeWork",
+              url: absoluteUrl("/docs"),
+            },
+            sameAs: [site.repository],
+            potentialAction: installMethods.map((method) => ({
+              "@type": "InstallAction",
+              name: `Install with ${method.label}`,
+              description: method.command,
+            })),
+          },
+          {
+            "@type": "SoftwareSourceCode",
+            name: site.name,
+            codeRepository: site.repository,
+            programmingLanguage: "Go",
+            license: "https://opensource.org/licenses/MIT",
+            author: personLd(),
+            targetProduct: { "@type": "SoftwareApplication", name: site.name },
+          },
+        ]}
+      />
       <section className="hero-wash">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center px-4 pt-14 text-center md:px-6 md:pt-20">
           {newestNote ? (
