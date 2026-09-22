@@ -38,6 +38,7 @@ import { PaneBoxNegotiation } from '@/components/mdx/pane-box-negotiation';
 import { AgentSourceTimeline } from '@/components/mdx/agent-source-timeline';
 import { MailboxSandbox } from '@/components/mdx/mailbox-sandbox';
 import { ReattachReplay } from '@/components/mdx/reattach-replay';
+import { ScrollbackBytes } from '@/components/mdx/scrollback-bytes';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -81,6 +82,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     AgentSourceTimeline,
     MailboxSandbox,
     ReattachReplay,
+    ScrollbackBytes,
     ...components,
   };
 }
