@@ -16,8 +16,8 @@ Something that degrades as you go is a queue you are not draining fast enough.
 
 Every mouse motion event composed a full frame. A frame during a tiling resize
 costs 3.3 to 6.7 ms, which caps the drain rate somewhere around 150 to 300
-events per second. A drag emits roughly one event per cell crossed, and moving
-a mouse across a terminal briskly beats that comfortably.
+events per second. A drag emits roughly one event per cell crossed, and a brisk
+drag across a terminal easily outpaces that.
 
 So the queue grows for the duration of the drag, and what you see is wherever
 the pointer was some number of events ago. Stop moving and it catches up. That
@@ -64,16 +64,25 @@ TUIOS wires up `net/http/pprof` behind a flag:
 
 ```go
 if pprofAddr != "" {
-    runtime.SetBlockProfileRate(1)
-    runtime.SetMutexProfileFraction(1)
+    runtime.SetBlockProfileRate(10000) // one sample per ~10us blocked
+    runtime.SetMutexProfileFraction(100)
     go func() { _ = http.ListenAndServe(pprofAddr, nil) }()
 }
 ```
 
 Block and mutex profiling are off by default in Go and cost real overhead when
-on, which is why they sit behind the same flag rather than being always
-enabled. For a program that spends its life waiting on PTY reads and holding
-locks, those are the two profiles that explain anything.
+on, which is why they sit behind the same flag instead of being always
+enabled. They are sampled too, because recording every event made a `--pprof`
+run feel much slower than a normal one. For a program that spends its life
+waiting on PTY reads and holding locks, those are the two profiles that explain
+anything.
+
+<Callout title="Corrected 22 September 2026">
+  An earlier version of this post showed `SetBlockProfileRate(1)` and
+  `SetMutexProfileFraction(1)`. The code used those values for 25 minutes on
+  the morning of 4 July, before this post was written. The snippet now shows
+  the sampled rates it actually used.
+</Callout>
 
 ## Four hypotheses. Two wrong.
 
@@ -106,9 +115,8 @@ down.
 
 ## Fixing the top cost promotes the next one
 
-With renders coalesced, the handler ran on every event while renders did not,
-so the handler became the new floor. A gap appeared that had been sitting
-invisible underneath the old cost.
+With renders coalesced, the handler still ran on every event, so it became the
+new floor. That exposed a gap the old cost had been hiding.
 
 <BenchBars
   groups={["4", "9"]}
@@ -148,8 +156,8 @@ It looked like a red afterimage trailing the cyan separator.
 My first fix put the flush on the paths that change geometry, which is the
 obvious place and the wrong one. Any frame composed for another reason bypassed
 it, and `PTYDataMsg` composes constantly during a real drag, because the
-terminals in the other panes are still producing output. Which is why it showed
-up constantly in use and needed interleaved PTY output to reproduce in a test.
+terminals in the other panes are still producing output. That is why it showed
+up all the time in use but needed interleaved PTY output to reproduce in a test.
 
 The flush belongs in `View`, immediately before composing. Geometry can be
 applied whenever, but the ratios have to agree with it on any frame that
@@ -235,9 +243,9 @@ What found it was instrumenting the running program: log the pointer position,
 the grabbed divider, and every window whose geometry changed, then do the drag
 and read the log. One drag showed five windows moving where two should have,
 one of them reversing direction twenty-two times. The benchmarks had been
-accurately measuring the wrong thing for three rounds. What fell out of that
-log, three separate defects and one candidate that turned out to be correct
-behaviour, became [its own post](/blog/one-divider-five-windows).
+accurately measuring the wrong thing for three rounds. That log turned up three
+separate defects and one suspect that turned out to be correct behaviour, and
+they got [their own post](/blog/one-divider-five-windows).
 
 When the numbers and the experience disagree, the experience wins. The
 benchmark is not wrong. It is answering the question you encoded, precisely,
