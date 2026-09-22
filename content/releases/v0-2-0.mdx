@@ -5,50 +5,50 @@ date: '2025-11-02'
 author: Gaurav Gosain
 ---
 
-Eight commits, two of them big: tuios got themes, and it got a new PTY layer
-underneath every window. The rest is cleanup that matters on the way out the
-door, literally in one case, since this release is also where tuios learned to
-restore your terminal properly on exit.
+Eight commits. Two are large: tuios got themes, and a new PTY layer under every
+window. This is also the release where tuios restores your terminal properly
+when it exits.
 
 ## Themes
 
-tuios now ships with over 340 color themes via bubbletint, selected with
-`--theme` (default: tokyonight). A theme does not just recolor the chrome. A
-custom SGR handler maps the 16 ANSI colors to the theme's palette, so `ls`,
-vim, and htop running inside a window pick up the theme too, instead of
-whatever hardcoded colors they would normally show. 256-color and RGB escape
-sequences pass through untouched, so applications that ask for exact colors
-still get them.
+tuios ships over 340 colour themes from bubbletint. Pick one with `--theme`
+(the default is `tokyonight`).
 
-Window borders use the palette to carry state: unfocused windows take the
-theme's red, a focused window in window mode is bright cyan, and in terminal
-mode it is bright green. `--list-themes` prints all of them and
-`--preview-theme` shows a theme's 16 ANSI colors with hex values before you
-commit to one.
+- A theme recolours the programs in your windows too, not only the chrome. A
+  custom SGR handler maps the 16 ANSI colours to the theme's palette, so `ls`,
+  vim and htop follow it.
+- 256-colour and RGB sequences pass through unchanged, so a program that asks
+  for an exact colour still gets it.
+- Borders show state: an unfocused window uses the theme's red, a focused
+  window in window mode is bright cyan, and in terminal mode it is bright
+  green.
+- `--list-themes` prints every theme, and `--preview-theme` shows a theme's 16
+  ANSI colours with their hex values.
 
 ## A new PTY layer
 
-Every terminal window sits on a pseudo-terminal, and this release swaps the
-library that provides it: go-pty out, charmbracelet's xpty in, for a cleaner
-API and better Windows ConPTY support. The migration broke shell startup
-first. Processes were no longer getting the PTY as their controlling terminal,
-which shells like fish require, so windows spawned and immediately died with
-exit status 1. The fix, in this same release, sets up the process session and
-controlling terminal explicitly, matching what the old library did implicitly.
+Every window runs on a pseudo-terminal, and this release swaps the library
+that provides it: go-pty out, charmbracelet's xpty in, for a cleaner API and
+better Windows ConPTY support.
 
-## Smaller changes
+The switch first broke shell startup. Processes no longer got the PTY as their
+controlling terminal, which shells such as fish need, so windows opened and
+died at once with exit status 1. The fix, in the same release, sets up the
+process session and controlling terminal explicitly, as the old library did
+implicitly.
 
-- Windows can no longer be dragged or resized off screen. Bounds checking
-  keeps them inside the viewport and out of the dock area, which also fixes
-  rendering artifacts at the edges.
-- tuios exits cleanly. SIGINT and SIGTERM are handled, and on the way out it
-  disables mouse tracking, restores the cursor, and leaves the alternate
-  screen, so your shell prompt is not corrupted.
-- The README no longer disagrees with itself about the background refresh
-  rate (30Hz, not 20Hz). Caught by ShalokShalom.
-- The nix packaging workflow now triggers on tag pushes, not just release
-  events, so it actually runs on every version.
+## Changed and fixed
 
-v0.2.0 was tagged on 2025-11-02. Two patch releases followed within days, and
-their commits are covered on the [v0.3.0 page](/releases/v0-3-0) along with
-everything else from that three-day stretch.
+- Windows can no longer be dragged or resized off screen. They stay inside the
+  viewport and out of the dock, which also fixes drawing artifacts at the
+  edges.
+- tuios exits cleanly. It handles SIGINT and SIGTERM, and on the way out it
+  turns off mouse tracking, restores the cursor, and leaves the alternate
+  screen, so your shell prompt is intact.
+- The README gave two background refresh rates. It now says 30Hz, not 20Hz.
+  Caught by ShalokShalom.
+- The Nix packaging workflow now runs on tag pushes, not only on release
+  events, so it runs for every version.
+
+v0.2.0 was tagged on 2 November 2025. Two patch releases followed within days.
+Their changes are on the [v0.3.0 page](/releases/v0-3-0).
