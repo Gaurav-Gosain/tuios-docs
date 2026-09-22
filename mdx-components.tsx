@@ -23,6 +23,7 @@ import { InvariantBlind } from '@/components/mdx/invariant-blind';
 import { CellShape } from '@/components/mdx/cell-shape';
 import { SpentFrames } from '@/components/mdx/spent-frames';
 import { ScrollColumnsRoundTrip } from '@/components/mdx/scroll-columns-round-trip';
+import { ExtentScan } from '@/components/mdx/extent-scan';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -51,6 +52,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     CellShape,
     SpentFrames,
     ScrollColumnsRoundTrip,
+    ExtentScan,
     ...components,
   };
 }
