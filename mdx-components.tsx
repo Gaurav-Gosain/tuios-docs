@@ -25,6 +25,8 @@ import { SpentFrames } from '@/components/mdx/spent-frames';
 import { ScrollColumnsRoundTrip } from '@/components/mdx/scroll-columns-round-trip';
 import { ExtentScan } from '@/components/mdx/extent-scan';
 import { RenderPathAttrs } from '@/components/mdx/render-path-attrs';
+import { AuditChurn } from '@/components/mdx/audit-churn';
+import { HelpKeyDrift } from '@/components/mdx/help-key-drift';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -55,6 +57,8 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ScrollColumnsRoundTrip,
     ExtentScan,
     RenderPathAttrs,
+    AuditChurn,
+    HelpKeyDrift,
     ...components,
   };
 }

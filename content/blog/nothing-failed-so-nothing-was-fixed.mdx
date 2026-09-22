@@ -1,0 +1,267 @@
+---
+title: Nothing failed, so nothing was fixed
+description: A whole-codebase audit of tuios found a flag nothing set, an interface with one implementation behind 140 call sites, and copies of code that had quietly drifted apart. Dead code survives because nothing fails when it is wrong.
+date: '2026-09-22'
+author: Gaurav Gosain
+---
+
+In September I audited the whole tuios codebase. Not a bug hunt with a
+reported bug at the end of it. A read of everything, looking for code that
+was dead, duplicated, wrong, or out of step with the docs.
+
+I did it with AI agents, orchestrated by me. That part needs a clear account,
+so here is what the setup was:
+
+- Eight auditors read the tree with no write access. They produced 81
+  findings, each with the file and line evidence behind it.
+- Every finding went to a second agent whose only job was to refute it.
+- The surviving findings were grouped into 11 implementation units. Each unit
+  ran in its own git worktree, and each diff got an adversarial review before
+  it merged.
+- Every bug fix came with a new test, and the test had to be seen failing:
+  revert the fix, run the test, watch it fail, put the fix back.
+
+It landed as 92 commits. The production Go got 1,494 lines shorter while
+gaining features, and the tests got 2,120 lines longer.
+
+Most of what it found has the same shape, and that shape is the point of
+this post. The code was wrong, or dead, or two copies disagreed, and nothing
+failed. So nothing had ever made me look.
+
+## A flag nothing ever set
+
+`terminal.Window` had a field called `Minimizing`, documented as "True when
+window is being minimized (animation playing)". Production code read it in 27
+places. Every tiler, the dock, the workspace switcher and the render loop
+guarded on it:
+
+```go
+if w.Workspace == m.CurrentWorkspace && !w.Minimized && !w.Minimizing {
+```
+
+The only line in the tree that set it to `true` was in a test. Production code
+only ever set it to `false`. One of those writes was in `MinimizeWindow`, right
+under a comment that said "Immediately minimize without animation".
+
+The history explains it. Minimizing used to animate: set `Minimizing`, start
+an animation, clear the flag when it ends. On 24 October 2025, in a commit
+titled "refactor: split copymode.go into modular components", the animation
+was replaced by an immediate minimize. The field stayed, and so did the
+animation constructor, the animation type, its completion branch and the 18
+guards that read the flag at the time. Code written over the next eleven
+months added nine more guards on a flag that could not be true.
+
+It gets better. An earlier dead-code sweep, in August 2026, found the
+wrapper `CreateMinimizeAnimation` with zero callers and deleted it. Its
+commit message says minimize "animates through the generic path". It did
+not. The sweep removed the one caller-less function it could see and kept
+`ui.NewMinimizeAnimation`, because a test still called that one, and the
+test set `Minimizing = true` so it had something to animate. A test was
+keeping a dead feature alive.
+
+Nothing could fail here. A term that checks a flag that is always false
+never changes the answer, so no test can see it being wrong. The branch it
+exists for, the one that runs while a window is minimizing, never ran.
+The audit removed the flag, the animation and every guard term, 202 lines
+out and 48 in.
+
+## An interface with one implementation
+
+The daemon protocol had a `Codec` interface: `Encode`, `Decode`, `Type`. It
+came in December 2025 with two implementations, gob and JSON, and a
+negotiation step so a client could pick one.
+
+The August sweep removed the JSON codec, because no client could negotiate
+it. It kept the interface. So the codebase ended up with `GetCodec`, which
+ignored its argument and returned the gob singleton, a `connState`, `Client`
+and `TUIClient` that each carried a codec field that was always the same
+value, and about 140 call sites of `*WithCodec` functions that passed it
+along.
+
+None of that was broken. It was indirection that described a choice that
+no longer existed, and every reader of the protocol code paid for it. The
+fix removed the interface and the `*WithCodec` variants and left two
+unexported gob helpers. The wire did not change: frames still carry codec
+byte 0, and the welcome message still says `"gob"`, so older and newer peers
+still talk.
+
+## The same code, twice
+
+Reading a process's current directory is platform code: `/proc` on Linux, a
+kernel call on macOS, nothing elsewhere. tuios had it twice, as three
+build-tagged files in `internal/session` and the same three in
+`internal/terminal`. Both packages already imported `internal/ptyspawn`, so
+one copy moved there. A side effect: a resurrection test that had only run on
+Linux now runs on macOS too.
+
+The input package had a more instructive case. Seven prefix actions (new
+window, the four split actions, settings, the command palette) had handlers
+that were exact copies of the window-management handlers. The skeptic diffed
+each pair after renaming and found them identical, so the prefix actions now
+register the shared handlers and the copies are gone. No behavior changed.
+
+An eighth prefix handler was nearly a copy, and that is the one that
+mattered. `prefix_help` toggled the help overlay without resetting its scroll
+position. The normal toggle and the command palette both reset it. So help
+opened from the leader key could start part way down the list. Seven copies
+that still agreed were harmless. The one that had drifted was a bug.
+
+## Two copies that disagreed
+
+The help overlay's key handling was also written twice, once for terminal
+mode and once for window-management mode. Over time the copies drifted. Try
+the combinations:
+
+<HelpKeyDrift />
+
+In window mode, `?` while searching only left the search, although the footer
+in both modes says `? close`. `q` while searching also left the search, so a
+search could not contain the letter q. In terminal mode, `q` outside a search
+did nothing at all.
+
+Merging the copies meant choosing one rule, and I chose the one the footer
+already advertises. `esc` leaves a search and otherwise closes. `?` always
+closes. `q` closes outside a search and is typed into the query inside one.
+The new test, `TestHelpKeysAgreeAcrossModes`, runs every case in both modes.
+Run against the old two files, exactly the three drifted cases failed.
+
+Only part of the overlay chain could be shared. The overlays checked after
+settings and the pickers are checked in a different order in each mode, and
+several of them can be open at once. One shared order would change which
+panel gets a key. So that tail stays per mode, and the commit says why.
+
+## Front ends that had drifted
+
+tuios has three front ends: the local terminal, `tuios ssh`, and the separate
+`tuios-web` binary. One of the implementation units was only about places
+where they disagreed.
+
+`tuios-web` took 9 of the 18 interface flags the other two take. You could not
+pass `--shared-borders`, `--hide-clock` or `--confirm-quit` to a browser
+session, only set them in the config file. The flags moved into a new
+`internal/cliflags` package that both binaries register, and a test checks
+that the web root command takes every flag in the set, so they cannot drift
+again.
+
+SSH panes could start as `TERM=dumb`. The pane environment trusted the
+server's own environment only when `COLORTERM=truecolor` was set, and
+otherwise detected colour support from the server process's stdout. Under
+systemd, `nohup` or a log file, that stdout is not a terminal, detection
+answers "no TTY", and that maps to `TERM=dumb`. So every ephemeral pane on a
+headless SSH server ran as a dumb terminal while being drawn on the client's
+real one. The SSH server now sets `xterm-256color` with truecolor for that
+case at startup. A server started in a real terminal still detects from it.
+
+Ephemeral web sessions had their own version of this: a placeholder 10x20
+cell instead of the browser's measured one, no palette, and `TERM=xterm-kitty`,
+which needs a terminfo entry the server may not have. They now get the
+browser's cell size and palette, and `xterm-256color`.
+
+## Two small ones with real edges
+
+A daemon pane resize called the PTY library's `Resize`, which writes the
+window size with zero pixels. Then every caller wrote it again with the
+pixel size, through a hand-written `TIOCSWINSZ`. For one resize the guest got
+two `SIGWINCH` signals, and a program that read the size between them saw a
+window with no pixels. Now the PTY remembers the cell size a client reported,
+and one write carries cells and pixels together.
+
+The nightly race job had been failing a server test now and then, one that
+floods state syncs and checks that the client ends on the newest snapshot:
+
+```
+TestStateSyncFloodLeavesTheClientOnTheNewestSnapshot
+```
+
+The test used a round trip on the client's own connection as a barrier, on the grounds
+that the reply only comes back after every state sync sent before it. That
+holds for syncs already on that connection. But the daemon writes each
+client's broadcasts from its own goroutine, so under `-race` the reply could
+overtake the last broadcast. The snapshot was late, not lost. The test now
+waits for the newest snapshot itself, and it still fails if the queue ever
+drops the newest one instead of the oldest.
+
+## Where the lines went
+
+Here is the whole change, by package. Switch between production code and
+tests.
+
+<AuditChurn />
+
+The biggest removals are in `internal/app` and `internal/session`: dead
+methods, fields that were written and never read, 69 unused config constants,
+the minimize code and the codec. The packages that only grew are new ones
+that replaced copies: `cliflags` for the flags, and `served` for the one model
+builder the SSH and web servers now share (there were four). The existing
+`guestenv` package took over the `TERM` detection, which the CLI client had
+its own, slightly different, copy of.
+
+The test view is mostly the other direction. The biggest exceptions are
+`internal/pool` and `internal/ui`, where the tests went away with the code
+they tested: a style pool that saved nothing, because lipgloss v2 styles are
+values and the pooled pointer never carried any state, and the minimize
+animation.
+
+There were speedups too, each its own commit so a bad one can be reverted
+alone. The largest was in the emulator: tracking where each row's text ends,
+so a scroll stops copying at the end of the text instead of the end of the
+row. A short-line scroll with scrollback went from about 1,120 ns to 240 ns
+of CPU per line. The details and the measurement method are in the "2026-09
+vt parse and scroll pass" section of `docs/perf.md`. One fix went the other
+way: the focused pane had been dropping underline, and fixing it cost 3 to 9%
+on the cell loop, because every cell now carries more style. Two follow-up
+commits took loop-invariant work out of the per-cell path and won that back.
+
+## What the agents did well, and what they did not
+
+The skeptic step earned its place. It did not just confirm findings. It cut
+them down. An auditor listed `SendInputToDaemon` as dead, and the skeptic
+found seven calls to it in the latency tests. An auditor said two picker
+state machines were identical, and the skeptic showed that their cancel and
+apply logic differed. And the agents doing the work pushed back as well: an auditor had
+called one reordering of a window-state update safe, and the implementing
+agent traced the moved field through four calls to the pane name shown in
+agent alerts, and left that part alone.
+
+The adversarial review caught real mistakes too. The unit that made daemon
+panes honour `appearance.preferred_shell` also made the control client's
+hello resolve the shell, by loading the user config. That client backs every
+control command, tape runs, `tuios logs` and shell completion. So each of
+them parsed the config, wrote a default `config.toml` if none existed, and
+printed config warnings to stderr. The review blocked it, and the hello now
+names no shell and lets the daemon resolve it.
+
+The docs had false claims in them, which is the same failure in prose: two
+commands the docs used did not exist, and the embedding recipes in the
+library docs did not compile. Nothing ran them. An earlier post on this blog
+had a wrong command too, and it now carries a correction note.
+
+What did not go as well. The machine was shared by all of the agents at once,
+with a load average between 9 and 32 on 11 cores. Wall-clock benchmarks
+swung by up to 2x between identical runs, so every comparison had to
+alternate old and new binaries over several rounds, and some tests timed out
+under load and passed when rerun alone. That is noise I had to rule out by
+hand each time. One agent overwrote a helper script another agent had left in
+the shared scratch directory. One unit broke two tree-wide tests, and only
+its full-suite run caught that.
+
+And the audit found what reading can find. It is very good at "nothing refers
+to this". It is less good at "this matters". A few unused functions are still
+there because whether to keep them is my decision, not a fact about the code. Some things stayed open: the SSH half of the host
+palette has no source to read from, because an SSH client sends nothing that
+names its colours.
+
+## What I keep from this
+
+Every item in this post survived for the same reason: nothing failed when it
+was wrong. A guard on a flag that is always false cannot fail. An interface
+with one implementation cannot pick the wrong one. Two copies of a handler
+each pass their own tests. A doc command is not run by anything. The flaky
+race test is the exception: it did fail, and that is why it was on the list.
+
+So the rule I held the audit to was the one from the start of this post: a
+fix is not done until a test fails without it. That is what the revert step
+checks. A test that has never failed has not shown it can see the bug.
+And for dead code, the useful question is not "is this called?". It is "if
+this were wrong, what would tell me?". When the answer is nothing, the code
+is either dead or untested, and either way it should not stay as it is.
