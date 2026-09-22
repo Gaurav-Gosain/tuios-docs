@@ -37,6 +37,7 @@ import { ClipWidth } from '@/components/mdx/clip-width';
 import { PaneBoxNegotiation } from '@/components/mdx/pane-box-negotiation';
 import { AgentSourceTimeline } from '@/components/mdx/agent-source-timeline';
 import { MailboxSandbox } from '@/components/mdx/mailbox-sandbox';
+import { ReattachReplay } from '@/components/mdx/reattach-replay';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -79,6 +80,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     PaneBoxNegotiation,
     AgentSourceTimeline,
     MailboxSandbox,
+    ReattachReplay,
     ...components,
   };
 }
