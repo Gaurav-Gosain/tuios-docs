@@ -33,6 +33,7 @@ import { StyleIdRecycle } from '@/components/mdx/style-id-recycle';
 import { QueryPath } from '@/components/mdx/query-path';
 import { SendKeysTokens } from '@/components/mdx/send-keys-tokens';
 import { ClipWidth } from '@/components/mdx/clip-width';
+import { PaneBoxNegotiation } from '@/components/mdx/pane-box-negotiation';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -71,6 +72,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     QueryPath,
     SendKeysTokens,
     ClipWidth,
+    PaneBoxNegotiation,
     ...components,
   };
 }
