@@ -16,6 +16,8 @@ const columns = [
       { text: "Blog", href: "/blog" },
       { text: "Releases", href: "/releases" },
       { text: "Contributing", href: "/docs/contributing" },
+      { text: "Blog RSS feed", href: "/blog/rss.xml" },
+      { text: "llms.txt", href: "/llms.txt" },
       { text: "llms-full.txt", href: "/llms-full.txt" },
     ],
   },
@@ -67,6 +69,14 @@ export function SiteFooter() {
                       href={link.href}
                       target="_blank"
                       rel="noopener noreferrer"
+                      className="text-fd-foreground/80 transition-colors hover:text-fd-primary"
+                    >
+                      {link.text}
+                    </a>
+                  ) : /\.(xml|txt)$/.test(link.href) ? (
+                    // A feed or text file, not a page the router can render.
+                    <a
+                      href={link.href}
                       className="text-fd-foreground/80 transition-colors hover:text-fd-primary"
                     >
                       {link.text}

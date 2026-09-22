@@ -2,10 +2,19 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ArticleLayout } from "@/components/article/article-layout";
 import {
+  breadcrumbLd,
+  JsonLd,
+  personLd,
+  publisherLd,
+} from "@/components/json-ld";
+import { pageMetadata } from "@/lib/metadata";
+import { absoluteUrl } from "@/lib/site";
+import {
   blogSource,
   getBlogPageImage,
   getBlogPosts,
   getReadingMinutes,
+  getWordCount,
 } from "@/lib/source";
 import { getMDXComponents } from "@/mdx-components";
 
@@ -21,6 +30,7 @@ export default async function Page(props: {
   const index = posts.findIndex((post) => post.url === page.url);
   const newer = index > 0 ? posts[index - 1] : undefined;
   const older = index >= 0 ? posts[index + 1] : undefined;
+  const words = await getWordCount(page);
 
   return (
     <ArticleLayout
@@ -34,6 +44,33 @@ export default async function Page(props: {
       newer={newer && { url: newer.url, title: newer.data.title }}
       older={older && { url: older.url, title: older.data.title }}
     >
+      <JsonLd
+        data={[
+          {
+            "@type": "BlogPosting",
+            headline: page.data.title,
+            description: page.data.description,
+            datePublished: page.data.date,
+            url: absoluteUrl(page.url),
+            mainEntityOfPage: absoluteUrl(page.url),
+            image: absoluteUrl(getBlogPageImage(page).url),
+            inLanguage: "en",
+            wordCount: words,
+            author: personLd(page.data.author),
+            publisher: publisherLd,
+            isPartOf: {
+              "@type": "Blog",
+              name: "TUIOS engineering blog",
+              url: absoluteUrl("/blog"),
+            },
+          },
+          breadcrumbLd([
+            { name: "TUIOS", path: "/" },
+            { name: "Blog", path: "/blog" },
+            { name: page.data.title, path: page.url },
+          ]),
+        ]}
+      />
       <MDX components={getMDXComponents()} />
     </ArticleLayout>
   );
@@ -50,13 +87,15 @@ export async function generateMetadata(props: {
   const page = blogSource.getPage([params.slug]);
   if (!page) notFound();
 
-  return {
+  return pageMetadata({
     title: page.data.title,
-    description: page.data.description,
-    openGraph: {
-      type: "article",
+    description: page.data.description ?? "",
+    path: page.url,
+    image: getBlogPageImage(page).url,
+    article: {
       publishedTime: page.data.date,
-      images: getBlogPageImage(page).url,
+      author: page.data.author,
+      section: "Engineering blog",
     },
-  };
+  });
 }
