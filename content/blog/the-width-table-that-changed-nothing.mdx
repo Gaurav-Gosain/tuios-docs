@@ -1,11 +1,11 @@
 ---
-title: I ported a correct width table and it fixed nothing
-description: Grapheme widths were wrong in the browser client, so I lifted the tables from an implementation that gets it right. Measured it. No change at all, for a reason that took me longer to see than it should have.
+title: I ported a correct emoji width table and it fixed nothing
+description: Emoji widths were wrong in the tuios browser client. I ported ghostty's per-codepoint width table and nothing changed, because width belongs to clusters.
 date: '2026-06-27'
 author: Gaurav Gosain
 ---
 
-Emoji were breaking layout in the browser terminal. A family emoji would claim
+Emoji were breaking layout in the [browser terminal](/docs/web). A family emoji would claim
 the wrong number of columns, everything after it on the line would shift, and
 box drawing further along would stop lining up.
 
@@ -89,6 +89,15 @@ fraction wildly while nothing is actually wrong, so the number measures jitter
 rather than correctness. Those rows are compared by ink coverage per cell
 instead. The question is whether the right cell contains the right amount of
 glyph, not whether the exact pixels are identical.
+
+Side by side, the three comparisons and what each one accepts:
+
+| Suite | Compared by | Passes when |
+| --- | --- | --- |
+| Width corpus, 45 cases | cursor advance, as integers | equal to ghostty-vt (39 agree, 6 asserted as documented divergences) |
+| Four golden scenarios | differing pixels against the reference | under 2 percent |
+| Emoji golden scenario | differing pixels against the reference | under 5 percent |
+| Torture corpus, 24 entries | ink coverage per cell | the right cell holds the right amount of glyph |
 
 Every threshold in that list is a claim about the size of defect I am prepared
 not to notice. Choosing them felt like bookkeeping at the time. It was not.

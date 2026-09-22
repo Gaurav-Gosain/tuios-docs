@@ -31,6 +31,8 @@ import { PreshapedGuard } from '@/components/mdx/preshaped-guard';
 import { MediumProbe } from '@/components/mdx/medium-probe';
 import { StyleIdRecycle } from '@/components/mdx/style-id-recycle';
 import { QueryPath } from '@/components/mdx/query-path';
+import { SendKeysTokens } from '@/components/mdx/send-keys-tokens';
+import { ClipWidth } from '@/components/mdx/clip-width';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -67,6 +69,8 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     MediumProbe,
     StyleIdRecycle,
     QueryPath,
+    SendKeysTokens,
+    ClipWidth,
     ...components,
   };
 }
