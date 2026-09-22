@@ -1,457 +1,468 @@
 ---
 title: Keybindings
-description: Complete keyboard shortcut reference for TUIOS
+description: Every default key in TUIOS, grouped by the config section that owns it
 icon: Keyboard
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-# Keybindings Reference
+TUIOS has two modes. **Window mode** is for managing panes. **Terminal mode** sends your keys to the focused pane. A new session starts in window mode.
 
-Complete keyboard shortcut reference for TUIOS. All keybindings are customizable through the [configuration file](/docs/configuration).
+The leader key is <kbd>Ctrl</kbd>+<kbd>B</kbd>. Press it, release it, then press a command key. The leader works in both modes.
 
-<Callout title="Quick Tip" type="tip">
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>?</kbd> from anywhere in TUIOS to see the help overlay!
+Every table on this page names the config section that holds the binding and the action name to use in it. Every action is rebindable. See [Customizing](#customizing) at the end.
+
+<Callout type="info" title="Check your own bindings">
+This page lists the defaults. `tuios keybinds list`, `tuios keybinds explain <key>` and the keybind manager (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>k</kbd>) show what is bound on your machine.
 </Callout>
 
 ## Modes
 
-Mode switching is configured in `[keybindings.mode_control]`. TUIOS has two main modes:
+Section: `[keybindings.mode_control]`. These keys work in window mode.
 
-- **Window Management Mode** - Navigate and manage windows (default on startup)
-- **Terminal Mode** - Input goes directly to the focused terminal
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>i</kbd>, <kbd>Enter</kbd> | `enter_terminal_mode` | Enter terminal mode |
+| <kbd>Esc</kbd> | `enter_window_mode` | Enter window mode |
+| <kbd>?</kbd> | `toggle_help` | Toggle the help overlay |
+| <kbd>,</kbd> | `open_settings` | Open the settings page |
+| <kbd>q</kbd> | `quit` | Quit |
+| none | `hold_window_mode` | Window mode while the key is held. Unbound by default |
 
-### Mode Switching
+To leave terminal mode, press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Esc</kbd>, or the direct key from [Terminal mode](#terminal-mode).
 
-- <kbd>i</kbd> or <kbd>Enter</kbd> - Enter Terminal Mode
-- <kbd>Alt</kbd>+<kbd>Esc</kbd> or <kbd>Opt</kbd>+<kbd>Esc</kbd> - Exit Terminal Mode (direct shortcut)
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Esc</kbd> - Return to Window Management Mode (from Terminal Mode)
-- <kbd>?</kbd> (Window Mode) or <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>?</kbd> (universal) - Toggle help overlay
-- <kbd>q</kbd> (Window Mode) or <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>q</kbd> (universal) - Quit TUIOS
+`hold_window_mode` needs a terminal that speaks the Kitty keyboard protocol (Ghostty, kitty, WezTerm, foot, Alacritty), because only that protocol reports key releases. Bind it to an ordinary spare key such as `f13`. Binding a modifier such as `leftalt` also works, but then every keystroke in the session arrives as an escape code.
 
-<Callout title="Esc and d are not the same thing" type="warn">
-<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Esc</kbd> leaves terminal mode and returns you to window mode. It never detaches.
+## Window mode
 
-<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> detaches from a daemon session, leaving it running in the background. These were one action in older versions and are now separate: `prefix_exit_mode` and `prefix_detach`.
+### Windows
+
+Section: `[keybindings.window_management]`.
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>n</kbd> | `new_window` | New window |
+| <kbd>N</kbd> | `new_session` | New session. Asks which machine when there is more than one |
+| <kbd>w</kbd>, <kbd>x</kbd> | `close_window` | Close the focused window |
+| <kbd>r</kbd> | `rename_window` | Rename the focused window |
+| <kbd>m</kbd> | `minimize_window` | Minimize the focused window |
+| <kbd>M</kbd> | `restore_all` | Restore all minimized windows |
+| <kbd>z</kbd> | `toggle_zoom` | Zoom the focused window, or unzoom it |
+| <kbd>Tab</kbd> | `next_window` | Focus the next window |
+| <kbd>Shift</kbd>+<kbd>Tab</kbd> | `prev_window` | Focus the previous window |
+| <kbd>1</kbd> to <kbd>9</kbd> | `select_window_1` to `select_window_9` | Focus a window by number |
+| <kbd>c</kbd> | `copy_selection` | Copy the mouse selection |
+| <kbd>s</kbd> | `focus_sidebar` | Give the keyboard to the session rail |
+| <kbd>S</kbd> | `start_screensaver` | Start the screen saver now |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> | `next_session` | Next session |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> | `prev_session` | Previous session |
+
+Section `[keybindings.restore_minimized]` restores one minimized window by position:
+
+| Key | Action |
+|-----|--------|
+| <kbd>Shift</kbd>+<kbd>1</kbd> to <kbd>Shift</kbd>+<kbd>9</kbd> (also <kbd>!</kbd> to <kbd>(</kbd>) | `restore_minimized_1` to `restore_minimized_9` |
+
+Section `[keybindings.system]` has one binding: <kbd>b</kbd> is `toggle_spotlight`, which lights one part of the screen and dims the rest. See the `[spotlight]` options in [Configuration](/docs/configuration#the-spotlight-table).
+
+### Workspaces
+
+Section: `[keybindings.workspaces]`. There are nine workspaces. The modifier is <kbd>Option</kbd> on macOS and <kbd>Alt</kbd> elsewhere.
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>Alt</kbd>+<kbd>9</kbd> | `switch_workspace_1` to `switch_workspace_9` | Show a workspace |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> to <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>9</kbd> | `move_and_follow_1` to `move_and_follow_9` | Move the focused window there and follow it |
+
+### Layout and snapping
+
+Section: `[keybindings.layout]`.
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>t</kbd> | `toggle_tiling` | Turn tiling on or off |
+| <kbd>h</kbd> | `snap_left` | Snap to the left half. In tiling, focus left |
+| <kbd>l</kbd> | `snap_right` | Snap to the right half. In tiling, focus right |
+| <kbd>f</kbd> | `snap_fullscreen` | Fill the screen |
+| <kbd>u</kbd> | `unsnap` | Restore the size before the snap |
+| <kbd>H</kbd>, <kbd>Ctrl</kbd>+<kbd>←</kbd> | `swap_left` | Swap with the window to the left |
+| <kbd>L</kbd>, <kbd>Ctrl</kbd>+<kbd>→</kbd> | `swap_right` | Swap with the window to the right |
+| <kbd>K</kbd>, <kbd>Ctrl</kbd>+<kbd>↑</kbd> | `swap_up` | Swap with the window above |
+| <kbd>J</kbd>, <kbd>Ctrl</kbd>+<kbd>↓</kbd> | `swap_down` | Swap with the window below |
+| <kbd>&lt;</kbd> | `resize_master_shrink` | Narrow the master area |
+| <kbd>&gt;</kbd> | `resize_master_grow` | Widen the master area |
+| <kbd>&#123;</kbd> | `resize_height_shrink` | Shorten the focused window from the bottom edge |
+| <kbd>&#125;</kbd> | `resize_height_grow` | Lengthen the focused window from the bottom edge |
+| <kbd>.</kbd> | `resize_master_grow_left` | Widen the master area from the left edge |
+| <kbd>[</kbd> | `resize_height_shrink_top` | Shorten the focused window from the top edge |
+| <kbd>]</kbd> | `resize_height_grow_top` | Lengthen the focused window from the top edge |
+| none | `resize_master_shrink_left` | Narrow the master area from the left edge. Unbound by default |
+
+`resize_master_shrink_left` has no default because <kbd>,</kbd> opens settings. Bind it to a free key if you want it.
+
+Corner snapping is on the [layout prefix](#layout-prefix), not on the bare digits.
+
+### BSP splits
+
+Also in `[keybindings.layout]`. See [BSP Tiling](/docs/bsp-tiling).
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>-</kbd> | `split_horizontal` | Split the focused pane top and bottom |
+| <kbd>&#124;</kbd>, <kbd>&#92;</kbd> | `split_vertical` | Split the focused pane left and right |
+| <kbd>R</kbd> | `rotate_split` | Flip the split direction |
+| <kbd>=</kbd> | `equalize_splits` | Reset every split ratio |
+| <kbd>Alt</kbd>+<kbd>h</kbd> / <kbd>j</kbd> / <kbd>k</kbd> / <kbd>l</kbd> | `preselect_left`, `preselect_down`, `preselect_up`, `preselect_right` | Choose where the next window opens |
+
+The preselect keys use <kbd>Option</kbd> on macOS. The prefix menu has its own copies of the four split actions, and rebinding one set does not change the other.
+
+## Terminal mode
+
+Section: `[keybindings.terminal_mode]`. These keys work in terminal mode with no prefix. Everything else goes to the pane.
+
+<Tabs items={['Linux and other', 'macOS']}>
+<Tab value="Linux and other">
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>Alt</kbd>+<kbd>n</kbd> | `terminal_next_window` | Focus the next window |
+| <kbd>Alt</kbd>+<kbd>p</kbd> | `terminal_prev_window` | Focus the previous window |
+| <kbd>Alt</kbd>+<kbd>Esc</kbd> | `terminal_exit_mode` | Go to window mode |
+| <kbd>Alt</kbd>+arrows | `terminal_focus_left`, `_right`, `_up`, `_down` | Focus the pane in that direction |
+| <kbd>Shift</kbd>+<kbd>↑</kbd> | `terminal_scroll_up` | Scroll into the pane's scrollback |
+| <kbd>Shift</kbd>+<kbd>↓</kbd> | `terminal_scroll_down` | Scroll back toward live output |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, <kbd>Super</kbd>+<kbd>V</kbd> | `terminal_paste_host` | Paste from the host clipboard |
+
+</Tab>
+<Tab value="macOS">
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>Option</kbd>+<kbd>Tab</kbd>, <kbd>Alt</kbd>+<kbd>n</kbd> | `terminal_next_window` | Focus the next window |
+| <kbd>Option</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd>, <kbd>Alt</kbd>+<kbd>p</kbd> | `terminal_prev_window` | Focus the previous window |
+| <kbd>Option</kbd>+<kbd>Esc</kbd> | `terminal_exit_mode` | Go to window mode |
+| <kbd>Alt</kbd>+arrows | `terminal_focus_left`, `_right`, `_up`, `_down` | Focus the pane in that direction |
+| <kbd>Shift</kbd>+<kbd>↑</kbd> | `terminal_scroll_up` | Scroll into the pane's scrollback |
+| <kbd>Shift</kbd>+<kbd>↓</kbd> | `terminal_scroll_down` | Scroll back toward live output |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, <kbd>Super</kbd>+<kbd>V</kbd> | `terminal_paste_host` | Paste from the host clipboard |
+
+</Tab>
+</Tabs>
+
+<Callout type="warn" title="Alt+Left and Alt+Right cost you word motions">
+Readline, fish and zsh use <kbd>Alt</kbd>+<kbd>←</kbd> and <kbd>Alt</kbd>+<kbd>→</kbd> to move a word at a time. To give them back, run `tuios keybinds free alt+left` and `tuios keybinds free alt+right`. <kbd>Ctrl</kbd>+<kbd>B</kbd> then an arrow still moves focus.
 </Callout>
 
-### Terminal Mode Shortcuts
+Plain <kbd>Ctrl</kbd>+<kbd>V</kbd> is not bound. It reaches the pane, so vim's visual block mode works.
 
-These shortcuts work directly in Terminal Mode without requiring the prefix key. Configured in `[keybindings.terminal_mode]`.
+## Global keys
 
-| Platform | Next Window | Previous Window | Exit Terminal Mode |
-|----------|-------------|-----------------|-------------------|
-| macOS | <kbd>Opt</kbd>+<kbd>Tab</kbd> | <kbd>Opt</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | <kbd>Opt</kbd>+<kbd>Esc</kbd> |
-| Linux/Windows | <kbd>Alt</kbd>+<kbd>N</kbd> | <kbd>Alt</kbd>+<kbd>P</kbd> | <kbd>Alt</kbd>+<kbd>Esc</kbd> |
+Section: `[keybindings.global]`. These keys work in window mode and terminal mode.
 
-<Callout title="Why different keybindings?" type="info">
-On Linux and Windows, <kbd>Alt</kbd>+<kbd>Tab</kbd> is captured by the OS window switcher, so TUIOS uses <kbd>Alt</kbd>+<kbd>N</kbd>/<kbd>Alt</kbd>+<kbd>P</kbd> instead. On macOS, <kbd>Opt</kbd>+<kbd>Tab</kbd> produces a unicode character that TUIOS can intercept.
-</Callout>
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>Ctrl</kbd>+<kbd>P</kbd> | `command_palette` | Open the command palette |
+| <kbd>Alt</kbd>+<kbd>Space</kbd> | `launcher` | Open the app launcher |
 
-<kbd>Alt</kbd>+<kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> move focus directionally between panes without leaving terminal mode (`terminal_focus_left`, `terminal_focus_right`, `terminal_focus_up`, `terminal_focus_down`).
+The **command palette** searches commands, sessions and windows. Start the query with `@` to filter panes by agent state (`@n` for needs input), or with `#` to search actions to rebind.
 
-## Window Management
+The **app launcher** lists every executable on `$PATH`, ranked by use. <kbd>Enter</kbd> runs the selection in a new pane with no shell in between. <kbd>Tab</kbd> types the command into the focused shell instead, so you can add arguments.
 
-Window mode, from `[keybindings.window_management]` (and `[keybindings.restore_minimized]` for the last row).
+These two keys take <kbd>Ctrl</kbd>+<kbd>P</kbd> from fish and vim and <kbd>Alt</kbd>+<kbd>Space</kbd> from readline. Set an action to `[]` to give its key back. On macOS, <kbd>Option</kbd>+<kbd>Space</kbd> types a non-breaking space, so use <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>a</kbd> for the launcher.
 
-- <kbd>z</kbd> - Toggle zoom (fullscreen focused window). Shared borders hidden when zoomed, dockbar shows **Z** indicator.
-- <kbd>n</kbd> - Create new window
-- <kbd>w</kbd> or <kbd>x</kbd> - Close focused window
-- <kbd>r</kbd> - Rename focused window
-- <kbd>m</kbd> - Minimize focused window
-- <kbd>Shift</kbd>+<kbd>M</kbd> - Restore all minimized windows
-- <kbd>Tab</kbd> - Focus next window
-- <kbd>Shift</kbd>+<kbd>Tab</kbd> - Focus previous window
-- <kbd>1</kbd>-<kbd>9</kbd> - Select window by number
-- <kbd>Shift</kbd>+<kbd>1</kbd>-<kbd>9</kbd> or <kbd>!@#$%^&*(</kbd> - Restore minimized window by number
-- <kbd>c</kbd> - Copy the current selection (`copy_selection`)
-- <kbd>s</kbd> - Focus the session rail (`focus_sidebar`)
-- <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> / <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> - Next and previous session (`next_session`, `prev_session`)
-- <kbd>Shift</kbd>+<kbd>S</kbd> - Start the screen saver now (`start_screensaver`)
+## Prefix commands
 
-## Workspaces
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, then the key. Section: `[keybindings.prefix_mode]`.
 
-TUIOS supports **9 workspaces** for organizing windows. Configured in `[keybindings.workspaces]`.
-
-- <kbd>Alt</kbd>+<kbd>1</kbd> through <kbd>Alt</kbd>+<kbd>9</kbd> - Switch to workspace 1-9
-- <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> through <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>9</kbd> - Move window to workspace and follow
-
-<Callout title="macOS Users" type="info">
-Use <kbd>Option</kbd>+<kbd>1</kbd> through <kbd>Option</kbd>+<kbd>9</kbd> (automatically configured by default)
-</Callout>
-
-## Window Layout
-
-### Manual Snapping (Non-Tiling Mode)
-
-#### Keyboard Snapping
-
-- <kbd>h</kbd> - Snap window to left half
-- <kbd>l</kbd> - Snap window to right half
-- <kbd>f</kbd> - Fullscreen window
-- <kbd>u</kbd> - Unsnap/restore window
-- <kbd>1</kbd> - Snap to top-left corner
-- <kbd>2</kbd> - Snap to top-right corner
-- <kbd>3</kbd> - Snap to bottom-left corner
-- <kbd>4</kbd> - Snap to bottom-right corner
-
-#### Mouse Edge Snapping
-
-In floating mode (non-tiling), drag a window to the screen edges to snap it:
-
-| Edge | Action |
-|------|--------|
-| Top center | Fullscreen |
-| Left edge | Snap to left half |
-| Right edge | Snap to right half |
-| Top-left corner | Snap to top-left quarter |
-| Top-right corner | Snap to top-right quarter |
-| Bottom-left corner | Snap to bottom-left quarter |
-| Bottom-right corner | Snap to bottom-right quarter |
-
-<Callout title="Edge Detection" type="tip">
-Simply drag a window by its title bar and release when the cursor reaches the screen edge (within 5 pixels of the edge).
-</Callout>
-
-### Tiling Mode
-
-TUIOS uses Binary Space Partitioning (BSP) for automatic tiling. Windows are arranged in an alternating vertical/horizontal split pattern (spiral layout).
-
-- <kbd>t</kbd> - Toggle automatic tiling mode
-- <kbd>Shift</kbd>+<kbd>H</kbd> or <kbd>Ctrl</kbd>+<kbd>Left</kbd> - Swap with window to the left
-- <kbd>Shift</kbd>+<kbd>L</kbd> or <kbd>Ctrl</kbd>+<kbd>Right</kbd> - Swap with window to the right
-- <kbd>Shift</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>Up</kbd> - Swap with window above
-- <kbd>Shift</kbd>+<kbd>J</kbd> or <kbd>Ctrl</kbd>+<kbd>Down</kbd> - Swap with window below
-- <kbd>&lt;</kbd> or <kbd>Shift</kbd>+<kbd>,</kbd> - Decrease master window width (from right edge)
-- <kbd>&gt;</kbd> or <kbd>Shift</kbd>+<kbd>.</kbd> - Increase master window width (from right edge)
-- <kbd>&#123;</kbd> or <kbd>Shift</kbd>+<kbd>[</kbd> - Decrease focused window height (from bottom edge)
-- <kbd>&#125;</kbd> or <kbd>Shift</kbd>+<kbd>]</kbd> - Increase focused window height (from bottom edge)
-- <kbd>.</kbd> - Increase master window width from the left edge
-- <kbd>[</kbd> - Decrease focused window height from the top edge
-- <kbd>]</kbd> - Increase focused window height from the top edge
-
-<Callout title="One default binding you cannot reach" type="warn">
-`resize_master_shrink_left` is bound to a bare <kbd>,</kbd> by default, and you will never trigger it. In window mode, <kbd>,</kbd> is intercepted for the settings page before any keybinding lookup runs.
-
-Rebinding <kbd>,</kbd> in `[keybindings.layout]` does not help either, because the intercept is not registry-driven. Bind `resize_master_shrink_left` to a different key if you want it.
-</Callout>
-
-### BSP Split Controls
-
-In window mode, from `[keybindings.layout]`:
-
-- <kbd>-</kbd> - `split_horizontal`
-- <kbd>&#124;</kbd> or <kbd>&#92;</kbd> - `split_vertical`
-- <kbd>R</kbd> - `rotate_split`
-- <kbd>=</kbd> - `equalize_splits`
-- <kbd>Alt</kbd>+<kbd>h</kbd> <kbd>Alt</kbd>+<kbd>j</kbd> <kbd>Alt</kbd>+<kbd>k</kbd> <kbd>Alt</kbd>+<kbd>l</kbd> - `preselect_left` / `preselect_down` / `preselect_up` / `preselect_right`, choosing where the next window lands (<kbd>Opt</kbd> on macOS)
-
-The same four split operations are also on the prefix key, as separate actions in `[keybindings.prefix_mode]`:
-
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>-</kbd> - `prefix_split_horizontal`
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>&#124;</kbd> or <kbd>&#92;</kbd> - `prefix_split_vertical`
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>R</kbd> - `prefix_rotate_split`
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>=</kbd> - `prefix_equalize_splits`
-
-Rebinding one does not rebind the other. They are two independent sets.
-
-<Callout title="Split Indicator" type="tip">
-The dock shows the next split direction (V for vertical, H for horizontal) when tiling mode is active.
-</Callout>
-
-## Copy Mode
-
-Enter copy mode with <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>[</kbd> to navigate scrollback and select text using vim-style commands.
-
-<Callout title="Vim Users" type="tip">
-Copy mode supports 50+ vim motions including word movements, paragraph jumps, and search!
-</Callout>
-
-### Basic Navigation
-
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>[</kbd> - Enter copy mode
-- <kbd>h</kbd> <kbd>j</kbd> <kbd>k</kbd> <kbd>l</kbd> - Move cursor left/down/up/right
-- <kbd>w</kbd> <kbd>b</kbd> <kbd>e</kbd> - Word forward / word backward / word end
-- <kbd>0</kbd> <kbd>^</kbd> <kbd>$</kbd> - Start of line / first non-blank / end of line
-- <kbd>g</kbd><kbd>g</kbd> - Jump to top of scrollback
-- <kbd>G</kbd> - Jump to bottom (live output)
-- <kbd>&#123;number&#125;</kbd><kbd>G</kbd> - Jump to line number (e.g., 10G)
-- <kbd>&#123;</kbd> <kbd>&#125;</kbd> - Jump to previous/next paragraph
-- <kbd>Ctrl</kbd>+<kbd>U</kbd> <kbd>Ctrl</kbd>+<kbd>D</kbd> - Half page up/down
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Ctrl</kbd>+<kbd>F</kbd> - Full page up/down
-- <kbd>i</kbd> - Return to terminal mode
-- <kbd>q</kbd> or <kbd>Esc</kbd> - Exit copy mode
-
-### Count Prefix
-
-Prefix any motion with a number to repeat it:
-- <kbd>1</kbd><kbd>0</kbd><kbd>j</kbd> - Move down 10 lines
-- <kbd>5</kbd><kbd>w</kbd> - Move forward 5 words
-- <kbd>3</kbd><kbd>&#123;</kbd> - Jump up 3 paragraphs
-
-### Character Search
-
-- <kbd>f</kbd><kbd>&#123;char&#125;</kbd> - Find next occurrence of char on line
-- <kbd>F</kbd><kbd>&#123;char&#125;</kbd> - Find previous occurrence of char on line
-- <kbd>t</kbd><kbd>&#123;char&#125;</kbd> - Move cursor before next char
-- <kbd>T</kbd><kbd>&#123;char&#125;</kbd> - Move cursor after previous char
-- <kbd>;</kbd> - Repeat last character search
-- <kbd>,</kbd> - Repeat last search (opposite direction)
-
-### Search
-
-- <kbd>/</kbd> - Search forward
-- <kbd>?</kbd> - Search backward
-- <kbd>n</kbd> - Next match
-- <kbd>N</kbd> - Previous match
-- <kbd>Ctrl</kbd>+<kbd>L</kbd> - Clear search highlights
-
-### Visual Selection
-
-- <kbd>v</kbd> - Enter visual character mode
-- <kbd>V</kbd> - Enter visual line mode
-- <kbd>y</kbd> or <kbd>c</kbd> - Yank (copy) selection to clipboard
-- <kbd>Esc</kbd> or <kbd>q</kbd> - Exit visual mode
-
-## Command Palette
-
-- <kbd>Ctrl</kbd>+<kbd>P</kbd> - Open Command Palette (works from any mode)
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>P</kbd> - Open Command Palette (prefix alternative)
-
-The command palette provides fuzzy-searchable access to all TUIOS commands, keybindings, and actions, plus sessions and windows. An `@` prefix filters panes by agent state, for example `@n` for needs input. Programs live in their own overlay, the app launcher, and the palette keeps one row that opens it.
-
-## App Launcher
-
-- <kbd>Alt</kbd>+<kbd>Space</kbd> - Open the app launcher (works from any mode)
-
-The launcher lists every executable on `$PATH`, fuzzy-matched and frecency-ranked, with names and icons from desktop entries on platforms that have them. <kbd>Enter</kbd> execs the selection in a new pane, with no shell in between, so what you launched is what runs. <kbd>Tab</kbd> types the command into the focused shell instead, for when you want to add arguments.
-
-Both this key and <kbd>Ctrl</kbd>+<kbd>P</kbd> live in `[keybindings.global]`, a section consulted in window mode and terminal mode alike.
-
-## Prefix Commands
-
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, release, then press the command key (tmux-style).
-
-<Callout title="Leader Key" type="info">
-The leader key (<kbd>Ctrl</kbd>+<kbd>B</kbd> by default) is configurable. See [Configuration Guide](/docs/configuration) for details.
-</Callout>
-
-### Main Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd>)
-
-Every row below is an action in `[keybindings.prefix_mode]` and can be rebound.
-
-| Key | Action name | Does |
-|-----|-------------|------|
-| <kbd>c</kbd> | `prefix_new_window` | Create new window |
-| <kbd>x</kbd> | `prefix_close_window` | Close current window |
-| <kbd>r</kbd> | `prefix_rename_window` | Rename window |
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>c</kbd> | `prefix_new_window` | New window |
+| <kbd>x</kbd> | `prefix_close_window` | Close the focused window |
+| <kbd>r</kbd> | `prefix_rename_window` | Rename the focused window |
+| <kbd>n</kbd>, <kbd>Tab</kbd> | `prefix_next_window` | Next window |
+| <kbd>p</kbd>, <kbd>Shift</kbd>+<kbd>Tab</kbd> | `prefix_prev_window` | Previous window |
+| <kbd>0</kbd> to <kbd>9</kbd> | `prefix_select_0` to `prefix_select_9` | Jump to a window |
+| arrows | `terminal_focus_left`, `_right`, `_up`, `_down` | Focus the pane in that direction |
+| <kbd>)</kbd> | `next_session` | Next session |
+| <kbd>(</kbd> | `prev_session` | Previous session |
+| <kbd>Space</kbd> | `prefix_toggle_tiling` | Turn tiling on or off |
+| <kbd>z</kbd> | `prefix_fullscreen` | Zoom the focused window |
+| <kbd>-</kbd> | `prefix_split_horizontal` | Split top and bottom |
+| <kbd>&#124;</kbd>, <kbd>&#92;</kbd> | `prefix_split_vertical` | Split left and right |
+| <kbd>R</kbd> | `prefix_rotate_split` | Flip the split direction |
+| <kbd>=</kbd> | `prefix_equalize_splits` | Reset every split ratio |
+| <kbd>[</kbd> | `prefix_selection` | Enter [copy mode](#copy-mode) |
+| <kbd>s</kbd> | `prefix_scrollback` | Open the scrollback browser |
+| <kbd>C</kbd> | `prefix_screenshot` | Take a screenshot |
+| <kbd>P</kbd> | `prefix_command_palette` | Open the command palette |
+| <kbd>a</kbd> | `launcher` | Open the app launcher |
 | <kbd>,</kbd> | `prefix_settings` | Open the settings page |
 | <kbd>k</kbd> | `prefix_keybinds` | Open the keybind manager |
-| <kbd>n</kbd> or <kbd>Tab</kbd> | `prefix_next_window` | Next window |
-| <kbd>p</kbd> or <kbd>Shift</kbd>+<kbd>Tab</kbd> | `prefix_prev_window` | Previous window |
-| <kbd>0</kbd>-<kbd>9</kbd> | `prefix_select_0` to `prefix_select_9` | Jump to window |
-| <kbd>Space</kbd> | `prefix_toggle_tiling` | Toggle tiling mode |
-| <kbd>z</kbd> | `prefix_fullscreen` | Toggle zoom on current pane |
-| <kbd>-</kbd> | `prefix_split_horizontal` | Split horizontally (top/bottom) |
-| <kbd>&#124;</kbd> or <kbd>&#92;</kbd> | `prefix_split_vertical` | Split vertically (left/right) |
-| <kbd>R</kbd> | `prefix_rotate_split` | Rotate split direction |
-| <kbd>=</kbd> | `prefix_equalize_splits` | Equalize all split ratios |
-| <kbd>[</kbd> | `prefix_selection` | Enter copy mode |
-| <kbd>s</kbd> | `prefix_scrollback` | Open the scrollback browser |
+| <kbd>b</kbd> | `prefix_toggle_sidebar` | Show or hide the session rail |
+| <kbd>e</kbd> | `prefix_explore` | Move the keyboard to the rail, or back |
 | <kbd>S</kbd> | `prefix_session_switcher` | Open the session switcher |
-| <kbd>P</kbd> | `prefix_command_palette` | Open the command palette |
-| <kbd>L</kbd> | `prefix_layout` | Enter layout prefix menu |
-| <kbd>w</kbd> | `prefix_workspace` | Enter workspace prefix menu |
-| <kbd>m</kbd> | `prefix_minimize` | Enter minimize prefix menu |
-| <kbd>t</kbd> | `prefix_window` | Enter window prefix menu |
-| <kbd>D</kbd> | `prefix_debug` | Enter debug prefix menu |
-| <kbd>T</kbd> | `prefix_tape` | Enter tape prefix menu |
-| <kbd>X</kbd> | `prefix_close_session` | Close the current session |
-| <kbd>b</kbd> | `prefix_toggle_sidebar` | Toggle the session rail |
 | <kbd>W</kbd> | `prefix_workspace_switcher` | Open the workspace switcher |
-| <kbd>e</kbd> | `prefix_explore` | Focus the session rail |
-| <kbd>j</kbd> | `prefix_jump_notif` | Jump to the pane a notification came from |
-| <kbd>d</kbd> | `prefix_detach` | Detach; a daemon session keeps running |
-| <kbd>Esc</kbd> | `prefix_exit_mode` | Leave terminal mode, never detaches |
-| <kbd>q</kbd> | `prefix_quit` | Quit; in daemon mode this kills the session |
+| <kbd>j</kbd> | `prefix_jump_notif` | Jump to the pane of the newest message |
+| <kbd>M</kbd> | `prefix_mail` | Open the agent mailbox |
+| <kbd>t</kbd> | `prefix_window` | [Window prefix](#window-prefix) |
+| <kbd>m</kbd> | `prefix_minimize` | [Minimize prefix](#minimize-prefix) |
+| <kbd>w</kbd> | `prefix_workspace` | [Workspace prefix](#workspace-prefix) |
+| <kbd>L</kbd> | `prefix_layout` | [Layout prefix](#layout-prefix) |
+| <kbd>T</kbd> | `prefix_tape` | [Tape prefix](#tape-prefix) |
+| <kbd>D</kbd> | `prefix_debug` | [Debug prefix](#debug-prefix) |
+| <kbd>d</kbd> | `prefix_detach` | Detach. The session keeps running |
+| <kbd>X</kbd> | `prefix_close_session` | Close the session and its panes |
+| <kbd>Esc</kbd> | `prefix_exit_mode` | Leave terminal mode. Never detaches |
+| <kbd>q</kbd> | `prefix_quit` | Quit. In a daemon session this kills the session |
 | <kbd>?</kbd> | `prefix_help` | Toggle help |
 
-<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Ctrl</kbd>+<kbd>B</kbd> sends a literal <kbd>Ctrl</kbd>+<kbd>B</kbd> to the terminal.
+In terminal mode, pressing the leader twice sends one literal <kbd>Ctrl</kbd>+<kbd>B</kbd> to the pane.
 
-<Callout title="Copy mode and the scrollback browser are different" type="info">
-<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> enters copy mode, with vim motions and text selection. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>s</kbd> opens the scrollback browser, which is for reading back through history. They are separate actions with separate bindings.
-</Callout>
+After a command worth repeating, such as an arrow, the prefix stays armed for 500 ms. <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>←</kbd> <kbd>←</kbd> <kbd>←</kbd> moves three panes. Change this with `appearance.prefix_repeat_time`. `0` turns it off.
 
-### Window Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>t</kbd>)
+### Window prefix
 
-Configured in `[keybindings.window_prefix]`.
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>t</kbd>, then the key. Section: `[keybindings.window_prefix]`.
 
-- <kbd>n</kbd> - `window_prefix_new`, create new window
-- <kbd>x</kbd> - `window_prefix_close`, close current window
-- <kbd>r</kbd> - `window_prefix_rename`, rename window
-- <kbd>Tab</kbd> - `window_prefix_next`, next window
-- <kbd>Shift</kbd>+<kbd>Tab</kbd> - `window_prefix_prev`, previous window
-- <kbd>t</kbd> - `window_prefix_tiling`, toggle tiling mode
-- <kbd>Esc</kbd> - `window_prefix_cancel`, cancel
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>n</kbd> | `window_prefix_new` | New window |
+| <kbd>x</kbd> | `window_prefix_close` | Close the focused window |
+| <kbd>r</kbd> | `window_prefix_rename` | Rename the focused window |
+| <kbd>Tab</kbd> | `window_prefix_next` | Next window |
+| <kbd>Shift</kbd>+<kbd>Tab</kbd> | `window_prefix_prev` | Previous window |
+| <kbd>t</kbd> | `window_prefix_tiling` | Turn tiling on or off |
+| <kbd>Esc</kbd> | `window_prefix_cancel` | Cancel |
 
-### Minimize Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>m</kbd>)
+### Minimize prefix
 
-Configured in `[keybindings.minimize_prefix]`.
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>m</kbd>, then the key. Section: `[keybindings.minimize_prefix]`.
 
-- <kbd>m</kbd> - `minimize_prefix_focused`, minimize the focused window
-- <kbd>1</kbd>-<kbd>9</kbd> - `minimize_prefix_restore_1` to `minimize_prefix_restore_9`, restore minimized window by position
-- <kbd>M</kbd> - `minimize_prefix_restore_all`, restore all minimized windows
-- <kbd>Esc</kbd> - `minimize_prefix_cancel`, cancel
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>m</kbd> | `minimize_prefix_focused` | Minimize the focused window |
+| <kbd>1</kbd> to <kbd>9</kbd> | `minimize_prefix_restore_1` to `minimize_prefix_restore_9` | Restore a minimized window by position |
+| <kbd>M</kbd> | `minimize_prefix_restore_all` | Restore all minimized windows |
+| <kbd>Esc</kbd> | `minimize_prefix_cancel` | Cancel |
 
-### Tape Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>T</kbd>)
+### Workspace prefix
 
-Record and replay `.tape` automation scripts. Configured in `[keybindings.tape_prefix]`.
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>w</kbd>, then the key. Section: `[keybindings.workspace_prefix]`.
 
-- <kbd>m</kbd> - `tape_prefix_manager`, open the tape manager
-- <kbd>r</kbd> - `tape_prefix_record`, start recording
-- <kbd>s</kbd> - `tape_prefix_stop`, stop recording
-- <kbd>t</kbd> - `tape_prefix_review`, review a detected project tape
-- <kbd>Esc</kbd> - `tape_prefix_cancel`, cancel
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>1</kbd> to <kbd>9</kbd> | `workspace_prefix_switch_1` to `workspace_prefix_switch_9` | Show a workspace |
+| <kbd>!</kbd> <kbd>@</kbd> <kbd>#</kbd> <kbd>$</kbd> <kbd>%</kbd> <kbd>^</kbd> <kbd>&</kbd> <kbd>*</kbd> <kbd>(</kbd> | `workspace_prefix_move_1` to `workspace_prefix_move_9` | Move the focused window there and follow it |
+| <kbd>r</kbd> | `workspace_prefix_rename` | Rename the current workspace |
+| <kbd>Esc</kbd> | `workspace_prefix_cancel` | Cancel |
 
-### Workspace Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>w</kbd>)
+### Layout prefix
 
-Configured in `[keybindings.workspace_prefix]`.
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd>, then the key. Section: `[keybindings.layout_prefix]`.
 
-- <kbd>1</kbd>-<kbd>9</kbd> - `workspace_prefix_switch_1` to `workspace_prefix_switch_9`, switch to workspace
-- <kbd>!</kbd> <kbd>@</kbd> <kbd>#</kbd> <kbd>$</kbd> <kbd>%</kbd> <kbd>^</kbd> <kbd>&</kbd> <kbd>*</kbd> <kbd>(</kbd> - `workspace_prefix_move_1` to `workspace_prefix_move_9`, move window to workspace and follow
-- <kbd>r</kbd> - `workspace_prefix_rename`, rename the current workspace
-- <kbd>Esc</kbd> - `workspace_prefix_cancel`, cancel
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>l</kbd> | `layout_prefix_load` | Open the layout picker |
+| <kbd>s</kbd> | `layout_prefix_save` | Save the current layout as a template |
+| <kbd>1</kbd> to <kbd>4</kbd> | `snap_corner_1` to `snap_corner_4` | Snap to the top-left, top-right, bottom-left or bottom-right quarter. Floating mode only |
+| <kbd>5</kbd> to <kbd>9</kbd> | `resize_width_50` to `resize_width_90` | Set the focused window's width to 50% to 90% |
+| <kbd>Shift</kbd>+<kbd>5</kbd> to <kbd>Shift</kbd>+<kbd>9</kbd> | `resize_height_50` to `resize_height_90` | Set its height to 50% to 90% |
+| <kbd>Esc</kbd> | `layout_prefix_cancel` | Cancel |
 
-### Debug Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>D</kbd>)
+Actions `resize_width_10` to `resize_width_40` and `resize_height_10` to `resize_height_40` also exist, with no default key.
 
-Debug and development tools. Configured in `[keybindings.debug_prefix]`.
+Loading a layout moves the existing windows into place. It does not close any. Extra windows are minimized. `tuios layout` manages saved templates from the shell.
 
-- <kbd>l</kbd> - `debug_prefix_logs`, toggle log viewer
-- <kbd>c</kbd> - `debug_prefix_cache`, toggle cache statistics
-- <kbd>k</kbd> - `debug_prefix_showkeys`, toggle showkeys overlay
-- <kbd>a</kbd> - `debug_prefix_animations`, toggle animations
-- <kbd>Esc</kbd> - `debug_prefix_cancel`, cancel
+### Tape prefix
 
-### Layout Prefix (<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>L</kbd>)
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>T</kbd>, then the key. Section: `[keybindings.tape_prefix]`. See [Tape Recording](/docs/tape-recording).
 
-Save and load window layout templates:
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>m</kbd> | `tape_prefix_manager` | Open the tape manager |
+| <kbd>r</kbd> | `tape_prefix_record` | Start recording |
+| <kbd>s</kbd> | `tape_prefix_stop` | Stop recording |
+| <kbd>t</kbd> | `tape_prefix_review` | Review the project tape found in this directory |
+| <kbd>Esc</kbd> | `tape_prefix_cancel` | Cancel |
 
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>L</kbd> then <kbd>l</kbd> - Load layout template
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>L</kbd> then <kbd>s</kbd> - Save layout template
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>L</kbd> then <kbd>Esc</kbd> - Cancel
+While a tape plays, section `[keybindings.script]` is active: <kbd>Ctrl</kbd>+<kbd>P</kbd> is `script_pause` and pauses or resumes playback.
 
-Layout loading is non-destructive: existing windows are repositioned to match the template rather than being killed. Extra windows are minimized.
+### Debug prefix
 
-<Callout title="The only prefix menu you cannot rebind" type="info">
-Entering this menu is the configurable `prefix_layout` action, but <kbd>l</kbd> and <kbd>s</kbd> inside it are literal. The layout sub-prefix has no config section of its own.
-</Callout>
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd>, then the key. Section: `[keybindings.debug_prefix]`.
 
-## Mouse Controls
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>l</kbd> | `debug_prefix_logs` | Toggle the log viewer |
+| <kbd>c</kbd> | `debug_prefix_cache` | Toggle style cache statistics |
+| <kbd>k</kbd> | `debug_prefix_showkeys` | Toggle the [showkeys](/docs/showkeys) overlay |
+| <kbd>a</kbd> | `debug_prefix_animations` | Toggle animations |
+| <kbd>Esc</kbd> | `debug_prefix_cancel` | Cancel |
 
-- **Left Click** - Focus window
-- **Left Drag** - Move window (non-tiling) or swap windows (tiling)
-- **Right Drag** - Resize window (non-tiling only)
-- **Title Bar Buttons** - Minimize, maximize, or close window
-- **Click Dock Item** - Restore minimized window
-- **Copy Mode Click** - Move cursor to position
-- **Copy Mode Drag** - Select text (enters visual mode). Dragging above/below the pane auto-scrolls via a timer.
-- **Mouse Wheel Up** - Enter copy mode and scroll up (when the application is not tracking the mouse and is not on the alternate screen)
-- **Right Border Click/Drag** - Interactive scrollbar for navigating scrollback history
+## Session rail
 
-## Session Rail
+Section: `[keybindings.sidebar]`. Active while the rail has the keyboard: press <kbd>s</kbd> in window mode, or <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>e</kbd>.
 
-When the rail owns the keyboard (<kbd>s</kbd> in window mode, or <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>e</kbd>), it has a keybinding section of its own, `[keybindings.sidebar]`: <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>g</kbd>/<kbd>G</kbd> jump to the ends, <kbd>Tab</kbd> switches section, <kbd>Enter</kbd> activates, <kbd>J</kbd>/<kbd>K</kbd> reorder, <kbd>f</kbd> and <kbd>o</kbd> filter and sort the agents section, <kbd>n</kbd> makes a new session, <kbd>/</kbd> opens the palette, <kbd>&lt;</kbd>/<kbd>&gt;</kbd> narrow and widen, <kbd>1</kbd>-<kbd>9</kbd> jump by number, and <kbd>?</kbd> shows the rail's own help.
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>j</kbd>, <kbd>↓</kbd> | `cursor_down` | Move down |
+| <kbd>k</kbd>, <kbd>↑</kbd> | `cursor_up` | Move up |
+| <kbd>g</kbd>, <kbd>Home</kbd> | `first` | First row |
+| <kbd>G</kbd>, <kbd>End</kbd> | `last` | Last row |
+| <kbd>l</kbd>, <kbd>→</kbd> | `expand` | Expand the row |
+| <kbd>h</kbd>, <kbd>←</kbd> | `collapse` | Collapse the row |
+| <kbd>Enter</kbd> | `activate` | Open the row |
+| <kbd>J</kbd>, <kbd>Shift</kbd>+<kbd>↓</kbd> | `reorder_down` | Move the session or machine down |
+| <kbd>K</kbd>, <kbd>Shift</kbd>+<kbd>↑</kbd> | `reorder_up` | Move the session or machine up |
+| <kbd>Tab</kbd>, <kbd>Shift</kbd>+<kbd>Tab</kbd> | `section` | Go to the next section |
+| <kbd>1</kbd> to <kbd>9</kbd> | `jump_1` to `jump_9` | Jump to a row by number |
+| <kbd>n</kbd> | `new_session` | New session |
+| <kbd>t</kbd> | `new_window` | New window |
+| <kbd>r</kbd> | `rename` | Rename the pane or session |
+| <kbd>c</kbd> | `accent` | Set the session's accent colour |
+| <kbd>x</kbd> | `kill` | Open the row's close menu |
+| <kbd>m</kbd> | `menu` | Open the row's menu |
+| <kbd>i</kbd> | `mail` | Open the mailbox for the pane under the cursor |
+| <kbd>f</kbd> | `agents_filter` | Filter the agents section |
+| <kbd>o</kbd> | `agents_sort` | Sort the agents section |
+| <kbd>/</kbd> | `palette` | Open the command palette |
+| <kbd>&lt;</kbd> | `narrow` | Narrow the rail |
+| <kbd>&gt;</kbd> | `widen` | Widen the rail |
+| <kbd>?</kbd> | `help` | Show the rail's help |
+| <kbd>Esc</kbd>, <kbd>s</kbd> | `exit` | Give the keyboard back |
 
-While the cursor is on a row of the files section, a second section answers first, `[keybindings.sidebar_files]`: <kbd>a</kbd> creates, <kbd>r</kbd> renames, <kbd>d</kbd> deletes to the trash, <kbd>D</kbd> deletes permanently, <kbd>y</kbd> copies, <kbd>x</kbd> cuts, and <kbd>p</kbd> pastes. They are a section of their own because three of them collide with a rail key that already exists, so the row under the cursor decides which map answers. See [The files section](/docs/configuration#the-files-section).
+When the cursor is on a row in the files section, section `[keybindings.sidebar_files]` answers first:
 
-## Mouse links
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>Enter</kbd> | `file_open` | Open the folder, or copy the file's path |
+| <kbd>a</kbd> | `file_create` | New file. End the name with `/` for a folder |
+| <kbd>r</kbd> | `file_rename` | Rename |
+| <kbd>d</kbd> | `file_delete` | Delete to the trash |
+| <kbd>D</kbd> | `file_delete_forever` | Delete with no trash |
+| <kbd>y</kbd> | `file_copy` | Copy |
+| <kbd>x</kbd> | `file_cut` | Cut |
+| <kbd>p</kbd> | `file_paste` | Paste into this folder |
 
-<kbd>Shift</kbd> and the left mouse button on a link in a pane opens it. Shift is the terminal's own "this click is mine, not the program's" modifier, so it reaches past a program that is tracking the mouse. `appearance.links` decides what counts as a link. See [links](/docs/configuration#links).
+See [The files section](/docs/configuration#the-files-section).
 
-## Customization
+## Copy mode
 
-Every binding on this page lives in one of 19 sections under `[keybindings]` in `config.toml`, and every one is rebindable. The section is named next to each group above. See the [Configuration Guide](/docs/configuration) for the full list and the key syntax.
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> to enter copy mode. It moves a cursor through the scrollback with vim keys. These keys are fixed and are not in the config. Put a count before a motion to repeat it: `10j`, `5w`.
 
-```bash
-# Edit your keybindings
-tuios config edit
+| Keys | Does |
+|------|------|
+| <kbd>h</kbd> <kbd>j</kbd> <kbd>k</kbd> <kbd>l</kbd>, arrows | Move the cursor |
+| <kbd>w</kbd> <kbd>b</kbd> <kbd>e</kbd> | Next word, previous word, end of word |
+| <kbd>W</kbd> <kbd>B</kbd> <kbd>E</kbd> | The same, for space-separated words |
+| <kbd>0</kbd> <kbd>^</kbd> <kbd>$</kbd> | Line start, first non-blank, line end |
+| <kbd>H</kbd> <kbd>M</kbd> <kbd>L</kbd> | Top, middle and bottom of the screen |
+| <kbd>g</kbd><kbd>g</kbd>, <kbd>G</kbd> | Top of the scrollback, bottom (live output) |
+| `{n}G` | Go to line `n` |
+| <kbd>&#123;</kbd> <kbd>&#125;</kbd> | Previous and next paragraph |
+| <kbd>%</kbd> | Matching bracket |
+| <kbd>Ctrl</kbd>+<kbd>U</kbd> / <kbd>Ctrl</kbd>+<kbd>D</kbd> | Half page up, down |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>F</kbd>, <kbd>PgUp</kbd> / <kbd>PgDn</kbd> | Full page up, down |
+| <kbd>f</kbd> <kbd>F</kbd> <kbd>t</kbd> <kbd>T</kbd> then a character | Find a character on the line |
+| <kbd>;</kbd> <kbd>,</kbd> | Repeat the character search, forward or back |
+| <kbd>/</kbd> <kbd>?</kbd> | Search forward, backward |
+| <kbd>n</kbd> <kbd>N</kbd> | Next match, previous match |
+| <kbd>Ctrl</kbd>+<kbd>L</kbd> | Clear search highlights |
+| <kbd>v</kbd> <kbd>V</kbd> | Start a character or line selection |
+| <kbd>y</kbd>, <kbd>c</kbd> | Copy the selection to the clipboard |
+| <kbd>i</kbd> | Leave copy mode and go to terminal mode |
+| <kbd>q</kbd>, <kbd>Esc</kbd> | Leave copy mode |
 
-# View current configuration
-tuios keybinds list
+The scrollback browser (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>s</kbd>) is a different tool. It lists past commands by their prompt marks, for shells that emit OSC 133.
 
-# View your customizations
-tuios keybinds list-custom
+## Mouse
 
-# Audit for conflicts, with evidence tiers
-tuios keybinds doctor
+| Gesture | Does |
+|---------|------|
+| Click a pane | Focus it. In window mode it also starts typing, per `appearance.click_to_type` |
+| Drag a title bar | Move the window. In tiling, swap it with the pane you drop it on |
+| <kbd>Alt</kbd> + drag | Move the window from anywhere inside it (`appearance.alt_drag`) |
+| Right-drag | Resize the window |
+| Right-click | In window mode, open the menu for the pane, the dock or the desktop |
+| <kbd>Shift</kbd> or <kbd>Ctrl</kbd> + right-click | Open the pane menu even when the program in the pane uses the mouse |
+| Title bar buttons | Minimize, zoom or close |
+| Click a dock item | Restore a minimized window |
+| Wheel up | Enter copy mode and scroll, when the program is not using the mouse |
+| Drag the right border | Scroll with the scrollbar |
+| <kbd>Shift</kbd> + click a link | Open it. `appearance.links` decides what counts as a link |
 
-# Everything one key does, and who else wants it
-tuios keybinds explain ctrl+b
+In floating mode, drop a window on a screen edge to snap it: the left or right edge for a half, a corner for a quarter, the top center for the full screen.
+
+In copy mode, a click moves the cursor and a drag selects. Dragging past the top or bottom of the pane scrolls.
+
+## Customizing
+
+Bindings live in 19 sections under `[keybindings]` in `config.toml`. Each action takes a list of keys.
+
+```toml
+[keybindings]
+leader_key = "ctrl+a"
+
+[keybindings.window_management]
+new_window = ["n", "ctrl+t"]
+close_window = []          # unbind: the key goes back to the pane
 ```
 
-### Keybind Manager
+An empty list and a missing line are different. A missing action gets its default back at the next load. An empty list stays empty. Key syntax and every section are on the [Configuration](/docs/configuration#keybindings) page.
 
-<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>k</kbd> opens the keybind manager inside the app: four tabs over one analysis. **Bindings** lists every binding, searchable. **Conflicts** shows keys claimed twice inside TUIOS. **Guests** shows keys TUIOS takes that the pane's program also wants. **Record** captures the next key you press and reports all three answers for it.
+Inspect and change bindings from the shell:
 
-The same analysis runs headlessly: `tuios keybinds doctor` reports duplicate claims and keys taken from the pane, each finding tagged with how it knows, `certain` from TUIOS routing, `observed` from the pane, or `reference` from a curated list of program defaults. `tuios keybinds explain <key>` answers for one key. Both take `--json` and `--guest <program>`.
+```bash
+tuios keybinds list                       # the main tables
+tuios keybinds doctor                     # conflicts, and keys taken from the pane
+tuios keybinds explain alt+left           # everything one key does
+tuios keybinds unbind close_window w      # take one key off one action
+tuios keybinds free alt+left              # take a key off every action
+```
 
-<Callout title="Prefix bindings work now" type="info">
-Six sections used to be parsed and then ignored, so rebinding anything under the leader key silently did nothing: `prefix_mode`, `window_prefix`, `minimize_prefix`, `workspace_prefix`, `debug_prefix`, and `tape_prefix`. They all resolve properly now, as does `terminal_mode`. If you gave up on customizing your prefix menus, try again.
+`doctor` tags each finding with its evidence: `certain` comes from TUIOS routing, `observed` from the live pane, `reference` from a list of common program defaults. `doctor` and `explain` take `--json` and `--guest <program>`.
+
+The **keybind manager** (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>k</kbd>) shows the same analysis in four tabs: Bindings, Conflicts, Guests and Record. Record captures the next key you press. On a binding, <kbd>Ctrl</kbd>+<kbd>D</kbd> removes it and <kbd>Ctrl</kbd>+<kbd>X</kbd> takes its key off every action.
+
+<Callout type="warn" title="Keybinding edits need a new client">
+The config file reloads on save, but only `leader_key` among the keybindings. After editing other bindings, detach and attach again, or restart TUIOS. Changes made with the keybind manager apply at once.
 </Callout>
 
-<Callout title="list-custom is not a full audit" type="warn">
-`tuios keybinds list-custom` compares 9 of the 19 sections. It ignores `navigation`, `restore_minimized`, `debug_prefix`, `tape_prefix`, `layout_prefix`, `terminal_mode`, `global`, `script`, `sidebar`, and `sidebar_files`, and it never reports a customized `leader_key`. A config that changes only those prints "No custom keybindings configured".
+<Callout type="warn" title="keybinds list-custom is partial">
+`tuios keybinds list-custom` compares 9 of the 19 sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix` and `workspace_prefix`. It does not report `leader_key`. Use `tuios keybinds doctor` or read the file for the rest.
 </Callout>
 
-<Callout title="Most keybinding changes need a restart" type="warn">
-TUIOS hot-reloads the `[appearance]` table and `leader_key`, but the other keybindings are not in that subset. Restart the client after editing them.
-</Callout>
+## macOS
 
-## Platform-Specific Notes
+macOS treats Option as a compose key unless the terminal says otherwise. An Option chord then arrives as a character. TUIOS maps most of those characters back to the chord, which is why <kbd>Option</kbd>+<kbd>1</kbd> to <kbd>Option</kbd>+<kbd>9</kbd> work with no setup. Two kinds cannot be recovered:
 
-### macOS
+- **Dead keys.** <kbd>Option</kbd>+<kbd>e</kbd>, <kbd>i</kbd>, <kbd>n</kbd>, <kbd>u</kbd> and <kbd>&#96;</kbd> send nothing until a second key. <kbd>Alt</kbd>+<kbd>n</kbd> (next window in terminal mode) takes two presses.
+- **Rewritten chords.** Many terminals send <kbd>Option</kbd>+<kbd>←</kbd> and <kbd>Option</kbd>+<kbd>→</kbd> as readline word motions, with no sign that an arrow was pressed.
 
-Default workspace switching uses Option key:
-- <kbd>Option</kbd>+<kbd>1</kbd> through <kbd>Option</kbd>+<kbd>9</kbd> - Switch workspace
-- <kbd>Option</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> through <kbd>Option</kbd>+<kbd>Shift</kbd>+<kbd>9</kbd> - Move window to workspace
+To fix both, turn on your terminal's Option-as-Alt setting:
 
-Terminal mode shortcuts:
-- <kbd>Opt</kbd>+<kbd>Tab</kbd> / <kbd>Opt</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> - Cycle windows
-- <kbd>Opt</kbd>+<kbd>Esc</kbd> - Exit terminal mode
+| Terminal | Setting |
+|----------|---------|
+| Ghostty | `macos-option-as-alt = true` |
+| Terminal.app | Settings > Profiles > Keyboard > Use Option as Meta Key |
+| iTerm2 | Settings > Profiles > Keys > Left Option key: Esc+ |
+| kitty | `macos_option_as_alt yes` |
+| WezTerm | `send_composed_key_when_left_alt_is_pressed = false` |
+| Alacritty | `option_as_alt = "Both"` under `[window]` |
+| VS Code | `terminal.integrated.macOptionIsMeta` |
 
-You can still type Option key unicode characters (¡™£¢∞§¶•ª) in Terminal Mode.
+Ghostty also needs `keybind = alt+left=unbind` and `keybind = alt+right=unbind`, because its own keybinds rewrite those arrows first.
 
-### Linux/Windows
+The prefix works on every terminal with no setup. <kbd>Ctrl</kbd>+<kbd>B</kbd> then an arrow, <kbd>n</kbd>, <kbd>p</kbd>, <kbd>(</kbd>, <kbd>)</kbd>, <kbd>a</kbd> or a digit covers every navigation command.
 
-Uses standard Alt key for workspace switching:
-- <kbd>Alt</kbd>+<kbd>1</kbd> through <kbd>Alt</kbd>+<kbd>9</kbd>
-- <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> through <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>9</kbd>
+Command chords never reach a terminal program. macOS sends them to the menu bar.
 
-Terminal mode shortcuts:
-- <kbd>Alt</kbd>+<kbd>N</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd> - Cycle windows (next/previous)
-- <kbd>Alt</kbd>+<kbd>Esc</kbd> - Exit terminal mode
-
-<Callout title="Note" type="info">
-<kbd>Alt</kbd>+<kbd>Tab</kbd> is not used on Linux/Windows because it conflicts with the OS window switcher.
-</Callout>
-
-## Related Documentation
+## Related
 
 <Cards>
-  <Card
-    title="Configuration Guide"
-    href="/docs/configuration"
-    description="Customize keybindings and settings"
-  />
-  <Card
-    title="Hooks"
-    href="/docs/hooks"
-    description="Run shell commands on TUIOS events"
-  />
-  <Card
-    title="CLI Reference"
-    href="/docs/cli-reference"
-    description="Command-line options and usage"
-  />
+  <Card title="Configuration" href="/docs/configuration" description="Key syntax, every section, and every option" />
+  <Card title="BSP Tiling" href="/docs/bsp-tiling" description="Splits, preselection and layouts" />
+  <Card title="CLI Reference" href="/docs/cli-reference" description="Every command and flag" />
 </Cards>
