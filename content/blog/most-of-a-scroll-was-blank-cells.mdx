@@ -5,8 +5,10 @@ date: '2026-09-22'
 author: Gaurav Gosain
 ---
 
-Every tuios pane runs an in-process terminal emulator, `internal/vt`. It
-started as a fork of `charmbracelet/x/vt` and is pure Go. In September I did
+The default tuios build runs its own pure Go terminal emulator,
+`internal/vt`, for every pane. It started as a fork of `charmbracelet/x/vt`.
+The other option is libghostty-vt behind a build tag, and nothing in this
+post applies to that backend. In September I did
 a performance pass over it: the parser, the print path and the scroll path.
 Five commits came out of it. One of them matters much more than the others,
 so most of this post is about that one.
@@ -166,17 +168,22 @@ intervals from +/-4% to +/-43%. I only quote a result that clears that at
 p < 0.05. Allocation counts are exact, so they need none of this.
 
 One thing this does not give you is a stable absolute number across
-comparisons. `BackendScroll` read 86.7 ms after one change and 71.3 ms before
-the next, and nothing between them touched it. The load had changed. Each
-before and after pair ran interleaved, so the pair is comparable. Two
+comparisons. `EmulatorWriteHeavyOutput/colored-log` read 56.7 us after the
+plain scrollback change and 54.2 us before the ASCII run change, the very
+next commit, with nothing in between. `BackendScroll` is worse: 86.7 ms after
+the plain scrollback change and 71.3 ms before the extent one. The ASCII run
+commit sits between those, and its own comparison put `BackendScroll` at `~`.
+That means its interval was too wide to say, not that it did not move. From
+two numbers in different pairs I cannot tell a change from a shift in load.
+Each before and after pair ran interleaved, so the pair is comparable. Two
 numbers from different pairs are not.
 
 ## Keeping it right
 
 Skipping work is a correctness claim. The extent is only safe if every path
 that writes a non-blank cell raises it. Miss one, and the scroll blanks too
-little of a row, or leaves the end of a line out of the scrollback. The
-screen keeps working. The text is just wrong.
+little of a row, so old text comes back, or leaves the end of a line out of
+the scrollback.
 
 Two tests hold the invariant directly. The random grid test, which already
 drove the grid and ultraviolet's buffer side by side, now also checks the
@@ -198,8 +205,9 @@ e.scr.buf.raiseExt(y, x+n)
 
 While writing this post I deleted that line in a copy of the tree and ran
 the suite, to see what would notice. The conformance corpus passed. The
-tmux differential test passed, all 63 cases. The screen those tests compare
-was right, so they had nothing to say.
+tmux differential test passed, all 63 cases. That was not because the screen
+was right. None of their cases scrolls a row that the direct store wrote, so
+they never reached the bug.
 
 Six tests failed:
 
@@ -224,11 +232,18 @@ I also removed the rotation of the extents in the whole-screen scroll. That
 one is loud: `blankRows` panics with a slice out of range, and one of the 63
 tmux cases disagrees.
 
-The quiet failure is the one I care about. With that line gone, a shell
-scrolling short lines would lose them from the scrollback, and outside a
-case like that reset, nothing on screen would look wrong. The tests that check what the screen looks like,
-the corpus and tmux, could not see it. The tests that check what the
-emulator believes about itself could.
+The quiet failure is the one I care about, and it is not quiet on screen.
+I fed a 20x4 emulator twelve lines, alternating `long-line-NN` and a short
+`sN`. With the line gone, the bottom row, where the cursor sits, showed
+`long-line-08` again. Without the mutation it is blank. A recycled row keeps
+extent 0, so the blanking skips it and the old text comes back. Five of the
+nine lines in the scrollback were empty. Anyone scrolling a shell would see
+it within a screen.
+
+The tests that check what the screen looks like, the corpus and tmux, still
+passed. That is a coverage gap: none of their cases recycles a row the
+direct store wrote. The tests that check what the emulator believes about
+itself did not need such a case.
 
 ## The rest of the pass
 
@@ -303,4 +318,5 @@ most of the memory is blanks.
 
 The other part is the negative control. The extent itself is a small change.
 Trusting it took a test that watches the emulator's own bookkeeping, because
-the tests that watch the screen passed with the bookkeeping broken.
+the tests that watch the screen passed with the bookkeeping broken. The
+screen was wrong. They just never looked at a screen where it showed.
