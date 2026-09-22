@@ -177,9 +177,16 @@ if isColorSafe(cell.Style.UnderlineColor) {
 ```
 
 Mapping it on the style was not enough, and this is the part a quick fix
-would have missed. The underline has to survive three more places on the
+would have missed. The underline has to survive four more places on the
 way out:
 
+- `shouldApplyStyle` decides whether a cell gets a style at all. It
+  returned true only when the cell had a foreground, a background or an
+  attribute bit set. Underline is not an attribute bit, so a cell with an
+  underline and no colour was never styled. The `under` in the test line
+  above is exactly that cell: with `buildCellStyle` and the other three
+  places fixed, it would still have come out plain. It now also checks the
+  underline style and the underline colour.
 - `styleToANSI`, which turns the style into the escape the loop writes,
   only knew a boolean underline. It now emits the underline style and the
   underline colour.
@@ -203,18 +210,18 @@ first cell a single underline and the curl cell a coloured curly one. If
 the emulator ever stopped parsing `4:3` the comparison would pass on two
 plain lines, and a test that passes on nothing proves nothing.
 
-## What it cost, and what I took back
+## What it cost, and what I could not measure
 
 Reading three more fields per cell, and comparing them in the batching
 check, is not free. The cell loop runs once per cell per frame on every
-focused pane. So I measured it, then went looking for work in the same loop
-that did not need to be there.
+focused pane. So I went looking for work in the same loop that did not need
+to be there.
 
-The commit after the fix,
+The third follow-up,
 [`6ca97f96`](https://github.com/Gaurav-Gosain/tuios/commit/6ca97f96), says
 the extra compares "measured as a few percent on the focused render
-benchmarks". Four follow-ups took more than that back out of the same
-code, and none of them changes the output:
+benchmarks". Four follow-ups removed work from the same code, and none of
+them changes the output:
 
 - [`d1321aa9`](https://github.com/Gaurav-Gosain/tuios/commit/d1321aa9): in
   scrollback and copy mode the loop fetched the scrollback line once per
@@ -241,35 +248,32 @@ code, and none of them changes the output:
 
 I built the render benchmarks at three commits, the one before the fix,
 the fix, and `ca2c8edc` after all four follow-ups, and ran them interleaved
-so drift hit all three alike. I have to be plain about the conditions: the
-machine was busy with other work. The load average was 24.6 on 11 cores at
-the end of the first run and 17.7 at the end of the second, and the spread
-on single benchmarks reached 40% and more.
+so drift hit all three alike. It did not work. The machine was busy with
+other work, and it still was when I came back to rerun them quietly: the
+load average was 21 on 11 cores. The timings show it.
 
-Under that noise the fix on its own did not produce a stable number. In
-the first run benchstat called it 15 to 18% slower on two of the cell loop
-benchmarks. In the second it could not tell the fix apart from the code
-before it on any benchmark. I would not quote either as the cost, and I
-take the "few percent" in the commit as the better figure.
+The clearest sign is two benchmarks that measure the same thing.
+`RenderTerminalUnfocused` and the 120x40 unfocused case of
+`RenderTerminalReal` render the same size of pane down the same path. In
+one run benchstat called the first one a quarter faster after the
+follow-ups and could not tell the second one apart from the code before
+the fix. The same code cannot be both. `CellLoopPaneNoDim`, which
+isolates the cell loop the fix touched, showed no significant change in
+either run, and its dimmed twin showed none in the run that had it. And
+the code before the fix, which did not change between the runs, measured
+28 to 75% slower in the second run than in the first on three of the four
+benchmarks both runs shared. Numbers like that describe the load, not the
+code.
 
-The follow-ups are a different story. Against the code before the fix,
-three benchmarks came out faster in both runs, each at p below 0.05:
-
-<BenchBars
-  groups={["207x55 unfocused", "207x55 focused", "120x40 unfocused"]}
-  series={[
-    { label: "faster in run 1, n=8", values: [18.8, 13.7, 23.8], tone: "baseline" },
-    { label: "faster in run 2, n=12", values: [33.1, 43.0, 46.6], tone: "subject" }
-  ]}
-  unit="%"
-  groupLabel="pane"
-  caption="How much less time one render took after all four follow-ups, against the code before the underline fix, from two interleaved runs on a busy machine. The direction held in both runs. The size did not, so read these as a range, not a number. Allocations were identical at all three commits in both runs."
-/>
-
-What both runs agree on is the claim that matters. The fix did not trade
-correctness for speed: after the follow-ups, the loop that keeps every
-attribute is faster than the loop that dropped them, and so is the fast
-path next to it.
+So I am not putting a time on any of this. The one number the runs agree
+on is allocations: every benchmark allocated exactly as many times per
+render at all three commits, and within a run the median memory per
+render matched to within a byte. The fix and the follow-ups did not add a
+single allocation to the render path. For time I
+have the commit's own "few percent" for the cost and the list above for
+what was removed, which is work that was provably repeated for nothing.
+Whether that nets out ahead or behind needs a quiet machine, and I have
+not had one.
 
 ## What I keep from this
 
