@@ -1,0 +1,216 @@
+---
+title: Themes and Appearance
+description: Colour themes, custom and imported themes, chrome colours, glyph sets, spacing, dimming and the spotlight
+icon: Palette
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+Four things decide what TUIOS looks like:
+
+| Part | What it controls | How to set it |
+|------|------------------|---------------|
+| Colour | The terminal colours, the accents, the borders | `appearance.theme` |
+| Shape | The characters the chrome is drawn with: borders, controls, rules, rail marks | `appearance.glyphs` |
+| Spacing | Empty ground between panes, padding inside dialogs | `appearance.gap`, `appearance.panel_padding` |
+| Text | What a window title, a workspace tab and the clock show | `window_title_format`, `dock_workspace_tab_format`, `clock_format` |
+
+Every option on this page can be changed while TUIOS runs, from the settings page (<kbd>,</kbd> in window mode), with `tuios set-config`, or by editing `config.toml`, which is reloaded when saved.
+
+## Choosing a theme
+
+TUIOS ships over 300 themes. A theme sets the 16 ANSI colours plus foreground, background and cursor, and TUIOS derives its own interface colours from them.
+
+```toml
+[appearance]
+theme = "catppuccin_mocha"
+```
+
+```bash
+# Change it in the running session
+tuios set-config appearance.theme catppuccin_mocha
+
+# Start with a theme, overriding the config for this run
+tuios --theme dracula
+
+# Find one
+tuios list-themes --filter gruvbox
+tuios --list-themes | fzf --preview 'tuios --preview-theme {}'
+```
+
+Theme ids use underscores: `tokyo_night`, not `tokyo-night`.
+
+In the app, open the picker from the palette (`Theme picker`) or from the Theme row on the settings page. It is searchable, shows a swatch per theme, and applies the selection live as you move. <kbd>Esc</kbd> puts back the theme you started with.
+
+An empty `theme` turns theming off. TUIOS then emits plain colour indices and your terminal's own palette decides what they look like.
+
+### Checking a theme
+
+`tuios list-themes <id>` prints a theme's colours with the contrast each one measures against the theme's background. It tells you whether a palette is readable before you look at it.
+
+```bash
+tuios list-themes catppuccin_latte
+tuios list-themes catppuccin_latte --json | jq -r '.palette.illegible[]'
+tuios list-themes --json | jq -r .active
+```
+
+## Importing a theme
+
+`tuios import-theme` converts a kitty, ghostty, alacritty or wezterm colour scheme into a TUIOS theme. The format is read from the file's content, so the extension does not matter.
+
+```bash
+tuios import-theme ~/.config/kitty/current-theme.conf --name mine
+tuios set-config appearance.theme mine
+```
+
+A scheme that sets only some colours imports those, and the rest fall back to the xterm defaults. Wezterm's TOML schemes are read. Its Lua schemes are not.
+
+## Writing a theme
+
+A theme is a JSON file in `~/.config/tuios/themes/` (following `$XDG_CONFIG_HOME`). The file name without `.json`, lowercased, is its id unless the file sets `id`.
+
+```json
+{
+  "id": "my-theme",
+  "display_name": "My Theme",
+  "fg": "#e0def4",
+  "bg": "#191724",
+  "cursor": "#e0def4",
+  "black": "#26233a",
+  "red": "#eb6f92",
+  "green": "#31748f",
+  "yellow": "#f6c177",
+  "blue": "#9ccfd8",
+  "purple": "#c4a7e7",
+  "cyan": "#ebbcba",
+  "white": "#e0def4",
+  "bright_black": "#6e6a86",
+  "bright_red": "#eb6f92",
+  "bright_green": "#31748f",
+  "bright_yellow": "#f6c177",
+  "bright_blue": "#9ccfd8",
+  "bright_purple": "#c4a7e7",
+  "bright_cyan": "#ebbcba",
+  "bright_white": "#e0def4"
+}
+```
+
+- The colour names are `purple` and `bright_purple`, not `magenta`.
+- A colour is a hex string or an object: `{"r": 255, "g": 0, "b": 0, "a": 255}`.
+- Every field is optional. `fg` defaults to `#e5e5e5`, `bg` to `#000000`, `cursor` to `fg`, the eight normal colours to the xterm defaults, and each `bright_*` to its normal colour. Set the bright colours yourself, or bright text looks the same as normal text.
+- The directory is read again when you select a theme or run `list-themes`, so a file you just wrote can be selected at once. Subdirectories are not read.
+- A file that does not parse is skipped. `tuios list-themes` reports it under `problems` with the reason.
+
+### Chrome colours
+
+The 16 ANSI colours are what programs in your panes paint with. By default TUIOS also takes its own accents from them: the logo and the selected row from `bright_blue`, the terminal-mode border from `bright_green`, and so on. A `chrome` object sets those accents directly, without changing what programs see:
+
+```json
+{
+  "id": "amber",
+  "chrome": {
+    "accent": "#ffb454",
+    "accent_bright": "#ffd580",
+    "success": "#aad94c",
+    "warning": "#ffb454",
+    "error": "#ff3333",
+    "info": "#59c2ff",
+    "surface": "#2b2118"
+  }
+}
+```
+
+| Field | What it colours | Taken from when absent |
+|-------|-----------------|------------------------|
+| `accent` | Logo, selected row, window-mode pill | `bright_blue` |
+| `accent_bright` | Secondary accent, focused border in window mode | `bright_cyan` |
+| `success` | Terminal-mode pill, focused border in terminal mode, success messages | `bright_green` |
+| `warning` | Copy-mode pill, warnings | `yellow` |
+| `error` | Error messages | `red` |
+| `info` | Info messages | `blue` |
+| `surface` | The fill of every dialog: palette, pickers, menus, which-key | A fixed dark grey |
+| `canvas`, `panel`, `card` | The darker and lighter steps around `surface` | Derived from `surface` |
+
+Dialogs sit on a fixed grey ramp so they stay readable over any pane content. `surface` moves that ramp, and TUIOS picks text colours for it by contrast, so a light surface gets dark text. Text colours cannot be set directly. A field that is not a valid hex colour is ignored on its own.
+
+### Border colours
+
+`appearance.border_focused_color` and `appearance.border_unfocused_color` override the theme's border colours with a hex value. They live in `config.toml`, not in the theme. Clear one to hand the border back to the theme.
+
+## Glyph sets
+
+A glyph set picks the shapes the chrome is drawn with. Four ship: `default`, `unicode` (no Nerd Font glyphs), `heavy` and `ascii`.
+
+```bash
+tuios set-config appearance.glyphs heavy
+tuios set-config appearance.border_style glyphs
+tuios list-glyphs heavy
+```
+
+`border_style = "glyphs"` is what makes the border follow the set. The settings page has a searchable Glyph set picker with a live preview. Writing your own set, the roles it can name and the width rules are covered in [Configuration](/docs/configuration#glyph-sets).
+
+## Spacing and text
+
+```bash
+tuios set-config appearance.gap 2                 # cells between tiled panes, 0 to 8
+tuios set-config appearance.panel_padding 4       # columns inside dialogs, 1 to 6
+tuios set-config appearance.clock_format "Mon 3:04PM"
+tuios set-config appearance.window_title_format "{index}: {title}"
+```
+
+- `window_title_format` accepts `{title}`, `{index}` and `{cwd}`.
+- `dock_workspace_tab_format` accepts `{index}` and `{name}`.
+- `clock_format` is a Go time layout, such as `15:04` or `Mon 3:04PM`.
+
+## Quieting what you are not using
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `appearance.dim_unfocused` | `0` | Fade panes you are not in, as a percent from 0 to 90. `0` is off |
+| `appearance.zen_mode` | `"disabled"` | Hide pane borders: `disabled`, `always`, or `mouse` (hidden while the mouse is still) |
+| `appearance.border_style` | `"rounded"` | `rounded`, `normal`, `thick`, `double`, `block`, `outer-half-block`, `inner-half-block`, `ascii`, `hidden` or `glyphs` |
+
+`dim_unfocused` dims pane content only. Borders, title bars, the rail and the dock stay as they are. Without a theme it can only dim cells a program coloured itself, because a cell in the terminal's default colour has no colour TUIOS knows. Set a theme first.
+
+## Selection and search colours
+
+`[appearance.selection]` holds the colours a pane marks text with. They are settings rather than part of the theme, because TUIOS chooses them and the program in the pane does not.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `bg` / `fg` | `#45475A` / empty | Selected text. An empty `fg` keeps the text's own colour |
+| `bold` | `false` | Also draw selected text bold |
+| `search_bg` / `search_fg` | `#8A6D2F` / `#F5E7C8` | Every search match |
+| `match_bg` / `match_fg` | `#E5A93D` / `#1C1B19` | The match under the cursor |
+| `cursor_bg` / `cursor_fg` | `#39C5CF` / `#08222B` | The copy mode cursor |
+| `flash` | `true` | Sweep a band of light over text you just copied |
+| `flash_ms` | `420` | How long the sweep takes, 80 to 3000 |
+| `flash_style` | `"diagonal"` | `diagonal`, `diagonal-reverse`, `horizontal` or `vertical` |
+| `flash_color` | empty | The colour of the sweep |
+
+The scrollback browser uses the same search and selection colours.
+
+## Spotlight
+
+The spotlight lights one area of the screen and dims the rest. It is meant for recordings and demos. Press <kbd>b</kbd> in window management mode, or run `Toggle spotlight` from the palette.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `spotlight.enabled` | `false` | Start with the spotlight on |
+| `spotlight.follow` | `"mouse"` | Follow the `mouse` or the focused pane's `cursor` |
+| `spotlight.radius` | `10` | Half the beam's height, in rows |
+| `spotlight.dim` | `75` | Percent of its light an unlit cell loses |
+| `spotlight.edge` | `"hard"` | `hard` cuts the beam off, `soft` fades it |
+| `spotlight.shake` | `false` | Shake the mouse left and right to toggle the beam |
+
+The spotlight belongs to one client. Another client attached to the same session sees its own screen unchanged. Over SSH or in the browser, `follow = "cursor"` and `edge = "hard"` send far fewer bytes.
+
+## Related
+
+<Cards>
+  <Card title="Configuration" href="/docs/configuration#appearance" description="Every appearance key, and writing a glyph set" />
+  <Card title="Session Rail" href="/docs/session-rail" description="The sidebar and its colours" />
+  <Card title="Screenshots" href="/docs/screenshots" description="Render a pane in any theme" />
+  <Card title="CLI Reference" href="/docs/cli-reference" description="--theme, --list-themes, list-themes and import-theme" />
+</Cards>
