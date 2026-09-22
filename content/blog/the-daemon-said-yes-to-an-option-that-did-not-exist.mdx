@@ -1,11 +1,11 @@
 ---
 title: The daemon said yes to an option that did not exist
-description: Driving the control socket the way a machine would, instead of testing its handlers the way I had been, found a typed command that lost its spaces, a parameter that was silently discarded, and a settings surface where six paths out of 88 were real.
+description: Driving the tuios control socket like a machine found a command that lost its spaces, a dropped parameter, and 88 settings of which six applied live.
 date: '2026-08-21'
 author: Gaurav Gosain
 ---
 
-tuios has a control socket: a JSON protocol a program can speak to the daemon
+tuios has a [control socket](/docs/control-protocol): a JSON protocol a program can speak to the daemon
 to open windows, send input, read screens, change settings. It exists so that
 agents and scripts can drive a session without faking keystrokes at a TUI.
 Every verb had tests. The tests were green. Then I sat down to write the
@@ -34,10 +34,12 @@ surface exists to serve: a machine that composed a shell command and reached
 for the verb with "keys" in the name. Nothing warns you. The call exits zero,
 and the pane runs a command that does not exist.
 
+<SendKeysTokens />
+
 This one is not fixed in code, because the tokenizer behaves as specified.
-The fix is in the surface. The skill documentation now shows the failure
+The fix is in the surface. The [skill documentation](/docs/agents#letting-an-agent-drive-tuios) now shows the failure
 inline, annotated with exactly what gets typed, and steers text, including
-whole shell commands, toward `send-text`, which sends its argument verbatim.
+whole shell commands, toward [`send-text`](/docs/cli-reference#send-text), which sends its argument verbatim.
 The examples in that documentation are held by a test that parses every one
 of them against the real command tree, so the docs cannot drift from the
 binary.
@@ -70,6 +72,27 @@ declared schemas, which would have become unreachable the moment enforcement
 landed. The declared surface and the implemented surface had already drifted
 apart. Nothing was comparing them.
 
+This is the same kind of request against the daemon today, with the
+workspace parameter misspelt:
+
+<TerminalCapture
+  title="new-window over the socket, tuios main, September 2026"
+  lines={[
+    { text: "-> new-window, session blogdemo, workspce 3", tone: "normal" },
+    { text: "<- error.code     invalid_params", tone: "echo" },
+    { text: "   message        verb new-window has no parameter workspce", tone: "echo" },
+    { text: "   did_you_mean   workspace", tone: "echo" },
+    { text: "   accepted       session, name, workspace, cwd, focus, command, host", tone: "echo" },
+    { text: "   detail         An unknown parameter is refused rather than", tone: "echo" },
+    { text: "                  silently ignored. Fix the name and retry.", tone: "echo" }
+  ]}
+  rows={7}
+  note="Request and reply are JSON on one line each. They are laid out here field by field. No window was created."
+/>
+
+The full list of error codes is in the [protocol
+reference](/docs/control-protocol#error-codes).
+
 ## The option that did not exist
 
 ```json
@@ -87,7 +110,28 @@ error, `option_not_found`, carrying the closest match and the complete list
 of valid paths. The value is validated too, by trying the assignment on a
 throwaway default config before touching the session, so the check and the
 apply cannot disagree about what is assignable. And when `applied` is false,
-the response says why.
+the response says why. Both requests from this section, sent to a headless
+session today:
+
+<TerminalCapture
+  title="set-option over the socket, tuios main, September 2026"
+  lines={[
+    { text: "-> key appearance.totally_made_up, value whatever", tone: "normal" },
+    { text: "<- error.code  option_not_found", tone: "echo" },
+    { text: "   message     no such option appearance.totally_made_up", tone: "echo" },
+    { text: "   available   appearance.alt_drag, appearance.animations_enabled, ...", tone: "echo" },
+    { text: "", tone: "dim" },
+    { text: "-> key appearance.border_style, value rounded", tone: "normal" },
+    { text: "<- type        option_set", tone: "echo" },
+    { text: "   applied     false", tone: "echo" },
+    { text: "   reason      no client is attached, so nothing is drawing it yet.", tone: "echo" },
+    { text: "               The value is recorded for this session and is not", tone: "echo" },
+    { text: "               saved to the config file. It applies when a client", tone: "echo" },
+    { text: "               attaches", tone: "echo" }
+  ]}
+  rows={12}
+  note="The made-up key is refused. The real key is accepted, and the reply says why it did not apply yet. The list of available paths is cut short here."
+/>
 
 ## Six paths out of 88
 
@@ -95,7 +139,8 @@ The last one was the quietest and the largest. Applying a setting to a
 running tuios went through a hand-written switch, and the switch knew six
 paths, all of them appearance options: border style, dock position,
 animations, three flavours of window button. The option registry at that
-commit declared 88. Everything else, most of the sidebar's settings and all
+commit declared 88 (the full list today is one [`tuios
+list-options`](/docs/cli-reference#list-options) away). Everything else, most of the sidebar's settings and all
 but one of the dock's, could be written into the config file, read at
 startup, listed by the CLI, accepted by `set-option`, and would do nothing
 whatsoever to the running program. Not rejected. Accepted, recorded,
