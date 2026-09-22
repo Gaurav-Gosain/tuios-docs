@@ -1,0 +1,186 @@
+---
+title: Remote Hosts
+description: Open sessions on other machines in your own client, run panes on another machine, and script across hosts
+icon: Network
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+TUIOS can reach other machines over ssh. Once a machine is added as a host, you can list its sessions and agents, open one of its sessions in your own client, run a single pane on it inside a local session, and send commands and messages to it.
+
+Each host needs TUIOS installed. Your daemon holds one ssh link to each host and talks to the TUIOS daemon on the other side. There is no new listening port and no second login system: ssh decides who can connect.
+
+## Adding a host
+
+```bash
+tuios hosts add build gaurav@buildbox
+```
+
+The name (`build`) is what you type later. It takes letters, digits, dot, dash and underscore. The address is anything ssh understands, including an alias from `~/.ssh/config`.
+
+The command writes the `[hosts]` table in your config file. A running daemon follows the file, so no restart is needed. The link is tested at once and the result is printed. A host that does not answer is still added.
+
+```bash
+tuios hosts                  # every host and the state of its link
+tuios hosts test build       # dial it now and print what ssh said
+tuios hosts remove build     # drop it
+```
+
+`hosts add` also takes:
+
+- `--ssh-option ARG`: one extra ssh argument. Repeat it, for example `--ssh-option -J --ssh-option bastion` for a jump host.
+- `--connect-timeout SECONDS`: how long one dial may take (default 10).
+- `--command PATH`: the TUIOS binary to run on the host. Without it, the link looks on the `PATH`, then in the usual install locations, then in a login shell.
+
+<Callout type="warn" title="Accept the host key first">
+The daemon runs ssh with `BatchMode` on, so a link never asks for a password or about a host key. Run `ssh` to the host once by hand to accept its key, and use key-based login.
+</Callout>
+
+### Link states
+
+| Status | Meaning |
+|--------|---------|
+| `up` | The link is open and the remote daemon answers |
+| `no_daemon` | The machine is up and no TUIOS daemon runs on it |
+| `no_tuios` | The machine is up and the link cannot find TUIOS on it. `tuios hosts test` shows where it looked |
+| `unreachable` | The last attempt failed. The line under the table says why |
+| `reconnecting` | The link dropped and TUIOS is dialling again |
+| `incompatible` | The two sides speak different control protocol versions. Update one of them |
+| `connecting` | The first attempt has not finished |
+
+### The hosts table
+
+`tuios hosts add` writes this for you. You can also edit it by hand:
+
+```toml
+[hosts.build]
+addr = "gaurav@buildbox"
+
+[hosts.lab]
+addr = "lab-01"
+connect_timeout = 5
+command = "/opt/tools/tuios"
+ssh_options = ["-J", "bastion"]
+```
+
+A machine behind NAT is a reachability problem for ssh, not for TUIOS. Any tool that works as an ssh `ProxyCommand` works here too. See [Configuration](/docs/configuration#the-hosts-table) for an example.
+
+## Machines on a tailnet
+
+If this machine is on a [Tailscale](https://tailscale.com) tailnet, TUIOS can list the machines on it:
+
+```bash
+tuios hosts tailnet
+```
+
+```
+   arch-btw          arch-btw.example.ts.net          offline
+ + ente              ente.example.ts.net
+ = forgejo           forgejo.example.ts.net           already the host forgejo
+   my-phone          my-phone.example.ts.net          cannot run tuios (iOS)
+```
+
+Add one by its name:
+
+```bash
+tuios hosts add ente --tailnet
+```
+
+Nothing is added on its own. The list only saves you typing the MagicDNS name. A host added this way is still reached over ssh. TUIOS asks the local `tailscaled` for the list, so it needs no root and no auth key.
+
+By default the list leaves out machines that are offline, this machine, machines shared from another tailnet, and phones and tablets. The `[tailscale]` table changes that:
+
+```toml
+[tailscale]
+addr = "dns"            # dns (MagicDNS name), name (short name) or ip (100.x address)
+user = "ubuntu"         # ssh login put in front of every address
+os = ["linux", "macOS"] # an empty list offers every OS
+offline = false
+include = ["*"]
+exclude = ["*-pad-*"]
+
+[tailscale.users]
+build = "root"          # per-machine login, wins over user
+```
+
+`tuios hosts tailnet --json` gives every machine with `offered`, and a `skipped` reason when it is false.
+
+## Opening a session on a host
+
+```bash
+tuios attach --host build api        # attach the session api on build
+tuios new --host build               # create a session on build and attach it
+tuios new --host build ci --detach   # create the session ci on build and return
+tuios ls --all-hosts                 # sessions on every machine
+```
+
+The session is drawn in your client, with your theme, config and prefix key. Nothing is nested. The connection goes through your local daemon and its link to the host.
+
+In the rail, sessions are grouped by machine. Press <kbd>Enter</kbd> on a session under a host to attach it, or on the `+` beside a host to create a session there. While you are on a host, the rail lists this machine's sessions under `local`. Press <kbd>Enter</kbd> on one to come back.
+
+If the link drops, the session keeps running on the host. Your client keeps the pane on screen, the dock says it is reconnecting, and TUIOS dials again on its own. After three minutes it gives up, says why, and returns you to the session you left on this machine.
+
+`--ssh` runs `ssh` to the host and starts the TUIOS there instead. Use it when the host's TUIOS is too old to serve your client. You then see the remote client nested in yours, and you press the prefix key twice to send it to the inner one.
+
+## Panes on another machine
+
+A single pane can run on another machine while it stays in a local session:
+
+```bash
+tuios new-window deploy --host build
+```
+
+The palette has the same thing as `New window on another machine`. The pane is drawn, laid out and closed here. Only its process runs on `build`. Its title bar reads `build:deploy`, so two panes side by side never look alike when they are on different machines.
+
+The session is still an ordinary session: `tuios ls`, scripting, the mailbox, hooks and resurrection work on it as usual. The host runs only the process and its pty. It keeps no screen or scrollback for the pane, and the pane does not appear in `tuios ls` on the host.
+
+Agent detection works in such a pane: the local daemon asks the host what the pane is running. An agent inside it cannot report its own state or read its mail, though, because nothing on the host can reach your daemon. These panes have `TUIOS_PANE_HOSTED=1`, `TUIOS_HOST` set to the host, and `TUIOS_SESSION_REMOTE` set to the session name here. They do not have `TUIOS_ENV`, `TUIOS_SOCKET`, `TUIOS_PANE_ID` or `TUIOS_SESSION`.
+
+**Limits:**
+
+- The pane ends when the link drops, the same as closing it. It does not come back when the link does.
+- A resurrected session brings the pane back as a local shell.
+- Both machines need a TUIOS new enough to open remote panes. An older one refuses with a message that says to update.
+
+### Global sessions
+
+A session with panes from several machines belongs to none of them. Once a second machine is reachable, the rail draws a `global` group above the machines for such sessions.
+
+```bash
+tuios new deploy --global
+```
+
+A global session starts with no panes. Every way of making a pane in it (the key, the rail's `+`, the palette) asks which machine to run on. Turn the group off with `appearance.global_session = false`.
+
+## Scripting across machines
+
+Name the host in the target and a command runs on that host's daemon, through the link:
+
+| Target | Means |
+|--------|-------|
+| `-s HOST:SESSION` | A session on a host |
+| `-w HOST:SESSION:WINDOW` | A pane in a session on a host |
+| `-s local:NAME` | A session on this machine whose name contains a colon |
+
+```bash
+tuios list-windows -s build:api
+tuios capture-pane -w build:api:0
+tuios send-text -s build:api -w 0 'make test'
+tuios wait-for window-idle -w build:api:0
+tuios list-agents --host build
+tuios kill-session build:api
+```
+
+The CLI says which host answered, and `--json` adds a `host` field. A host name is matched exactly. An unknown name fails with `unknown_host` and lists the configured names, and a host that is down fails with `host_unreachable`. Nothing is queued for later.
+
+Messages and files cross links too. See [Agent Messaging](/docs/agent-messaging#across-machines).
+
+## Related
+
+<Cards>
+  <Card title="Sessions" href="/docs/sessions" description="Daemon sessions, detaching and resurrection" />
+  <Card title="Session Rail" href="/docs/session-rail" description="Sessions grouped by machine" />
+  <Card title="Configuration" href="/docs/configuration#the-hosts-table" description="The hosts table and ProxyCommand transports" />
+  <Card title="Web Terminal" href="/docs/web" description="Reach TUIOS from a browser instead" />
+</Cards>
