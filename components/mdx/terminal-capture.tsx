@@ -38,6 +38,9 @@ export function TerminalCapture({
   rows = 4,
 }: TerminalCaptureProps) {
   const padding = Math.max(0, rows - lines.length);
+  // A screen with box-drawing lines gets the line height those glyphs fill,
+  // so the vertical lines join across rows. See .box-drawing in global.css.
+  const boxDrawing = lines.some((line) => /[─-╿]/.test(line.text));
 
   return (
     <figure className="not-prose my-8">
@@ -54,7 +57,12 @@ export function TerminalCapture({
         </div>
 
         <div className="overflow-x-auto">
-          <pre className="min-w-max px-4 py-3 font-mono text-sm leading-6">
+          <pre
+            className={cn(
+              'min-w-max px-4 py-3 font-mono text-sm',
+              boxDrawing ? 'leading-[1.15]' : 'leading-6',
+            )}
+          >
             {lines.map((line, i) => (
               <div key={i} className={cn(TONE[line.tone ?? 'normal'])}>
                 {line.text || ' '}

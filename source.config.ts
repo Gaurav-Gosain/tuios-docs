@@ -1,4 +1,8 @@
-import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
+import {
+  rehypeCodeDefaultOptions,
+  remarkMdxMermaid,
+} from "fumadocs-core/mdx-plugins";
+import type { ShikiTransformer } from "shiki";
 import {
   defineConfig,
   defineDocs,
@@ -54,8 +58,28 @@ export const releases = defineDocs({
   },
 });
 
+// Marks a code block that draws with box-drawing characters, such as a table
+// printed by the CLI. Those blocks get a line height the glyphs fill, so the
+// vertical lines join from one row to the next (see .box-drawing in
+// app/global.css).
+const transformerBoxDrawing: ShikiTransformer = {
+  name: "box-drawing",
+  pre(node) {
+    if (/[─-╿]/.test(this.source)) {
+      this.addClassToHast(node, "box-drawing");
+    }
+  },
+};
+
 export default defineConfig({
   mdxOptions: {
     remarkPlugins: [remarkMdxMermaid],
+    rehypeCodeOptions: {
+      ...rehypeCodeDefaultOptions,
+      transformers: [
+        ...(rehypeCodeDefaultOptions.transformers ?? []),
+        transformerBoxDrawing,
+      ],
+    },
   },
 });
