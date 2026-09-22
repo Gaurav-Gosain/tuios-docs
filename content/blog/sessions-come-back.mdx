@@ -1,7 +1,7 @@
 ---
 title: Session state was saved every 30 seconds and never read back
 description: tuios wrote every session to disk from April and no daemon ever loaded it. Wiring up the read side, and then making reattached panes redraw correctly.
-date: '2026-07-18'
+date: '2026-09-22'
 author: Gaurav Gosain
 ---
 
@@ -12,9 +12,10 @@ and layout after crash". The same evening a commit titled "wire all unwired
 features into UI" started the 30 second saver in every session.
 
 It wired the writer. It did not wire the reader. `LoadResurrectionState` had
-exactly one caller, the function that listed saved sessions, and nothing ever
-called that. From April to 18 July every tuios daemon wrote a JSON file per
-session every 30 seconds, and when the daemon restarted, every session was gone.
+no caller outside its own tests. The function that listed saved sessions,
+`ListResurrectableSessions`, had none either. From April to 18 July every
+tuios daemon wrote a JSON file per session every 30 seconds, and when the
+daemon restarted, every session was gone.
 
 The tests were green the whole time. `TestSaveAndLoadResurrection` saved a
 state, loaded it back and compared the two. That is a real test of a real
@@ -170,7 +171,7 @@ quietly, the field stayed empty, and every restored macOS pane opened in
 whatever directory the daemon happened to be started from. No error, no
 warning, on a platform I use every day.
 
-The same assumption had been written three times in three packages, and it was
+The same assumption had been written three times in two packages, and it was
 found three times:
 
 | Date | What was reading `/proc` | What it broke on macOS |
