@@ -1,0 +1,291 @@
+---
+title: The underline depended on which code drew it
+description: A focused pane dropped SGR underline, and a dimmed, scrolled back or copy mode pane dropped almost every attribute once it lost focus in window mode. tuios had five ways to draw a pane and only one kept everything. The difference only showed when a pane changed paths, usually as focus moved.
+date: '2026-09-22'
+author: Gaurav Gosain
+---
+
+A program asks a terminal for underlined text with `ESC [ 4 m`. tuios
+parsed that correctly. The emulator stored it on every cell it applied to.
+Then, depending on which code path drew the pane that frame, the underline
+reached your screen or it did not.
+
+The focused pane, the one you are typing into, never showed an underline.
+An unfocused pane showed it. Leave the pane and the underline appeared.
+Come back and it went away. An unfocused pane in window mode that was
+dimmed, in copy mode or scrolled back lost more than that: bold, italic,
+faint, reverse and strikethrough went too, and only the colours survived.
+
+## How I found it
+
+Not from a report. It came out of an audit of the renderer, reading two
+functions in `internal/app/render_helpers.go` side by side. The first,
+`buildCellStyle`, built the style for one cell:
+
+```go
+if cell.Style.Attrs != 0 {
+    attrs := cell.Style.Attrs
+    if attrs&1 != 0 {
+        cellStyle = cellStyle.Bold(true)
+    }
+    if attrs&2 != 0 {
+        cellStyle = cellStyle.Faint(true)
+    }
+    if attrs&4 != 0 {
+        cellStyle = cellStyle.Italic(true)
+    }
+    if attrs&32 != 0 {
+        cellStyle = cellStyle.Reverse(true)
+    }
+    if attrs&128 != 0 {
+        cellStyle = cellStyle.Strikethrough(true)
+    }
+}
+
+return cellStyle
+```
+
+The bits are right. They match ultraviolet's `AttrBold`, `AttrFaint`,
+`AttrItalic`, `AttrReverse` and `AttrStrikethrough`. What is missing is
+everything that is not a bit. Underline in ultraviolet is its own field,
+`Style.Underline`, with a style (single, double, curly, dotted, dashed),
+and the underline colour is a third field, `Style.UnderlineColor`. The
+function never read either. It also skipped bit 8, blink.
+
+The second function was `buildOptimizedCellStyle`. It set the foreground
+and the background, and returned. No attributes at all. It was chosen by
+one line in `renderTerminal`:
+
+```go
+useOptimizedRendering := !isFocused && !inTerminalMode
+```
+
+So there were at least two opinions in the code about what a cell looks
+like. Reading told me that much. It did not tell me which panes took which
+path on a real frame, and I have [been wrong
+before](/blog/three-fixes-for-a-bug-i-had-not-found) about a causal story I
+only read. So the next step was a probe, not a fix.
+
+## The probe
+
+The probe writes one line into a pane's emulator, with a run of each
+attribute:
+
+```go
+const attrsLine = "\x1b[4munder\x1b[0m \x1b[1mbold\x1b[0m \x1b[3mital\x1b[0m " +
+	"\x1b[4:3;58;5;196mcurl\x1b[0m \x1b[2mfaint\x1b[0m \x1b[5mblink\x1b[0m " +
+	"\x1b[7mrev\x1b[0m \x1b[9mstrike\x1b[0m \x1b[1;3;4mall\x1b[0m"
+```
+
+`4:3` is a curly underline, and `58;5;196` sets its colour to xterm red.
+Then it renders the pane through `renderTerminal`, parses the frame that
+comes out back into cells, and compares every cell of that row with the
+cell the emulator holds. Colours are left out of the comparison, because
+the dim setting changes them on purpose. Text attributes and the underline
+are compared exactly.
+
+Run once for each way a pane can be drawn, that probe became the
+regression test, `TestEveryRenderPathKeepsTextAttributes` in
+`internal/app/render_attrs_test.go`. It has ten cases. Here it is run
+against the parent of the fix commit:
+
+```
+--- FAIL: TestEveryRenderPathKeepsTextAttributes/focused
+--- FAIL: TestEveryRenderPathKeepsTextAttributes/focused_window_mode
+--- PASS: TestEveryRenderPathKeepsTextAttributes/unfocused_fast_path
+--- PASS: TestEveryRenderPathKeepsTextAttributes/unfocused_fast_path_window_mode
+--- FAIL: TestEveryRenderPathKeepsTextAttributes/unfocused_dimmed
+--- FAIL: TestEveryRenderPathKeepsTextAttributes/unfocused_dimmed_window_mode
+--- FAIL: TestEveryRenderPathKeepsTextAttributes/focused_copy_mode
+--- FAIL: TestEveryRenderPathKeepsTextAttributes/unfocused_copy_mode
+--- FAIL: TestEveryRenderPathKeepsTextAttributes/focused_scrollback
+--- FAIL: TestEveryRenderPathKeepsTextAttributes/unfocused_scrollback
+```
+
+Two of the ten passed. Both were the unfocused fast path. Every failure
+reported the same first cell:
+
+```
+focused: cell (0,0) rendered as "u" {... Underline:0 Attrs:0},
+         emulator holds "u" {... Underline:1 Attrs:0}
+```
+
+The test stops at the first wrong cell of a path, so that says nothing
+about the rest of the line. To see the rest I ran a copy of it that logs
+every run instead of stopping. The ten cases fell into three groups:
+
+| path | kept | dropped |
+| --- | --- | --- |
+| unfocused fast path, either mode | everything | nothing |
+| focused; dimmed in terminal mode; copy mode or scrollback while focused | bold, faint, italic, reverse, strikethrough | underline, its style and colour, blink |
+| dimmed in window mode; copy mode or scrollback while unfocused | colours only | every attribute |
+
+## Five ways to draw a pane
+
+A pane reaches the screen through one of these, decided per frame:
+
+- **Unfocused, nothing special.** The fast path. `renderTerminal` hands the
+  grid to the emulator's own `Render`, which emits every attribute,
+  underline style and colour included.
+- **Focused.** Always the cell loop, because it has to draw a cursor and
+  handle things the fast path cannot. Styles came from `buildCellStyle`.
+- **Dimmed.** The dim setting blends an unfocused pane's colours, which the
+  fast path cannot do, so a dimmed pane takes the cell loop too.
+- **Copy mode.** The cell loop, for the copy cursor, the selection and the
+  search highlights.
+- **Scrollback.** The cell loop, reading rows out of scrollback instead of
+  the grid. A hovered link also takes a pane off the fast path.
+
+The cell loop took its styles from `buildCellStyle`, which dropped the
+underline, except for an unfocused pane while the app was in window mode.
+That pane got `buildOptimizedCellStyle`, which dropped the rest as well.
+Only the fast path was right, and only because it used neither builder.
+
+<RenderPathAttrs />
+
+## Why nobody saw it
+
+Each path, looked at on its own, draws something plausible. A missing
+underline does not look broken. It looks like text without an underline.
+A focused pane showing a `man` page with plain text where the underline
+should be is not something you stop and question.
+
+What does look broken is the same text changing when nothing about it
+changed. That only happens when a pane moves from one path to another:
+focus moves, the dim kicks in, the app switches between terminal mode and
+window mode, you enter copy mode. Take the focus change, since it
+happens all day. It is a moment when you are looking at something else. You switched focus to type in the other pane. The pane that changed
+is the one you just stopped looking at.
+
+A style that depends on which path drew it is a bug nobody sees until they
+switch focus, and when they switch focus they are not looking.
+
+## The fix
+
+[`fb8735a6`](https://github.com/Gaurav-Gosain/tuios/commit/fb8735a6) makes
+`buildCellStyle` read everything the emulator's renderer reads. The magic
+numbers became the named ultraviolet constants, blink was added, and the
+underline style and colour are mapped:
+
+```go
+if cell.Style.Underline != uv.UnderlineNone {
+    cellStyle = cellStyle.UnderlineStyle(cell.Style.Underline)
+}
+if isColorSafe(cell.Style.UnderlineColor) {
+    cellStyle = cellStyle.UnderlineColor(cell.Style.UnderlineColor)
+}
+```
+
+Mapping it on the style was not enough, and this is the part a quick fix
+would have missed. The underline has to survive four more places on the
+way out:
+
+- `shouldApplyStyle` decides whether a cell gets a style at all. It
+  returned true only when the cell had a foreground, a background or an
+  attribute bit set. Underline is not an attribute bit, so a cell with an
+  underline and no colour was never styled. The `under` in the test line
+  above is exactly that cell: with `buildCellStyle` and the other three
+  places fixed, it would still have come out plain. It now also checks the
+  underline style and the underline colour.
+- `styleToANSI`, which turns the style into the escape the loop writes,
+  only knew a boolean underline. It now emits the underline style and the
+  underline colour.
+- The style cache keys styles by a hash of the cell. The hash had no
+  underline in it, so an underlined cell and a plain one with the same
+  colours would have shared one cache entry, and whichever came first
+  would have won. The key now includes the underline style and colour.
+- The loop batches neighbouring cells with the same style into one run.
+  Its comparison checked colours and attribute bits, so an underlined cell
+  next to a plain one would have joined its run. The comparison now checks
+  the underline too.
+
+`buildOptimizedCellStyle` is gone. It existed to be cheaper, and it was
+not: both builders sat behind the same style cache, so after the first cell
+of a given style both cost one hash and one map lookup. The only thing the
+optimized builder saved was correctness.
+
+After the fix all ten paths pass, and the test stays in the suite. It also
+checks, before comparing anything, that the emulator really did give the
+first cell a single underline and the curl cell a coloured curly one. If
+the emulator ever stopped parsing `4:3` the comparison would pass on two
+plain lines, and a test that passes on nothing proves nothing.
+
+## What it cost, and what I could not measure
+
+Reading three more fields per cell, and comparing them in the batching
+check, is not free. The cell loop runs once per cell per frame on every
+focused pane. So I went looking for work in the same loop that did not need
+to be there.
+
+The third follow-up,
+[`6ca97f96`](https://github.com/Gaurav-Gosain/tuios/commit/6ca97f96), says
+the extra compares "measured as a few percent on the focused render
+benchmarks". Four follow-ups removed work from the same code, and none of
+them changes the output:
+
+- [`d1321aa9`](https://github.com/Gaurav-Gosain/tuios/commit/d1321aa9): in
+  scrollback and copy mode the loop fetched the scrollback line once per
+  cell. Each fetch took a lock, checked a generation and did a map lookup,
+  for a value that only depends on the row. It is now read once per row.
+- [`1d858a68`](https://github.com/Gaurav-Gosain/tuios/commit/1d858a68): the
+  emulator's own `Render`, the unfocused fast path, compared neighbouring
+  cells with `uv.Style.Equal`, which converts every colour to RGBA even
+  when both sides are the same value copied from one pen. It now returns
+  early when both colours have the same type and are equal, and compares
+  RGBA otherwise. A test checks the new comparison against ultraviolet's.
+- [`6ca97f96`](https://github.com/Gaurav-Gosain/tuios/commit/6ca97f96): the
+  fake cursor test re-read six flags and made an interface call for every
+  cell, though none of them change within a frame. It is decided once per
+  frame. `shouldApplyStyle` was asked for every cell and only used where a
+  batch starts, so it is only asked there.
+- [`ca2c8edc`](https://github.com/Gaurav-Gosain/tuios/commit/ca2c8edc): the
+  style cache is looked up once per style run, which under a full-screen
+  colour flood is nearly once per cell. Its key wrote the one-byte
+  attribute field into the hash as eight bytes, and ran a reflection-based
+  nil check on a colour before testing whether it was an indexed one, which
+  can never be nil. It now writes one byte, tests for the indexed colour
+  first, and skips an absent underline colour entirely.
+
+I built the render benchmarks at three commits, the one before the fix,
+the fix, and `ca2c8edc` after all four follow-ups, and ran them interleaved
+so drift hit all three alike. It did not work. The machine was busy with
+other work, and it still was when I came back to rerun them quietly: the
+load average was 21 on 11 cores. The timings show it.
+
+The clearest sign is two benchmarks that measure the same thing.
+`RenderTerminalUnfocused` and the 120x40 unfocused case of
+`RenderTerminalReal` render the same size of pane down the same path. In
+one run benchstat called the first one a quarter faster after the
+follow-ups and could not tell the second one apart from the code before
+the fix. The same code cannot be both. `CellLoopPaneNoDim`, which
+isolates the cell loop the fix touched, showed no significant change in
+either run, and its dimmed twin showed none in the run that had it. And
+the code before the fix, which did not change between the runs, measured
+28 to 75% slower in the second run than in the first on three of the four
+benchmarks both runs shared. Numbers like that describe the load, not the
+code.
+
+So I am not putting a time on any of this. The one number the runs agree
+on is allocations: every benchmark allocated exactly as many times per
+render at all three commits, and within a run the median memory per
+render matched to within a byte. The fix and the follow-ups did not add a
+single allocation to the render path. For time I
+have the commit's own "few percent" for the cost and the list above for
+what was removed, which is work that was provably repeated for nothing.
+Whether that nets out ahead or behind needs a quiet machine, and I have
+not had one.
+
+## What I keep from this
+
+Two paths that draw the same thing are two answers to one question, and
+the question only gets asked once per frame. There is no moment where both
+answers are on screen next to each other to be compared. The disagreement
+shows up across time instead, as a pane changing when focus moves, and a
+change on the pane you just left is the one change you are guaranteed not
+to watch.
+
+So the test does the comparing I could not do by eye. It takes the expected
+cell from the emulator, not from the renderer, so no path can agree with
+itself and pass. It runs every path, not the one I happened to be reading.
+And the next time someone adds a sixth way to draw a pane, the table in
+that test is the first place it has to go.

@@ -24,6 +24,7 @@ import { CellShape } from '@/components/mdx/cell-shape';
 import { SpentFrames } from '@/components/mdx/spent-frames';
 import { ScrollColumnsRoundTrip } from '@/components/mdx/scroll-columns-round-trip';
 import { ExtentScan } from '@/components/mdx/extent-scan';
+import { RenderPathAttrs } from '@/components/mdx/render-path-attrs';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -53,6 +54,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     SpentFrames,
     ScrollColumnsRoundTrip,
     ExtentScan,
+    RenderPathAttrs,
     ...components,
   };
 }
