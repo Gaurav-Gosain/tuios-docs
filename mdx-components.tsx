@@ -36,6 +36,7 @@ import { SendKeysTokens } from '@/components/mdx/send-keys-tokens';
 import { ClipWidth } from '@/components/mdx/clip-width';
 import { PaneBoxNegotiation } from '@/components/mdx/pane-box-negotiation';
 import { AgentSourceTimeline } from '@/components/mdx/agent-source-timeline';
+import { MailboxSandbox } from '@/components/mdx/mailbox-sandbox';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -77,6 +78,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ClipWidth,
     PaneBoxNegotiation,
     AgentSourceTimeline,
+    MailboxSandbox,
     ...components,
   };
 }
