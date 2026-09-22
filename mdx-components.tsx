@@ -22,6 +22,7 @@ import { SharedBordersToggle } from '@/components/mdx/shared-borders-toggle';
 import { InvariantBlind } from '@/components/mdx/invariant-blind';
 import { CellShape } from '@/components/mdx/cell-shape';
 import { SpentFrames } from '@/components/mdx/spent-frames';
+import { ReattachReplay } from '@/components/mdx/reattach-replay';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -49,6 +50,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     InvariantBlind,
     CellShape,
     SpentFrames,
+    ReattachReplay,
     ...components,
   };
 }
