@@ -1,27 +1,25 @@
 ---
 title: Library Usage
-description: Embed TUIOS in your own Bubble Tea application
+description: Embed TUIOS in your own Bubble Tea program, or serve it over SSH or the web
 icon: Code
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-TUIOS ships as a Go package as well as a binary. `pkg/tuios` exposes the window manager as a Bubble Tea model, so you can run it standalone, embed it, or serve it over a PTY of your own.
-
-## Installation
+The `pkg/tuios` package exposes the window manager as a Bubble Tea model. You can run it on its own, wrap it in your own model, or serve it over SSH or the browser.
 
 ```bash
-go get github.com/Gaurav-Gosain/tuios
+go get github.com/Gaurav-Gosain/tuios/pkg/tuios
 ```
 
 <Callout type="warn">
-The package is pre-1.0 and the API can change between releases. `Model` is a type alias for an internal type, so any method the internal model gains or loses is visible to you immediately. Pin a version in your `go.mod`.
+The API is pre-1.0 and can change between releases. `Model` is a type alias for the internal `app.OS` type, so its exported fields and methods change with it. Pin a version in your `go.mod`.
 </Callout>
 
-## Basic Usage
+## Run it
 
-`tuios.New` returns a `*Model` that implements `tea.Model`. You construct the Bubble Tea program yourself, which means you keep control of the program options and the error handling.
+`tuios.New` returns a `*tuios.Model`, which implements `tea.Model`. You build the program yourself, so you keep control of program options and error handling. There is no `tuios.Run`.
 
 ```go
 package main
@@ -43,13 +41,9 @@ func main() {
 }
 ```
 
-<Callout type="info">
-There is no `tuios.Run` function. Constructing the model and running the program are separate steps.
-</Callout>
-
 ## Options
 
-Configuration uses functional options passed to `New`. Each corresponds to a field on the `Options` struct, and `DefaultOptions()` returns the defaults.
+`New` takes functional options:
 
 ```go
 model := tuios.New(
@@ -62,28 +56,98 @@ model := tuios.New(
 )
 ```
 
-| Option | Type | Default | Notes |
-|--------|------|---------|-------|
-| `WithTheme` | `string` | empty | Theme name. Empty uses standard terminal colors. |
-| `WithShowKeys` | `bool` | `false` | Show the pressed-keys overlay. |
-| `WithAnimations` | `bool` | `true` | When off, windows snap instantly. |
-| `WithASCIIOnly` | `bool` | `false` | Use ASCII instead of Nerd Font icons. |
-| `WithWorkspaces` | `int` | `9` | Clamped to 1-9. |
-| `WithBorderStyle` | `string` | `"rounded"` | See [Configuration](/docs/configuration#border_style). |
-| `WithDockbarPosition` | `string` | `"bottom"` | `bottom`, `top`, or `hidden`. |
-| `WithHideWindowButtons` | `bool` | `false` | Hide minimize, maximize, and close. |
-| `WithWindowButtonStyle` | `string` | `"pill"` | `pill` (glyphs on a filled pill) or `dots` (macOS traffic lights). |
-| `WithWindowButtonPosition` | `string` | `"right"` | `right` or `left` end of the title bar. |
-| `WithScrollbackLines` | `int` | `10000` | Clamped to 100-1000000. |
-| `WithSize` | `int, int` | auto | Initial size, detected if unset. |
-| `WithSSHMode` | `bool` | `false` | Adjusts behaviour for SSH serving. |
-| `WithUserConfig` | `*config.UserConfig` | loaded from disk | Supply a config instead of reading the user's file. |
+TUIOS reads the user's config file first and then applies your options on top, the same way the `tuios` binary applies its command-line flags. An option left at its zero value keeps whatever the config file says.
 
-Out-of-range values are clamped rather than rejected. `WithWorkspaces(50)` gives you 9 and `WithScrollbackLines(10)` gives you 100, with no error.
+| Option | Type | If not set | Notes |
+|--------|------|------------|-------|
+| `WithTheme` | `string` | config file | A theme name, such as `dracula` or `nord`. |
+| `WithShowKeys` | `bool` | config file | Shows the [showkeys overlay](/docs/showkeys). |
+| `WithAnimations` | `bool` | config file | `false` turns animations off. `true` cannot turn them on if the config turned them off. |
+| `WithASCIIOnly` | `bool` | config file | ASCII instead of Nerd Font glyphs. |
+| `WithWorkspaces` | `int` | `9` | Clamped to 1 to 9. |
+| `WithBorderStyle` | `string` | config file | See [`border_style`](/docs/configuration#border_style). |
+| `WithDockbarPosition` | `string` | config file | `bottom`, `top` or `hidden`. |
+| `WithHideWindowButtons` | `bool` | config file | Hides minimize, maximize and close. |
+| `WithWindowButtonStyle` | `string` | config file | `pill` or `dots` (macOS traffic lights). The built-in default is `dots`. |
+| `WithWindowButtonPosition` | `string` | config file | `left` or `right`. The built-in default is `left`. |
+| `WithScrollbackLines` | `int` | `10000` | Clamped to 100 to 1,000,000. Always applied, so it replaces the config's `scrollback_lines`. |
+| `WithSize` | `int, int` | detected | Initial width and height in cells. |
+| `WithSSHMode` | `bool` | `false` | Marks the model as an SSH client. See [Serve over SSH](#serve-over-ssh). |
+| `WithUserConfig` | `*config.UserConfig` | loaded from disk | Use this config instead of reading the user's file. |
 
-## Serving a PTY
+Out-of-range numbers are clamped, not rejected. `WithWorkspaces(50)` gives 9 and `WithScrollbackLines(10)` gives 100. `DefaultOptions()` returns the starting values as an `Options` struct.
 
-`NewForPTY` sizes the model from a PTY. Anything with `Width() int` and `Height() int` satisfies the `PTY` interface, which keeps the package independent of any particular SSH or web terminal library.
+## Use your own config
+
+`tuios.Config` exposes three config functions, so you do not need to import an internal package:
+
+```go
+cfg, err := tuios.Config.LoadUserConfig()
+if err != nil {
+	cfg = tuios.Config.DefaultConfig()
+}
+cfg.Keybindings.LeaderKey = "ctrl+a"
+
+model := tuios.New(tuios.WithUserConfig(cfg))
+```
+
+`tuios.Config.GetConfigPath()` returns the path of the config file and an error.
+
+## Wrap it in your own model
+
+Delegate to the TUIOS model and handle your own messages first. In Bubble Tea v2, `View` returns a `tea.View`.
+
+```go
+type app struct {
+	wm *tuios.Model
+}
+
+func (a *app) Init() tea.Cmd {
+	return a.wm.Init()
+}
+
+func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(pingMsg); ok {
+		// Handle your own message and stop here.
+		return a, nil
+	}
+	updated, cmd := a.wm.Update(msg)
+	a.wm = updated.(*tuios.Model)
+	return a, cmd
+}
+
+func (a *app) View() tea.View {
+	return a.wm.View()
+}
+```
+
+To check the mode, read the `Mode` field. The package exports `WindowManagementMode`, which TUIOS starts in, and `TerminalMode`:
+
+```go
+if model.Mode == tuios.TerminalMode {
+	// keys go to the focused pane
+}
+```
+
+## Program options
+
+`ProgramOptions()` returns the Bubble Tea options every TUIOS client runs with:
+
+- the frame rate cap from the config (`max_fps`)
+- no signal handler, so your program owns the process signals
+- `tea.WithFilter(tuios.FilterMouseMotion)`
+
+Pass them through instead of writing your own, so you get later additions.
+
+`FilterMouseMotion` drops mouse motion that nothing on screen reacts to. Motion still passes when something needs it, for example during a drag or resize, over a link, the dock or the sidebar, and when the focused pane runs an application that tracks the mouse. It is exported for callers that build their own option list.
+
+<Callout type="warn" title="The last filter wins">
+Bubble Tea keeps only one `tea.WithFilter`. SSH and web serving libraries add their own filter, so put their options first and `tuios.ProgramOptions()` last. Otherwise the TUIOS filter is replaced and every mouse motion event reaches the model.
+</Callout>
+
+## Size from a PTY
+
+`NewForPTY` takes the initial size from anything with `Width()` and `Height()` methods:
 
 ```go
 type PTY interface {
@@ -94,58 +158,94 @@ type PTY interface {
 func NewForPTY(pty PTY, opts ...Option) *Model
 ```
 
-<Callout type="warn">
-The doc comment above the `PTY` interface in the source still refers to a `NewForSession` constructor. No such function exists; the constructor is `NewForPTY`.
-</Callout>
+The interface needs methods. A struct with `Width` and `Height` fields, such as `sip.Pty`, does not satisfy it. For those, use `New` with `WithSize`, as the recipes below do.
 
-## Program Options
+## Serve in the browser
 
-`ProgramOptions()` returns the Bubble Tea options TUIOS expects, currently the frame rate. Pass them through rather than writing your own, so you inherit later additions.
-
-`FilterMouseMotion` is a `tea.WithFilter` function that drops mouse motion events when nothing is being dragged, resized, or selected. Terminal applications generate a lot of motion events and forwarding all of them costs measurable CPU.
+[sip](https://github.com/Gaurav-Gosain/sip) serves a Bubble Tea program to the browser. It is the library behind `tuios-web`. Use `ServeWithProgram` and build the program yourself:
 
 ```go
-p := tea.NewProgram(
-	model,
-	tea.WithFilter(tuios.FilterMouseMotion),
+package main
+
+import (
+	"context"
+	"log"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/Gaurav-Gosain/sip"
+	"github.com/Gaurav-Gosain/tuios/pkg/tuios"
 )
-```
 
-Motion passes through during window drags and resizes, overlay panel drags, scrollback browser selection, text selection, and when the focused window is an alt-screen application tracking the mouse itself. Everything else is filtered out.
+func main() {
+	server := sip.NewServer(sip.DefaultConfig())
 
-## Modes
-
-`Mode` is an alias for the internal mode type, with two exported constants. `WindowManagementMode` is what TUIOS starts in.
-
-```go
-if model.Mode == tuios.TerminalMode {
-	// input is going to the focused terminal
+	err := server.ServeWithProgram(context.Background(), func(sess sip.Session) *tea.Program {
+		pty := sess.Pty()
+		model := tuios.New(
+			tuios.WithSize(pty.Width, pty.Height),
+			tuios.WithTheme("dracula"),
+		)
+		// sip's options first, then tuios's, so the tuios filter wins.
+		opts := append(sip.MakeOptions(sess), tuios.ProgramOptions()...)
+		return tea.NewProgram(model, opts...)
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-## Configuration Access
+Do not use sip's `Serve` here. It appends its own options after the ones you return, so its filter replaces the TUIOS one. A model served this way counts as a local client: there is no option that marks it as a browser.
 
-`tuios.Config` re-exports three configuration functions so you can work with user configuration without importing an internal package:
+## Serve over SSH
+
+With [Wish](https://github.com/charmbracelet/wish), use `MiddlewareWithProgramHandler` for the same reason: `bubbletea.Middleware` appends its options after yours.
 
 ```go
-cfg, err := tuios.Config.LoadUserConfig()
-if err != nil {
-	cfg = tuios.Config.DefaultConfig()
-}
+package main
 
-model := tuios.New(tuios.WithUserConfig(cfg))
+import (
+	"log"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/ssh"
+	"charm.land/wish/v2"
+	"charm.land/wish/v2/bubbletea"
+	"github.com/Gaurav-Gosain/tuios/pkg/tuios"
+)
+
+func main() {
+	s, err := wish.NewServer(
+		wish.WithAddress(":2222"),
+		wish.WithHostKeyPath(".ssh/tuios_ed25519"),
+		wish.WithMiddleware(
+			bubbletea.MiddlewareWithProgramHandler(func(sess ssh.Session) *tea.Program {
+				pty, _, _ := sess.Pty()
+				model := tuios.New(
+					tuios.WithSize(pty.Window.Width, pty.Window.Height),
+					tuios.WithSSHMode(true),
+				)
+				// wish's options first, then tuios's, so the tuios filter wins.
+				opts := append(bubbletea.MakeOptions(sess), tuios.ProgramOptions()...)
+				return tea.NewProgram(model, opts...)
+			}),
+		),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Fatal(s.ListenAndServe())
+}
 ```
 
-`tuios.Config.GetConfigPath()` returns the path the configuration is read from.
+`WithSSHMode(true)` makes the model an SSH client. The settings page does not write the server's config file, and desktop actions do not run on the server. It does not give the model the SSH session, a graphics channel or the client terminal's capabilities, so images are not forwarded to the client.
 
 ## Limitations
 
-Worth knowing before you build on this:
-
-- **Daemon mode is not available through the library.** Sessions, detach and reattach, and the control protocol live in an internal package and are reachable only through the `tuios` binary. `pkg/tuios` gives you an in-process window manager.
-- **SSH serving is not exported.** The binary's `tuios ssh` is implemented internally. You can serve TUIOS over SSH by wiring `NewForPTY` into your own server, but there is no `RunSSH` helper.
-- **Several options set process-global state.** `WithASCIIOnly`, `WithBorderStyle`, `WithDockbarPosition`, `WithHideWindowButtons`, `WithWindowButtonStyle`, `WithWindowButtonPosition`, `WithScrollbackLines`, and `WithAnimations` write to package-level variables in the config package. Two models in one process do not get independent values for these, and the last one constructed wins. This matters if you serve several sessions from a single process.
-- **There is no Go example directory.** The repository's `examples/` directory holds `.tape` scripts for the tape player, not Go programs.
+- **No daemon.** Sessions, detach and reattach, and the control protocol are internal and only reachable through the `tuios` binary. `pkg/tuios` gives you an in-process window manager.
+- **No SSH or web helper.** `tuios ssh` and `tuios-web` are built from internal packages. Use the recipes above to serve the model yourself.
+- **Some settings are process-wide.** Theme, border style, dockbar position, window buttons, ASCII mode, scrollback and animations are written to package-level state in the config package. Two models in one process share them, and the last one built wins. This matters when you serve several sessions from one process.
+- **No Go examples in the repository.** The `examples/` directory holds `.tape` scripts and a dock config, not Go programs. The recipes on this page all compile against current `main`.
 
 ## Related
 
@@ -153,11 +253,16 @@ Worth knowing before you build on this:
   <Card
     title="Architecture"
     href="/docs/architecture"
-    description="How TUIOS is put together internally"
+    description="How TUIOS is put together"
   />
   <Card
     title="Configuration"
     href="/docs/configuration"
-    description="The user configuration this API reads"
+    description="The config file these options sit on top of"
+  />
+  <Card
+    title="Web Terminal"
+    href="/docs/web"
+    description="The tuios-web binary built on sip"
   />
 </Cards>
