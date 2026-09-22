@@ -1,6 +1,6 @@
 ---
 title: The renderer was drawing a backlog it had caused
-description: A pane kept painting for 1.2 seconds after the program flooding it had exited. The flood alone did not cause it. The client's own renderer was eating the time it needed to catch up.
+description: A flooded tuios pane kept painting 1.2 s after its source exited. The client's own renderer caused the backlog, and pacing by queued bytes halved the tail.
 date: '2026-08-26'
 author: Gaurav Gosain
 ---
@@ -15,6 +15,15 @@ emulator paces the guest, but nothing paces the client, and the client is
 the slower side because it also draws. So the queue between daemon and
 client grows for the length of the flood and is worked through afterwards,
 frame by frame, on screen.
+
+```mermaid
+graph TD
+    G[guest program] --> D[daemon emulator]
+    D -->|socket| Q[client queue]
+    Q --> W[output writer]
+    W -->|needs the pane lock| P[client pane emulator]
+    R[renderer] -->|holds the read lock<br/>while composing| P
+```
 
 ## The same number twice
 
@@ -79,6 +88,14 @@ The drain is faster as well as quieter: a 256 KiB batch went from 6.2 ms to
 3.95 ms, with the writer's lock wait halved. What remains of the tail is
 the client emulator's own parse rate, which is the honest floor. The bytes
 exist and something has to parse them.
+
+The pacing is described with the other render settings on the
+[architecture page](/docs/architecture#performance). Profiling a DOOM-fire
+flood at nearly the same size showed that a fifth of each frame went to
+[a wrap that changed nothing](/blog/a-fifth-of-every-frame-went-to-changing-nothing),
+which is compose time a backlog like this one pays for. And the shape is the
+one from [a resize drag that trailed the mouse](/blog/measuring-before-optimising):
+a queue that grows while you work, and drains after you stop.
 
 ## What I keep from this
 
