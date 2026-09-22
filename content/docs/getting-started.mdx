@@ -1,457 +1,278 @@
 ---
 title: Getting Started
-description: Install TUIOS and learn the basics
+description: Install TUIOS, open your first windows, and learn the keys you need on day one.
 icon: Rocket
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Steps, Step } from 'fumadocs-ui/components/steps';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-# Getting Started with TUIOS
+This page takes you from nothing to a working session in about five minutes.
 
-This guide will help you install TUIOS and learn the essential operations.
+You need a terminal with true color support. A [Nerd Font](https://www.nerdfonts.com) makes the icons render; without one, start TUIOS with `--ascii-only`.
 
-<Callout title="Requirements" type="info">
-- A terminal with true color support (most modern terminals)
-- Go 1.26+ (if building from source)
-- For graphics support: Kitty, WezTerm, Ghostty, iTerm2, or other Kitty-protocol-compatible terminals (optional, experimental)
-</Callout>
+## Install
 
-## Installation
-
-### Package Managers
-
-<Steps>
-
-<Step>
-
-#### Homebrew (macOS/Linux)
+<Tabs items={['Homebrew', 'Arch (AUR)', 'Script', 'Nix', 'Go', 'Docker']}>
+<Tab value="Homebrew">
+macOS and Linux:
 
 ```bash
 brew tap Gaurav-Gosain/tap
 brew install tuios
 ```
-
-</Step>
-
-<Step>
-
-#### Arch Linux (AUR)
-
+</Tab>
+<Tab value="Arch (AUR)">
 ```bash
-# Using yay
 yay -S tuios-bin
-
-# Using paru  
-paru -S tuios-bin
 ```
-
-</Step>
-
-<Step>
-
-#### Nix
-
-```bash
-nix run github:Gaurav-Gosain/tuios#tuios
-```
-
-The flake builds for `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. Intel Macs are not covered by the flake, but the release binaries include `darwin/amd64`.
-
-</Step>
-
-</Steps>
-
-### Quick Install Script
-
-**Linux/macOS:**
+</Tab>
+<Tab value="Script">
+Linux and macOS. Installs the `tuios` binary into `/usr/local/bin`, `~/.local/bin` or `~/bin`, whichever it can write to.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/tuios/main/install.sh | bash
 ```
-
-This installs the `tuios` binary only. The browser terminal is a second binary, `tuios-web`, which you install separately. See [Web Terminal](/docs/web).
-
-To build from a checkout instead, `scripts/install.sh` compiles and installs the binary, defaulting to the libghostty-vt backend (which needs `zig` on the path); pass `pure` as the first argument for the pure-Go emulator, `scripts/install.sh pure`. `tuios --version` reports which backend a binary carries.
-
-### Alternative Methods
-
-<Cards>
-  <Card title="GitHub Releases" href="https://github.com/Gaurav-Gosain/tuios/releases">
-    Download pre-built binaries
-  </Card>
-  <Card title="Go Install">
-    ```bash
-    go install github.com/Gaurav-Gosain/tuios/cmd/tuios@latest
-    ```
-  </Card>
-  <Card title="Docker">
-    ```bash
-    docker run -it --rm ghcr.io/gaurav-gosain/tuios:latest
-    ```
-  </Card>
-  <Card title="Build from Source">
-    ```bash
-    git clone https://github.com/gaurav-gosain/tuios.git
-    cd tuios
-    go build -o tuios ./cmd/tuios
-    ./tuios
-    ```
-  </Card>
-</Cards>
-
-## First Launch
-
-Simply run:
-
+</Tab>
+<Tab value="Nix">
 ```bash
-tuios
+nix run github:Gaurav-Gosain/tuios#tuios
 ```
 
-<Callout title="No windows yet?" type="info">
-You'll start in **Window Management Mode** with no windows. This is normal, and TUIOS shows a welcome splash pointing at the three keys worth knowing first: <kbd>n</kbd> to create a window, <kbd>?</kbd> for help, and <kbd>,</kbd> for settings.
+The flake builds for `x86_64-linux`, `aarch64-linux` and `aarch64-darwin`. On an Intel Mac, use a release binary.
+</Tab>
+<Tab value="Go">
+Needs Go 1.26 or newer.
+
+```bash
+go install github.com/Gaurav-Gosain/tuios/cmd/tuios@latest
+```
+</Tab>
+<Tab value="Docker">
+```bash
+docker run -it --rm ghcr.io/gaurav-gosain/tuios:latest
+```
+</Tab>
+</Tabs>
+
+Pre-built binaries for Linux, macOS, Windows and FreeBSD are on the [releases page](https://github.com/Gaurav-Gosain/tuios/releases).
+
+Check the install:
+
+```bash
+tuios --version
+```
+
+The first line names the version and the terminal emulator backend the binary was built with, for example `tuios version 0.7.0 [pure-Go backend]`.
+
+<Callout type="info" title="Keeping it up to date">
+If you installed with the script or a release binary, `tuios update` installs the newest release over the binary (`tuios update --check` only reports). For Homebrew, AUR, Nix and Go installs, use that tool to update. `tuios update` detects them and prints the right command instead.
 </Callout>
 
-## Understanding Modes
+The browser terminal is a separate binary, `tuios-web`. See [Web Terminal](/docs/web) to install it.
 
-TUIOS has **two primary modes**:
+### Build from source
 
-### 1. Window Management Mode 
+```bash
+git clone https://github.com/Gaurav-Gosain/tuios.git
+cd tuios
+go build -o tuios ./cmd/tuios
+```
 
-The mode you start in. This is where you:
-- Navigate between windows
-- Create/close/rename windows  
-- Switch workspaces
-- Tile windows
-- Use mouse to drag/resize
+`./scripts/install.sh` builds and installs into `~/.local/bin`. It defaults to the libghostty-vt emulator backend, which needs `zig`. Run `./scripts/install.sh pure` for the pure Go emulator, which needs nothing beyond Go.
 
-**Visual Indicator**: Windows have colored borders and you see the dockbar at bottom.
-
-### 2. Terminal Mode
-
-Where you interact with the terminal inside a window. Your keypresses go directly to the shell/application.
-
-**Visual Indicator**: The active window is fully focused, keyboard input is captured.
-
-<Callout title="Mode Switching" type="tip">
-- Press <kbd>i</kbd> or <kbd>Enter</kbd> to enter **Terminal Mode**
-- Press <kbd>Alt</kbd><kbd>Esc</kbd> (or <kbd>Opt</kbd><kbd>Esc</kbd> on macOS) for quick exit from Terminal Mode
-- Press <kbd>Esc</kbd> or <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>Esc</kbd> to return to **Window Management Mode**. <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>d</kbd> detaches the session instead of changing mode.
-</Callout>
-
-## Essential Keybindings
-
-### Command Palette
-
-The fastest way to discover what TUIOS can do is the **Command Palette**:
-
-- Press <kbd>Ctrl</kbd>+<kbd>P</kbd> from any mode to open it
-- Type to fuzzy-search commands, keybindings, actions, sessions, and windows, or launch any executable on `$PATH`
-- Press <kbd>Enter</kbd> to execute
-
-<Callout title="First thing to try" type="tip">
-After launching TUIOS, press <kbd>Ctrl</kbd>+<kbd>P</kbd> to open the Command Palette. It is the quickest way to explore all available commands without memorizing keybindings.
-</Callout>
-
-### Creating Your First Window
-
-From Window Management Mode:
-- Press <kbd>n</kbd> to create a new window
-
-Or from any mode:
-- Press <kbd>Ctrl</kbd><kbd>B</kbd>, then <kbd>c</kbd>
-
-### Window Navigation
-
-In Window Management Mode:
-- <kbd>Tab</kbd> - Next window
-- <kbd>Shift</kbd><kbd>Tab</kbd> - Previous window
-- **Arrow keys** - Move focus directionally
-- <kbd>1</kbd>-<kbd>9</kbd> - Select window by number
-
-<Callout title="hjkl are not focus keys" type="warn">
-In Window Management Mode, <kbd>h</kbd> snaps the focused window to the left half and <kbd>l</kbd> snaps it to the right half. <kbd>j</kbd> and <kbd>k</kbd> are unbound. Use the arrow keys to move focus. The vim motions you may be expecting are in copy mode, not window mode.
-</Callout>
-
-In Terminal Mode (without leaving the mode):
-- <kbd>Alt</kbd><kbd>N</kbd> / <kbd>Alt</kbd><kbd>P</kbd> - Next/Previous window (Linux/Windows)
-- <kbd>Opt</kbd><kbd>Tab</kbd> / <kbd>Opt</kbd><kbd>Shift</kbd><kbd>Tab</kbd> - Next/Previous window (macOS)
-
-Or click with your mouse!
-
-### Window Management
-
-From any mode (using <kbd>Ctrl</kbd><kbd>B</kbd> prefix):
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>c</kbd> - Create new window
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>x</kbd> - Close focused window
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>r</kbd> - Rename focused window
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>m</kbd> <kbd>m</kbd> - Minimize focused window (<kbd>Ctrl</kbd><kbd>B</kbd> <kbd>m</kbd> opens the minimize menu)
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>,</kbd> - Open the settings page
-
-### Workspaces
-
-TUIOS provides **9 workspaces** (like virtual desktops):
-
-- <kbd>Alt</kbd><kbd>1</kbd>-<kbd>9</kbd> - Switch to workspace 1-9
-- <kbd>Alt</kbd><kbd>Shift</kbd><kbd>1</kbd>-<kbd>9</kbd> - Move window to workspace and follow
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>w</kbd> then <kbd>1</kbd>-<kbd>9</kbd> - The same, through the workspace prefix menu
-
-<Callout type="info">
-<kbd>Ctrl</kbd><kbd>B</kbd> followed by a digit selects a **window** by number, not a workspace.
-</Callout>
-
-### Tiling
-
-- <kbd>t</kbd> - Toggle automatic tiling mode
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>z</kbd> - Zoom the focused pane to fullscreen
-- <kbd>f</kbd> - Fullscreen the focused window (window mode)
-- <kbd>h</kbd> / <kbd>l</kbd> - Snap window left / right at 50% width (window mode)
-
-### Layout Templates
-
-Save and restore window arrangements for repeatable workflows:
-
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>L</kbd> - Load a saved layout template
-- Use `tuios layout list` to see saved layouts
-- Use `tuios layout dir` to find the templates directory
-- Use `tuios layout export <name>` to export a layout
-
-Layout templates remember the number of windows, their positions, sizes, and workspace assignments so you can recreate a complex setup with a single command.
-
-### Copy Mode (Scrollback)
-
-Access 10,000 lines of scrollback with vim-style navigation:
-
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>[</kbd> - Enter copy mode
-- <kbd>h</kbd><kbd>j</kbd><kbd>k</kbd><kbd>l</kbd> - Move cursor
-- <kbd>/</kbd> - Search forward
-- <kbd>v</kbd> - Start visual selection
-- <kbd>y</kbd> - Copy selection to clipboard
-- <kbd>Esc</kbd> - Exit copy mode
-
-<Callout title="More keybindings" type="info">
-See the [Keybindings](/docs/keybindings) page for the complete reference.
-</Callout>
-
-### Help & Quit
-
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>?</kbd> - Toggle help overlay
-- <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>q</kbd> - Quit TUIOS
-
-## Example Workflow
-
-Let's create a development setup:
+## Your first session
 
 <Steps>
 
 <Step>
 
-### Launch TUIOS
+### Start TUIOS
 
 ```bash
 tuios
 ```
 
-You start in Window Management Mode with no windows.
+The first run creates a session called `session-0` and shows a welcome screen with four keys on it:
+
+<TerminalCapture
+  title="tuios"
+  rows={5}
+  lines={[
+    { text: '  TUIOS' },
+    { text: '  Terminal UI Operating System', tone: 'dim' },
+    { text: '' },
+    { text: '  n  new window    N  new session    ?  help    ,  settings' },
+  ]}
+/>
+
+You are in **window management mode**. Keys here arrange windows. Nothing is sent to a shell yet.
 
 </Step>
 
 <Step>
 
-### Create first window
+### Open a window
 
-Press <kbd>n</kbd>
-
-A new window appears with your shell.
+Press <kbd>n</kbd>. A window opens with your shell in it.
 
 </Step>
 
 <Step>
 
-### Enter terminal mode
+### Type in it
 
-Press <kbd>i</kbd> or <kbd>Enter</kbd>
-
-Now you can type commands.
-
-</Step>
-
-<Step>
-
-### Run a command
+Press <kbd>i</kbd> (or <kbd>Enter</kbd>) to enter **terminal mode**. Your keys now go to the shell. Run a command:
 
 ```bash
 ls
-vim myfile.go
 ```
 
-Work normally in the terminal.
+</Step>
+
+<Step>
+
+### Go back to window management
+
+Press <kbd>Alt</kbd>+<kbd>Esc</kbd> (<kbd>Opt</kbd>+<kbd>Esc</kbd> on macOS), or <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Esc</kbd>.
+
+A bare <kbd>Esc</kbd> stays in terminal mode and goes to the program, so vim and other full-screen programs keep working.
 
 </Step>
 
 <Step>
 
-### Return to management mode
+### Open two more windows
 
-Press <kbd>Esc</kbd>
+Press <kbd>n</kbd> twice. Tiling is on by default, so each new window takes half of the focused one and all three stay visible.
 
-Back to Window Management Mode.
-
-</Step>
-
-<Step>
-
-### Create more windows
-
-Press <kbd>n</kbd> twice more.
-
-You now have 3 windows!
+Move between them with <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd>, the number keys <kbd>1</kbd> to <kbd>9</kbd>, or <kbd>Alt</kbd>+arrow keys to move to the neighbour in that direction. You can also click a window.
 
 </Step>
 
 <Step>
 
-### Enable tiling
+### Try another workspace
 
-Press <kbd>t</kbd>
-
-Windows automatically arrange in a grid.
+Press <kbd>Alt</kbd>+<kbd>2</kbd> (<kbd>Opt</kbd>+<kbd>2</kbd> on macOS) to switch to workspace 2. It is empty. Open a window there, then press <kbd>Alt</kbd>+<kbd>1</kbd> to go back.
 
 </Step>
 
 <Step>
 
-### Switch workspaces
+### Detach, and come back
 
-Press <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>2</kbd>
-
-Move to empty workspace 2.
-
-</Step>
-
-<Step>
-
-### Create windows here too
-
-Press <kbd>n</kbd> a few times.
-
-Each workspace is independent!
-
-</Step>
-
-<Step>
-
-### Navigate between windows
-
-- Press <kbd>Tab</kbd> to cycle windows
-- Press <kbd>Ctrl</kbd><kbd>B</kbd> <kbd>1</kbd> to go back to workspace 1
-- Click windows with your mouse
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>d</kbd>. TUIOS exits, but the session and its shells keep running in the background daemon. Run `tuios` again and everything is where you left it.
 
 </Step>
 
 </Steps>
 
-## Command Line Options
-
-TUIOS supports many flags:
-
-```bash
-# Run with a specific theme
-tuios --theme dracula
-
-# List all available themes (342 built in)
-tuios --list-themes
-
-# Preview a theme's colors
-tuios --preview-theme nord
-
-# Enable debug mode
-tuios --debug
-
-# Use ASCII-only (no Nerd Font icons)
-tuios --ascii-only
-
-# Show pressed keys overlay (for demos)
-tuios --show-keys
-
-# Custom border style
-tuios --border-style thick
-
-# Custom dockbar position
-tuios --dockbar-position top
-```
-
-## Daemon Mode (Session Persistence)
-
-Create persistent sessions that survive disconnection (like tmux):
-
-```bash
-# Create a new session
-tuios new mysession
-
-# ... work in TUIOS ...
-# Detach with Ctrl+B d
-
-# List sessions
-tuios ls
-
-# Reattach later
-tuios attach mysession
-```
-
-<Callout type="info">
-Daemon mode works on **Linux**, **macOS**, and **Windows** (build 17063 or later, for Unix socket support). See the [Sessions](/docs/sessions) guide for details, including what does and does not survive a daemon restart.
+<Callout type="tip" title="When you forget a key">
+Press <kbd>Ctrl</kbd>+<kbd>P</kbd> in either mode to open the command palette and search every command by name. Press <kbd>Ctrl</kbd>+<kbd>B</kbd> and wait half a second: a panel lists every key the prefix accepts next. <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>?</kbd> opens the full help.
 </Callout>
 
-## SSH Server Mode
+## The two modes
 
-Run TUIOS as an SSH server for remote access:
+| Mode | What your keys do | How to get there |
+|------|-------------------|------------------|
+| Window management | Create, close, move, tile and switch windows | <kbd>Alt</kbd>+<kbd>Esc</kbd>, or <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Esc</kbd> |
+| Terminal | Go to the program in the focused window | <kbd>i</kbd> or <kbd>Enter</kbd> |
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> is the **prefix** key. It works in both modes: press it, release it, then press the next key. You can change it with `keybindings.leader_key` in the [configuration](/docs/configuration).
+
+## Keys for day one
+
+On macOS, read <kbd>Alt</kbd> as <kbd>Opt</kbd>. If an <kbd>Opt</kbd> chord types a strange character instead, see the [macOS notes](/docs/keybindings#macos).
+
+**Windows**
+
+| Key | Action |
+|-----|--------|
+| <kbd>n</kbd> | New window (window mode) |
+| <kbd>w</kbd> or <kbd>x</kbd> | Close the focused window (window mode) |
+| <kbd>r</kbd> | Rename the focused window (window mode) |
+| <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | Next / previous window (window mode) |
+| <kbd>Alt</kbd>+<kbd>N</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd> | Next / previous window (both modes) |
+| <kbd>Alt</kbd>+arrow | Focus the window in that direction (both modes) |
+| <kbd>1</kbd> to <kbd>9</kbd> | Focus window by number (window mode) |
+| <kbd>z</kbd> | Zoom the focused window to fill the screen, and back (window mode) |
+| <kbd>m</kbd> | Minimize to the dock (window mode). <kbd>M</kbd> restores all. |
+
+The prefix versions work in both modes: <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>c</kbd> (new), <kbd>x</kbd> (close), <kbd>r</kbd> (rename), <kbd>n</kbd>/<kbd>p</kbd> (next/previous), an arrow key (focus that way), <kbd>0</kbd> to <kbd>9</kbd> (focus by number), <kbd>z</kbd> (zoom).
+
+**Tiling**
+
+| Key | Action |
+|-----|--------|
+| <kbd>t</kbd> or <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Space</kbd> | Turn tiling on or off |
+| <kbd>-</kbd> / <kbd>\|</kbd> | Split the focused window: new window below / to the right (window mode) |
+| <kbd>H</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> | Swap with the neighbour left / down / up / right (window mode) |
+| <kbd>=</kbd> | Make all splits equal (window mode) |
+
+[BSP Tiling](/docs/bsp-tiling) covers preselection, resizing and the other layouts.
+
+**Workspaces**
+
+| Key | Action |
+|-----|--------|
+| <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>9</kbd> | Switch to workspace 1 to 9 |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> to <kbd>9</kbd> | Move the focused window there, and follow it |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>w</kbd>, then a digit | Switch workspace from the prefix menu |
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> followed directly by a digit focuses a **window**, not a workspace.
+
+**Scrollback and copying**
+
+| Key | Action |
+|-----|--------|
+| Mouse wheel | Scroll the window's history. Typing, or scrolling back to the bottom, returns to live output. |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> | Enter copy mode: move with vim keys, <kbd>/</kbd> to search, <kbd>v</kbd> to select, <kbd>y</kbd> to copy, <kbd>Esc</kbd> to leave |
+| Drag with the mouse | Select text. It is copied when you release. |
+
+**Everything else**
+
+| Key | Action |
+|-----|--------|
+| <kbd>Ctrl</kbd>+<kbd>P</kbd> | Command palette |
+| <kbd>Alt</kbd>+<kbd>Space</kbd> or <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>a</kbd> | App launcher: start any program on your `$PATH` in a new window |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>S</kbd> | Session switcher |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>,</kbd> | Settings page (<kbd>,</kbd> in window mode) |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>?</kbd> | Help (<kbd>?</kbd> in window mode) |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>d</kbd> | Detach, leaving the session running |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>q</kbd> | Quit menu: detach, switch session, or kill this session |
+
+The full list is on the [Keybindings](/docs/keybindings) page, and `tuios keybinds list` prints the bindings in effect on your machine.
+
+## Sessions
+
+`tuios` on its own attaches to your most recent session, and creates one if there is none. To manage several:
 
 ```bash
-# Start on default port (2222)
-tuios ssh
-
-# Custom port
-tuios ssh --port 8022
-
-# Listen on all interfaces
-tuios ssh --host 0.0.0.0 --port 2222
+tuios new work          # create a session called "work" and attach to it
+tuios ls                # list sessions
+tuios attach work       # attach to "work"
+tuios kill-session work # end "work" and every window in it
 ```
 
-Connect from another machine:
+Inside TUIOS, <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>S</kbd> switches between sessions and <kbd>N</kbd> (window mode) creates one.
+
+If you want a session that lives and dies with this terminal and starts no daemon, run `tuios --standalone`. [Sessions](/docs/sessions) explains both kinds and exactly what survives a restart.
+
+## Make it yours
 
 ```bash
-ssh -p 2222 user@hostname
+tuios config edit        # open the config file in $EDITOR
+tuios config path        # print where it is
+tuios --list-themes      # list the built-in themes
+tuios --theme dracula    # start with a theme
 ```
 
-Each SSH connection gets its own isolated TUIOS session!
+Most settings can also be changed live on the settings page, <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>,</kbd>. See [Configuration](/docs/configuration) for every option.
 
-## Configuration
-
-TUIOS stores its configuration in a TOML file:
-
-```bash
-# Edit configuration
-tuios config edit
-
-# Print config file path
-tuios config path
-
-# Reset to defaults
-tuios config reset
-
-# List all keybindings
-tuios keybinds list
-
-# List only custom keybindings
-tuios keybinds list-custom
-```
-
-See the [Configuration](/docs/configuration) guide for details.
-
-## Shell Completions
-
-Generate shell completions for your shell:
+## Shell completions
 
 ```bash
 # Bash
@@ -467,32 +288,13 @@ tuios completion fish > ~/.config/fish/completions/tuios.fish
 tuios completion powershell > tuios.ps1
 ```
 
-## Next Steps
+## Next steps
 
 <Cards>
-  <Card
-    title="Sessions & Daemon Mode"
-    href="/docs/sessions"
-    description="Persistent sessions with detach/reattach"
-  />
-  <Card
-    title="Keybindings Reference"
-    href="/docs/keybindings"
-    description="Learn all keyboard shortcuts"
-  />
-  <Card
-    title="Configuration Guide"
-    href="/docs/configuration"
-    description="Customize TUIOS to your liking"
-  />
-  <Card
-    title="Tape Scripting"
-    href="/docs/tape-scripting"
-    description="Automate workflows with tape files"
-  />
-  <Card
-    title="CLI Reference"
-    href="/docs/cli-reference"
-    description="Complete command-line reference"
-  />
+  <Card title="Keybindings" href="/docs/keybindings" description="Every default key and how to rebind it" />
+  <Card title="Sessions" href="/docs/sessions" description="Detach, reattach, share a session, and restore after a reboot" />
+  <Card title="BSP Tiling" href="/docs/bsp-tiling" description="Splits, preselection, resizing and layout modes" />
+  <Card title="Configuration" href="/docs/configuration" description="Themes, appearance and behaviour" />
+  <Card title="Tape Scripting" href="/docs/tape-scripting" description="Record and replay workflows" />
+  <Card title="CLI Reference" href="/docs/cli-reference" description="Every command and flag" />
 </Cards>

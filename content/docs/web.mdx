@@ -1,319 +1,195 @@
 ---
 title: Web Terminal
-description: Access TUIOS from any browser with WebGL rendering (separate tuios-web binary)
+description: Use TUIOS from a browser with tuios-web, a separate server binary.
 icon: Globe
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Access TUIOS from any modern web browser with hardware-accelerated rendering and low-latency connections.
+`tuios-web` serves TUIOS to a web browser. The browser draws the terminal with WebGL and connects over WebTransport when it can, or WebSocket when it cannot.
 
-<Callout type="info" title="Powered by Sip">
-The web terminal is powered by [**sip**](https://github.com/Gaurav-Gosain/sip), a standalone library for serving Bubble Tea apps through the browser. You can use sip to serve your own Bubble Tea applications on the web!
+It is a separate binary from `tuios`, so the main binary contains no web server. It is built on [sip](https://github.com/Gaurav-Gosain/sip), a library for serving any Bubble Tea program in a browser.
+
+<Callout title="tuios-web has no login" type="error">
+Anyone who can reach the port gets a shell as the user running `tuios-web`. There is no password or token. Keep it on `localhost`, or put a reverse proxy with authentication in front of it. See [Security](#security).
 </Callout>
 
-<Callout type="warn" title="Separate Binary">
-The web terminal functionality is provided as a separate `tuios-web` binary for security isolation. This prevents the web server from being used as a potential backdoor in the main TUIOS binary.
-</Callout>
+## Install
 
-## Installation
-
-<Tabs items={['Homebrew', 'AUR', 'Go Install']}>
+<Tabs items={['Homebrew', 'Arch (AUR)', 'Script', 'Go']}>
 <Tab value="Homebrew">
 ```bash
 brew tap Gaurav-Gosain/tap
 brew install tuios-web
 ```
 </Tab>
-<Tab value="AUR">
+<Tab value="Arch (AUR)">
 ```bash
 yay -S tuios-web-bin
-# or
-paru -S tuios-web-bin
 ```
 </Tab>
-<Tab value="Go Install">
+<Tab value="Script">
+```bash
+curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/tuios/main/install-web.sh | bash
+```
+</Tab>
+<Tab value="Go">
 ```bash
 go install github.com/Gaurav-Gosain/tuios/cmd/tuios-web@latest
 ```
 </Tab>
 </Tabs>
 
-## Quick Start
+## Quick start
 
 <Steps>
 <Step>
-### Start the web server
+### Start the server
 
 ```bash
 tuios-web
 ```
 
-This starts:
-- HTTP server on `http://localhost:7681` (static files, WebSocket)
-- WebTransport server on `https://127.0.0.1:7682` (QUIC/UDP)
+It listens on `http://localhost:7681`, and for WebTransport on UDP port 7682 of the same host.
+
 </Step>
 
 <Step>
-### Open in browser
+### Open it
 
-```bash
-open http://localhost:7681
-```
+Go to [http://localhost:7681](http://localhost:7681). The page picks the best transport on its own.
 
-The browser will automatically connect using the best available transport (WebTransport if supported, WebSocket otherwise).
 </Step>
 </Steps>
 
-## Features
+By default every browser attaches to one daemon session called `web`, created the first time it is needed. Close the tab and the session keeps running, like any [daemon session](/docs/sessions). Open a second tab and both show the same session.
 
-- **WebGL Rendering** - GPU-accelerated terminal
-- **Dual Protocols** - WebTransport (QUIC) with WebSocket fallback
-- **Bundled Fonts** - JetBrains Mono Nerd Font included
-- **Settings Panel** - Configure transport, renderer, font size
-- **Mouse Support** - Full interaction with cell-based optimization
-- **Auto-Reconnect** - Automatic reconnection with backoff
-- **Read-Only Mode** - View-only sessions for demos
+## Reaching it from another device
 
-## Command Reference
+Binding anything other than a loopback address needs TLS, because otherwise every keystroke crosses the network in clear text. `tuios-web` refuses to start without one of these:
 
 ```bash
-tuios-web [flags]
+# HTTPS from a self-signed certificate tuios-web generates and keeps
+tuios-web --host 0.0.0.0 --auto-tls
+
+# HTTPS from a certificate you already have
+tuios-web --host 0.0.0.0 --cert cert.pem --key key.pem
+
+# Plain HTTP, only on a network you trust
+tuios-web --host 0.0.0.0 --insecure
 ```
 
-### Flags
+With `--auto-tls`, each browser shows a certificate warning on its first visit, because the certificate is self-signed. `tuios-web cert info` explains what the warning looks like and how to make it go away. The other `cert` subcommands are `new` (replace the certificate), `path` (print its path) and `rm` (delete it and the key).
+
+An SSH tunnel is another option, and needs no certificate:
+
+```bash
+ssh -L 7681:localhost:7681 you@server
+```
+
+Then open `http://localhost:7681` on your own machine.
+
+On phones and tablets, `tuios-web` adds a key bar with the prefix key and buttons for common commands (new, close, next, zoom, the command palette and more). It detects touch devices from the browser's request. Use `--touch on` or `--touch off` when it guesses wrong.
+
+## Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port` | `7681` | HTTP server port |
-| `--host` | `localhost` | Server bind address |
-| `--read-only` | `false` | Disable client input |
-| `--max-connections` | `0` | Max concurrent sessions (0=unlimited) |
-| `--default-session` | `web` | Session name shared by all connections |
-| `--ephemeral` | `false` | Disable daemon mode, so sessions do not persist |
+| `--host` | `localhost` | Address to bind |
+| `--port` | `7681` | HTTP port. WebTransport uses the next port up. |
+| `--auto-tls` | off | Serve HTTPS from a self-signed certificate that `tuios-web` generates and keeps |
+| `--cert`, `--key` | | Serve HTTPS from your own certificate and key, in PEM form |
+| `--cert-days` | `365` | Days an `--auto-tls` certificate is valid. Under 14 also keeps WebTransport working in Chrome. |
+| `--cert-dir` | sip's directory in your user config dir | Where `--auto-tls` keeps its certificate |
+| `--cert-host` | | Extra DNS name or IP for the `--auto-tls` certificate. Repeatable. |
+| `--insecure` | off | Allow plain HTTP on a non-loopback address |
+| `--read-only` | off | Ignore all input from browsers |
+| `--max-connections` | `0` | Maximum concurrent connections. `0` means no limit. |
+| `--default-session` | `web` | Session every browser attaches to |
+| `--ephemeral` | off | Give each connection its own standalone session, with no daemon. Nothing persists. |
+| `--touch` | `auto` | Touch mode: `auto`, `on` or `off` |
+| `--debug` | off | Log connections, sessions and errors |
 
-`tuios-web` starts the daemon automatically. If the daemon cannot be started it falls back to ephemeral mode silently, so sessions that you expected to persist will not.
+All the appearance flags of `tuios` also work here and apply to every browser session: `--theme`, `--border-style`, `--dockbar-position`, `--show-keys`, `--shared-borders`, `--ascii-only`, `--no-animations` and the rest. `tuios-web --help` lists them. They are layered over your config file the same way `tuios` layers them.
 
-### Forwarded TUIOS Flags
+```bash
+tuios-web --theme nord --show-keys
+```
 
-Nine TUIOS flags are forwarded to the spawned instance: `--debug`, `--ascii-only`, `--theme`, `--border-style`, `--dockbar-position`, `--hide-window-buttons`, `--scrollback-lines`, `--show-keys`, and `--no-animations`.
+`tuios-web` starts the daemon if it is not running. If the daemon cannot start, it logs a warning and falls back to ephemeral sessions, which do not persist.
 
-<Callout type="warn">
-This is not the full TUIOS flag set. `--shared-borders`, `--show-clock`, `--show-cpu`, `--show-ram`, `--hide-scrollbar`, `--window-title-position`, `--zoom-max-width`, `--confirm-quit`, and `--pprof` are **not** forwarded. Passing them to `tuios-web` is not an error, so they fail silently. Set them in your config file instead.
+Windows opened from the browser get `TERM=xterm-256color` and `COLORTERM=truecolor`.
+
+## Browser settings
+
+The gear button in the corner opens the settings panel. Settings are saved in the browser's local storage.
+
+| Setting | Options |
+|---------|---------|
+| Transport | Auto (prefers WebTransport), WebTransport, WebSocket |
+| Renderer | Auto (prefers WebGL), WebGL, Canvas, DOM, vtgl (experimental) |
+| Font size | 10 to 28 px, default 14 |
+| Toggles | Copy on select, blinking cursor, the browser's right-click menu, and capturing <kbd>Ctrl</kbd>+<kbd>W</kbd> and similar keys (fullscreen only) |
+
+The page ships with JetBrains Mono Nerd Font, so icons render without anything installed on the client.
+
+## Graphics in the browser
+
+Inline images work, with a smaller part of the Kitty graphics protocol than a native terminal supports.
+
+**Works:** direct base64 transmission (`t=d`), placing and deleting images, RGB, RGBA and PNG data, zlib compression, chunked transmission, source-region clipping, and images moving with scrolling. Sixel images work too.
+
+**Does not work:** file transmission (`t=f`), temporary files (`t=t`), shared memory (`t=s`), animation frame edits (`a=f`), and Unicode placeholders (`U=1`).
+
+TUIOS tells programs what the browser can do. A program that asks whether it can send a file path is told no, and falls back to sending the bytes. A program that insists on shared memory gets no image: `mpv --vo=kitty` is the common case. See [Graphics](/docs/architecture#graphics) for how TUIOS handles graphics in a native terminal.
+
+## Security
+
+<Callout title="There is no authentication" type="error">
+`tuios-web` has no login of any kind. Whoever reaches the port gets a full shell with your privileges.
+
+Browser connections from other web sites are refused: a WebSocket or WebTransport connection must come from a page served by `tuios-web` itself. That stops a page you happen to visit from opening a shell on `localhost:7681`, but it is not authentication. Programs that are not browsers send no origin and are accepted.
 </Callout>
 
-`tuios-web` also sets `TERM=xterm-kitty` and `TERM_PROGRAM=tuios-web` for every session it spawns.
+If anyone but you can reach the port:
 
-```bash
-# With theme
-tuios-web --theme dracula
+1. **Put authentication in a reverse proxy.** `tuios-web` has none of its own.
+2. **Bind to localhost** with `--host 127.0.0.1` so that only the proxy can reach it.
+3. **Use TLS** end to end, or at least between the browser and the proxy.
+4. **Limit connections** with `--max-connections`.
+5. **Use `--read-only`** for demos, so viewers cannot type.
 
-# With show-keys overlay
-tuios-web --show-keys
+### WebTransport and certificates
 
-# Disable animations for instant transitions
-tuios-web --no-animations
+WebTransport always runs over TLS.
 
-# Multiple flags
-tuios-web --theme nord --ascii-only --debug
-```
+- **On localhost without TLS,** `tuios-web` generates a short-lived self-signed certificate for WebTransport alone. It is valid for 10 days, Chrome's limit for certificates pinned by hash, and the page fetches its hash from `/cert-hash`, so no warning appears.
+- **With `--cert` or `--auto-tls`,** WebTransport uses the same certificate as HTTPS. For a self-signed `--auto-tls` certificate, Chrome only accepts WebTransport if the certificate is valid for under 14 days, so set `--cert-days 13` if you want it.
+- **With `--insecure`** there is no certificate, so there is no WebTransport. Browsers use WebSocket.
 
-## Client Settings
+## Behind a reverse proxy
 
-Click the ⚙ button in the top-right corner to access settings:
+Run `tuios-web` on `127.0.0.1` and let the proxy handle TLS and authentication. Most proxies carry only the WebSocket connection, so browsers use WebSocket rather than WebTransport.
 
-### Transport
+The proxy must pass the original `Host` header through. `tuios-web` compares it with the page's origin and refuses the WebSocket connection if they differ.
 
-| Option | Description |
-|--------|-------------|
-| **Auto** | Prefer WebTransport, fallback to WebSocket |
-| **WebTransport** | Force QUIC (lower latency) |
-| **WebSocket** | Force WebSocket (wider compatibility) |
+### Nginx with basic auth
 
-### Renderer
-
-| Option | Description |
-|--------|-------------|
-| **Auto** | Prefer WebGL, fallback to Canvas/DOM |
-| **WebGL** | GPU-accelerated (best performance) |
-| **Canvas** | 2D canvas (good compatibility) |
-| **DOM** | Standard DOM (most compatible) |
-
-### Font Size
-
-Adjustable from 10px to 24px. Settings persist in localStorage.
-
-## Architecture
-
-```mermaid
-flowchart TB
-    subgraph Browser
-        xterm["xterm.js<br/>(WebGL)"]
-        client["terminal.js<br/>(client)"]
-        transport["WebTransport/WS<br/>(transport)"]
-        xterm <--> client <--> transport
-    end
-
-    transport <-->|"QUIC (UDP:7682)<br/>or WebSocket (TCP:7681)"| session
-
-    subgraph Server
-        http["HTTP Server<br/>(static) :7681"]
-        wt["WT Server<br/>(QUIC) :7682"]
-        session["Session<br/>Manager"]
-        pty["PTY<br/>(TUIOS)"]
-        session --> pty
-    end
-```
-
-### Message Protocol
-
-| Type | Code | Direction | Description |
-|------|------|-----------|-------------|
-| Input | `0` | C→S | Keyboard/mouse input |
-| Output | `1` | S→C | Terminal output data |
-| Resize | `2` | C→S | Terminal size change |
-| Ping | `3` | C→S | Keep-alive ping |
-| Pong | `4` | S→C | Keep-alive response |
-| Title | `5` | S→C | Window title update |
-| Options | `6` | S→C | Session configuration |
-| Close | `7` | S→C | Session ended |
-
-The code is the ASCII character `'0'` through `'7'` (bytes `0x30` to `0x37`), not the raw byte values 0 to 7. It is the first byte of each frame.
-
-## Graphics in the Browser
-
-Inline images work in the web client, but a narrower set of the Kitty graphics protocol is supported than in a native terminal.
-
-**Works:** direct base64 transmission (`t=d`), the placement and deletion actions, RGB and RGBA and PNG formats, zlib compression, chunked transmission, source-region clipping, and repositioning on scroll. Sixel graphics also work.
-
-**Does not work:** file transmission (`t=f`), temporary-file transmission (`t=t`), shared memory (`t=s`, including `/dev/shm`), the animation protocol (`a=f`, `a=a`, `a=c`), and Unicode placeholders (`U=1`).
-
-The practical consequence is that a program which insists on passing a file path or a shared memory handle gets no image. `mpv --vo=kitty` is the common case: it prefers shared memory, which the browser client cannot read.
-
-<Callout type="info">
-This is handled honestly rather than silently. TUIOS probes its host terminal at startup to find out which transmission media actually work, and answers guest capability queries with the real answer. A program that asks whether it can send a file path is told no, and falls back to streaming bytes, instead of sending a path that produces a blank image.
-
-Earlier versions answered every capability query with a yes, which is why `kitten icat` and similar tools could silently render nothing. See [Graphics Support](/docs#graphics-support-experimental) for the host-side behaviour.
-</Callout>
-
-There is one conservative edge: the host probe shares a 300 ms budget, so a host that supports file transmission but answers slowly is treated as if it does not. That costs a server-side read and re-encode per frame rather than breaking anything, and there is no environment variable to force it back on.
-
-## Reverse Proxy Setup
-
-For production deployments, put TUIOS behind a reverse proxy with proper TLS.
-
-<Callout title="Important" type="warn">
-WebTransport requires HTTP/3 (QUIC) support. Most reverse proxies only support WebSocket, so WebTransport connections will fall back to WebSocket when proxied.
-</Callout>
-
-### Cloudflare Tunnel
-
-Cloudflare Tunnels provide secure access without opening ports.
-
-<Steps>
-<Step>
-### Install cloudflared
-
-```bash
-# macOS
-brew install cloudflare/cloudflare/cloudflared
-
-# Linux
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
-chmod +x cloudflared
-sudo mv cloudflared /usr/local/bin/
-```
-</Step>
-
-<Step>
-### Authenticate
-
-```bash
-cloudflared tunnel login
-```
-</Step>
-
-<Step>
-### Create tunnel
-
-```bash
-cloudflared tunnel create tuios
-```
-</Step>
-
-<Step>
-### Configure tunnel
-
-Create `~/.cloudflared/config.yml`:
-
-```yaml
-tunnel: <your-tunnel-id>
-credentials-file: /path/to/credentials.json
-
-ingress:
-  - hostname: tuios.yourdomain.com
-    service: http://localhost:7681
-  - service: http_status:404
-```
-</Step>
-
-<Step>
-### Start TUIOS and tunnel
-
-```bash
-# Terminal 1: Start TUIOS web server
-tuios-web --host 127.0.0.1
-
-# Terminal 2: Start tunnel
-cloudflared tunnel run tuios
-```
-</Step>
-
-<Step>
-### Add DNS record
-
-```bash
-cloudflared tunnel route dns tuios tuios.yourdomain.com
-```
-
-Access at `https://tuios.yourdomain.com`
-</Step>
-</Steps>
-
-### Nginx
-
-<Tabs items={['WebSocket Only', 'With SSL']}>
-<Tab value="WebSocket Only">
-```nginx
-server {
-    listen 80;
-    server_name tuios.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:7681;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;
-    }
-}
-```
-</Tab>
-
-<Tab value="With SSL">
 ```nginx
 server {
     listen 443 ssl http2;
     server_name tuios.example.com;
 
-    ssl_certificate /etc/letsencrypt/live/tuios.example.com/fullchain.pem;
+    ssl_certificate     /etc/letsencrypt/live/tuios.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/tuios.example.com/privkey.pem;
 
     location / {
+        auth_basic           "TUIOS";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+
         proxy_pass http://127.0.0.1:7681;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -333,18 +209,62 @@ server {
     return 301 https://$server_name$request_uri;
 }
 ```
-</Tab>
-</Tabs>
 
-### Caddy
+Create the password file with `htpasswd -c /etc/nginx/.htpasswd yourname`.
 
-Caddy automatically handles TLS certificates:
+### Caddy with basic auth
+
+Caddy gets a certificate for you:
 
 ```text
 tuios.example.com {
+    basic_auth {
+        yourname <hash from "caddy hash-password">
+    }
     reverse_proxy localhost:7681
 }
 ```
+
+### Cloudflare Tunnel
+
+A tunnel reaches the server without opening a port. Put [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) in front of the hostname, or anyone who finds it gets a shell.
+
+<Steps>
+<Step>
+### Create the tunnel
+
+```bash
+cloudflared tunnel login
+cloudflared tunnel create tuios
+cloudflared tunnel route dns tuios tuios.example.com
+```
+</Step>
+
+<Step>
+### Configure it
+
+`~/.cloudflared/config.yml`:
+
+```yaml
+tunnel: <your-tunnel-id>
+credentials-file: /path/to/credentials.json
+
+ingress:
+  - hostname: tuios.example.com
+    service: http://localhost:7681
+  - service: http_status:404
+```
+</Step>
+
+<Step>
+### Run both
+
+```bash
+tuios-web --host 127.0.0.1
+cloudflared tunnel run tuios
+```
+</Step>
+</Steps>
 
 ### Traefik
 
@@ -352,9 +272,8 @@ tuios.example.com {
 # docker-compose.yml
 services:
   tuios:
-    # Build this yourself; no published image ships tuios-web.
+    # Build this image yourself (see Docker below). No published image contains tuios-web.
     image: tuios-web:local
-    command: ["--host", "0.0.0.0"]
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.tuios.rule=Host(`tuios.example.com`)"
@@ -365,154 +284,13 @@ services:
       - "traefik.http.services.tuios.loadbalancer.server.port=7681"
 ```
 
-The `basicauth` middleware is doing the access control here. Without it this configuration publishes an unauthenticated shell on a public hostname.
+The `basicauth` middleware is the only access control here. Without it, this publishes a shell to the internet.
 
-## Security Considerations
+## Running as a service
 
-### There is no authentication
+### Docker
 
-<Callout title="tuios-web has no access control of any kind" type="error">
-`tuios-web` serves a full interactive shell to anyone who can reach the port. It has no login, no token, no password flag, and no TLS option. Anyone who connects gets your shell with your privileges.
-
-It also accepts WebSocket connections **from any origin**. The origin check is a function that returns true unconditionally, and the allowed-origin list is left empty, which the underlying library treats as a wildcard. This means any web page you visit while `tuios-web` is running can open a connection to `localhost:7681` and run commands as you. Binding to `127.0.0.1` does not protect against this, because the request originates from your own browser.
-
-Treat a running `tuios-web` as an open shell on that port. Do not leave it running unattended, and do not expose it without putting authentication in front of it.
-</Callout>
-
-### Putting authentication in front of it
-
-Because the server has no authentication of its own, a reverse proxy is the only place to add it. This is a requirement for any use beyond a local session you are actively watching, not a hardening tip.
-
-<Callout title="If you expose this at all" type="warn">
-1. **Terminate TLS and authenticate at a reverse proxy.** The server speaks plaintext HTTP and WebSocket and exposes no TLS flags.
-2. **Bind to localhost**: `tuios-web --host 127.0.0.1`, and let the proxy be the only thing that reaches it.
-3. **Limit connections**: `tuios-web --max-connections 10`
-4. **Use read-only for demos**: `tuios-web --read-only`
-5. **Do not rely on origin checks.** There are none to configure. The `AllowOrigins` setting exists in the underlying library but `tuios-web` exposes no flag for it.
-</Callout>
-
-### WebTransport certificates
-
-The server generates a self-signed certificate for WebTransport:
-
-- Valid for 10 days, which is Chrome's limit for `serverCertificateHashes`
-- The hash is served from the `/cert-hash` endpoint
-- No browser warning is shown for the WebTransport connection
-
-<Callout type="warn">
-The WebTransport listener binds to `127.0.0.1` regardless of what you pass to `--host`. With `--host 0.0.0.0`, remote clients cannot use WebTransport at all and always fall back to WebSocket. WebTransport is effectively a local-only optimisation today.
-</Callout>
-
-### Basic Auth with Nginx
-
-```nginx
-location / {
-    auth_basic "TUIOS";
-    auth_basic_user_file /etc/nginx/.htpasswd;
-    
-    proxy_pass http://127.0.0.1:7681;
-    # ... rest of proxy config
-}
-```
-
-Create password file:
-
-```bash
-htpasswd -c /etc/nginx/.htpasswd username
-```
-
-## Performance
-
-### Server Optimizations
-
-- **Buffer Pools** - Reusable buffers reduce GC pressure
-- **Atomic Counters** - Lock-free connection counting
-- **Direct Streaming** - No intermediate buffering
-- **Structured Logging** - charmbracelet/log with configurable levels
-
-### Client Optimizations
-
-- **requestAnimationFrame Batching** - Writes batched per frame
-- **Mouse Deduplication** - Only sends on cell position change
-- **Pre-allocated Buffers** - Reusable send/receive buffers
-- **Cached DOM Elements** - No repeated queries
-
-### Measured Performance
-
-There is no benchmark in the repository for the web path, so no latency, memory, or event-filtering figures are claimed here. The optimisations above are real code, but their effect has not been measured and published.
-
-If you need numbers for your own deployment, measure them on your own hardware and network. Local latency is dominated by the transport in use, and WebTransport is only available when the browser reaches the server on `127.0.0.1`.
-
-## Troubleshooting
-
-### WebTransport Not Connecting
-
-1. **Check browser support** - Chrome 97+, Edge 97+
-2. **Verify UDP port** - Port 7682 must be accessible
-3. **Check console** - Look for certificate hash errors
-4. **Force WebSocket** - Use settings panel to switch
-
-### Blank Terminal
-
-1. **Check console** - Look for JavaScript errors
-2. **Verify fonts** - Check if fonts loaded
-3. **Try different renderer** - Switch in settings
-4. **Check server logs** - Verify TUIOS process started
-
-### High Latency
-
-1. **Check network** - Run speed test
-2. **Prefer WebTransport** - Lower latency than WebSocket
-3. **Use WebGL** - Hardware acceleration
-4. **Check server CPU** - May be overloaded
-
-### Session Not Closing
-
-When TUIOS quits (pressing `q`), the web session should close automatically. If not:
-
-1. Check browser console for errors
-2. Verify server logs show session cleanup
-3. Refresh browser to start new session
-
-### Debug Mode
-
-```bash
-tuios-web --debug
-```
-
-Server logs include:
-- Connection attempts
-- Session lifecycle
-- Bytes sent/received
-- Terminal resize events
-- Error details
-
-## Examples
-
-### Public Demo Server
-
-```bash
-# Read-only with connection limit
-tuios-web \
-  --host 0.0.0.0 \
-  --port 7681 \
-  --read-only \
-  --max-connections 50 \
-  --theme dracula
-```
-
-### Development with Hot Reload
-
-```bash
-# With debug logging
-tuios-web --debug --show-keys
-```
-
-### Docker Deployment
-
-<Callout type="warn">
-There is no published image that contains `tuios-web`. The `ghcr.io/gaurav-gosain/tuios` image builds only `cmd/tuios` and its entrypoint is the `tuios` binary, which has no `web` subcommand. To run the web terminal in a container you have to build an image yourself.
-</Callout>
+The published `ghcr.io/gaurav-gosain/tuios` image contains only `tuios`. Build your own image for `tuios-web` from a checkout of the repository:
 
 ```dockerfile
 FROM golang:1.26 AS build
@@ -523,17 +301,16 @@ RUN go build -o /out/tuios-web ./cmd/tuios-web
 FROM debian:bookworm-slim
 COPY --from=build /out/tuios-web /usr/local/bin/tuios-web
 EXPOSE 7681
-ENTRYPOINT ["tuios-web", "--host", "0.0.0.0"]
+# Plain HTTP inside the container: terminate TLS and authenticate at a proxy in front of it.
+ENTRYPOINT ["tuios-web", "--host", "0.0.0.0", "--insecure"]
 ```
 
-Remember that this exposes an unauthenticated shell. See [Security Considerations](#security-considerations).
-
-### Systemd Service
+### systemd
 
 ```ini
 # /etc/systemd/system/tuios-web.service
 [Unit]
-Description=TUIOS Web Terminal
+Description=TUIOS web terminal
 After=network.target
 
 [Service]
@@ -548,26 +325,72 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl enable tuios-web
-sudo systemctl start tuios-web
+sudo systemctl enable --now tuios-web
 ```
 
-## Related Documentation
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph Browser
+        xterm["xterm.js (WebGL)"]
+    end
+
+    subgraph Server["tuios-web"]
+        http["HTTP / WebSocket :7681"]
+        wt["WebTransport :7682"]
+        tui["TUIOS client"]
+    end
+
+    daemon["tuios daemon"]
+
+    xterm <-->|WebSocket| http
+    xterm <-->|QUIC| wt
+    http --> tui
+    wt --> tui
+    tui <-->|Unix socket| daemon
+```
+
+Each browser connection runs a TUIOS client inside `tuios-web`, which attaches to the daemon like any other client. The first byte of every message says what it is. It is an ASCII digit, not a raw byte value:
+
+| Type | Byte | Direction | Content |
+|------|------|-----------|---------|
+| Input | `'0'` | browser to server | Keyboard and mouse input |
+| Output | `'1'` | server to browser | Terminal output |
+| Resize | `'2'` | browser to server | New size in cells and pixels |
+| Ping | `'3'` | browser to server | Keep-alive |
+| Pong | `'4'` | server to browser | Keep-alive reply |
+| Title | `'5'` | server to browser | Window title |
+| Options | `'6'` | server to browser | Session settings |
+| Close | `'7'` | server to browser | The session ended |
+| Kitty keyboard | `'8'` | browser to server | Keyboard protocol flags |
+
+## Troubleshooting
+
+### It refuses to start on `0.0.0.0`
+
+That is the TLS requirement. Add `--auto-tls`, `--cert` and `--key`, or `--insecure`. The error message lists the exact commands.
+
+### WebTransport does not connect
+
+The page falls back to WebSocket, so this only costs latency. Check that UDP port 7682 (or your `--port` plus one) is reachable, that you are not using `--insecure`, and that your browser supports WebTransport. The browser console shows certificate errors. You can force WebSocket in the settings panel.
+
+### The WebSocket connection is refused behind a proxy
+
+The proxy is probably rewriting the `Host` header. Pass it through unchanged, for example `proxy_set_header Host $host;` in nginx.
+
+### Blank terminal
+
+Check the browser console for errors, try another renderer in the settings panel, and run `tuios-web --debug` to see the server's log.
+
+### The tab stays open after quitting
+
+In a daemon session, <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>q</kbd> opens the quit menu, and its default is to detach. Detaching or killing the session from that menu ends the browser connection. If the page does not close, reload it.
+
+## Related
 
 <Cards>
-  <Card
-    title="CLI Reference"
-    href="/docs/cli-reference"
-    description="Complete command-line reference"
-  />
-  <Card
-    title="Configuration"
-    href="/docs/configuration"
-    description="Customize keybindings and settings"
-  />
-  <Card
-    title="Architecture"
-    href="/docs/architecture"
-    description="Technical architecture and design"
-  />
+  <Card title="Sessions" href="/docs/sessions" description="How the daemon keeps sessions alive" />
+  <Card title="Configuration" href="/docs/configuration" description="The config file that browser sessions also read" />
+  <Card title="CLI Reference" href="/docs/cli-reference" description="Every command and flag" />
 </Cards>

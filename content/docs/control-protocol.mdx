@@ -1,230 +1,316 @@
 ---
 title: Control Protocol
-description: Drive a TUIOS daemon from scripts with the JSON verb protocol
+description: Drive a TUIOS daemon from scripts and programs with line-delimited JSON on its socket.
 icon: Terminal
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-The TUIOS daemon speaks a line-oriented JSON protocol on its Unix socket. It is meant for scripts, automation, and programs that drive TUIOS without a terminal attached. Every request is one line of JSON, and every response is one line of JSON.
+The TUIOS daemon accepts JSON requests on its Unix socket. Send one JSON object per line and read one JSON object back per line. No client library is needed: a shell, `nc` and `jq` are enough.
 
-This is a separate surface from the [remote control CLI commands](/docs/cli-reference#remote-control-commands). Those commands are convenient for shell one-liners; the verb protocol is what you want when you need structured errors, blocking waits, or an event stream.
+Use it when a script or program needs structured errors, blocking waits, or a live stream of events. For quick one-liners, the [CLI commands](/docs/sessions#remote-control) such as `tuios send-text` and `tuios wait-for` do the same things and are built on this protocol.
 
 ## Connecting
 
-The verb protocol shares the daemon socket with the binary client protocol. The daemon decides which one you are speaking by looking at the first byte you send: a line beginning with `{` (or leading whitespace) is a verb-protocol client, and a binary client's first byte is the high byte of a length prefix, which is never `{`.
-
-That means there is no separate port, no handshake negotiation, and no special socket. Connect to the socket and write JSON.
+The protocol shares the socket the TUIOS client uses. There is no separate port and no handshake to negotiate: connect and write JSON. The daemon tells the two apart by the first byte, since a JSON request starts with `{` and a binary client frame never does.
 
 ```bash
-# Linux, when XDG_RUNTIME_DIR is set
-echo '{"id":1,"verb":"list-sessions"}' | socat - UNIX-CONNECT:"$XDG_RUNTIME_DIR/tuios/tuios.sock"
+if [ -n "$XDG_RUNTIME_DIR" ]; then
+  SOCK="$XDG_RUNTIME_DIR/tuios/tuios.sock"
+else
+  SOCK="/tmp/tuios-$(id -u)/tuios.sock"
+fi
+
+printf '{"id":1,"verb":"list-sessions"}\n' | nc -U "$SOCK" | jq .
 ```
 
-See [Sessions](/docs/sessions#daemon-location) for the socket path on each platform.
+`socat - UNIX-CONNECT:"$SOCK"` works in place of `nc -U "$SOCK"`. The socket path for Windows is in [Sessions](/docs/sessions#daemon-location).
+
+You can send several requests on one connection. They are answered in order, one response line per request line. To run requests in parallel, open more connections.
+
+The socket is only accessible to your user. There is no token or password on top of that.
 
 ## Discovering the protocol
 
-You do not have to read this page to use the protocol. The daemon describes itself:
+The daemon describes itself, so you do not need this page to use it:
 
 ```bash
-# Every verb, its parameters, and example requests
-tuios list-verbs
-
-# Just one verb
-tuios list-verbs capture-pane
+tuios list-verbs                # every verb, its parameters and example requests
+tuios list-verbs capture-pane   # one verb
+tuios list-verbs --json         # the same, as JSON
 ```
 
-`list-verbs` reports the protocol version, every verb and parameter, the accepted values for each constrained parameter, the stable error codes, and the request and response envelope shapes. The same information is available over the socket as the `list-verbs` verb.
+The output includes the protocol version, every parameter with its type, default and accepted values, the error codes, and the request and response shapes. The same catalogue is available over the socket as the `list-verbs` verb.
 
-<Callout type="tip">
-The parameter schema `list-verbs` returns is generated from the same value sets the request validator uses, so the accepted values it advertises cannot disagree with what the daemon will actually take.
-</Callout>
+The accepted values come from the same lists the daemon checks requests against, so they cannot disagree with what it will actually take.
 
-## Envelopes
+## Requests and responses
 
-A request carries an `id`, a `verb`, and optional `params`:
+A request has an optional `id`, a `verb`, and `params` when the verb takes any:
 
 ```json
-{"id":1,"verb":"send-keys","params":{"session":"work","keys":"ls,Enter"}}
+{"id":1,"verb":"send-text","params":{"session":"work","window":"build","text":"make\n"}}
 ```
 
-A successful response echoes the `id` and carries a `result`. An error response carries an `error` object with a stable `code`, a human-readable `message`, and often a `hint` naming what would resolve the failure: the closest verb spelling, the parameter that was wrong, or the set of values that do exist.
+The `id` can be a number or a string. It is echoed back on the response, and left out if you left it out.
 
-Existing consumers that read only `code` and `message` are unaffected by hints, which are all optional.
+A successful response carries a `result`. Every result has a `type` field naming its shape:
 
-Unknown parameters are refused, not ignored. A request naming a parameter the verb does not take fails with `invalid_params`, and the hint carries the closest spelling and everything the verb does accept. A call that cannot do what it asked for never reports success, and a refusal is also what a newer caller gets from an older daemon.
+```json
+{"id":1,"result":{"type":"hello","protocol":1,"min_protocol":1,"daemon_version":"0.7.0","pid":4242,"sessions":2}}
+```
+
+A failure carries an `error` with a stable `code`, a readable `message`, and usually a `hint`:
+
+```json
+{"id":2,"error":{"code":"invalid_params","message":"verb capture-pane has no parameter foo","hint":{"verb":"list-verbs","command":"tuios list-verbs capture-pane","param":"foo","accepted":["session","window","source","styled","scrollback","ansi","resolved","palette","lines","start","end"],"detail":"An unknown parameter is refused rather than silently ignored. Fix the name and retry."}}}
+```
+
+The hint says what to do next: the parameter that was wrong, the values it accepts, the closest match to what you typed (`did_you_mean`), the names that do exist (`available`), or a command to run. Every hint field is optional.
+
+A few rules hold for every verb:
+
+- **Unknown parameters are refused**, not ignored. A misspelt parameter fails with `invalid_params` instead of doing something you did not ask for.
+- **`session` can usually be left out.** It then means the most recently active session.
+- **`window` takes a window ID or name.** Left out, it means the focused window.
+- **A request that cannot do what it asked never reports success.**
+
+## Versioning
+
+`hello` reports the protocol version the daemon speaks and the oldest one it accepts. The current version is 1. Calling it first is optional: every other verb works without it.
+
+```json
+{"id":1,"verb":"hello","params":{"client":"my-script","version":"1.0.0","protocol":1}}
+```
+
+A caller whose version is outside the accepted range gets `protocol_mismatch`. New verbs are added without changing the version; it changes only when an existing verb or the envelope changes incompatibly.
 
 ## Verbs
 
-Thirty-five verbs are implemented. The daemon is the authority on this list:
-`tuios list-verbs` always reflects the binary you are talking to.
+The daemon currently implements 62 verbs. `tuios list-verbs` always reflects the binary you are talking to.
 
-### Discovery and handshake
+### Discovery
 
 | Verb | Purpose |
 |------|---------|
-| `hello` | Report the daemon's protocol version and the range it accepts. Takes `client`, `version`, `protocol`. |
+| `hello` | Report the protocol version and the range the daemon accepts. |
 | `list-verbs` | Describe every verb, or one named verb. |
 
-Both sides of the handshake compare wire versions, and each refuses a peer
-outside its accepted range with a message that says which side is newer.
-
-### Sessions and windows
+### Sessions
 
 | Verb | Purpose |
 |------|---------|
-| `list-sessions` | List all sessions the daemon holds. |
-| `session-info` | Report details about one session. |
-| `list-windows` | List the windows in a session, with index, workspace, size, and detected agent. |
-| `new-window` | Create a window. Optional `name`, `workspace`, `cwd`, `focus`, and `command`, an argv to exec as the window's process instead of a shell; the window closes when the program exits. |
-| `split-window` | Split relative to a window. Needs an attached client. |
-| `focus-window` | Focus a window, by target or by direction. Directional focus needs an attached client. |
-| `move-window` | Move a window to a workspace. |
-| `set-window` | Change a window's name or minimized state. |
-| `select-workspace` | Switch the session's current workspace. |
-| `list-workspaces` | List workspaces, their names, and their display order. |
-| `set-layout` | Apply tiling, equalize, or rotate. Needs an attached client. |
-| `run-command` | Run any named tuios command, the same vocabulary tapes use. |
+| `list-sessions` | List every session the daemon holds. |
+| `new-session` | Create a session, detached, with its first window. Optional `name`, `width`, `height` (default 80x24), `window`, `window_name`, `cwd` and `command`. |
+| `session-info` | Details about one session. |
+| `kill-session` | End a session and every window in it. |
+| `set-session-name` | Set a display name. The session keeps its real name for addressing. |
+| `set-session-accent` | Set or clear a session's accent colour. |
+
+### Windows
+
+| Verb | Purpose |
+|------|---------|
+| `list-windows` | List a session's windows with ID, index, name, workspace, size, focus and agent state. |
+| `new-window` | Create a window. Optional `name`, `workspace`, `cwd`, `focus`, `command` (an argv run instead of a shell) and `host` (run it on another machine). |
 | `close-window` | Close a window. |
-| `kill-session` | Terminate a session and every window in it. |
+| `focus-window` | Focus a window by `window`, `relative` (`next`, `prev`) or `direction` (`left`, `right`, `up`, `down`). Direction needs an attached client. |
+| `move-window` | Move a window to another workspace, optionally following it. |
+| `set-window` | Rename a window or change its minimized state. |
+| `split-window` | Split a window `horizontal` or `vertical` and open a new one beside it. Needs an attached client with tiling on. |
+| `resize` | Resize a window's PTY to `width` by `height`. |
+| `popup` | Run a command in a floating window that closes when the command exits. Needs an attached client. |
+| `screenshot` | Render a window to a `png`, `svg`, `ansi`, `html` or `txt` file. |
+
+### Workspaces and layout
+
+| Verb | Purpose |
+|------|---------|
+| `list-workspaces` | List workspaces with their names, window counts and which one is showing. |
+| `select-workspace` | Show a workspace. |
+| `set-workspace-name` | Name a workspace. It keeps its number for addressing. |
+| `set-workspace-order` | Set the order workspaces are displayed in. |
+| `set-layout` | Turn tiling on or off, equalize splits, or rotate the focused split. Needs an attached client. |
+| `run-command` | Run any named command, the same set tape scripts and keybindings use. Prefer a dedicated verb where one exists: they report what changed. |
 
 ### Input and output
 
 | Verb | Purpose |
 |------|---------|
-| `send-keys` | Send parsed key tokens, for example `"ctrl+b,n"`. Optional `literal` and `raw` flags. Tokens split on spaces and commas, so use `send-text` for text that contains either. |
-| `send-text` | Write literal text to a window's PTY. |
-| `capture-pane` | Capture a pane's contents. |
-| `resize` | Resize a window's PTY. Requires `width` and `height`. |
+| `send-text` | Write text to a window's PTY exactly as given. A trailing `\n` presses Enter. |
+| `send-keys` | Send key names such as `"ctrl+b,n"`. Keys are split on spaces and commas, so use `send-text` for ordinary text. |
+| `capture-pane` | Read a window's contents. See [Capturing windows](#capturing-windows). |
 
-### Options
-
-| Verb | Purpose |
-|------|---------|
-| `list-options` | Describe every settable option path, its type, default, and accepted values. |
-| `set-option` | Set a session option by path, for example `appearance.dockbar_position`. The path is validated against the option registry, and the value is validated before anything is recorded. Applied live when a client is attached. |
-| `get-option` | Read the value in effect for an option path. |
-| `list-themes` | List every theme the daemon can apply, built-in and user-imported, re-reading the user themes directory on each call. |
-
-<Callout type="info">
-`set-option` refuses a path that does not exist with the `option_not_found`
-error, whose hint carries the closest match and the full path list. When it
-reports `applied: false`, the response says why. `get-option` reports the
-value in effect along with a `source` field that says whether it came from
-the session or from defaults.
-</Callout>
-
-### Naming and arrangement
+### Options, themes and the dock
 
 | Verb | Purpose |
 |------|---------|
-| `set-session-name` | Set a session's display name. The original name stays its identity. |
-| `set-session-accent` | Set or clear a session's accent colour. |
-| `set-workspace-name` | Name a workspace. Its number stays its identity. |
-| `set-workspace-order` | Set the display order of a session's workspaces. |
+| `list-options` | Every settable option path with its type, default, accepted values and description. |
+| `get-option` | Read the value in effect, and whether it comes from the session or the defaults. |
+| `set-option` | Set an option by path, for example `appearance.dockbar_position`. The path and value are checked first. An attached client applies it live. |
+| `list-themes` | List the themes, built-in and imported. Name one to get its colours and their contrast. |
+| `list-glyphs` | List the glyph sets, and describe one. |
+| `list-hooks` | List the hooks and what each last did. |
+| `list-dock-components` | List the dock's components and what each last did. |
+| `refresh-dock` | Re-run one dock component, or all of them. |
 
-### Agent state
+### Agents and messages
 
 | Verb | Purpose |
 |------|---------|
-| `set-agent-state` | Report an agent's state for a pane, with a `source` tier. |
-| `get-agent-state` | Read the agent state the daemon holds for a pane. |
-| `explain-agent-detect` | Show why a pane was or was not detected as running an agent. |
-| `explain-agent-screen` | Show what the screen rules make of a pane. |
+| `list-agents` | List the windows running coding agents, with their state and unread mail. |
+| `get-agent-state` | Read a window's agent state. |
+| `set-agent-state` | Report an agent's state: `working`, `needs_input`, `idle`, `done`, `errored`, `unknown`, or `none` to clear. |
+| `explain-agent-detect` | Explain why a window was or was not detected as running an agent. |
+| `explain-agent-screen` | Show what the screen-reading rules make of a window. |
+| `send-agent-message` | Leave a message for another window, or a notice for the whole session. |
+| `read-agent-messages` | Read a session's messages, or one window's inbox. |
+| `ask-agent` | Type a question into another agent's window and wait for its answer. |
+
+### Files and worktrees
+
+| Verb | Purpose |
+|------|---------|
+| `stash-put` | Copy a file into the session's own store and return the stored path. |
+| `stash-get` | Read a stored file back. |
+| `stash-list` | List the files in a session's store. |
+| `new-worktree` | Create a git worktree and a session in it. |
+| `list-worktrees` | List the sessions whose directory is a git worktree. |
+| `remove-worktree` | Remove a worktree session's worktree and kill the session. Refuses uncommitted changes unless told to stash or discard them. |
+| `fan` | Start one prompt in several agents, each in its own worktree and session. |
+
+### Other machines
+
+| Verb | Purpose |
+|------|---------|
+| `list-hosts` | List the machines in the `[hosts]` config table and the state of each link. |
+| `list-host-sessions` | List sessions here and on every configured host. |
+| `list-host-agents` | List agent windows here and on every configured host. |
+| `open-host-connection` | Turn this connection into a connection to the daemon on a host. |
+
+Five more verbs, `open-pane`, `pane-agent`, `pane-cwd`, `resize-pane` and `read-dir`, are what one daemon calls on another to run a window's process on a different machine. You do not normally call them yourself.
 
 ### Events and waiting
 
 | Verb | Purpose |
 |------|---------|
-| `subscribe` | Open a long-lived event stream on this connection. |
-| `unsubscribe` | Close this connection's event stream. |
-| `wait-for` | Block until a condition matches, or fail with the `timeout` code. |
+| `subscribe` | Turn this connection into a stream of events. |
+| `unsubscribe` | Stop this connection's event stream. |
+| `wait-for` | Block until a condition matches, or fail with `timeout`. |
 
-## Capturing panes
+## Capturing windows
 
-`capture-pane` reads one of two buffers, named by `source`:
+`capture-pane` reads one of two buffers, chosen by `source`:
 
-- `visible` (default) captures the visible screen.
-- `recent` captures recent scrollback.
+- `visible` (default): the screen as it is now.
+- `recent`: the screen plus the scrollback above it.
 
-Set `styled` to include ANSI styling. Restrict the output with `lines` to keep the last N lines, or with `start` and `end` for a 1-based inclusive range. When `start` or `end` is given, `lines` is ignored.
+Set `styled` to keep ANSI colours and attributes, and `resolved` to turn the 16 theme colours into 24-bit RGB. Limit the output with `lines` (the last N lines) or with `start` and `end` (a 1-based inclusive range, which overrides `lines`).
 
 ```json
-{"id":1,"verb":"capture-pane","params":{"session":"work","source":"recent","lines":50}}
+{"id":1,"verb":"capture-pane","params":{"session":"work","window":"build","source":"recent","lines":50}}
 ```
 
-<Callout type="warn">
-There is no unwrapped capture. A `recent-unwrapped` source was once accepted and behaved as a silent alias for `recent`; it has been retired, and asking for it now returns an error explaining why. The emulator does not record which rows are soft wrapped, so unwrapping would mean guessing at row boundaries. Long lines come back split at the pane width.
-</Callout>
+Long lines come back split at the window's width. The emulator does not record which rows were soft-wrapped, so there is no unwrapped capture.
 
 ## Waiting for conditions
 
-`wait-for` replaces the poll-and-capture loops that scripts otherwise write. It blocks until the condition matches or the timeout expires.
+`wait-for` replaces poll loops. It blocks until the condition matches, then returns a `wait_result`. If the timeout passes first, it fails with the `timeout` error code.
 
 | Condition | Matches when |
 |-----------|--------------|
-| `session-exists` | The named session exists. |
-| `window-output` | Output matching `pattern` (a regular expression) appears. |
+| `session-exists` | A session named `session` exists. |
+| `window-output` | Text matching the regular expression `pattern` is in the window. Checked at once, then on every new output. |
 | `window-exit` | The window's process exits. |
-| `window-idle` | The window produces no output for `idle` milliseconds. |
+| `window-idle` | The window prints nothing for `idle` milliseconds (default 500). |
+| `agent-state` | A window's agent state becomes one of the states in `until` (comma-separated). Without `window`, any window in the session counts. |
+| `agent-message` | A message arrives. With `window`, in that window's inbox. `thread` narrows it to one thread. |
 
-`idle` defaults to 500 ms and `timeout` defaults to 30000 ms. `pattern` is required by `window-output`. A wait that expires fails with the `timeout` error code rather than returning a non-match result.
+`timeout` defaults to 30000 milliseconds. For `window-output`, `source` defaults to `recent`, so output that has already scrolled off the screen still matches.
 
 ```json
-{"id":1,"verb":"wait-for","params":{"condition":"window-output","session":"work","pattern":"done","timeout":10000}}
+{"id":1,"verb":"wait-for","params":{"condition":"window-output","session":"work","window":"build","pattern":"build (ok|failed)","timeout":120000}}
 ```
 
 ## Event stream
 
-`subscribe` turns the connection into an event stream. Events are delivered from the moment of subscription and there is no backfill, so subscribe before you trigger the thing you want to observe.
-
-Filter with `types` to receive only some events, and set `queue` to change how many events buffer before the stream marks a gap (default 256). If a consumer falls behind far enough to overflow that buffer, the stream emits a `gap` event rather than silently dropping events.
-
-The event types are:
-
-`window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `output`, `bell`, `mode-changed`, `session-created`, `session-closed`, and `gap`.
+`subscribe` turns the connection into a stream. The first line back is an acknowledgement carrying the current sequence number, and every line after it is an event:
 
 ```json
-{"id":1,"verb":"subscribe","params":{"session":"work","types":["window-created","window-closed"]}}
+{"id":1,"verb":"subscribe","params":{"session":"work","types":["window-created","window-closed","bell"]}}
 ```
 
-## Error codes
+```json
+{"id":1,"result":{"type":"subscribed","seq":42}}
+{"seq":43,"type":"window-created","session":"work","window":"1f3c...","pty_id":"9ab2...","title":"build","time":1790102604545781000}
+```
 
-Codes are stable and safe to branch on.
+Filter with `session`, `window` and `types`. Leave `types` out to receive everything.
 
-| Code | Meaning |
-|------|---------|
-| `invalid_request` | Not a valid request envelope, or the connection is in the wrong state for the verb. |
-| `unknown_verb` | No such verb. The hint carries the closest match and the full verb list. |
-| `invalid_params` | A parameter was missing, malformed, or outside its accepted set. The hint names the parameter. |
-| `session_not_found` | The named session does not exist. The hint lists the sessions that do. |
-| `window_not_found` | The window target did not resolve. The hint lists the addressable windows. |
-| `no_windows` | The session exists but holds no windows to act on. |
-| `pty_not_found` | The target window has no live PTY; its shell has already exited. |
-| `needs_client` | The verb needs a live renderer, and no client is attached. |
-| `option_not_found` | No option by that path exists. The hint carries the closest match and the full path list; `list-options` describes them. |
-| `command_failed` | A verb routed to the attached client came back failed. |
-| `timeout` | A `wait-for` condition did not match before its timeout. |
-| `protocol_mismatch` | The caller's protocol version is outside the range this daemon accepts. |
-| `internal` | Unexpected server-side failure. |
+There is no backfill: events start at the moment you subscribe. Call `list-windows` first to learn the current state, then follow the stream.
+
+The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `agent-state`, `agent-message`, `output`, `bell`, `mode-changed`, `session-created`, `session-closed` and `gap`.
+
+Events fire the same way whether a change came from a verb or from a person using the TUI. Window geometry changes do not produce events.
+
+If you read too slowly, the daemon drops events rather than wait for you, and sends a `gap` event with the number dropped before the next one it delivers. `queue` sets how many events buffer before that happens (default 256).
 
 ## Verbs that need an attached client
 
-Some work cannot happen without a renderer. A verb that routes to the attached TUI returns `needs_client` when the session is headless, rather than appearing to succeed. If you are driving a session created with `tuios new --detach`, expect this for anything that depends on the client's view of the world, and attach a client if you need it.
+Some verbs change what is drawn, which needs a client to draw it: `split-window`, `set-layout`, `popup`, and `focus-window` with a `direction`. On a headless session, such as one made with `tuios new --detach`, they fail with `needs_client` instead of pretending to succeed. Attach a client first if you need them.
+
+## Error codes
+
+Codes are stable, so it is safe to branch on them.
+
+| Code | Meaning |
+|------|---------|
+| `invalid_request` | The line is not a valid request, or the connection is in the wrong state for the verb. |
+| `unknown_verb` | No verb has that name. The hint has the closest match and the full list. |
+| `invalid_params` | A parameter is missing, malformed, unknown, or outside its accepted values. The hint names it. |
+| `session_not_found` | No session has that name. The hint lists the sessions that exist. |
+| `session_exists` | `new-session` was given a name that is already taken. |
+| `window_not_found` | The window target matched nothing. The hint lists the windows. |
+| `no_windows` | The session has no windows to act on. |
+| `pty_not_found` | The window's process has already exited. |
+| `needs_client` | The verb needs an attached client and none is attached. |
+| `option_not_found` | No option has that path. The hint has the closest match. |
+| `command_failed` | The attached client ran the request and it failed. |
+| `timeout` | A `wait-for` condition did not match in time. |
+| `not_ready` | The target agent is busy, so the call did not type into it. |
+| `loop_refused` | The call would loop, for example a window messaging itself. |
+| `rate_limited` | The sender is over the message rate limit. |
+| `no_keyboard` | The target is the person's inbox, which has no window to type into. |
+| `protocol_mismatch` | The caller's protocol version is outside the range the daemon accepts. |
+| `unknown_host` | No host by that name is configured. |
+| `host_unreachable` | The host is configured but not answering. |
+| `host_refused` | The link to the host is up but cannot take another connection. |
+| `unknown_pane` | The daemon is not running a pane with that ID. |
+| `not_worktree` | The session is not in a git worktree. |
+| `worktree_dirty` | The worktree has uncommitted changes and neither stash nor force was passed. |
+| `git_failed` | A git command failed. The message is git's own. |
+| `internal` | An unexpected failure inside the daemon. |
+
+## Examples
+
+```bash
+# Create a headless session and run a build in it
+printf '{"verb":"new-session","params":{"name":"ci"}}\n' | nc -U "$SOCK"
+printf '{"verb":"send-text","params":{"session":"ci","text":"make test\\n"}}\n' | nc -U "$SOCK"
+
+# Block until it finishes, then read the last 20 lines
+printf '{"verb":"wait-for","params":{"condition":"window-output","session":"ci","pattern":"(PASS|FAIL)","timeout":600000}}\n' | nc -U "$SOCK"
+printf '{"verb":"capture-pane","params":{"session":"ci","source":"recent","lines":20}}\n' \
+  | nc -U "$SOCK" | jq -r .result.content
+
+# Watch for bells and exits in every session
+printf '{"verb":"subscribe","params":{"types":["bell","window-exit"]}}\n' | nc -U "$SOCK" | jq -c .
+```
 
 ## Related
 
 <Cards>
-  <Card
-    title="Sessions & Daemon Mode"
-    href="/docs/sessions"
-    description="Persistent sessions, detach, and resurrection"
-  />
-  <Card
-    title="CLI Reference"
-    href="/docs/cli-reference"
-    description="Complete command reference"
-  />
+  <Card title="Sessions & Daemon Mode" href="/docs/sessions" description="Sessions, detaching, and the CLI remote-control commands" />
+  <Card title="CLI Reference" href="/docs/cli-reference" description="Every command and flag" />
 </Cards>
