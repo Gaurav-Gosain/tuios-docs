@@ -22,6 +22,8 @@ import { SharedBordersToggle } from '@/components/mdx/shared-borders-toggle';
 import { InvariantBlind } from '@/components/mdx/invariant-blind';
 import { CellShape } from '@/components/mdx/cell-shape';
 import { SpentFrames } from '@/components/mdx/spent-frames';
+import { SendKeysTokens } from '@/components/mdx/send-keys-tokens';
+import { ClipWidth } from '@/components/mdx/clip-width';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -49,6 +51,8 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     InvariantBlind,
     CellShape,
     SpentFrames,
+    SendKeysTokens,
+    ClipWidth,
     ...components,
   };
 }
