@@ -1,11 +1,11 @@
 ---
-title: The bug I closed three times
-description: A speckled sprite in the browser terminal. Three closures, each resting on a different wrong conclusion, a test suite blind by construction, and an instrument that was corrupting its own measurements.
+title: 'The bug I closed three times: a speckled sprite in a WebGL terminal'
+description: A speckled sprite in the tuios browser terminal. Three wrong closures, a test suite blind by construction, and a browser that salted its own pixel readback.
 date: '2026-07-19'
 author: Gaurav Gosain
 ---
 
-The report was visual and specific: half-block sprites in the browser terminal
+The report was visual and specific: half-block sprites in the [browser terminal](/docs/web)
 showed speckling. `pokemon-colorscripts` draws its sprites out of U+2580 and
 U+2584, upper and lower half blocks, with 24-bit foreground and background
 colours on every cell, so each character cell carries two pixels of artwork.
@@ -156,13 +156,20 @@ draw is what stock Chromium and Firefox draw. The speckling comes from
 Helium's WebGL texture path, no flag turns it off, and the workaround for
 anyone it bothers is the DOM renderer, at 95.1 percent even inside Helium. I
 changed no source anywhere, and none needed changing. The right answer to the
-report was a paragraph of explanation and a renderer toggle, both available
-from day one.
+report was a paragraph of explanation and a [renderer
+toggle](/docs/web#browser-settings), both available from day one.
 
 ## Three failures, three shapes
 
 They do not reduce to one moral, which is why I am writing them out
 separately.
+
+| Conclusion | Rested on | What was wrong |
+| --- | --- | --- |
+| 1: the image protocol | recent experience | never looked at the wire: it was text |
+| 2: the sprite is like that | a ground truth render, compared by eye | no bound on the difference |
+| 3: a browser engine difference | `getImageData`: Firefox 3 colours, Helium 44 | the readback did not report the rendering, and Helium salts it |
+| Final: Helium's WebGL texture path | a compositor capture: stock Chromium 95.6% exact, Helium 41.2% | it held |
 
 The first conclusion failed because I never looked. I assumed the category
 from recent experience and never checked the wire. It was the cheapest failure
