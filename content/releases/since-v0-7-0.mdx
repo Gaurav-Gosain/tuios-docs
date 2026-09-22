@@ -1,674 +1,752 @@
 ---
 title: Everything since v0.7.0
-description: Sessions that survive a daemon restart, one pane geometry the daemon negotiates for every client, an interface that answers the mouse, a file browser in the rail, agents that can message each other, a screenshot command, and a read-only view of other machines.
-date: '2026-08-27'
+description: 'Unreleased work on main: sessions that come back after a daemon restart, sessions and panes on other machines, agents you can watch and message, one layout for every client, an interface that answers the mouse, and a large cut in memory use.'
+date: '2026-09-22'
 author: Gaurav Gosain
 ---
 
-1,708 commits since v0.7.0, across 1,412 files. This page has been written
-in three rounds. The newest work is at the top, the round from late August
-is below it, and the round from July is below that. Both of those are
-unchanged and still hold. The short version of the new work: your sessions
-come back after the daemon restarts, the daemon decides one pane geometry
-for every client instead of letting each client guess, the whole interface
-answers the mouse, agents in separate panes can talk to each other, and
-there is now a screenshot command, a screen saver, a file browser in the
-rail, and a read-only view of the sessions on your other machines.
+1,805 commits since v0.7.0, across 1,817 files, up to 22 September 2026. None
+of it is in a tagged release yet. It will ship as the next one.
 
-## Your sessions come back
+The page is grouped by what you notice, most important first. If you already
+run tuios, read [Before you upgrade](#before-you-upgrade) first.
 
-The daemon saves its sessions under `$XDG_STATE_HOME/tuios/sessions` and
-restores them when it starts. That is on by default. `tuios daemon
---no-restore` turns it off, and `tuios resurrect` lists what is saved or
-brings one session back by name.
+## In short
 
-Each window comes back with its workspace, its place in the layout, its
-name and its working directory, and the session comes back with its display
-name and accent. The shell in each window is a new
-shell, started in the old directory. Scrollback is not saved, and neither
-are the programs that were running. A window whose shell will not start is
-dropped rather than restored empty. The state file carries a version, and a
-file tuios cannot read is moved aside for two weeks instead of stopping the
-daemon.
+- [Before you upgrade](#before-you-upgrade): wire protocol 3, new defaults,
+  SSH key checks, hooks in the daemon.
+- [Sessions come back](#sessions-come-back) after a daemon restart.
+- [Other machines](#other-machines): remote sessions, remote panes, global
+  sessions.
+- [Agents](#agents): agent state in the rail, mail, worktree fan-out.
+- [One layout for every client](#one-layout-for-every-client).
+- [The mouse](#the-mouse), [the rail](#the-rail), and
+  [tiling and zoom](#tiling-and-zoom).
+- [Keys](#keys): keybind manager, launcher, prefix repeat.
+- [Look and feel](#look-and-feel): themes, glyphs, spotlight, screen saver.
+- [Graphics and screenshots](#graphics-and-screenshots) and
+  [the web client](#the-web-client).
+- [Scripting and control](#scripting-and-control): 62 verbs, 156 options.
+- [Project tapes and startup](#project-tapes-and-startup).
+- [The terminal emulator](#the-terminal-emulator): a second backend and a
+  conformance suite.
+- [Faster and smaller](#faster-and-smaller), and
+  [other fixes](#other-fixes).
 
-## One shape for every client
-
-Two clients on one session used to disagree about how big a pane is. Each
-client subtracted its own chrome, its own rail and dock, from the screen and
-retiled, and the two answers fought over the same pseudo-terminals. A client
-now reports only how much it reserves on each edge. The daemon takes the
-largest reserve on each edge across every attached client and hands back one
-geometry. A client with less chrome than the agreed figure draws a blank
-band rather than moving the panes.
-
-The handshake carries a protocol version, and the version is now 3. Version
-2 is refused. That is not a cosmetic bump. A message type had been inserted
-into the middle of the list after v0.7.0 without a version change, which
-shifted the type byte of every message the daemon sends. An old daemon and a
-new client still connected, and each read the other's replies as a different
-message rather than as an error. When the two disagree now, the message says
-which side is newer and names `tuios kill-server`. The JSON verb protocol
-carries its own separate version, still 1.
-
-Switching workspaces no longer resends scrollback the client already holds.
-The request says how many rows the client has and the daemon sends the rows
-past that. A cold attach still gets up to 1,000 rows per pane.
-
-Session display names and accent colours moved into the daemon. They used to
-live in a per-client file, so a second client attached to the same session
-never saw a rename, and neither the name nor the colour survived a reattach.
-
-The daemon speaks 46 verbs now, over a line-delimited JSON socket: one JSON
-object per line in, one per line out.
-
-## Driven by the mouse
-
-Every overlay row highlights under the pointer and acts on a click: the
-settings panel, the command palette, the launcher, the theme, glyph and
-effect pickers, the session and workspace lists, the layout menu and the
-dialogs. Two exceptions are deliberate. The keybind manager's rows select
-but do not fire, because inspecting a binding is not running it, and the
-help panel only scrolls.
-
-Right-click opens a menu for whatever is under the pointer: a pane, a dock
-segment, a workspace pill, the dock, the desktop, or a session row in the
-rail. Every row in those menus is an action from the keybind registry, and
-the key it shows comes from the registry too, so the hint cannot drift from
-the binding.
-
-Alt and the left button move a pane from anywhere in its content, and alt
-and the right button resize it, so you no longer have to find a border
-first. The plain left button selects text, with a double click for a word
-and a triple click for a line. A plain right-click over a shell opens the
-pane menu; over a program that has asked for the mouse, the program keeps
-the right button and the menu needs ctrl or shift.
-
-The rail answers the mouse throughout. Rows highlight on hover, a truncated
-row scrolls so you can read it, the collapsed strip pops a label beside the
-row under the pointer, session rows can be dragged into an order, and the
-rail's own edge is a one-cell target for dragging its width.
-
-The dock lost its powerline caps and reads as a status line. Its contents
-are a `[dock]` table: `left`, `center` and `right` are ordered lists of
-component names, `[dock.clock]` sets the time format, and a
-`[dock.custom.NAME]` entry runs a shell command and shows what it prints.
-Workspace pills can be dragged into a display order, which does not renumber
-the workspaces.
-
-The keybind manager gained the thing it was missing: a way to give a key
-back. `ctrl+x` on a row, or `tuios keybinds free <key>`, strips that key off
-every action in every scope and writes the empty list down, so the program
-in the pane receives it. `tuios keybinds unbind` is the narrower request,
-taking one action off one key.
-
-## The rail lists your files
-
-The rail has a files section. It lists the working directory of the focused
-pane and follows the pane as it moves. Entries carry nerd font icons, and
-each icon takes its own file type's colour, corrected toward the rail's
-background so it clears a 3:1 contrast floor instead of vanishing into it.
-`appearance.sidebar.file_icon_colors` turns the colour off. Clicking a
-folder navigates the listing, sends a `cd` to the pane, or both, set by
-`appearance.sidebar.folder_click`.
-
-Six file actions: create, rename, delete, copy, cut and paste. Only delete
-asks first, and the dialog names the file and says whether it can be
-recovered. A delete moves the file to `$XDG_DATA_HOME/Trash` following the
-freedesktop.org spec, writing the `.trashinfo` record itself rather than
-shelling out to another tool. `appearance.sidebar.file_delete = "permanent"`
-skips the trash. It is home trash only: a file on another filesystem is
-refused rather than quietly destroyed, and Windows has no trash at all, so a
-delete there is permanent and says so. Paste never overwrites; a name that
-already exists gains a number.
-
-Which sections the rail draws, in what order, and how much height each one
-takes, is one string, `appearance.sidebar.sections`, with an editor for it
-in the settings panel under Sidebar. `spacer` is the one name that may
-repeat, because a gap is not a section and a layout may want several.
-
-## Agents can talk to each other
-
-An agent in one pane can find the others and leave them mail.
-`tuios list-agents` names every pane running an agent and its state,
-`tuios send-agent-message` drops a message in another pane's mailbox,
-`tuios read-agent-messages` collects your own, and `tuios ask-agent` sends a
-question and waits for the answer.
-
-The bounds are the point. A message is at most 8KB, with a 120 character
-subject and eight attachments, which travel as paths and never as bytes. A
-session's mailbox holds 256 messages or 512KB, whichever comes first. A
-sender gets a burst of ten, and thirty messages per minute. Mail lives in
-memory and dies with the daemon. And `ask-agent` refuses a question that
-would deadlock: not only asking yourself, but any question that would close
-a cycle of agents already waiting on each other. It tells you to send a
-message instead.
-
-Detection reads 22 agent CLIs from TOML manifests now, and per-pane state
-comes from six ranked sources rather than four. Below the agent's own
-report, its transcript, escape codes and screen heuristics sit two more: what
-the foreground process is, and, last of all, an output stall.
-
-`tuios update` replaces the binary in place, and refuses when it did not
-install it. It knows six origins: a release download, the install script,
-`go install`, a Nix store path, Homebrew, and a system package. Only the
-first is safe to overwrite. For the others it names the installer that owns
-the binary and what would go stale if it wrote over it.
-
-## What the oracles found
-
-The conformance rounds described further down fixed more than that section
-named, and the fuzzing around them grew two oracles that need no expected
-output at all. The first says a frame the emulator emits must redraw the
-screen the emulator holds. The second says the same bytes must draw the same
-screen however the read boundaries fall between them. Neither needs a
-reference terminal, and between them they found two root causes: a wide rune
-severed at a margin left half of itself behind, and zero-width input was
-given a cell of its own instead of a base to attach to. A third fuzzer feeds
-identical bytes to the pure-Go emulator and the ghostty one and compares;
-it catalogued eight places where the two disagree, now pinned as known
-divergences rather than quietly passing.
-
-Some of what those rounds fixed is worth naming, because any program in a
-pane could reach it. DECSTBM, which sets the scroll region, stored the
-bottom row a program asked for without checking it, so a region sized for a
-taller terminal survived into a shorter one and the next scroll indexed past
-the screen. That panic lands in the PTY reader, which takes the daemon down
-and every session with it. OSC 8 had its two fields the wrong way round, so
-every hyperlink a program emitted carried the parameters where the URL
-belonged and did not work. DECSTR, the soft reset, was not implemented at
-all. Insert mode was recorded, reported as set when a program asked, and
-read by nothing, so a program that switched to insert mode overwrote the
-line it meant to open a hole in. And DECRQSS, which asks the terminal to
-report a setting back, was ignored rather than answered.
-
-## Three tilers, one contract
-
-A pane can be floated out of a tiled layout on its own, and pinned so it
-follows you across workspaces. The scrolling layout, in the style of niri,
-puts columns on an endless horizontal strip. Master-stack is a third engine
-beside BSP and scrolling. "All windows" in the command palette shows every
-window in every workspace at once, searchable, and jumps to the one you
-pick.
-
-Two of the three tilers let tiles overlap instead of shrinking. BSP was
-fixed in July. Master-stack had the same defect and was fixed in August: at
-45 by 14 cells it overlapped from five panes up. The same change made all
-three honour `appearance.gap`, which master-stack applied on one side only
-and the scrolling layout ignored entirely.
-
-## A picture of a pane
-
-`tuios screenshot` writes a pane to a file as `png`, `svg`, `ansi`, `html`
-or `txt`. It runs in the daemon and reads the emulator's resolved cell grid
-rather than re-parsing an ANSI string, so indexed colours keep their
-identity and the picture has the shape of the terminal it came from. Because
-the daemon owns the pane, `tuios screenshot -w build` answers on a detached
-session, from a script, with nobody attached.
-
-Kitty graphics work over SSH now. Passthrough used to be decided by asking
-the terminal on the server what it could do. A server has no terminal, so
-the answer was no, and graphics were off for everyone who connected to it.
-The client's capabilities are now read from what the SSH connection already
-carries: the `TERM` in the pty request, the forwarded environment, and the
-pixel dimensions the client reports, which also give the cell size.
-
-## Links, and a screen saver
-
-`appearance.links` decides what tuios treats as a link in a pane: `off`,
-`marked` for the ones a program declares with OSC 8, or `all`, the default,
-which adds bare URLs found in plain text. The link under the pointer is
-underlined, the pointer turns into a hand, a label says where it goes, and a
-click opens it. A `file://` link opens on whichever machine runs the client.
-An `http` link opens a browser only when the client is local; under
-`tuios ssh` or `tuios-web` it copies the URL to your clipboard instead,
-because opening a browser on the server would help nobody.
-
-The screen saver draws over the screen after `screensaver.idle_minutes` of
-nothing happening, and is off until you set `screensaver.enabled`. There are
-36 effects, ported to Go from terminaltexteffects and now kept in their own
-library, and the picker animates the one you are on over a capture of your
-real screen rather than over sample text. `screensaver.effect` picks one, or
-leaves it `random`.
-
-## Every option in one list
-
-There is one registry of settable options, 121 of them. It backs
-`set-option`, `get-option` and `list-options` on the socket, and the
-settings panel is derived from it: a test fails if a registry path has no
-row in the panel, apart from a short list of exclusions, each carrying its
-reason.
-
-One bug it exposed: a run of settings applied only on the path `cmd/tuios`
-takes. Border style, dock position, window buttons, the scrollbar, the three
-dock meters, scrollback lines, reverse scroll, the frame cap, the theme and
-the leader key were written to the config file correctly
-by the settings page and then read back as defaults on every config reload,
-and were never applied at all under `tuios tape` or the embed API. Boolean
-toggles had a second fault: they were applied only when true, so turning one
-off could not be saved. Applying a config file is one function now, and a
-test walks the whole file to prove it.
-
-A theme can be described as well as applied. The description measures the
-foreground, the cursor and all sixteen ANSI colours against the theme's own
-background and reports which of them fall under a contrast floor, so an
-illegible swatch is named rather than shipped.
-
-A theme is only half a rice. `appearance.glyphs` picks a glyph set, which
-owns the shapes: border corners and junctions, window controls, the rail's
-marks, folder glyphs. Four sets ship, `default`, `unicode`, `heavy` and
-`ascii`, each glyph carrying its own ASCII fallback rather than one fallback
-for the whole set, and a custom set is a file that can inherit from a
-built-in. `tuios list-glyphs` lists them, and the settings panel has a
-picker with a preview.
-
-## Other machines, listings only
-
-tuios can look at the sessions on your other machines. Add a
-`[hosts.build]` table with an `addr` of `user@machine`, then `tuios hosts`
-lists the machines, `tuios ls --all-hosts` lists their sessions, and
-`tuios list-agents --all-hosts` lists the agents running in them. The rail
-draws them as muted rows.
-
-That is all of it. Nothing crosses a link except listings. You cannot start
-a session on another machine, attach to one, resize it, type into it, kill
-it, or rename it, and a remote row in the rail cannot be clicked, dragged,
-renamed or switched to. This is the first release of the feature and the
-boundary is deliberate. The CLI help says the same thing.
-
-The transport is one `ssh` child process per host, running
-`tuios stdio-proxy` on the far side with `BatchMode=yes`, so it never
-prompts: you need to be able to `ssh` to the machine without typing
-anything first. The proxy
-bridges to that machine's daemon socket and deliberately does not start one,
-because starting a daemon would restore that machine's sessions, and that is
-a change, not a listing. A host that is down costs its own row and nothing
-else.
-
-## Faster underneath, measured
-
-Every number here is from the commit that made the change.
-
-- Rehydrating a workspace switch where the client is already caught up:
-  2,878,917 bytes, 316,544 allocations and 47.6ms per pane, down to 146,598
-  bytes, 10,775 allocations and 2.4ms.
-- A keystroke over a real unix socket: 4,009ns and four writes, down to
-  967ns and one write.
-- Input latency, after a leading-edge coalescer replaced a free-running
-  ticker: the coalescer's own median went from 5.01ms to 20.1us, and the
-  median round trip from keypress to echo from 9.75ms to 1.78ms.
-- An idle daemon: 470ns, 568 bytes and 9 allocations per tick, with one
-  unit of work per tick, down to 260ns, 296 bytes, 5 allocations and no
-  work at all.
-- Drawing a pane's frame, after tuios stopped asking a layout library to
-  measure a box whose size it already knew: 6.53ms to 1.58ms when the pane
-  is dirty, 3.51ms to 62.7us when the content is cached.
-- The rail's rows, cached behind a signature of what they depend on:
-  82,000ns and 178 allocations per frame, down to 288ns and none.
-
-## Six changes to your setup
+## Before you upgrade
 
 Most of these need nothing from you.
 
-- The wire protocol is version 3, and version 2 is refused. If a daemon and
-  a client from different builds meet, the message says which is newer. Run
-  `tuios kill-server` and start again.
-- Digits 1 to 4 in window mode select windows. They used to snap a window to
-  a corner. Corner snap moved to the layout prefix. An old config still
-  carrying the default corner-snap bindings is migrated on load; one you
-  changed yourself is left alone.
-- Right-click on pane content opens the pane menu when the pane is running a
-  shell. It used to only resize. Over a program that has asked for the
-  mouse, the program still gets the right button and the menu is on ctrl or
-  shift with right-click. Right-drag still resizes.
-- `appearance.separator_style` is gone. It parsed and nothing read it.
-  `appearance.gap` was removed at the same time for the same reason, and has
-  since come back as an option all three tilers honour.
-- Sidebar settings moved from flat `appearance.sidebar_*` keys into an
-  `[appearance.sidebar]` table. The old keys are folded in on load, the
-  table wins where both are set, and the file is not rewritten in the old
-  spelling.
-- The `colorshift` screen saver effect is gone. A config that names it reads
-  as `random` rather than failing validation. `waves` and `vhstape` arrived
-  in the same change.
+- **Restart the daemon.** The wire protocol is version 3, and version 2 is
+  refused with a message that says which side is newer. (A message type added
+  after v0.7.0 shifted every type number without a version change, so mixed
+  builds misread each other.) Run `tuios kill-server` and start tuios again.
+  Your sessions are saved and come back. The JSON verb protocol stays at
+  version 1.
+- **New defaults on a fresh install.** A bare `tuios` starts or joins the
+  daemon (`startup.daemon = true`), starts tiled (`startup.tiled = true`), and
+  draws window controls as dots on the left of the title bar. An existing
+  config file keeps what it says: the `[startup]` booleans are only read from
+  the file, so a machine that ran standalone and floating still does. The two
+  window-button options are strings and do reach a config that never set them.
+  `tuios --standalone` or `TUIOS_NO_DAEMON=1` runs without the daemon. If the
+  daemon will not start, a bare `tuios` runs standalone for that run and says
+  so.
+- **The SSH server checks keys.** `tuios ssh` used to give a shell to every
+  connection. It now admits the public keys in
+  `~/.config/tuios/authorized_keys`, or in `~/.ssh/authorized_keys` when the
+  first file is absent. `--authorized-keys` names another file. With no keys, a
+  loopback bind still runs unauthenticated and prints a warning, and any other
+  address is refused. `--no-auth` opens it on a network you trust. A keys file
+  that cannot be read, does not parse, or holds no key stops startup.
+- **Unnamed SSH connections.** A connection that names no session, and whose
+  username maps to none, now gets a session called `ssh-session` when several
+  exist. It used to get whichever session was listed first. With exactly one
+  session, it still gets that one.
+- **Hooks run in the daemon.** `after-new-window`, `after-close-window`,
+  `after-focus-change`, `after-workspace-switch` and `after-agent-state` now
+  run in the daemon, with the daemon's environment. They fire with nobody
+  attached, and once rather than once per client. `after-attach`,
+  `after-detach`, `after-resize` and `after-layout-change` stay in the client,
+  and `after-detach` now also fires when an SSH connection or a browser tab
+  goes away.
+- **Window-mode keys.** Digits 1 to 4 select windows. They used to snap a
+  window to a corner, which is now `ctrl+b L` then 1 to 4. A config still
+  carrying the default corner-snap bindings is migrated on load. Bindings you
+  changed are left alone. With tiling on, `h` and `l` now focus the pane on
+  that side instead of doing nothing. In the layout picker, delete moved from
+  `d` to `ctrl+d`, so typing a filter no longer deletes a layout.
+- **Right-click.** In window-management mode, a right-click on a pane opens the
+  pane menu and a right-drag resizes. It used to only resize. In terminal mode
+  the right button belongs to the pane: ctrl or shift with right-click opens
+  the menu, and `appearance.right_click_opens_menu = true` makes a plain
+  right-click open it too. A program that asked for the mouse always keeps the
+  plain right button.
+- **Frame rate.** `appearance.max_fps` now tops out at 120, the renderer's own
+  ceiling. Values up to 240 were accepted before and changed nothing on screen.
+- **Selection colours.** The selection, search matches and copy-mode cursor
+  are now settings under `[appearance.selection]`, with new defaults: a neutral
+  grey selection, amber search matches, and a cyan copy-mode cursor. Selected
+  text is no longer bold. `appearance.selection.bold = true` brings that back.
+- **Sidebar settings** moved from flat `appearance.sidebar_*` keys into an
+  `[appearance.sidebar]` table. The old keys are still read, the table wins
+  where both are set, and the file is not rewritten in the old spelling.
+- **Removed.** `appearance.separator_style`, which parsed and did nothing. The
+  `colorshift` screen saver effect: a config that names it reads as `random`.
 
----
+## Sessions come back
 
-Everything below is the round of this page written in late August,
-unchanged because it still holds. Two counts in it have moved since: the
-daemon speaks 46 verbs, not 35, and agent detection reads 22 manifests, not
-nine.
+The daemon saves each session under `$XDG_STATE_HOME/tuios/sessions` and
+restores it when it starts. This is on by default.
 
-## The sidebar knows what your agents are doing
+- Each window comes back with its workspace, its place in the layout, its name
+  and its working directory. The session keeps its display name and accent.
+- Each shell is new, started in the old directory. Scrollback and running
+  programs are not saved.
+- Restored shells get `TUIOS_RESTORED=1`, and `tuios ls` marks the session as
+  restored until you first attach.
+- A window whose shell will not start is dropped rather than restored empty.
+- A state file tuios cannot read is moved aside for two weeks instead of
+  stopping the daemon.
+- Working directories now come back on macOS too. The daemon used to read them
+  from `/proc`, which macOS does not have.
 
-The rail was rebuilt from a collapsible session tree into three flat
-sections: sessions, terminals, and agents. The agents section is the point.
-Every pane running a recognised coding agent shows up there with its state,
-ordered by who needs you: errored first, then waiting for input, then
-finished but unseen, then working. A finished agent you have looked at decays
-down the list instead of staying green forever. Rows carry the harness name
-and the last thing the agent said it was doing, and the command palette can
-filter panes by state, `@n` for needs input, `@w` for working, across every
-session at once.
+`tuios daemon --no-restore` turns restore off. `tuios resurrect` lists what is
+saved, or brings one session back by name.
 
-Detection is data, not code: nine harnesses ship as TOML manifests, matched
-against what the foreground process actually is rather than what it is
-named, and `tuios explain-agent-detect` shows the reasoning for a pane when
-it guesses wrong. State comes from ranked sources rather than one flag: an
-agent's own report outranks its transcript, which outranks escape codes,
-which outrank screen heuristics, and a lower tier can never overwrite a
-higher one that is still fresh. Where a harness keeps a session log, the
-daemon reads the agent's own record of its turn; the reader looks at the
-last 128KB and no further, so a 151MB transcript costs 652 microseconds.
+The daemon is also easier to reach. A bare `tuios` uses it by default (see
+above). `tuios attach` starts the daemon instead of refusing. `tuios ls` with
+no daemon running lists the sessions saved on disk, marked as saved, and exits
+3, so a script can tell a stopped daemon from a running one that holds nothing.
 
-When a state changes, tuios can tell you about it: a dock message, an OSC 9
-notification that reaches you over SSH because it travels in-band, and an
-optional sound cue, all governed by a `[notifications.agent]` table with
-per-state switches, a settle window so flapping states do not spam, and
-quiet hours. An `after-agent-state` hook hands the transition to any script,
-through environment variables rather than argv so a harness's free text
-cannot become shell arguments.
+Daemon panes now honour two settings they used to ignore:
+`appearance.scrollback_lines` (the daemon kept 10,000 lines per pane whatever
+the file said) and `appearance.preferred_shell`.
 
-Around the agents, the rail grew the rest of what it was missing: every
-session gets a colour of its own, derived from its name so it is stable
-across clients and restarts; sessions and workspaces can be renamed from one
-dialog; the collapsed strip mirrors all three sections; and the dock's
-workspace pills can be dragged into an order, display order only, because a
-workspace's number stays its identity.
+## Other machines
 
-## A second emulator, and the suite that stands between two
+tuios can now work across machines. Every link is one `ssh` process per host,
+run with `BatchMode=yes`, so you need to be able to `ssh` to the machine
+without typing anything. See [Sessions](/docs/sessions) for the full model.
 
-Behind a `ghostty` build tag, panes can be driven by libghostty-vt, the
-emulation core from the ghostty terminal, instead of the pure-Go emulator.
-The `Terminal` interface the rest of the app consumes was extracted first,
-so both backends implement one contract, and a differential suite feeds
-identical bytes to both and compares screens, cursor, scrollback, and modes,
-now after every chunk and on the rendered output a host would receive, not
-just on internal state at the end of input. That "now" is load-bearing: the
-suite as first written passed while the ghostty backend painted `ls` on hot
-pink, and [the post about why](/blog/my-differential-tests-passed-and-the-screen-was-pink)
-is the most instructive bug of the batch. The suite runs in CI on every
-change that touches the emulator, and releases ship ghostty-tagged artifacts
-alongside the default ones.
+### Adding a machine
 
-## A control surface a program can trust
+```bash
+tuios hosts add build gaurav@buildbox   # writes [hosts.build] in config.toml
+tuios hosts test build                  # dials it now and says what it found
+tuios hosts remove build
+tuios hosts                             # every link and its state
+```
 
-The daemon speaks 35 verbs over its socket now, wrapped in CLI commands, and
-the batch that added the arrangement and settings verbs also changed what
-the existing ones were allowed to say. A parameter a verb does not take is
-refused with the closest spelling and the full accepted list, instead of
-being silently dropped by the JSON decoder. `set-option` validates the path
-against a registry of every settable option and returns `option_not_found`
-with suggestions for a path that does not exist, instead of recording
-nonsense and reporting success. The registry is held to the config struct by
-a reflection test that fails in both directions, and applying a setting at
-runtime goes through the same funnel a config file does, which retired a
-hand-written switch that supported exactly six paths out of 88. Colour-valued
-options validate their values too.
+- The daemon follows the config file, so none of these needs a restart. The
+  settings page has a Hosts section that does the same.
+- An address is anything `ssh` understands. Your `~/.ssh/config` aliases are
+  offered in shell completion and on the settings page.
+- `tuios hosts tailnet` lists the machines on your tailnet and which ones it
+  would offer. `tuios hosts add NAME --tailnet` takes the address from the
+  machine of that name. It asks the `tailscaled` already running, with no root
+  and no auth key.
+- The link finds tuios on the far machine by itself: on the `PATH`, in the
+  usual install paths, then through the login shell. `tuios hosts test` prints
+  where it looked when it cannot find it.
+- A link that drops is dialled again with a backoff. `tuios hosts` shows each
+  link as `up`, `connecting`, `reconnecting`, `unreachable`, `no_daemon`,
+  `no_tuios` or `incompatible`, with how many times it dropped and why.
 
-The protocol carries a wire version in both directions of the handshake, and
-each side refuses a peer outside its range with a message that says which
-side is newer. An agent skill ships in the binary, printed by
-`tuios --skill`, and every command example in it is parsed against the real
-command tree by a test, so the documentation cannot drift from the binary.
-Most of this hardening came from driving the socket the way a machine would
-and watching what actually happened, which
-[got its own post](/blog/the-daemon-said-yes-to-an-option-that-did-not-exist).
+### Sessions on another machine
 
-## Run anything
+```bash
+tuios attach --host build api   # attach the session api on build
+tuios new --host build          # create a session on build and attach it
+```
 
-tuios can now launch programs: anything on `$PATH`, fuzzy-matched with
-frecency ranking. This started inside the command palette and then earned
-its own overlay, on `alt+space`, because a palette row is a verb tuios
-performs and a launcher row is a thing you start, and ranking the two
-against each other meant a handicap constant whose whole job was to stop
-"new" from offering `newgrp` above New Window. The launcher shows names
-and icons from desktop entries where the platform has them; Enter execs
-the selection directly in a new pane, so what you launched is what runs,
-with no shell history entry and no prompt flash, and Tab types the command
-into the focused shell instead for when you want to add arguments.
-Underneath both, the four separate search boxes in the app were collapsed
-onto one matcher that scores instead of shrugging, with its invariants held
-by fuzz tests on random input.
+The session is drawn by this client, with this machine's theme, config and
+prefix key. Nothing is nested. If the link drops, the pane stays on screen, the
+dock says it is reconnecting, and the client tries again for three minutes
+before it returns to the session it left on this machine. `--ssh` runs the
+tuios on the host inside this one instead, for a host whose tuios is too old.
 
-## Your keys, inspected
+In the rail, sessions are grouped under their machine. Enter on a session under
+a host attaches it, and enter on the `+` beside a host creates one there. A
+machine's header shows how many of its sessions want a person, and each row
+shows what its agents are doing. A machine that is not answering is muted and
+its rows cannot be clicked, because they are a cached listing.
 
-Every key tuios answers to now lives in the keybind registry, including
-the two that used to be literals in the input path: the palette on
-`ctrl+p` and the launcher on `alt+space` sit in a `[keybindings.global]`
-section consulted in every mode, because a key nobody can rebind is a key
-nobody can inspect. On top of that registry sits a keybind manager, on
-`ctrl+b k`: four tabs over one analysis, what is bound, where tuios argues
-with itself, where tuios argues with the pane's program, and a Record tab
-that captures the next key you press and tells you all three about it. The
-same analysis runs headlessly as `tuios keybinds doctor` and
-`tuios keybinds explain <key>`, and every finding says how it knows:
-`certain` from tuios routing, `observed` read from a live pane,
-`reference` from a curated list of program defaults, so a claim about what
-`nvim` wants never masquerades as detection.
+### A pane on another machine
 
-## Bring your colours with you
+```bash
+tuios new-window deploy --host build
+```
 
-`tuios import-theme` converts a kitty, ghostty, alacritty, or wezterm
-colour scheme into a tuios theme, sniffing the format from the file's
-content, and `tuios list-themes` lists everything the daemon can apply,
-342 built-ins and whatever the themes directory holds, re-read on every
-call so an imported theme is usable without a restart. Switching re-palettes
-every open pane in place.
+The window belongs to this session and is laid out here. Only its process runs
+on `build`. The title bar says `build:deploy`, and the rail row names the
+machine, because the same typed line does different things on different
+machines. The rail's file section and agent detection work for these panes. The
+pane ends when the link does.
 
-## tuios in your pocket
+### Global sessions
 
-`tuios-web` can serve a LAN address over TLS, and `--auto-tls` generates and
-keeps a certificate covering the hostname and every interface address, with
-`tuios-web cert` subcommands to inspect or replace it. On a phone, the web
-client shows a collapsible row of tuios commands nearest the thumb, built
-from the keybind registry so a rebound command moves its button; a long
-press opens the pane menu, and pane dividers get a touch target big enough
-to grab. Settings changed from a served browser session apply to that
-session only, instead of writing the operator's config file.
+Once a second machine is reachable, the rail shows a `global` group above the
+machines. A session in it holds panes from several machines, and every way of
+making a window there asks which machine to run it on. Anywhere else, a new
+window opens on the session's machine without asking.
 
-## Animated graphics, without the flood
+```bash
+tuios new deploy --global
+```
 
-The kitty animation protocol, tried and dropped in v0.7.0, is implemented:
-frame transmission, composition, and control, covered end to end by tests.
-Animated guests stream damage patches instead of whole bitmaps, which took
-one measured page from 330MB forwarded in 21.6 seconds at 17fps to 22MB at
-73fps with input still responsive. A graphics flood is paced so it cannot
-starve the keyboard, every frame of a stream gets placed instead of just the
-first, a placement hold during a pane resize releases when the geometry
-settles rather than waiting for a mouse release that may never arrive, and
-shared-memory transmissions are unlinked after reading so they do not
-accumulate.
+`appearance.global_session = false` hides the group. Making a new session (`N`
+in window mode, the new `+` at the start of the dock's session strip, or the
+command palette) asks which machine when more than one is reachable.
 
-## Colour, chrome, and zen
+### Addressing another machine from the CLI
 
-Colour options in the settings menu open a real picker: a hue strip, a
-shades grid, saturation and lightness sliders, RGB sliders, a typeable hex
-field, a harmony wheel, and the theme's own colours as a first row of slots.
-A slot re-resolves when the theme changes; a picked colour stays what was
-picked. Session accents, window accents, border colours, and the scrollbar
-tint all route through it, and settings rows show a swatch of the colour in
-force, so an unset row shows what it inherits.
+Verbs take a host-qualified target: `-s build:api` for a session, `-w
+build:api:0` for a window. `local:` addresses a local session whose name
+contains a colon. `list-windows`, `capture-pane`, `send-keys`, `send-text`,
+`wait-for`, `focus-window`, `kill-session`, `session-info`, `get-agent-state`,
+the agent mail verbs and the stash all take it. Every pane gets `TUIOS_HOST`,
+the hostname of the machine it runs on.
 
-`appearance.zen_mode` hides unfocused window borders, always or only while
-the mouse is still; the focused frame stays as an anchor, and the melt is a
-repaint, not a layout change, so content never shifts. Window buttons can
-sit on the left, and a `dots` style draws macOS-like traffic lights, with
-their colours nudged toward the pane's text colour where they would miss a
-3:1 contrast floor. The scrollbar got two deliberate styles, a single stroke
-at two weights in the pane's own ink, or a track with a half-cell thumb
-borrowed from opentui, and its default tint is measured against the pane
-background rather than hoping the border colour is visible.
+## Agents
 
-## Held to what real terminals assert
+### The rail shows what your agents are doing
 
-Two conformance rounds, both built on a corpus in the style of ghostty's
-terminal tests: a byte string into a 6x4 screen compared against a literal
-text dump, because on 6x4 the diff is the bug. The corpus cites esctest and
-vttest per test, a differential mode compares against a real tmux, and a
-grammar-based generator fuzzes the emulator with the sequences that have
-historically broken terminals, which found two cursor-clamping bugs in its
-first six seeds.
+The rail has an agents section. Every pane running a recognised coding agent
+is listed with its state, ordered by who needs you: errored, then waiting for
+input, then finished but not yet seen, then working. A finished agent you have
+looked at moves down the list. Rows show the harness and the last thing the
+agent said it was doing. The section header counts blocked and finished panes,
+and clicking the count filters the list. In the command palette, `@n` finds
+panes that need input and `@w` finds working ones, across every session.
 
-Round one found sequences that were simply missing: NEL, which terminfo uses
-to move down a line; DECALN, the alignment pattern vttest opens with, so a
-terminal that ignores it looks like it passed everything that follows; and
-DECOM homing. Round two produced eleven fixes, among them a cursor position
-report that had line and column transposed, so every program that asked
-where the cursor was got the answer backwards; SO and SI registered where
-the parser could not reach them, so under `TERM=screen`, `linux`, or `vt100`
-every box drawn through terminfo came out as `lqk` instead of line art; ED 3
-clearing the visible screen along with the saved lines; REP repeating the
-last ASCII byte instead of the last grapheme cluster; and a mode map read
-without its lock, which in Go is a runtime throw rather than a recoverable
-panic, inside the daemon that hosts every session.
+When a state changes, tuios can tell you: a dock message, an OSC 9
+notification (which reaches you over SSH), and an optional sound. The
+`[notifications.agent]` table has per-state switches, a settle window so a
+flapping state does not spam, and quiet hours. A blocked agent's alert now
+includes the question it asked. The `after-agent-state` hook receives the
+transition in environment variables, never in argv, so an agent's text cannot
+become shell arguments.
 
-## Faster underneath
+### Detection
 
-Idle first: with idle shells and the sidebar on, tuios now schedules zero
-timer-driven renders, the maintenance tick skips its scans when nothing
-moved, and the session poll only runs while something on screen consumes it.
-Startup asks the terminal everything in one round trip and stops reading at
-the DA1 reply, which took exec-to-first-frame from 566ms to 68ms on any
-terminal that answers. Switching workspaces stopped resending scrollback the
-client already had, which at four panes turns 11.5MB of daemon encode into
-0.6MB.
+- 22 agent CLIs are described by TOML manifests. `tuios explain-agent-detect`
+  shows why a pane was or was not recognised.
+- A process is identified by what it calls itself: its name, `argv[0]`, its
+  executable, or the script an interpreter runs. A directory called `claude` or
+  `codex` is no longer an agent. An agent started through `sh -c`, `timeout`,
+  `npx`, `uvx`, `mise` or `nix` is found.
+- State comes from six ranked sources: the agent's own report, its transcript,
+  escape codes (including window-title rules, such as Codex's "Action
+  Required"), screen rules, the foreground process, and last of all an output
+  stall. A lower source never overwrites a higher one that is still fresh.
+- The transcript reader reads only the last 128KB, so a 151MB transcript costs
+  652 microseconds.
+- A state clears when the agent exits back to its shell. Agents in panes on
+  other machines are detected too.
+- `get-agent-state` and `list-agents` report a confidence and whether the pane
+  needs you.
 
-Under load, the render coalescer paces each pane by what its frames actually
-cost instead of asking for one every 8ms, and a pane that falls more than
-4MiB behind drops to catch-up rate until it recovers; typing into a pane
-while another one floods went from a 18 to 28ms median round trip to one to
-five, against tmux's one. The pane renderer stopped word-wrapping content
-the emulator had already laid out to exactly the pane's width, which is
-[a fifth of every frame spent changing nothing](/blog/a-fifth-of-every-frame-went-to-changing-nothing).
-And the frames tuios sends the host are bracketed in synchronized output
-with a hold that survives invalidation, with an e2e harness that now answers
-the terminal queries bubbletea asks, because until it did, the entire suite
-had been running in the one configuration real terminals never present.
+### Agents can message each other, and you
 
-## The daemon, when you want it
+```bash
+tuios list-agents                      # every agent pane and its state
+tuios send-agent-message -w build 'rebased onto main, please retest'
+tuios read-agent-messages              # your own inbox
+tuios ask-agent -w review 'which test is flaky?'   # ask and wait
+```
 
-`startup.daemon = true` makes a bare `tuios` start or join the daemon and
-restore every saved session, off by default so nothing changes for anyone
-who did not ask. `tuios ls` with no daemon running now lists the sessions
-saved on disk, marked as saved, and exits 3, so a script can finally tell a
-stopped daemon from a running one holding nothing. And `tuios attach` starts
-the daemon instead of refusing and pointing you at `new`; your sessions were
-one process away the whole time.
+- A message is at most 8KB, with a subject of up to 120 characters and up to
+  eight attachments, sent as paths, never as bytes. A session's mailbox holds
+  256 messages or 512KB. A sender gets a burst of ten, then thirty messages a
+  minute. Mail lives in memory and ends with the daemon.
+- `--reply-to <id>` answers a message and joins its thread.
+  `read-agent-messages --thread` and `wait-for agent-message --thread` filter
+  by thread.
+- `ask-agent` refuses a question that would close a loop of agents waiting on
+  each other, not only a question to yourself. Loop detection needs
+  `--from "$TUIOS_PANE_ID"`.
+- The person at the keyboard has an inbox called `human`. An agent writes to it
+  with `send-agent-message -w human`. The mail overlay opens on `ctrl+b M`,
+  from the palette, or with `i` on a rail row, and you can reply from it.
+  `list-agents` reports `human_unread`.
+- `tuios stash put <file>` copies a file into a store owned by the session and
+  prints its path, ready for `--attach`. The file stays until the session
+  ends, even if the sender deletes the original. The limits are 16MB per file
+  and 256MB per session. `stash get` copies a file back out, also across a
+  link.
+- Mail from another machine is marked as such, and a session holds at most 32
+  unread messages and 32 notices from links.
 
----
+### One prompt, several worktrees
 
-Everything below is the earlier round of this page, from July, unchanged
-because it still holds.
+```bash
+tuios worktree new fix/retry          # a git worktree and a session in it
+tuios fan 3 --agent claude 'Add a retry with backoff to the HTTP client.'
+tuios fan keep api-fan-add-a-retry-with-2
+```
 
-## Project tapes
+`tuios worktree new` creates a worktree under the tuios data directory and a
+session in it named `<repo>-<branch>`. `worktree ls`, `worktree diff` and
+`worktree rm` manage them. `rm` refuses a worktree with uncommitted changes
+unless you pass `--stash` or `--force`, and it never deletes a branch. `tuios
+fan` creates several worktrees, starts the agent in each, and types the prompt
+once each agent is ready. `fan keep` removes the others. The rail groups
+worktree sessions under their repository.
 
-A `.tuios.tape` is a file in a project directory that describes the session for
-that project: which windows to open, what to run in them, how to lay them out.
-When the focused shell cd's into a directory that carries one, tuios notices.
-Like direnv, but for terminal layouts.
+## One layout for every client
 
-A tape is arbitrary command execution, so the whole feature is built around a
-trust boundary. A tape is inert until you have read it and chosen what to do
-with it: Run once, Trust and run, or Never. Trust binds to the file's content
-hash, so any edit reverts the tape to untrusted and it prompts again. By
-default nothing opens on its own. A badge in the dock and a notification tell
-you a tape is there, and the review dialog shows the full content before
-anything executes.
+Two clients on one session used to disagree about pane sizes, because each
+subtracted its own rail and dock and retiled. Now each client reports how much
+space it reserves on each edge, and the daemon takes the largest reserve per
+edge and hands every client one geometry. A client with less chrome draws a
+blank band instead of moving the panes.
 
-Two opt-ins trade friction for convenience without weakening the boundary.
-`auto_review` opens the review dialog on detection instead of waiting for a
-keypress. `autorun = "auto"` runs a tape without asking, but only one you have
-already trusted and not edited since; an untrusted or changed tape falls back
-to asking. Running a tape builds a session named after the project and switches
-you into it.
+The same rule now covers the rest of the layout:
 
-<TapeTrustFlow />
+- A zoom belongs to the session, so every client draws it.
+- The master-stack ratio is kept per workspace and shared.
+- Where the scrolling layout's strip is scrolled to is shared, so a client
+  that scrolls takes the others with it, and a client that joins lands where
+  the session is looking.
+- A workspace you arranged by hand stays arranged when another client visits
+  it for the first time.
+- A BSP tree built on one client is adopted by the others.
+- Session display names and accent colours are kept by the daemon, so a rename
+  reaches every client and survives a reattach.
+- The rail's width is yours: switching to another session no longer changes it.
 
-## Start where you want to be
+Fixes found along the way: broadcasts now reach a client in the order they were
+made, two clients resizing one pane can no longer leave its emulator at a size
+nobody draws, and opening or closing a pane no longer leaves a neighbour at its
+old size on another client. Reattaching to a full-screen program such as `top`
+no longer draws its rows one blank line apart
+([#123](https://github.com/Gaurav-Gosain/tuios/issues/123)).
 
-Every session used to start empty: a blank floating workspace, then the same
-three actions every time. Open a terminal, turn on tiling, enter terminal mode.
-Those are now three startup settings, all off by default so a fresh install
-behaves exactly as before: `open_default_window`, `tiled`, and
-`start_in_terminal_mode`. All three on means tuios launches into a tiled
-session with one terminal and the next keystroke goes to the shell.
+## The mouse
 
-The settings menu now covers everything the config file does. Border colors,
-preferred shell, window title format, daemon log level, mouse scroll speed,
-and the rest of what used to be file-only are in the menu and the command
-palette, with an inline text editor for free-text values. Changes persist.
-And when the config file itself has a problem, the error now surfaces inside
-the running TUI instead of being silently ignored.
+- Every overlay row highlights under the pointer and acts on a click: settings,
+  the command palette, the launcher, the theme, glyph and effect pickers, the
+  session and workspace lists, the layout menu, and dialogs. The keybind
+  manager's rows select but do not run, and the help panel only scrolls.
+- Right-click opens a menu for what is under the pointer: a pane, a dock
+  segment, a workspace pill, the dock, the desktop, a session row, or a
+  machine heading in the rail. Every row is an action from the keybind
+  registry, and the key it shows comes from the registry too.
+- Alt and the left button move a pane from anywhere in its content. Alt and the
+  right button resize it.
+- The left button selects text: double-click for a word, triple-click for a
+  line.
+- Dragging a tiled pane by its title bar moves it with the pointer in all three
+  layouts, and it swaps on release.
+- A click that only focuses a pane no longer resizes it, and a drag that puts a
+  pane back where it was resizes nothing, so your shell no longer reprints its
+  prompt.
+- Sideways trackpad drift during a vertical scroll no longer jumps lists or
+  walks the scrolling layout. `appearance.niri_scroll_cells` (default 8) sets
+  how far one scroll event moves the strip.
+- A shake of the mouse can toggle the [spotlight](#look-and-feel), with
+  `spotlight.shake = true`.
 
-<StartupPreview />
+The dock is now a status line without powerline caps. Its contents are a
+`[dock]` table: `left`, `center` and `right` are ordered lists of component
+names, `[dock.clock]` sets the time format, and a `[dock.custom.NAME]` entry
+runs a shell command and shows what it prints. A command that hangs is killed
+with its whole process tree at its timeout. Workspace pills can be dragged into
+a display order, which does not renumber the workspaces.
 
-## The web client can shape text now
+## The rail
 
-The web client moved to sip's WebGL renderer with real HarfBuzz text shaping,
-opt-in. A browser terminal normally draws one glyph per codepoint, which for
-Arabic means isolated, disconnected, wrongly ordered letters. With shaping,
-letters join, ligatures form, and combining marks land where they belong.
-This is the difference between a terminal that technically displays Arabic
-and one that can be read.
+The rail was rebuilt from a collapsible tree into flat sections. Which sections
+it draws, in what order, and how tall each is, is one string,
+`appearance.sidebar.sections`, with an editor in the settings panel. `spacer`
+may repeat. Drag the line above a pinned section to move the split.
 
-The same sip work fixed a class of freeze where a terminal stopped
-repainting under fast output (synchronized output, mode 2026, left engaged),
-matches grapheme cluster widths against a reference terminal instead of a
-guess, and corrects kitty graphics placement.
+- **Sessions.** Each session has its own colour, derived from its name, so it
+  is stable across clients and restarts. A session with a generated name is
+  labelled by its directory, and any session shows its git branch when there
+  is room. Sessions and workspaces can be renamed from one dialog, and session
+  rows can be dragged into an order. `appearance.session_border = true` tints
+  every pane border with the session's colour.
+- **Files.** The working directory of the focused pane, following the pane as
+  focus moves, with nerd font icons coloured by file type.
+  `appearance.sidebar.folder_click` decides whether clicking a folder
+  navigates the listing, sends a `cd` to the pane, or both. Six file actions:
+  create, rename, delete, copy, cut and paste. Only delete asks first. Delete
+  moves the file to the freedesktop trash in `$XDG_DATA_HOME/Trash`, and
+  `appearance.sidebar.file_delete = "permanent"` skips it. A file on another
+  filesystem is refused, and on Windows a delete is permanent and says so.
+  Paste never overwrites: a name that exists gains a number.
+- **Git.** Add `git` to the sections string to see the focused pane's
+  repository, branch, how far it is ahead of and behind its upstream, and,
+  with `appearance.git_dirty` (on by default), how many files are changed.
+- **Agents**, described [above](#agents).
 
-<ShapingCompare />
+A program in a pane can print an OSC 7 escape claiming any directory. When the
+kernel says the pane's shell is somewhere else, the file actions are switched
+off and the rail says "read only: wrong folder", so a pane cannot aim a delete
+at a folder it is not in. This now also works for daemon panes and on macOS.
 
-## Tiling, resize, and staying responsive
+The rail answers the mouse throughout: rows highlight on hover, a truncated row
+scrolls so you can read it, the collapsed strip pops a label beside the row
+under the pointer, and the rail's edge can be dragged to change its width.
 
-Windows created in a daemon session now tile. Placement used to only run for
-windows the attached client created itself, so daemon-created windows stacked
-on top of each other at the same position or floated over the tiled ones. A
-sync that re-places a window in a tiled session now retiles, and BSP tiles no
-longer overlap when panes shrink past the default size.
+## Tiling and zoom
+
+There are three tilers: BSP, master-stack, and a scrolling layout in the style
+of niri, which puts columns on an endless horizontal strip. All three honour
+`appearance.gap`. A pane can be floated out of a tiled layout on its own, or
+pinned so it follows you across workspaces. "All windows" in the command
+palette searches every window in every workspace and jumps to the one you pick.
+
+Windows created in a daemon session now tile. Before, only windows the attached
+client made itself were placed, so daemon-created windows stacked on each other
+or floated over the tiles. BSP and master-stack tiles no longer overlap when
+panes shrink.
 
 <DaemonTilePlacement />
 
-Resize was rebuilt after one bug report unravelled into three distinct
-defects, which got [its own post](/blog/one-divider-five-windows). The short
-form: dragging a shared border now moves the two panes that share it and
-nothing else, an untouched split's ratio no longer drifts every time something
-near it resizes, and the drag sets geometry directly instead of easing toward
-a target that has already moved. Both defects are demonstrated interactively in
-the post.
+- **Zoom** slides into place instead of cutting (`appearance.zoom_animation`).
+  `appearance.zoom_size` below 100 zooms like a camera: the layout stays on
+  screen around the zoomed pane, with its neighbours running off the edges.
+  Moving focus hands the zoom to the pane you land on
+  (`appearance.zoom_follows_focus`). A tiled pane's title bar has a zoom
+  button (`appearance.window_button_zoom`).
+- **Scrolling layout.** `appearance.scroll_column_max` (20 to 100, default 90)
+  lets a column fill the screen. Clicking, hovering with focus-follows-mouse,
+  or moving focus with the keyboard brings the whole column on screen
+  (`appearance.niri_click_reveals`, `appearance.niri_hover_reveals`). Column
+  widths and stacks survive a session switch, and the strip keeps its scroll
+  position across a workspace switch and a retile.
+- **Percentage resize.** `ctrl+b L` then 5 to 9 sets the focused pane's width
+  to 50 to 90 percent of its region, and shift with 5 to 9 sets its height.
+- **New windows open where you are.** A new window starts in the focused pane's
+  directory. `appearance.new_window_inherit_cwd = false` turns this off.
+- **Popups.** `tuios popup -- fzf` runs a command in a floating pane centred
+  over the layout, and closes it when the command exits. `--width` and
+  `--height` take cells or percentages (default 80% and 60%). Esc in window
+  mode closes the focused popup. This is how fzf, gum and other pickers become
+  tuios overlays.
+- Turning tiling on after floating brings back the arrangement you had.
+  Floating windows are no longer drawn over the clock, the log viewer or other
+  overlays, and raising one floating window no longer reshuffles the others.
 
-A busy pane can also no longer starve the rest of the app. A background pane
-flooding output used to hold the emulator lock for its entire pending batch,
-and the renderer, which needs that lock every frame, never got in. Output is
-now written in bounded chunks, so the renderer gets its turn and typing stays
-responsive no matter what another pane is doing. The August pacing work above
-built on top of this.
+Resize was rebuilt ([the post](/blog/one-divider-five-windows)): dragging a
+shared border moves only the two panes that share it, an untouched split no
+longer drifts, and a drag no longer eases toward a target that has moved.
 
-## Keycast
+## Keys
 
-tuios can now draw your keypresses on screen as you type: a small overlay in
-the bottom right showing the last few keys, with repeats coalesced. I added it
-for screen recordings, where a keyboard-driven window manager is unreadable
-without one. It toggles live from the command palette and the setting
-persists.
+- **One registry.** Every key tuios answers to is in the keybind registry,
+  including the palette on `ctrl+p` and the launcher on `alt+space`, which sit
+  in a `[keybindings.global]` section consulted in every mode. Any action can
+  now be bound there.
+- **Keybind manager** on `ctrl+b k`: what is bound, where tuios conflicts with
+  itself, where it conflicts with the pane's program, and a Record tab that
+  captures the next key you press. The same analysis runs as `tuios keybinds
+  doctor` and `tuios keybinds explain <key>`. Each finding says how it knows:
+  `certain` from tuios routing, `observed` from a live pane, or `reference`
+  from a list of program defaults.
+- **Giving a key back.** `ctrl+x` on a row, or `tuios keybinds free <key>`,
+  removes that key from every action in every scope so the program in the pane
+  receives it. `tuios keybinds unbind` removes one action from one key.
+- **Launcher** on `alt+space` or `ctrl+b a`: anything on `$PATH`,
+  fuzzy-matched and ranked by frecency, with names and icons from desktop
+  entries where the platform has them. Enter runs the selection in a new pane.
+  Tab types it into the focused shell so you can add arguments. All four
+  search boxes in tuios now share one fuzzy matcher.
+- **Prefix repeat.** After a command worth repeating, the prefix stays armed
+  for half a second, so `ctrl+b` then left left left walks three panes.
+  `appearance.prefix_repeat_time` sets the window, and 0 turns it off. New
+  prefix bindings: the arrows walk panes, `(` and `)` switch sessions, and `a`
+  opens the launcher. These work on macOS with no terminal settings.
+- **New window-mode keys.** `N` makes a new session, and `b` toggles the
+  spotlight.
+- **Entering terminal mode on focus.** `appearance.auto_enter_terminal_on_focus`
+  can be `off` (the default), `targeted` (focus by selection and arrows) or
+  `all` (including Tab).
+- **macOS.** An `opt+` binding on a key that composes no character, such as
+  `opt+esc`, never fired. It does now, so Option+Escape leaves terminal mode as
+  documented. When Option+Left or Option+Right arrives as the readline word
+  motions, tuios says so and names the terminal setting to change. The default
+  config no longer warns about its own bindings.
+- Keys typed within 150ms of entering terminal mode are no longer dropped.
+
+## Look and feel
+
+- **Themes.** `tuios import-theme` converts a kitty, ghostty, alacritty or
+  wezterm colour scheme, detecting the format from the file.
+  `tuios list-themes` lists the 342 built-in themes plus your themes
+  directory, and an imported theme works without a restart. Switching theme
+  recolours every open pane in place. A theme can describe itself: each colour
+  is measured against the background, and colours under the contrast floor are
+  named.
+- **Chrome colours.** A theme file may carry a `chrome` object with `accent`,
+  `accent_bright`, `success`, `warning`, `error` and `info`, so the interface
+  can use an amber accent without turning every blue in every pane amber.
+  `chrome.surface` sets the colour dialogs are drawn on, and the rest of the
+  chrome is derived from it at readable contrast.
+- **Glyph sets.** `appearance.glyphs` picks the shapes: borders, window
+  controls, rail marks, folders. Four ship (`default`, `unicode`, `heavy`,
+  `ascii`), each glyph with its own ASCII fallback, and a custom set is a file
+  that can inherit from a built-in. `tuios list-glyphs` lists them, and the
+  settings panel has a picker with a preview.
+- **Colour picker.** Colour settings open a picker with a hue strip, a shades
+  grid, HSL and RGB sliders, a hex field, a harmony wheel, and the theme's own
+  colours as slots that follow the theme. Settings rows show a swatch of the
+  colour in force. Numeric settings open an editor with a slider and a typed
+  value.
+- **Zen mode.** `appearance.zen_mode` hides unfocused borders always, or only
+  while the mouse is still. Content never shifts.
+- **Window controls** can sit on the left, and a `dots` style draws them as
+  traffic lights. The scrollbar has two styles: a single stroke in the pane's
+  own ink, or a track with a half-cell thumb.
+- **Copy flash.** A copy sweeps a band of light over the copied text.
+  `appearance.selection.flash` turns it off, and `flash_ms`, `flash_color` and
+  `flash_style` (`diagonal`, `diagonal-reverse`, `horizontal`, `vertical`) tune
+  it. Only the background changes, so the text stays readable.
+- **Spotlight.** `b` in window mode dims everything outside a circle around the
+  mouse. The `[spotlight]` table sets the radius, how dark the rest goes
+  (`dim`, default 75), and whether it follows the mouse or the cursor.
+- **Screen saver.** Off until you set `screensaver.enabled`. It starts after
+  `screensaver.idle_minutes` idle, with 36 effects ported from
+  terminaltexteffects (`screensaver.effect`, or `random`). The picker previews
+  each effect over your real screen. Effects now run at the right speed at any
+  frame rate, and on an unthemed session the saver asks the terminal for its
+  palette instead of guessing xterm's.
+- **Keycast.** tuios can draw your keypresses in the bottom right as you type,
+  with repeats coalesced, for screen recordings. It toggles from the command
+  palette and the setting persists.
 
 <KeycastDemo />
 
-## Fewer papercuts
+## Graphics and screenshots
 
-- Ctrl+P opens the command palette every time. It was silently swallowed when
-  the terminal reported a lock modifier like Num Lock in the key event.
-  Keybindings now resolve through a single registry, so a binding means the
-  same thing everywhere.
-- Quitting a session kills it, and the message says "Killed" instead of
-  "detached". The exit message names the session you were in, not the one you
-  first attached to.
-- A grapheme cluster split across two writes no longer renders as two. Write
-  boundaries fall anywhere; the emulator now treats that as its problem.
-- Erase-character respects the right margin.
-- Programs running inside tuios are told graphics forwarding is available, so
-  image-capable tools stop falling back to blocks.
-- Mouse scroll speed and window title format are configurable, in the file
-  and in the menu.
+`tuios screenshot` writes a pane to a file as `png`, `svg`, `ansi`, `html` or
+`txt`. It runs in the daemon and reads the emulator's cell grid, so it works
+on a detached session from a script: `tuios screenshot -w build`. On macOS it
+now finds your fonts without fontconfig, including fonts inside `.ttc`
+collections, so Nerd Font icons draw instead of boxes.
 
-All of this is on main now and will ship as the next tagged release. If a
-tape prompt ever surprises you, that is the trust boundary doing its job.
+- **Kitty graphics over SSH.** Passthrough used to be decided by asking the
+  server's terminal, and a server has none, so graphics were off for every SSH
+  client. The client's capabilities now come from the SSH connection: `TERM`,
+  the forwarded environment, and the pixel size it reports.
+- **Animation.** The kitty animation protocol, dropped in v0.7.0, is
+  implemented. Animated images send only the changed regions, which took one
+  measured page from 330MB forwarded in 21.6 seconds at 17fps to 22MB at
+  73fps. A flood of graphics is paced so it cannot starve the keyboard.
+- **Unicode placeholders.** Images drawn with placeholder cells, such as those
+  in glow's pager, now show inside a pane and scroll and clip with the text.
+  They need a host that supports placeholders (kitty, Ghostty, WezTerm), so
+  not tuios-web. `appearance.kitty_placeholders` forces the choice.
+- **Covered images are cropped.** A window over part of an image now cuts
+  that part away instead of hiding the whole image. An image no longer draws
+  over the rail or the dock, and an image in a pane's last rows no longer
+  scrolls the whole screen up.
+- **Bounded memory.** An animated gif under chafa grew tuios to 5.3GB in two
+  minutes. The same run now stays at 189MB.
+
+## The web client
+
+- **Text shaping.** The web client can use sip's WebGL renderer with HarfBuzz
+  shaping (opt-in). Arabic letters join, ligatures form, and combining marks
+  land where they belong. Grapheme widths now match a reference terminal, and
+  a freeze where synchronized output was left on is fixed.
+- **TLS and phones.** `tuios-web` can serve a LAN address over TLS, and
+  `--auto-tls` creates and keeps a certificate for the hostname and every
+  interface address. `tuios-web cert` inspects or replaces it. On a phone, a
+  row of tuios commands sits near your thumb, built from the keybind registry,
+  a long press opens the pane menu, and pane dividers are big enough to grab.
+- **Your theme.** A browser now shows the theme you picked, and the tab shows
+  tuios instead of "Sip".
+- Settings changed from a browser session apply to that session only, instead
+  of writing the server's config file.
+- `tuios-web` takes every interface flag `tuios` takes.
+- The Docker image now includes `tuios-web`.
+
+<ShapingCompare />
+
+## Scripting and control
+
+The daemon speaks 62 verbs over a line-delimited JSON socket, one JSON object
+per line each way. `tuios list-verbs` lists them with every error code a verb
+can return. See [the control protocol](/docs/control-protocol).
+
+- **Strict parameters.** A parameter a verb does not take is refused with the
+  closest spelling and the accepted list, instead of being dropped.
+- **Options.** One registry holds all 156 settable options. It backs
+  `set-option`, `get-option` and `list-options`, and the settings panel is
+  built from it. `set-option` refuses a path that does not exist, with
+  suggestions, and validates colour values. It also fixed a bug where a dozen
+  settings, from border style to the leader key, were saved and then read back
+  as defaults on every reload, and a boolean turned off could not be saved.
+- **Config reload.** Editing `config.toml` reaches the running client, even
+  with editors like vim that save by renaming. A file with an error is
+  reported on screen and the running config stays.
+- **`new-session`** creates a session and its first window from a program,
+  with no client attached.
+- **`run-command`** refuses a command name it does not know, instead of
+  reporting success. `tuios run-command --list` lists the names.
+- **Hooks say what happened.** `tuios list-hooks` shows each hook command's
+  run count, last exit code, last run and last error. A failing hook logs its
+  exit code and the tail of its stderr.
+- **Daemon logs.** The daemon writes errors and basic events to
+  `$XDG_STATE_HOME/tuios/daemon.log`, so a crash leaves a record.
+  `tuios set-config daemon.log_level messages` raises the detail without a
+  restart. `tuios daemon --pprof` serves profiling data.
+- **Crash report.** A panic in the interface now shows a full-screen report
+  with the build, terminal, layout and last actions. `c` copies it, and `g`
+  opens a prefilled issue. It never includes pane contents, titles, paths or
+  session names.
+- **`tuios update`** replaces the binary in place, but only when it installed
+  it. It recognises a release download, the install script, `go install`,
+  Nix, Homebrew and system packages, and for the others it names the
+  installer that owns the binary.
+- **Agent skill.** `tuios --skill` prints the recipes for driving tuios from a
+  pane. A test parses every command in it against the real command tree.
+- `tuios send-keys` no longer pulls a pane you scrolled back to the bottom.
+- `tuios stash put` and `stash get` print only the path on stdout, so
+  `path=$(tuios stash put FILE)` works.
+
+Most of this hardening came from driving the socket the way a program would,
+which [got its own post](/blog/the-daemon-said-yes-to-an-option-that-did-not-exist).
+
+## Project tapes and startup
+
+A `.tuios.tape` in a project directory describes the session for that project:
+which windows to open, what to run in them, and how to lay them out. When the
+focused shell changes into a directory that has one, tuios notices, like direnv
+for terminal layouts.
+
+A tape runs commands, so nothing happens until you have read it. The review
+dialog shows the whole file, and you choose Run once, Trust and run, or Never.
+Trust is tied to the file's content hash, so any edit makes it ask again. By
+default a dock badge and a notification tell you a tape is there.
+`auto_review` opens the review dialog on detection. `autorun = "auto"` runs a
+tape without asking, but only one you trusted and have not edited since.
+Running a tape builds a session named after the project and switches to it.
+
+<TapeTrustFlow />
+
+Three startup settings remove the steps every session used to start with:
+`startup.open_default_window`, `startup.tiled` and
+`startup.start_in_terminal_mode`. Only `tiled` is on by default, and only for a
+fresh install (see [Before you upgrade](#before-you-upgrade)). With all three
+on, tuios opens tiled with one terminal and your next key goes to the shell.
+Startup also asks the terminal everything in one round trip, which took the
+time to the first frame from 566ms to 68ms.
+
+<StartupPreview />
+
+The settings menu now covers everything the config file does, with an inline
+editor for text values, and changes persist.
+
+## The terminal emulator
+
+Behind a `ghostty` build tag, panes can run on libghostty-vt, the emulation
+core of the Ghostty terminal, instead of the pure Go emulator. Both backends
+implement one interface. A differential suite feeds both the same bytes and
+compares screens, cursors, scrollback, modes and the output a host would
+receive, after every chunk. The first version of that suite passed while the
+ghostty backend painted `ls` on hot pink, which is
+[its own post](/blog/my-differential-tests-passed-and-the-screen-was-pink).
+Releases ship ghostty builds beside the default ones.
+
+A conformance corpus checks byte strings on a 6x4 screen against literal text
+dumps, citing esctest and vttest, and can compare against a real tmux. A
+grammar-based fuzzer feeds the emulator sequences that have broken terminals
+before. Two more checks need no expected output: an emitted frame must redraw
+the screen the emulator holds, and the same bytes must draw the same screen
+however the reads are split. Bugs they found, any of which a program in a pane
+could hit:
+
+- The cursor position report had line and column swapped.
+- Under `TERM=screen`, `linux` or `vt100`, box drawing came out as `lqk`,
+  because SO and SI were unreachable.
+- OSC 8 hyperlinks had their fields swapped and never worked.
+- DECSTBM accepted a scroll region taller than the screen, and the next scroll
+  crashed the daemon and every session in it.
+- A mode map read without its lock, and two captures of one busy pane, could
+  each crash the daemon.
+- NEL, DECALN, DECSTR and DECRQSS were missing, and insert mode was recorded
+  but ignored.
+- ED 3 cleared the visible screen, REP repeated the wrong character, and a wide
+  character cut at a margin left half of itself behind.
+- A window title containing a character from the Dingbats block, which Claude
+  Code puts in its title, ended early and printed the rest into the pane,
+  because a byte inside the character was read as an eight-bit string
+  terminator. Invalid bytes in titles are now dropped.
+- A single shift (SS2, SS3) before a multi-byte character leaked into the next
+  character.
+- Underline and other attributes were dropped on the focused pane's render
+  path.
+
+Where the two backends still disagree, the difference is pinned as a known
+divergence rather than left to pass quietly.
+
+## Faster and smaller
+
+Every number here comes from the commit that made the change.
+
+### Speed
+
+- Idle: with idle shells and the rail open, tuios schedules no timer-driven
+  renders. The render ticker now runs at `max_fps`, which at the default of 60
+  took an idle client from 1.0% to 0.6% of a core.
+- Typing a letter into a shell: 18.9us and 177 allocations down to 1.06us and
+  14. A keystroke over the socket: 4,009ns and four writes down to 967ns and
+  one.
+- Keypress to echo: the median went from 9.75ms to 1.78ms. Typing into one pane
+  while another floods went from an 18 to 28ms median round trip to 1 to 5ms,
+  against tmux's 1.
+- A pane that falls more than 4MiB behind drops to catch-up rate until it
+  recovers, and a busy pane can no longer starve the renderer.
+- Workspace switch: the client asks only for rows it does not have. At four
+  panes that is 11.5MB of encoding down to 0.6MB, and a caught-up switch went
+  from 47.6ms to 2.4ms per pane.
+- Drawing a pane's frame: 6.53ms to 1.58ms when dirty, 3.51ms to 62.7us when
+  cached. The pane renderer stopped re-wrapping content that was already the
+  right width, which was
+  [a fifth of every frame](/blog/a-fifth-of-every-frame-went-to-changing-nothing).
+- The rail's rows: 82,000ns and 178 allocations per frame down to 288ns and
+  none.
+- Moving the pointer over plain text no longer composes a frame per cell.
+- A truecolor repaint: allocations down from 757,200 to 189,600 per run of the
+  benchmark. Scrolling short lines: 65 to 79 percent less CPU.
+
+### Memory
+
+- Scrollback is stored as text with styles marked where they change. A
+  175-character line went from 4,864 bytes to 216, and a full 10,000-line
+  history from 48MB to 4.2MB per pane, in the daemon and again in each client.
+- An empty 207x55 pane held 1.7MB before printing anything, 1.3MB of it the
+  screen grid. A row is now allocated only when something is printed on it,
+  and an empty pane's grid holds 28KB. The alternate screen is built on first
+  use.
+- Eight empty panes: heap from 47.5MiB to 14.9MiB.
+- On the ghostty backend, `scrollback_lines` now holds. The library pruned by
+  bytes first, so a pane asked for 10,000 lines kept about 400 at 207 columns.
+
+## Other fixes
+
+- The last output of a pane, often its prompt, sometimes stayed invisible until
+  the next key. It is now drawn at once.
+- A pane scrolled back stays on the line you stopped at while new output
+  arrives.
+- Ctrl+P opens the palette even when the terminal reports Num Lock in the key
+  event.
+- Quitting a session says "Killed", not "detached", and names the session you
+  were in.
+- A grapheme cluster split across two writes renders as one.
+- Programs in tuios are told graphics forwarding is available, so image tools
+  stop falling back to blocks.
+- Clipboard copy and paste work on GNOME Terminal and other VTE terminals, and
+  over a loopback SSH connection, using the native clipboard tool.
+- Ctrl+D in a pane on another machine closes it at once instead of on the next
+  key.
+- The log viewer's copy keys (`E` for errors, `A` for all) now work.
+- Help opened from the leader starts at the top. In help, `q` closes it
+  outside a search and can be typed inside one.
+- Mouse scroll speed and window title format are configurable, in the file and
+  in the menu.
