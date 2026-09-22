@@ -10,11 +10,11 @@ to open windows, send input, read screens, change settings. It exists so that
 agents and scripts can drive a session without faking keystrokes at a TUI.
 Every verb had tests. The tests were green. Then I sat down to write the
 documentation that teaches an agent to use it, and did the one thing the
-tests had never done: ran the documented examples over a real socket against
-a real daemon, and looked at what actually happened.
+tests had never done. I ran the documented examples over a real socket
+against a real daemon, and looked at what actually happened.
 
-Four findings, in ascending order of how much they changed my mind about
-what a passing test means.
+Four findings, in order of how much they changed my mind about what a
+passing test means.
 
 ## The command that lost its spaces
 
@@ -28,19 +28,19 @@ tuios send-keys "echo hello,Enter"
 The pane receives `echohello`, followed by Enter. The tokenizer aliases
 commas to spaces and then splits on whitespace, so `echo`, `hello` and
 `Enter` are three tokens, each sent as its content, with the separators
-dropped. That is correct behaviour for a key-token language, where the
-separator is punctuation rather than payload, and it is a trap for exactly
-the caller this surface exists to serve: a machine that composed a shell
-command and reached for the verb with "keys" in the name. Nothing warns you.
-The call exits zero, and the pane runs a command that does not exist.
+dropped. That is correct for a key-token language, where the separator is
+punctuation rather than payload. It is also a trap for exactly the caller this
+surface exists to serve: a machine that composed a shell command and reached
+for the verb with "keys" in the name. Nothing warns you. The call exits zero,
+and the pane runs a command that does not exist.
 
-This one is not fixed in code, because the tokenizer is behaving as
-specified. The fix is in the surface: the skill documentation now carries the
-failure inline, annotated with exactly what gets typed, and steers text
-toward `send-text`, which sends its argument verbatim, and whole commands
-toward `run-command`. And the examples in that documentation are held by a
-test that parses every one of them against the real command tree, so the docs
-cannot drift from the binary.
+This one is not fixed in code, because the tokenizer behaves as specified.
+The fix is in the surface. The skill documentation now shows the failure
+inline, annotated with exactly what gets typed, and steers text, including
+whole shell commands, toward `send-text`, which sends its argument verbatim.
+The examples in that documentation are held by a test that parses every one
+of them against the real command tree, so the docs cannot drift from the
+binary.
 
 ## The parameter that fell on the floor
 
@@ -52,7 +52,7 @@ cannot drift from the binary.
 
 A window came back: created, named, success envelope, everything in order.
 On workspace 1. Dropping an unknown field is what `encoding/json` does by
-default, and it is the worst answer available to a machine caller: the call
+default, and it is the worst answer available to a machine caller. The call
 did less than it was asked, reported success, and left no trace of the
 difference. A human notices the window opened in the wrong place. An agent
 reads `"type": "window_created"` and moves on, wrong about the world from
@@ -60,34 +60,34 @@ then on.
 
 The fix has two halves. `workspace` became real, along with `cwd` and
 `focus`. And the protocol layer now checks every incoming parameter against
-the verb's published schema before the handler runs, refusing anything
-unrecognised with the closest-match suggestion and the full accepted list.
-The refusal earns its keep beyond typos: a parameter the verb does not take
-yet is exactly what a caller built against a newer tuios sends an older one,
-and a refusal is the only answer that tells the truth in that situation.
-Turning the check on also caught two parameters that were real but missing
-from their verbs' declared schemas, which would have become unreachable the
-moment enforcement landed. The declared surface and the implemented surface
-had already drifted; there was just nothing comparing them.
+the verb's published schema before the handler runs. Anything unrecognised is
+refused, with the closest match and the full list of accepted parameters.
+The refusal is useful beyond typos. A parameter the verb does not take yet is
+exactly what a caller built against a newer tuios sends to an older one, and a
+refusal is the only honest answer in that situation. Turning the check on
+also caught two parameters that were real but missing from their verbs'
+declared schemas, which would have become unreachable the moment enforcement
+landed. The declared surface and the implemented surface had already drifted
+apart. Nothing was comparing them.
 
 ## The option that did not exist
 
-```
-tuios set-option appearance.totally_made_up whatever
+```json
+{"verb": "set-option", "params": {"key": "appearance.totally_made_up", "value": "whatever"}}
 ```
 
-came back `option_set`. Not an error. The response did include
+This came back `option_set`. Not an error. The response did include
 `"applied": false`, which sounds like a signal until you learn it was one bit
 meaning two things: "no client is attached to apply this right now" and
 "that key means nothing and never will". A caller cannot tell a setting that
-will take effect on next attach from a typo. Both were filed as success.
+will take effect on next attach from a typo. Both were reported as success.
 
 Now the path is resolved against the option registry first, and a miss is an
 error, `option_not_found`, carrying the closest match and the complete list
-of valid paths. The value is validated too, by attempting the assignment
-against a throwaway default config before touching the session, so the check
-and the apply cannot disagree about what is assignable. And when
-`applied` is false, the response says why.
+of valid paths. The value is validated too, by trying the assignment on a
+throwaway default config before touching the session, so the check and the
+apply cannot disagree about what is assignable. And when `applied` is false,
+the response says why.
 
 ## Six paths out of 88
 
@@ -103,13 +103,13 @@ inert.
 
 So the whole sidebar could be configured over the socket, verb by verb,
 success by success, without a single visible consequence. The fix deleted the
-dead end rather than extending the switch: unknown paths now route through
-the same funnel a config file load uses, one assignment function driven by
-the registry, then the same live-apply step. The registry itself is held to
-the config struct by a reflection test that walks every scalar field and
-fails in both directions, a field without a registry entry or an entry
-without a field. The number 88 can never again be quietly larger than the
-number six, because there is no six.
+dead end rather than extending the switch. Every path now goes through the
+same route a config file load uses: one assignment function driven by the
+registry, then the same live-apply step. The registry itself is held to the
+config struct by a reflection test that walks every scalar field and fails in
+both directions: a field without a registry entry, or an entry without a
+field. The number 88 can never again be quietly larger than the number six,
+because there is no six.
 
 ## Why every test was green
 
@@ -123,11 +123,11 @@ about any option existing or taking effect. It now sets a real registry path
 and asserts the value came back from the session, not from defaults.
 
 The unit tests called verb handlers as functions, with a fake client wired to
-answer every command with a hardcoded success. A handler under test like that
+answer every command with a hardcoded success. A handler tested like that
 cannot fail for any of the four reasons above. It cannot even fail for not
 being registered. The commit that replaced them says it plainly: a handler
 test would pass for a verb that was never registered, and registration is
-half of what these are.
+half of what these verbs are.
 
 The replacement suite starts a real daemon, connects over the socket, sends
 the verb as bytes, and asserts on the response and then on the state the
@@ -136,14 +136,21 @@ this surface whose passing means what it appears to mean.
 
 ## What I keep from this
 
-An API for machines has a different failure economics than a UI for people.
-A person who asks for a window on workspace 2 and watches it open on
-workspace 1 has already noticed; the interface self-reports through their
-eyes. A program has only the response envelope, so every gap between what
-was reported and what was done becomes a false belief in the caller,
-compounding silently. For this kind of surface, "accepted and ignored" is
-strictly worse than any error, and the couple of hours spent driving my own
-API the way its real callers would found more product defects than the
-entire handler-level suite had in its lifetime. The features were not
-broken. They were never wired to anything, and there is no green so
-untrustworthy as the green of a test that cannot reach the wire.
+An API for machines fails differently from a UI for people. A person who asks
+for a window on workspace 2 and watches it open on workspace 1 has already
+noticed: the interface reports itself through their eyes. A program has only
+the response envelope, so every gap between what was reported and what was
+done becomes a false belief in the caller, compounding silently. For this
+kind of surface, "accepted and ignored" is strictly worse than any error. The
+couple of hours I spent driving my own API the way its real callers would
+found more product defects than the handler-level suite had found in its
+whole lifetime. The features were not broken. They were never wired to
+anything, and no green is as untrustworthy as the green of a test that cannot
+reach the wire.
+
+_Note, September 2026: an earlier version of this post showed the option
+example as `tuios set-option ...`. There was no such CLI command: `set-option`
+is the socket verb, and the CLI command at the time was `tuios set-config`.
+It also said the skill steered whole commands toward `run-command`, which
+runs tuios commands such as `ToggleZoom`, not shell commands. Both are
+corrected above._
