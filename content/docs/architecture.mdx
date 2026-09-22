@@ -1,456 +1,290 @@
 ---
 title: Architecture
-description: Technical architecture and design of TUIOS
+description: How TUIOS is put together, for contributors and the curious.
 icon: Boxes
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-TUIOS is built on the Bubble Tea v2 framework following the Model-View-Update (MVU) pattern. All application code lives under `internal/`, with two binaries in `cmd/`.
+TUIOS is a Go program built on Bubble Tea v2 and its Model-View-Update pattern. The code lives under `internal/`, with the binaries in `cmd/` and the embeddable packages in `pkg/`. This page is a map for reading the code.
 
-## Tech Stack
+## Tech stack
 
-- **[Bubble Tea v2](https://charm.land/bubbletea)** - Event-driven TUI framework (`charm.land/bubbletea/v2`)
-- **[Lipgloss v2](https://charm.land/lipgloss)** - Terminal styling (`charm.land/lipgloss/v2`)
-- **[Ultraviolet](https://github.com/charmbracelet/ultraviolet)** - Cell and screen primitives used by the compositor
-- **[Wish v2](https://charm.land/wish)** - SSH server framework (`charm.land/wish/v2`)
-- **[x/xpty](https://github.com/charmbracelet/x)** - Cross-platform PTY interface (`github.com/charmbracelet/x/xpty`, which pulls in `x/conpty` and `creack/pty` indirectly)
-- **[Cobra](https://github.com/spf13/cobra)** - CLI framework, wrapped by **[fang](https://github.com/charmbracelet/fang)** for styled help, errors, and version output
-- **[bubbletint](https://github.com/lrstanley/bubbletint)** - Theme palettes
-- **[sip](https://github.com/Gaurav-Gosain/sip)** - Browser terminal transport used by `tuios-web`
-- **Vendored VT emulator** - Terminal emulation behind a `Terminal` interface (`internal/vt`), with two backends: the pure-Go `Emulator` by default, and a [libghostty-vt](https://github.com/ghostty-org/ghostty) backed implementation behind the `ghostty` build tag (`go.mitchellh.com/libghostty`), held together by a differential test suite
+- **[Bubble Tea v2](https://charm.land/bubbletea)** (`charm.land/bubbletea/v2`): the event loop and program model
+- **[Lipgloss v2](https://charm.land/lipgloss)** (`charm.land/lipgloss/v2`): styling and layer composition
+- **[Ultraviolet](https://github.com/charmbracelet/ultraviolet)**: cell and screen types used by the emulator and the compositor
+- **[Wish v2](https://charm.land/wish)** (`charm.land/wish/v2`): the SSH server
+- **[x/xpty](https://github.com/charmbracelet/x)**: cross-platform PTYs (ConPTY on Windows)
+- **[Cobra](https://github.com/spf13/cobra)** with **[fang](https://github.com/charmbracelet/fang)**: the CLI, its help and its errors
+- **[bubbletint](https://github.com/lrstanley/bubbletint)**: the built-in theme palettes
+- **[sip](https://github.com/Gaurav-Gosain/sip)**: the browser transport behind `tuios-web`
+- **[libghostty-vt](https://github.com/ghostty-org/ghostty)** (`go.mitchellh.com/libghostty`): an optional emulator backend, built with `-tags ghostty`
 
-> **Note:** As of December 2025, the Charm stack packages have migrated from `github.com/charmbracelet/*` to `charm.land/*` module paths.
+## Package map
 
-## Package Map
-
-| Package | Responsibility |
-|---------|----------------|
-| `internal/app` | The `OS` model: window lifecycle, workspaces, rendering, overlays, graphics passthrough, tape manager |
-| `internal/session` | Daemon and client. Sessions, PTY ownership, wire protocol, state merge, resurrection, JSON verbs |
-| `internal/server` | SSH server (`ssh.go`) and the SSH-side session picker (`session_picker.go`) |
-| `internal/vt` | The terminal emulator: CSI/OSC/ESC/DCS parsing, screen, scrollback, Kitty keyboard and graphics, Sixel |
-| `internal/terminal` | PTY spawn and I/O per window, window geometry, environment, cwd capture, cleanup |
-| `internal/input` | Modal input routing, keybinding resolution, mouse handling, copy mode |
-| `internal/layout` | BSP tree (`bsp.go`), tiling schemes (`tiling.go`), scroll geometry (`scrolling.go`) |
-| `internal/overlay` | Reusable overlay primitives: panels, the command palette, and hit regions |
-| `internal/scrollback` | Scrollback browser, output extraction, OSC 133 zone parsing, vim-style motions |
-| `internal/theme` | Theme registry, custom theme loading, theme-aware UI styles |
-| `internal/config` | TOML config, constants, keybinding registry, validation, migration, file watching |
-| `internal/hooks` | User hooks fired on session and window lifecycle events |
-| `internal/guestenv` | Environment variables injected into guest shells |
-| `internal/pool` | Reusable buffer and builder pools |
-| `internal/ui` | Animation easing and timing helpers |
-| `internal/testutil` | A fake shell used to make PTY tests deterministic |
-| `internal/harness` | Agent harness manifests and detection: which program a pane is running |
-| `internal/transcript` | Reads an agent harness's own session log to derive its state |
-| `internal/sessiontree` | The rail's model: sessions, panes, and agent ranking |
-| `internal/sound` | Notification sound cues, played through system players |
-| `internal/fuzz` | Grammar-based terminal input generation for fuzzing |
-| `internal/perf` | Latency distributions and measurement helpers |
-| `internal/tape` | Tape scripts: parser, executor, recorder, project tapes |
-| `pkg/fuzzy` | The one fuzzy matcher behind every search box |
-| `pkg/applist` | `$PATH` scanning and frecency ranking for the launcher |
+| Package | What it does |
+|---------|--------------|
 | `cmd/tuios` | The main binary and every CLI subcommand |
-| `cmd/tuios-web` | Serves TUIOS over HTTP through sip. See [Web Terminal](/docs/web) |
-| `e2e` | Control-plane tests, plus `e2e/tui`, a separate module that drives a real TUIOS in a PTY |
+| `cmd/tuios-web` | The browser server. See [Web Terminal](/docs/web). |
+| `cmd/tuios-fuzz` | A property fuzzer that drives TUIOS and can draw the run |
+| `internal/app` | The `OS` model: windows, workspaces, layout, rendering, overlays, graphics passthrough |
+| `internal/session` | The daemon and its client: sessions, PTY ownership, the wire protocol, state merging, resurrection, the JSON verbs |
+| `internal/input` | Modal input routing, keybinding dispatch, mouse handling, copy mode |
+| `internal/vt` | The terminal emulator, behind the `vt.Terminal` interface |
+| `internal/terminal` | One window: its PTY I/O, geometry, environment, working directory and cleanup |
+| `internal/ptyspawn` | Starting every PTY-backed process, in one place |
+| `internal/layout` | The BSP tree (`bsp.go`), master-stack tiling (`tiling.go`) and the scrolling layout (`scrolling.go`) |
+| `internal/config` | The TOML config, defaults, the option registry, keybinding registry, validation and file watching |
+| `internal/server` | The SSH server and its authentication |
+| `internal/served` | The per-connection model shared by the SSH and web servers |
+| `internal/cliflags` | The appearance flags every TUI-drawing binary registers |
+| `internal/federation` | The ssh links between this daemon and daemons on other machines |
+| `internal/overlay` | Panel and dialog primitives, and mouse hit regions |
+| `internal/scrollback` | The scrollback browser and OSC 133 command zones |
+| `internal/theme` | The theme registry, theme import, glyph sets and UI colours |
+| `internal/hooks` | Shell hooks fired on window, session and agent events |
+| `internal/harness`, `internal/transcript` | Detecting coding agents in panes and reading their state |
+| `internal/sessiontree` | The sidebar's model of sessions, windows and agents |
+| `internal/worktree`, `internal/gitstate` | Git worktree sessions, and the branch facts the sidebar shows |
+| `internal/shot`, `internal/capture` | Rendering a window to PNG, SVG, ANSI, HTML or text for `tuios screenshot` |
+| `internal/tape` | Tape scripts: lexer, parser, executor, player, recorder |
+| `internal/guestenv` | The environment variables exported to shells in windows |
+| `internal/release` | Finding and verifying releases for `tuios update` |
+| `internal/pool`, `internal/perf`, `internal/ui`, `internal/sound` | Buffer pools, latency measurement, animation easing, sound cues |
+| `internal/fuzz`, `internal/testutil` | Grammar-based fuzz input, and a fake shell for deterministic tests |
+| `pkg/tuios` | Embed TUIOS in another Bubble Tea program. See [Library](/docs/library). |
+| `pkg/applist`, `pkg/fuzzy` | `$PATH` scanning for the launcher, and the fuzzy matcher behind every search box |
+| `e2e` | Control-plane tests, and `e2e/tui`, a separate module that drives a real TUIOS in a PTY |
 
-## Client and Daemon
+## Client and daemon
 
-`internal/session` is the largest subsystem in the repo. TUIOS runs as a daemon that owns sessions, and one or more thin clients that attach over a Unix socket.
+By default TUIOS runs as a daemon that owns sessions, plus one or more clients that attach to it over a Unix socket.
 
 ```mermaid
 graph LR
-    subgraph Client["tuios attach"]
-        IN[input.HandleInput]
+    subgraph Client["tuios client"]
+        IN[input]
         MODEL[app.OS model]
-        VIEW[Render]
+        VIEW[renderer]
     end
 
     subgraph Daemon["tuios daemon"]
-        DISP[Verb / message dispatch]
-        STATE[Session state]
-        VT[vt.Emulator per window]
+        DISP[message and verb dispatch]
+        STATE[session state]
+        VT[emulator per window]
         PTY[PTY per window]
     end
 
-    IN -->|MsgInput| DISP
+    IN -->|input| DISP
     DISP --> PTY
     PTY --> VT
     VT --> STATE
-    STATE -->|state + PTY output stream| MODEL
+    STATE -->|state and output stream| MODEL
     MODEL --> VIEW
-    VIEW -->|MsgResize, MsgUpdateState| DISP
+    MODEL -->|resize, state updates| DISP
 
-    SHELL[bash / zsh / vim] <--> PTY
-    CLI[tuios run-command, send-keys, JSON verbs] --> DISP
+    SHELL[shells and programs] <--> PTY
+    CLI[CLI commands and JSON verbs] --> DISP
 ```
 
-The pieces that matter when reading the code:
+Where to look in `internal/session`:
 
-- **`daemon.go`, `daemon_handlers.go`** - accept loop and per-message handling. `manager.go` owns the session table.
-- **`protocol.go`, `codec.go`** - length-prefixed framing over the socket. Payloads are gob by default, with a JSON codec available for external clients.
-- **`daemon_stream.go`** - the PTY output stream clients subscribe to, so a client renders without owning a PTY.
-- **`state_merge.go`** - reconciles client-side and daemon-side window state, which is what makes multiple clients on one session converge.
-- **`tuiclient.go`, `client.go`** - the attach-side model and the connection wrapper.
-- **`verb_protocol.go`, `verb_handlers.go`, `verb_subscribe.go`** - the JSON verb layer that `tuios run-command` and external tooling speak.
-- **`resurrection.go`** - periodic and shutdown persistence of session structure to disk.
+- `daemon.go`, `daemon_handlers.go`: the accept loop and per-message handling. `manager.go` owns the session table.
+- `protocol.go`, `codec.go`: length-prefixed frames with gob payloads, the binary protocol the client speaks.
+- `verb_protocol.go`, `verb_handlers.go`, `verb_subscribe.go` and the other `verb_*.go` files: the [JSON control protocol](/docs/control-protocol). The daemon tells a JSON client from a binary one by its first byte.
+- `daemon_stream.go`: the output stream clients subscribe to, so a client draws without owning a PTY.
+- `state_merge.go`: reconciles client and daemon state, which is how several clients on one session converge.
+- `tuiclient.go`, `client.go`: the attach side.
+- `resurrection.go`: saving session structure to disk and restoring it.
 
-Because the daemon owns the PTYs and the emulator, detaching a client does not stop anything. See [Sessions & Daemon Mode](/docs/sessions) for the user-facing behaviour and for the limits of resurrection, and the [Control Protocol](/docs/control-protocol) for the verb schema.
+Because the daemon owns the PTYs and the emulators, detaching a client stops nothing. [Sessions](/docs/sessions) covers the user-facing behaviour.
 
 <Callout type="info">
-There is also an in-process path. `tuios` with no subcommand, and the SSH server, build an `app.OS` directly without a daemon. The same model code runs in both cases; only where the PTYs live differs.
+There is also an in-process path. `tuios --standalone`, `tuios ssh --ephemeral` and `tuios-web --ephemeral` build an `app.OS` that owns its PTYs directly, with no daemon. The same model code runs either way; only where the PTYs live changes.
 </Callout>
 
-## Core Components
+## Core components
 
-### Window Manager (`internal/app/os.go`)
+### Window manager (`internal/app`)
 
-The central `OS` struct manages:
+The `OS` struct in `os.go` is the model. It holds the windows, the nine workspaces, the focus, the input mode, the tiling state, overlays and mouse interaction state. Layout code is in `os_layout.go`, `tiling.go`, `tiling_bsp.go`, `tiling_resize.go` and `tiling_swap.go`.
 
-- Window lifecycle (create, focus, close)
-- 9 workspaces with independent layouts
-- Tiling mode, backed by the BSP tree in `internal/layout`
-- Mouse interaction state (dragging, resizing)
-- Keybind registry for customization
+### Terminal emulation (`internal/vt`)
 
-Layout work is split across `os_layout.go`, `tiling.go`, `tiling_bsp.go`, `tiling_resize.go`, and `tiling_swap.go`.
+The emulator sits behind the `vt.Terminal` interface, and exactly one implementation is compiled into a binary:
 
-### Terminal Emulation (`internal/vt`)
+- **Pure Go** (default). No cgo, so `go install` and cross-compilation just work.
+- **libghostty-vt** (`-tags ghostty`). Ghostty's VT library through its Go bindings. It needs cgo, and `scripts/install.sh` builds the library with `zig`.
 
-Terminal emulation lives behind a `Terminal` interface, so the implementation can be swapped at build time: the pure-Go `Emulator` is the default, and a libghostty-vt backed backend builds with `-tags ghostty`. A differential suite feeds identical bytes to both and compares screens, cursor, scrollback, modes, and rendered output, per chunk, and runs in CI on every emulator change. The pure-Go emulator:
+A differential test suite feeds the same bytes to both and compares screens, cursor, scrollback, modes and wire snapshots. `tuios --version` names the backend a binary was built with.
 
-- Full CSI, OSC, ESC, DCS sequence support
-- Scrollback buffer, 10,000 lines by default (`appearance.scrollback_lines`)
-- Bidirectional Unicode support
-- SGR (color/style) attribute handling
-- Alternative screen buffer (for vim, less, etc.)
-- Cursor shape rendering (block, bar, underline) with blink support
-- DECSCUSR sequence support for vi-mode cursor changes
-- Kitty keyboard protocol (CSI u) with push/pop/query/set. Fish 4.x compatible; Shift+printable bypasses the protocol and sends text directly.
-- Mode 2026 (synchronized output) and mode 2027 (unicode core)
-- OSC 4 (palette colors), OSC 10-12 (default colors), OSC 52 (clipboard with bubbletea bridge)
-- Mode 2031 (light/dark color scheme detection)
-- OSC 133 (shell integration / semantic zones), consumed by `internal/scrollback`
-- Cell size reporting (CSI 14t, 16t, 18t)
-- Thread-safe HasMouseMode/HasAllMotionMode/KittyKeyboardFlags via atomics
+The emulator handles CSI, OSC, ESC and DCS sequences, the alternate screen, scrollback (10,000 lines by default, `appearance.scrollback_lines`), cursor shapes, the kitty keyboard protocol, synchronized output (mode 2026), unicode width (mode 2027), colour scheme reports (mode 2031), OSC 4, 10 to 12 and 52, OSC 133 shell integration zones, and cell size reports (CSI 14t, 16t, 18t).
 
-### Graphics Protocols (Experimental)
+### Rendering (`internal/app/os_render.go`, `render_*.go`)
 
-<Callout title="Experimental Feature" type="warn">
-Graphics support is experimental. Bugs are expected and functionality may change in future releases.
-</Callout>
+The view is a stack of layers: window contents and borders, then overlays (help, palette, settings, pickers, the scrollback browser), then the dock and the sidebar. Overlays are z-ordered and can be dragged; hit testing is in `overlay_hit.go` and `overlay_mouse.go`.
 
-TUIOS supports terminal graphics protocols for inline image display:
+### Input (`internal/input`)
 
-**Kitty Graphics Protocol** (`internal/app/kitty_*.go`, `internal/vt/kitty_*.go`):
+Keys are routed by mode:
 
-- Passthrough forwarding from guest terminals to host
-- Image transmission (PNG, RGB, RGBA formats) with raw passthrough (no re-encoding)
-- Flicker-free video via image ID reuse (frames replace in-place). `mpv --vo=kitty` works (both shm and base64), youterm works.
-- Placement tracking with viewport clipping
-- Multi-window support with ID mapping
-- Shared memory support (`t=s` for mpv `--vo-kitty-use-shm`)
-- File path forwarding (`t=f`) to avoid read+encode overhead
-- Mode 2026 synchronized output wrapping
-- Animation protocol (a=f, a=a, a=c) supported and forwarded, with animated guests streamed as damage-rectangle frame edits rather than whole bitmaps
+- **Window management mode**: arrange windows
+- **Terminal mode**: keys go to the focused window's PTY
+- **Copy mode**: vim-style navigation over scrollback (`copymode_*.go`)
+- **Prefix mode**: the tmux-style leader key and its sub-menus (`prefix_routing.go`, `prefix_actions.go`)
 
-**Sixel Graphics** (`internal/app/sixel_*.go`, `internal/vt/sixel_*.go`):
-
-- Sixel image passthrough with raw data forwarding
-- DCS sequence parsing and dimension calculation
-- Window boundary awareness (hides images that don't fit)
-- Experimental: pixel-level clipping not yet implemented (requires stream-level sixel cropping)
-
-**Supported terminals**: Kitty, WezTerm, Ghostty, iTerm2, Foot, Contour, and other Kitty-protocol-compatible terminals.
-
-**Environment variables:**
-
-- `TUIOS_KITTY_GRAPHICS=1/0` - Force enable/disable Kitty graphics
-- `TUIOS_SIXEL_GRAPHICS=1/0` - Force enable/disable Sixel graphics
-
-### Rendering Engine (`internal/app/os_render.go` and `render_*.go`)
-
-Layer-based composition:
-
-1. **Window layers** - Terminal content with borders (`render_terminal.go`, `render_scrollbar.go`)
-2. **Overlay layers** - Help, logs, settings, theme picker, command palette, scrollback browser, cache stats (`render_overlays.go` and siblings)
-3. **Dockbar** - Window list and workspace indicator
-4. **Mouse cursor** - Selection and interaction feedback
-
-Overlays are z-ordered and mouse-draggable; hit testing lives in `overlay_hit.go` and `overlay_mouse.go`.
-
-### Input System (`internal/input`)
-
-Modal routing:
-
-- **Window Management Mode** - Navigate, create, tile
-- **Terminal Mode** - Input forwarded to PTY
-- **Copy Mode** - Vim-style scrollback navigation (`copymode_*.go`)
-- **Prefix Mode** - Tmux-style leader key commands (`prefix_routing.go`, `prefix_actions.go`)
-
-Over 100 configurable keybindings across modes.
+Every binding goes through the keybinding registry in `internal/config`, so every key can be rebound.
 
 ### Configuration (`internal/config`)
 
-TOML-based configuration:
+The TOML config file, its defaults, an option registry that the settings page, `list-options` and `set-option` all read, platform defaults (the macOS Option key), validation, migration of old keys, and live reload when the file changes.
 
-- Keybinding customization per section
-- Appearance options (borders, dockbar, scrollback, max FPS)
-- Platform-specific defaults (macOS Option key)
-- Validation and auto-migration
-- Live reload via `watcher.go` (fsnotify)
+## Graphics
+
+<Callout title="Experimental" type="warn">
+Graphics support is experimental. Expect bugs, and expect behaviour to change.
+</Callout>
+
+TUIOS passes images from programs in its windows through to the host terminal. It supports the **Kitty graphics protocol** and **sixel**.
+
+Kitty graphics (`internal/app/kitty_*.go`):
+
+- Image data is forwarded without re-encoding.
+- Image IDs are reused across frames, so video does not flicker. `mpv --vo=kitty` and [youterm](https://github.com/Gaurav-Gosain/youterm) work.
+- Shared memory (`t=s`) and file path (`t=f`) transmission are forwarded when the host terminal supports them.
+- Placements follow the window as it moves and scrolls, and are cropped to the part another window does not cover.
+- Unicode placeholders are drawn when the host terminal is known to support them.
+- Animation frames (`a=f`, `a=a`, `a=c`) are forwarded, and animated programs are sent as changed rectangles rather than whole images.
+- Output is wrapped in synchronized output (mode 2026).
+
+Sixel (`internal/app/sixel_passthrough.go`) is passed through as is. An image that does not fit inside its window is hidden, because pixel-level clipping is not implemented.
+
+TUIOS asks the host terminal what it supports at startup instead of guessing, and waits up to 300 ms for the answer. It then gives programs the real answer: a program that asks whether it may send a file path is told no when the host cannot read files, and falls back to sending bytes. If no answer arrives in time (for example when TUIOS runs inside another multiplexer that swallows the query), graphics forwarding is turned off and programs are told so.
+
+Host terminals known to work include Kitty, Ghostty, WezTerm, Foot, Contour and iTerm2 (partly). Support is detected, not looked up, so an unlisted terminal works if it answers the probe. The browser client supports a smaller set; see [Web Terminal](/docs/web#graphics-in-the-browser).
+
+These environment variables override detection. Set each to `1` or `0`:
+
+| Variable | Overrides |
+|----------|-----------|
+| `TUIOS_KITTY_GRAPHICS` | Kitty graphics support |
+| `TUIOS_SIXEL_GRAPHICS` | Sixel support |
+| `TUIOS_KITTY_PLACEHOLDERS` | Unicode placeholder support (also `appearance.kitty_placeholders`) |
+| `TUIOS_KITTY_ANIMATION` | Whether the host carries animation frame edits |
 
 ## Performance
 
-<Callout type="warn">
-The repo has benchmarks (`internal/app/compositor_bench_test.go`, `damage_bench_test.go`, `perf_bench_test.go`) but no published results, and none of the numbers below are measured. Treat them as design intent, not as figures you can cite.
-</Callout>
+Rendering is event-driven. PTY output wakes the model through a `PTYDataMsg`; there is no fixed-rate loop for terminal content. A separate maintenance tick drives animations, the which-key panel, dock stats and tape playback, and it stops doing work when nothing needs it. An idle session costs close to no CPU.
 
-### Style Caching
+- `appearance.max_fps` caps the frame rate. It defaults to 60 and is clamped to 10 to 120, the ceiling Bubble Tea itself enforces. The settings page offers 30, 60, 90, 120 and `unlimited`, which means 120.
+- Each window paces its redraws by what a frame actually costs, at most one every 8 ms. A window more than 4 MiB behind on output drops to a catch-up rate, so a flooding window cannot starve input.
+- Windows that are off screen or minimized are not rendered.
+- `internal/app/stylecache.go` caches cell styles and their ANSI escapes, keyed by a hash of colours and attributes. It holds 512 entries and drops about half when full. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>c</kbd> shows its hit rate.
+- `internal/pool` reuses byte buffers and highlight grids on the render path.
 
-`internal/app/stylecache.go` caches lipgloss styles keyed by a hash of the cell's foreground, background, attributes, and cursor state, and stores the derived ANSI prefix and suffix alongside the style so the escape is not rebuilt on every flush.
+The benchmarks are in `internal/app/*_bench_test.go`. The repository's `docs/perf.md` records measured baselines.
 
-It is a single-tier map, not an LRU. When the cache reaches its size limit it drops roughly half the entries at once and relies on Go's randomized map iteration order to approximate recency. Default size is 512 entries.
+## SSH server
 
-Hit, miss, and eviction counters are exported and visible with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>c</kbd>.
+`tuios ssh` (`internal/server/ssh.go`) serves TUIOS over SSH with Wish.
 
-### Viewport Culling
-
-Only visible windows are rendered. Off-screen and minimized windows are skipped.
-
-### Refresh Rates
-
-Rendering is event-driven: PTY output wakes the model through a `PTYDataMsg`, so there is no fixed render loop for terminal content. A separate maintenance tick drives animations, the prefix which-key overlay, dock stats, and tape playback.
-
-- `NormalFPS` defaults to 60 and is configurable through `appearance.max_fps`. Values are clamped to 10 at the low end and `MaxFPSCap` (240) at the high end. The settings UI offers 30, 60, 90, 120, 144, and `unlimited`, which pins it to the cap.
-- The tick drops to `IdleFPS` (10) when there are no animations, no active prefix, no running tape, and nothing needing dock updates.
-- Each pane's render coalescer paces its render signals by what a frame actually costs, with a floor of 8ms, and a pane whose output backlog exceeds 4MiB drops to a catch-up rate until it recovers, so a flooding pane cannot starve input.
-- The pane renderer reports the exact rectangle it produced, and when it matches the pane, the box is assembled without re-measuring or re-wrapping content the emulator already laid out.
-
-<Callout type="warn">
-`IdleThresholdFrames` and `BackgroundWindowUpdateCycle` are declared in `internal/config/constants.go` but are not referenced anywhere else in the tree. Documentation describing a per-frame idle counter or a background-window skip cycle is describing constants that nothing reads.
-</Callout>
-
-### Memory Pooling
-
-`internal/pool` provides reusable string builders and buffers for the render path.
-
-## SSH Server Architecture
-
-Built on Wish v2, in `internal/server/ssh.go`:
-
-**Per-connection isolation:**
-
-- Each SSH session gets its own OS instance
-- Independent workspace and window state
-- No shared memory between sessions
-
-**Security:**
-
-- Auto-generated host keys
-- Public key authentication support
-- No password auth by default
-
-**Usage:**
+- **Sessions.** By default each connection attaches to a daemon session, so sessions persist and several people can share one. With `--ephemeral`, each connection gets its own standalone session.
+- **Authentication.** Public keys from `~/.config/tuios/authorized_keys`, or `~/.ssh/authorized_keys` if that is absent. With no keys configured, the server accepts every connection on `localhost` and refuses to start on any other address unless you pass `--no-auth`.
+- **Host key.** Generated on first run, or given with `--key-path`.
 
 ```bash
 tuios ssh --host 0.0.0.0 --port 2222
-ssh -p 2222 user@hostname
+ssh -p 2222 work@server   # the user name picks the session
 ```
 
-## Tape Scripting System
+## Tape scripting
 
-Domain-specific language for automation, in `internal/tape`:
+`internal/tape` turns a tape file into actions: `lexer.go` tokenizes it (keywords are case-insensitive), `parser.go` builds commands, `executor.go` dispatches them and `player.go` plays them with timing. `recorder.go` records live actions back into a tape. See [Tape Scripting](/docs/tape-scripting).
 
-**Pipeline:**
+## Themes
 
-1. **Lexer** (`lexer.go`) - Tokenization. Keywords are matched case-insensitively.
-2. **Parser** (`parser.go`) - AST generation
-3. **Executor** (`executor.go`) - Command dispatch
-4. **Player** (`player.go`) - Playback engine with timing
-5. **Recorder** (`recorder.go`) - Captures live actions back into a tape file
+342 themes are built in, from [bubbletint](https://github.com/lrstanley/bubbletint). `tuios import-theme` converts a kitty, ghostty, alacritty or wezterm colour scheme into a TUIOS theme, and the themes directory is re-read every time themes are listed, so an imported theme is usable without a restart.
 
-The lexer recognises more verbs than the executor acts on, and the parser cannot construct arguments for several commands that the executor would accept. See [Tape Scripting](/docs/tape-scripting) for the list of commands that parse but do nothing.
+A theme sets the 16 ANSI colours and the default foreground and cursor. The 256-colour indices above 15 and truecolor pass through unchanged, and the default background stays transparent so programs keep their own backgrounds.
 
-## Theme System
+## Development patterns
 
-**342 built-in themes** (count from `tuios list-themes`) sourced from [bubbletint](https://github.com/lrstanley/bubbletint), plus user themes loaded from the themes directory. `tuios import-theme` converts a kitty, ghostty, alacritty, or wezterm colour scheme into one; the daemon re-reads the directory on every `list-themes` call, so an imported theme is usable without a restart.
+### Model-View-Update
 
-- ANSI 16-color palette mapping
-- SGR sequence translation
-- Runtime theme switching, including an in-app searchable picker
-- Terminal color profile detection
+- **Model**: `app.OS` holds all state.
+- **View**: `os_render.go` and the `render_*.go` files produce the frame.
+- **Update**: `update.go` handles messages: `tea.KeyPressMsg`, the mouse messages (`tea.MouseClickMsg`, `tea.MouseMotionMsg` and others), `tea.WindowSizeMsg`, `PTYDataMsg`, and messages from the daemon such as clients joining or leaving.
 
-**Usage:**
-
-```bash
-tuios --theme dracula
-tuios --list-themes
-tuios --preview-theme nord
-```
-
-## Development Patterns
-
-### Bubble Tea MVU
-
-**Model** - `app.OS` struct holds all state
-
-**View** - `os_render.go` and the `render_*.go` files generate terminal output
-
-**Update** - `update.go` handles messages:
-
-- `tea.KeyMsg` - Keyboard input
-- `tea.MouseMsg` - Mouse events
-- `tea.WindowSizeMsg` - Terminal resize
-- `PTYDataMsg` - PTY produced output
-- Session messages (client joined/left, resize, forced refresh)
-
-### Message Flow
+### Message flow
 
 ```mermaid
 graph TD
-    A[User Input] --> B[Bubble Tea Event]
-    B --> C[input.HandleInput]
-    C --> D{Modal Router}
-    D -->|Window Mode| E[Window Management]
-    D -->|Terminal Mode| F[Input bytes]
-    D -->|Copy Mode| G[Selection / Navigation]
+    A[Key or mouse event] --> C[input.HandleInput]
+    C --> D{Mode}
+    D -->|Window mode| E[Window management action]
+    D -->|Copy mode| G[Selection and navigation]
+    D -->|Terminal mode| F[Input bytes]
+    F --> I{Daemon session?}
+    I -->|Yes| J[Sent to the daemon over the socket]
+    I -->|No| K[Written to the local PTY]
     E --> H[OS.Update]
     G --> H
-    F --> I{Daemon session?}
-    I -->|Yes| J[MsgInput over Unix socket]
-    I -->|No| K[Local PTY.Write]
-    J --> L[Daemon writes PTY]
-    K --> M[vt.Emulator]
-    L --> N[Daemon vt.Emulator]
+    J --> N[Daemon emulator]
+    K --> M[Local emulator]
     N -->|output stream| H
     M --> H
-    H --> O[Render View]
+    H --> O[View]
 ```
 
-**Flow Explanation:**
+### Window lifecycle
 
-1. **User Input** - Keyboard or mouse event occurs
-2. **Bubble Tea** - Event system captures input
-3. **`input.HandleInput()`** - Central router receives event
-4. **Modal Router** - Determines mode and routes to handler
-5. **PTY write** - Direct in-process, or sent to the daemon as `MsgInput` when attached to a session
-6. **`OS.Update()`** - Emulator output and state changes reach the model
-7. **Render** - Screen updates based on new state
-
-### Window Lifecycle
-
-```mermaid
-flowchart LR
-    A[NewWindow] --> B[CreatePTY]
-    B --> C[StartShell]
-    C --> D[Monitor Output]
-    D --> E[Update Buffer]
-    E --> F[Render View]
-    F --> G{Exit?}
-    G -->|Yes| H[Cleanup]
-    G -->|No| D
-```
-
-**Lifecycle Stages:**
-
-- **Creation** - PTY spawned, shell launched with the environment from `internal/guestenv`
-- **Monitor** - Background goroutine reads output
-- **Update** - Terminal emulator processes ANSI sequences
-- **Render** - Screen displays content
-- **Cleanup** - On exit, PTY closed, resources freed, hooks fired
+1. **Create**: `internal/ptyspawn` starts the shell on a new PTY, with the environment from `internal/guestenv`.
+2. **Read**: a goroutine reads the PTY and feeds the emulator.
+3. **Render**: new output marks the window dirty and a frame is drawn.
+4. **Close**: when the process exits or the window is closed, the PTY is closed, resources are freed and hooks fire.
 
 ## Testing
 
 ```bash
-# Run all tests
-go test ./...
-
-# Run with race detection
-go test -race ./...
-
-# Specific package
-go test ./internal/config/...
-go test ./internal/tape/...
-
-# The end-to-end TUI harness is a separate module
-cd e2e/tui && go test ./...
+go test ./...                 # everything
+go test -race ./...           # with the race detector
+go test ./internal/vt/        # the emulator's conformance corpus and fuzz seeds
+cd e2e/tui && go test ./...   # the end-to-end TUI suite, a separate module
 ```
 
-**Test coverage:**
+The tests cover config validation and migration, tape parsing and execution, emulator conformance, the daemon protocol, state merging, resurrection and the verbs, and full TUI runs in a real PTY using the fake shell in `internal/testutil`. The repository's `AGENTS.md` describes the differential tests against tmux and the ghostty backend.
 
-- Configuration validation and migration
-- Tape lexing, parsing, execution, and fuzzing
-- VT emulator sequences
-- Style cache behavior
-- Daemon protocol, state merge, resurrection, and verb handlers
-- End-to-end TUI runs against a real PTY, using the fake shell in `internal/testutil`
-
-## Building from Source
+## Building from source
 
 ```bash
-git clone https://github.com/gaurav-gosain/tuios.git
+git clone https://github.com/Gaurav-Gosain/tuios.git
 cd tuios
 go build -o tuios ./cmd/tuios
 ./tuios
 ```
 
-**Requirements:**
+You need Go 1.26 or newer. The default build needs no C compiler. A [Nerd Font](https://www.nerdfonts.com) is needed for icons, or run with `--ascii-only`.
 
-- Go 1.26.0 (per `go.mod`)
-- Nerd Font (for icons; `--ascii-only` avoids it)
+## Platform-specific code
 
-No C compiler is needed. There is no cgo in the tree, and the PTY layer is pure Go.
-
-## Cross-Platform Support
-
-**PTY implementation:**
-
-- Unix: `internal/terminal/pty_unix.go`
-- Windows: `internal/terminal/pty_windows.go` (ConPTY)
-- The daemon has its own PTY split at `internal/session/pty_unix.go` and `pty_windows.go`
-
-**Window sizing:**
-
-- Unix: `internal/terminal/window_unix.go`
-- Windows: `internal/terminal/window_windows.go`
-
-**Terminal capability detection:**
-
-- `internal/app/capabilities_linux.go`, `capabilities_darwin.go`, `capabilities_bsd.go`, `capabilities_windows.go`
-
-**Daemon socket:**
-
-- Unix: `internal/session/daemon_unix.go`, `manager_unix.go`
-- Windows: `internal/session/daemon_windows.go`, `manager_windows.go`
+| Concern | Files |
+|---------|-------|
+| Starting processes on a PTY | `internal/ptyspawn/spawn_unix.go`, `spawn_windows.go` |
+| Reading a process's working directory | `internal/ptyspawn/cwd_linux.go`, `cwd_darwin.go`, `cwd_other.go` |
+| Window sizing | `internal/terminal/window_unix.go`, `window_windows.go` |
+| Host terminal probing | `internal/app/capabilities_linux.go`, `capabilities_darwin.go`, `capabilities_bsd.go`, `capabilities_windows.go` |
+| Daemon socket | `internal/session/daemon_unix.go`, `manager_unix.go`, `daemon_windows.go`, `manager_windows.go` |
 
 ## Contributing
 
 See [Contributing](/docs/contributing).
 
-## Related Documentation
+## Related
 
 <Cards>
-  <Card
-    title="Sessions & Daemon Mode"
-    href="/docs/sessions"
-    description="What the daemon guarantees, and what it does not"
-  />
-  <Card
-    title="Control Protocol"
-    href="/docs/control-protocol"
-    description="The JSON verb protocol the daemon speaks"
-  />
-  <Card
-    title="Configuration"
-    href="/docs/configuration"
-    description="Customize TUIOS settings"
-  />
-  <Card
-    title="Tape Scripting"
-    href="/docs/tape-scripting"
-    description="Automate with tape files"
-  />
+  <Card title="Sessions & Daemon Mode" href="/docs/sessions" description="What the daemon guarantees, and what it does not" />
+  <Card title="Control Protocol" href="/docs/control-protocol" description="The JSON verbs the daemon speaks" />
+  <Card title="Library" href="/docs/library" description="Embed TUIOS in your own program" />
+  <Card title="Tape Scripting" href="/docs/tape-scripting" description="Automate with tape files" />
 </Cards>
