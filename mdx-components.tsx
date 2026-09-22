@@ -20,6 +20,7 @@ import { DaemonTilePlacement } from '@/components/mdx/daemon-tile-placement';
 import { KeycastDemo } from '@/components/mdx/keycast-demo';
 import { SharedBordersToggle } from '@/components/mdx/shared-borders-toggle';
 import { InvariantBlind } from '@/components/mdx/invariant-blind';
+import { LinkLanes } from '@/components/mdx/link-lanes';
 import { CellShape } from '@/components/mdx/cell-shape';
 import { SpentFrames } from '@/components/mdx/spent-frames';
 import { ScrollColumnsRoundTrip } from '@/components/mdx/scroll-columns-round-trip';
@@ -60,6 +61,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     KeycastDemo,
     SharedBordersToggle,
     InvariantBlind,
+    LinkLanes,
     CellShape,
     SpentFrames,
     ScrollColumnsRoundTrip,
