@@ -127,7 +127,7 @@ export default function HomePage() {
           <Feature
             icon={<Network />}
             title="Other machines"
-            href="/docs/sessions"
+            href="/docs/remote-hosts"
           >
             Name a host once with <code>tuios hosts add</code>. Then attach to
             its sessions in this client, or run a single pane on it.
@@ -135,7 +135,7 @@ export default function HomePage() {
           <Feature
             icon={<Bot />}
             title="Built for coding agents"
-            href="/docs/cli-reference"
+            href="/docs/agents"
           >
             Panes running an agent show whether it is working, idle or waiting
             for you. Agents can message each other and fan out across git
