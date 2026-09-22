@@ -39,9 +39,9 @@ guarded on it:
 if w.Workspace == m.CurrentWorkspace && !w.Minimized && !w.Minimizing {
 ```
 
-The only line in the tree that set it to `true` was in a test. Production set
-it to `false`, once, in `MinimizeWindow`, right under a comment that said
-"Immediately minimize without animation".
+The only line in the tree that set it to `true` was in a test. Production code
+only ever set it to `false`. One of those writes was in `MinimizeWindow`, right
+under a comment that said "Immediately minimize without animation".
 
 The history explains it. Minimizing used to animate: set `Minimizing`, start
 an animation, clear the flag when it ends. On 24 October 2025, in a commit
@@ -59,8 +59,9 @@ not. The sweep removed the one caller-less function it could see and kept
 test set `Minimizing = true` so it had something to animate. A test was
 keeping a dead feature alive.
 
-Nothing could fail here. A guard that checks a flag that is always false
-is always right. The code it protects never ran, so it could never be wrong.
+Nothing could fail here. A term that checks a flag that is always false
+never changes the answer, so no test can see it being wrong. The branch it
+exists for, the one that runs while a window is minimizing, never ran.
 The audit removed the flag, the animation and every guard term, 202 lines
 out and 48 in.
 
@@ -190,12 +191,12 @@ tests.
 The biggest removals are in `internal/app` and `internal/session`: dead
 methods, fields that were written and never read, 69 unused config constants,
 the minimize code and the codec. The packages that only grew are new ones
-that replaced copies: `cliflags` for the flags, `served` for the one model
-builder the SSH and web servers now share (there were four), `guestenv` for
-the `TERM` detection, which the CLI client had its own, slightly different,
-copy of.
+that replaced copies: `cliflags` for the flags, and `served` for the one model
+builder the SSH and web servers now share (there were four). The existing
+`guestenv` package took over the `TERM` detection, which the CLI client had
+its own, slightly different, copy of.
 
-The test view is mostly the other direction. The exceptions are
+The test view is mostly the other direction. The biggest exceptions are
 `internal/pool` and `internal/ui`, where the tests went away with the code
 they tested: a style pool that saved nothing, because lipgloss v2 styles are
 values and the pooled pointer never carried any state, and the minimize
