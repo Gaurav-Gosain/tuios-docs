@@ -69,6 +69,112 @@ export function keyBytes(item: KeyItem): string {
   return out;
 }
 
+// The character each physical punctuation key types on a US layout.
+const US_PUNCTUATION: Record<string, string> = {
+  Minus: "-",
+  Equal: "=",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Semicolon: ";",
+  Quote: "'",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Backquote: "`",
+  Space: " ",
+};
+
+/**
+ * The character a physical key types with no modifier held, read as a US
+ * layout. That is the key the Kitty keyboard protocol reports as the base
+ * layout key, and the one tuios binds.
+ */
+export function baseKey(code: string): string | undefined {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  return US_PUNCTUATION[code];
+}
+
+/** The parts of a KeyboardEvent the key helpers read. */
+export type KeyLike = Pick<
+  KeyboardEvent,
+  "key" | "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
+>;
+
+/**
+ * The bytes for an Option chord on a Mac, sent as Alt: Option+j is ESC j, the
+ * same bytes alt+j sends on Linux. Null when the event is not such a chord.
+ *
+ * macOS types a character with Option held: Option+j is "∆", and Option+n is
+ * a dead key that waits to put a tilde on the next letter. xterm's
+ * macOptionIsMeta covers only part of that. The Kitty keyboard encoder
+ * reports the composed glyph as the key, and a dead key opens a composition
+ * that swallows the key after it. Reading the physical key instead gives the
+ * chord the reader pressed whatever the keyboard mode.
+ *
+ * Shift is kept for letters (Option+Shift+j is ESC J). A shifted digit or
+ * symbol is left to the terminal, since its shifted character depends on the
+ * layout.
+ */
+export function optionAsAlt(event: KeyLike): string | null {
+  if (!event.altKey || event.ctrlKey || event.metaKey) return null;
+  const base = baseKey(event.code);
+  if (!base) return null;
+  if (!event.shiftKey) return `\x1b${base}`;
+  const upper = base.toUpperCase();
+  return upper === base.toLowerCase() ? null : `\x1b${upper}`;
+}
+
+// What Option and a letter or digit types on a US Mac layout, for a chord
+// that reaches tuios as the composed glyph. The dead keys (e, i, n, u) spill
+// their accent.
+const MAC_OPTION_GLYPHS: Record<string, string> = {
+  å: "a",
+  "∫": "b",
+  ç: "c",
+  "∂": "d",
+  "´": "e",
+  ƒ: "f",
+  "©": "g",
+  "˙": "h",
+  ˆ: "i",
+  "∆": "j",
+  "˚": "k",
+  "¬": "l",
+  µ: "m",
+  "˜": "n",
+  ø: "o",
+  π: "p",
+  œ: "q",
+  "®": "r",
+  ß: "s",
+  "†": "t",
+  "¨": "u",
+  "√": "v",
+  "∑": "w",
+  "≈": "x",
+  "¥": "y",
+  Ω: "z",
+  "¡": "1",
+  "™": "2",
+  "£": "3",
+  "¢": "4",
+  "∞": "5",
+  "§": "6",
+  "¶": "7",
+  "•": "8",
+  ª: "9",
+  º: "0",
+};
+
+/** "alt+∆" and a bare "∆" are the Mac spellings of alt+j. */
+function fromMacOption(key: string): string {
+  const glyph = key.startsWith("alt+") ? key.slice(4) : key;
+  const base = MAC_OPTION_GLYPHS[glyph];
+  return base ? `alt+${base}` : key;
+}
+
 /** The bytes for a whole step, in order. */
 export function sequenceBytes(items: KeyItem[]): string[] {
   return items.map(keyBytes);
@@ -96,24 +202,30 @@ export function pressedNames(event: KeyboardEvent): string[] {
     ArrowRight: "right",
   };
   if (map[key]) names.push(map[key]);
-  else if (key.length === 1) {
-    names.push(key.toLowerCase());
-    if (key !== key.toLowerCase()) names.push(key);
+  else {
+    if (key.length === 1) {
+      names.push(key.toLowerCase());
+      if (key !== key.toLowerCase()) names.push(key);
+    }
     // With ctrl held, key is still the letter, which is what we want. With
-    // Option on a Mac it is a composed glyph, so the code decides.
-    if (event.code.startsWith("Key"))
-      names.push(event.code.slice(3).toLowerCase());
-    if (event.code.startsWith("Digit")) names.push(event.code.slice(5));
+    // Option on a Mac it is a composed glyph ("∆"), or "Dead" for the keys
+    // that put an accent on the next letter, so the physical key decides.
+    const code = event.code ?? "";
+    if (/^(Key|Digit)/.test(code)) names.push(baseKey(code) ?? "");
+    if (code === "Space") names.push("space");
   }
-  return names;
+  return names.filter(Boolean);
 }
 
 /** Whether the key tuios reported is the chord a step asks for. */
 export function sameChord(reported: string, wanted: string): boolean {
   if (reported === wanted) return true;
   // tuios reports "\\" for the backslash key and "|" for shift+backslash, and
-  // binds both to the same split.
-  const norm = (k: string) => k.replace(/^shift\+(.)$/, "$1").toLowerCase();
+  // binds both to the same split. A Mac Option glyph is the alt chord.
+  const norm = (k: string) =>
+    fromMacOption(k)
+      .replace(/^shift\+(.)$/, "$1")
+      .toLowerCase();
   return norm(reported) === norm(wanted);
 }
 

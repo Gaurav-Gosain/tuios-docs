@@ -17,6 +17,7 @@
  * Each lesson runs its own instance of the compiled module, so starting a
  * track always starts from an empty desktop. Compiling happens once.
  */
+import { optionAsAlt } from "./keys";
 import type { TuiosApi, TuiosEvent } from "./types";
 
 export type EngineManifest = {
@@ -225,6 +226,19 @@ function addStylesheet(href: string) {
   });
 }
 
+const IS_MAC =
+  typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad/.test(navigator.platform);
+
+/**
+ * The bytes for an Option chord on a Mac (Option+j is ESC j), or null. Only on
+ * a Mac: elsewhere Alt already sends the letter, and AltGr types characters
+ * a reader means to type.
+ */
+export function macOptionBytes(e: KeyboardEvent, mac = IS_MAC) {
+  return mac ? optionAsAlt(e) : null;
+}
+
 /** F5, ctrl+r and cmd+r always reload the page, whatever tuios is doing. */
 export function isReloadKey(e: KeyboardEvent) {
   if (e.key === "F5") return true;
@@ -270,6 +284,8 @@ async function boot(
   if (!WebTermClass || !GoClass) throw new Error("engine scripts missing");
 
   const fonts = manifest.fonts ?? DEFAULT_FONTS;
+  // Keys the page sends itself, in place of the terminal. Set once tuios runs.
+  let sendKeys: (bytes: string) => void = () => {};
   const term = new WebTermClass({
     fontFamily: "JetBrainsMono Nerd Font Mono",
     fontSize,
@@ -290,9 +306,23 @@ async function boot(
     },
     theme: { background: "#11111b" },
     mouse: { suppressContextMenu: true },
-    // Returning false leaves the key to the browser.
-    keyboard: { onKeyEvent: (e: KeyboardEvent) => !isReloadKey(e) },
-    // Option is Alt on a Mac, so alt+digit reaches tuios.
+    keyboard: {
+      // Returning false keeps the key from the terminal: a reload key goes
+      // to the browser, and an Option chord is sent from here.
+      onKeyEvent: (e: KeyboardEvent) => {
+        if (isReloadKey(e)) return false;
+        const alt = macOptionBytes(e);
+        if (alt === null) return true;
+        if (e.type === "keydown") {
+          // The default would type the composed glyph or start a dead key.
+          e.preventDefault();
+          sendKeys(alt);
+        }
+        return false;
+      },
+    },
+    // Option is Alt on a Mac. macOptionBytes does the work for letters and
+    // digits; this covers what is left, such as Option and an arrow.
     xterm: { macOptionIsMeta: true },
   });
   await term.open(host);
@@ -352,6 +382,9 @@ async function boot(
     },
     close() {},
   });
+  sendKeys = (bytes) => {
+    if (!disposed && !hasExited) api.input(bytes);
+  };
   term.on("resize", ({ cols, rows }) => {
     if (!disposed && !hasExited) api.resize(cols, rows);
   });
