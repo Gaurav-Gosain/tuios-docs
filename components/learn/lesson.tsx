@@ -28,6 +28,9 @@ import {
 import { chordParts, keyBytes } from "@/lib/learn/keys";
 import { markFinished, markStep } from "@/lib/learn/progress";
 import { runSetup, sleep, type TuiosInstance } from "@/lib/learn/runtime";
+import { playSound } from "@/lib/learn/sound";
+import { nudgeFor, TillyScript } from "@/lib/learn/tilly";
+import { hush, say } from "@/lib/learn/tilly-store";
 import type { Step, Track, TuiosEvent, TuiosState } from "@/lib/learn/types";
 import { ExplainerArt } from "./explainer-art";
 import { FinishPanel } from "./finish-panel";
@@ -35,6 +38,7 @@ import { useModalOverlay, useReducedMotion, useTicker } from "./hooks";
 import { KeySequence, useHeldKeys } from "./keycaps";
 import { LiveTerminal } from "./live-terminal";
 import { ModeBadge } from "./mode-badge";
+import { TillyControls, TillyGuide } from "./tilly";
 
 const PRAISE = ["Nice!", "Smooth.", "You got it.", "Clean.", "Yes!", "Easy."];
 
@@ -90,6 +94,9 @@ export function Lesson({
   const rootRef = useRef<HTMLDivElement>(null);
   const reducedRef = useRef(reduced);
   reducedRef.current = reduced;
+  const [script] = useState(() => new TillyScript());
+  // The nudges Tilly already gave, as "step:kind", so each comes once.
+  const nudged = useRef(new Set<string>());
 
   useTicker(phase === "running", 1000);
 
@@ -97,6 +104,7 @@ export function Lesson({
     alive.current = true;
     return () => {
       alive.current = false;
+      hush();
     };
   }, []);
 
@@ -141,7 +149,7 @@ export function Lesson({
   );
 
   const stepDone = useCallback(
-    (index: number) => {
+    (index: number, event: TuiosEvent | null = null, lastAction = "") => {
       const t = tuiosRef.current;
       const step = track.steps[index];
       // The rest of this update's events, such as the focus change that
@@ -160,6 +168,19 @@ export function Lesson({
       if (finished) args.push("big");
       if (reducedRef.current) args.push("still");
       t?.api.command("celebrate", ...args);
+      const results = lessonRef.current.results;
+      if (finished) {
+        say(script.finish(track, results));
+      } else if (step) {
+        say(
+          script.react({
+            step,
+            event,
+            lastAction,
+            result: results[index] ?? "clean",
+          }),
+        );
+      }
       setPraise(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
       setTimeout(() => alive.current && setPraise(null), 900);
       rerender();
@@ -172,7 +193,7 @@ export function Lesson({
         setTimeout(() => startStep(index + 1), 700);
       }
     },
-    [track, onProgress, startStep],
+    [track, onProgress, startStep, script],
   );
 
   const onEvent = useCallback(
@@ -180,10 +201,17 @@ export function Lesson({
       if (event.state) setTstate(event.state);
       if (phaseRef.current !== "running") return;
       if (performance.now() < settleUntil.current) return;
+      if (event.type === "mode") {
+        playSound(
+          event.data?.to === "terminal" ? "tickTerminal" : "tickWindow",
+        );
+      }
       const before = lessonRef.current.index;
+      // feed records the action on this context; advancing starts a new one.
+      const ctx = lessonRef.current.ctx;
       const { state, completed } = feed(lessonRef.current, event, Date.now());
       lessonRef.current = state;
-      if (completed) stepDone(before);
+      if (completed) stepDone(before, event, ctx.lastAction);
       else if (event.type === "key") rerender();
     },
     [stepDone],
@@ -205,8 +233,9 @@ export function Lesson({
       phaseRef.current = "running";
       setPhase("running");
       startStep(0);
+      say(script.greet(track));
     },
-    [onEvent, startStep, track],
+    [onEvent, startStep, track, script],
   );
 
   /** Type the step's keys for the reader, lighting each cap as it goes. */
@@ -326,7 +355,31 @@ export function Lesson({
     !!step &&
     !altNoteClosed.has(step.id) &&
     altChordBlocked(lesson, now);
+  const noWindow = !!step && lacksWindow(step, tstate);
+  const nudge =
+    phase === "running" && step && !step.explainer
+      ? nudgeFor({
+          level,
+          wrong: lesson.wrong,
+          wrongMode: lesson.wrongMode,
+          needs: step.needs,
+          noWindow,
+          altBlocked,
+        })
+      : null;
   const allHeld = new Set([...held, ...sim]);
+  const stepIndex = lesson.index;
+
+  // Tilly speaks up once per kind of trouble in a step, reusing what the
+  // card already works out: the hint ladder, the wrong mode, no window and
+  // the alt chord note.
+  useEffect(() => {
+    if (!nudge) return;
+    const id = `${stepIndex}:${nudge}`;
+    if (nudged.current.has(id)) return;
+    nudged.current.add(id);
+    say(script.nudge(nudge));
+  }, [nudge, stepIndex, script]);
   const seconds = phase === "booting" ? 0 : elapsed(lesson, now);
   const doneCount = lesson.results.length;
 
@@ -380,25 +433,28 @@ export function Lesson({
           })}
         </ol>
         <div className="ml-auto flex items-center gap-1 md:ml-0">
-          <span className="mr-2 inline-flex items-center gap-1.5 font-mono text-fd-muted-foreground text-sm tabular-nums">
+          <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-fd-muted-foreground text-sm tabular-nums sm:mr-2">
             <Clock className="size-3.5" />
             {formatTime(seconds)}
           </span>
+          <TillyControls />
           <button
             type="button"
             onClick={onRestart}
+            aria-label="Restart"
             className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-fd-muted-foreground text-xs transition-colors hover:bg-fd-accent hover:text-fd-foreground"
           >
             <RotateCcw className="size-3.5" />
-            Restart
+            <span className="hidden sm:inline">Restart</span>
           </button>
           <button
             type="button"
             onClick={onExit}
+            aria-label="Leave"
             className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-fd-muted-foreground text-xs transition-colors hover:bg-fd-accent hover:text-fd-foreground"
           >
             <X className="size-3.5" />
-            Leave
+            <span className="hidden sm:inline">Leave</span>
           </button>
         </div>
       </header>
@@ -613,6 +669,11 @@ export function Lesson({
             </kbd>{" "}
             leaves the terminal
           </p>
+
+          <TillyGuide
+            script={script}
+            className="order-first lg:order-none lg:mt-auto"
+          />
         </aside>
       </div>
 
@@ -620,6 +681,7 @@ export function Lesson({
         <FinishPanel
           track={track}
           lesson={lesson}
+          script={script}
           onRestart={onRestart}
           onExit={onExit}
           onPickTrack={onPickTrack}

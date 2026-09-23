@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, Laptop, Link2, Share2 } from "lucide-react";
+import { Check, Link2, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { EngineManifest } from "@/lib/learn/runtime";
 import { tracks } from "@/lib/learn/tracks";
 import { absoluteUrl } from "@/lib/site";
 import { ShareCanvas } from "./finish-panel";
+import { TillyFigure } from "./tilly-figure";
 import { TrackPreview } from "./track-preview";
 
 const SAMPLE = {
@@ -121,13 +122,15 @@ export function MobileLearn({ onTryAnyway }: { onTryAnyway: () => void }) {
 
         <div className="rounded-2xl border border-fd-border bg-fd-card p-5">
           <div className="flex items-start gap-3">
-            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-fd-primary/10 text-fd-primary">
-              <Laptop className="size-5" />
-            </span>
+            <TillyFigure
+              className="size-14 shrink-0"
+              title="Tilly, the tuios mascot"
+            />
             <div>
               <p className="font-semibold">Open this on a computer</p>
               <p className="mt-1 text-fd-muted-foreground text-sm">
-                Then press real keys and watch real windows move.
+                Then press real keys and watch real windows move. Tilly, the
+                little CRT here, walks you through it.
               </p>
             </div>
           </div>

@@ -20,8 +20,10 @@ import {
   type ShareData,
   shareText,
 } from "@/lib/learn/share";
+import type { TillyScript } from "@/lib/learn/tilly";
 import { findTrack } from "@/lib/learn/tracks";
 import type { Track } from "@/lib/learn/types";
+import { TillyGuide } from "./tilly";
 
 /** Distinct chords the track taught, for the card. */
 export function learnedChords(track: Track, count = 6) {
@@ -82,9 +84,12 @@ export function FinishPanel({
   onExit,
   onPickTrack,
   onClose,
+  script,
 }: {
   track: Track;
   lesson: LessonState;
+  /** Lets the reader poke Tilly on the panel too. */
+  script?: TillyScript;
   onRestart: () => void;
   onExit: () => void;
   onPickTrack: (id: string) => void;
@@ -184,6 +189,7 @@ export function FinishPanel({
             <p className="font-mono text-[var(--brand-a)] text-sm">
               {track.title} · done
             </p>
+            <TillyGuide script={script} variant="panel" />
             <h2 className="font-bold text-4xl leading-tight">
               You did it in{" "}
               <span className="learn-gradient-text">{formatTime(seconds)}</span>
