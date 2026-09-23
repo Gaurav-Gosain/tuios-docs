@@ -1,6 +1,6 @@
 ---
 title: Everything since v0.7.0
-description: 'Unreleased work on main: sessions that come back after a daemon restart, sessions and panes on other machines, agents you can watch and message, one layout for every client, an interface that answers the mouse, and a large cut in memory use.'
+description: 'Unreleased work on main: session layouts that come back after a daemon restart, sessions and panes on other machines, agents you can watch and message, one layout for every client, an interface that answers the mouse, and a large cut in memory use.'
 date: '2026-09-22'
 author: Gaurav Gosain
 ---
@@ -15,7 +15,8 @@ run tuios, read [Before you upgrade](#before-you-upgrade) first.
 
 - [Before you upgrade](#before-you-upgrade): wire protocol 3, new defaults,
   SSH key checks, hooks in the daemon.
-- [Sessions come back](#sessions-come-back) after a daemon restart.
+- [Layouts come back](#layouts-come-back-after-a-restart) after a daemon
+  restart, with new shells in the old directories.
 - [Other machines](#other-machines): remote sessions, remote panes, global
   sessions.
 - [Agents](#agents): agent state in the rail, mail, worktree fan-out.
@@ -41,8 +42,9 @@ Most of these need nothing from you.
   refused with a message that says which side is newer. (A message type added
   after v0.7.0 shifted every type number without a version change, so mixed
   builds misread each other.) Run `tuios kill-server` and start tuios again.
-  Your sessions are saved and come back. The JSON verb protocol stays at
-  version 1.
+  This ends every program running in your panes. The layout, window names and
+  working directories come back, each pane with a new shell; scrollback does
+  not. The JSON verb protocol stays at version 1.
 - **New defaults on a fresh install.** A bare `tuios` starts or joins the
   daemon (`startup.daemon = true`), starts tiled (`startup.tiled = true`), and
   draws window controls as dots on the left of the title bar. An existing
@@ -94,10 +96,13 @@ Most of these need nothing from you.
 - **Removed.** `appearance.separator_style`, which parsed and did nothing. The
   `colorshift` screen saver effect: a config that names it reads as `random`.
 
-## Sessions come back
+## Layouts come back after a restart
 
-The daemon saves each session under `$XDG_STATE_HOME/tuios/sessions` and
-restores it when it starts. This is on by default.
+The daemon saves each session's structure under
+`$XDG_STATE_HOME/tuios/sessions` and restores it when it starts. This is on by
+default. A detach loses nothing, because the daemon keeps the shells running.
+A daemon restart or a reboot ends them: what comes back is the layout, not the
+programs.
 
 - Each window comes back with its workspace, its place in the layout, its name
   and its working directory. The session keeps its display name and accent.
