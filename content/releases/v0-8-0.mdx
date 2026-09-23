@@ -1,0 +1,759 @@
+---
+title: v0.8.0
+description: 'tuios now tracks the coding agents in your panes, keeps sessions in a daemon that restores them, reaches panes on other machines, and uses a tenth of the memory per pane, with a scrolling layout, a rail with files and git, a launcher, a keybind manager and a settings page for every option.'
+date: '2026-09-23'
+author: Gaurav Gosain
+---
+
+{/*
+  DRAFT for review. Before tagging:
+  - Set `date` above to the tag date.
+  - Recount the numbers in "Numbers" at the tag (they are for tuios main at 491efd4d).
+  - Decide on the "Coming in this release" section at the end of Agents.
+  - The "New defaults" section describes defaults that tuios main at 491efd4d
+    does not have yet (see the comment there).
+*/}
+
+v0.8.0 turns tuios into a place to run coding agents: it knows what the agent
+in each pane is doing and tells you when one needs you, and your sessions live
+in a daemon that brings them back after a restart, including panes on other
+machines. It is also much smaller and faster: scrollback costs 4.2MB per pane
+instead of 48MB, and startup to the first frame went from 566ms to 68ms.
+
+1,906 commits in the six months since v0.7.0. If you already run tuios, read
+[Before you upgrade](#before-you-upgrade) and [New defaults](#new-defaults)
+first: some keys and defaults changed.
+
+## In short
+
+- [Agents](#agents): a live state for every agent pane, alerts, mail between
+  agents and you, and one prompt fanned out across git worktrees.
+- [Sessions come back](#sessions-come-back) after a daemon restart or a
+  reboot, and every client of a session sees one layout.
+- [Other machines](#other-machines): attach a session on another machine, or
+  open a single pane there, over plain `ssh`.
+- [The interface](#the-interface): a scrolling layout, a zoom camera, a rail
+  with files and git, a launcher, a keybind manager, the mouse everywhere,
+  themes, a spotlight and a screen saver.
+- [Scripting and control](#scripting-and-control): 64 JSON verbs, 156 options
+  you can set live, an event stream and `wait-for`.
+- [The web client, SSH and project tapes](#the-web-client-ssh-and-project-tapes).
+- [The terminal emulator](#the-terminal-emulator): a second backend and a
+  conformance suite.
+- [Faster and smaller](#faster-and-smaller), with the measured numbers.
+
+## Agents
+
+### The rail shows what your agents are doing
+
+Every pane running one of 22 recognised agent CLIs (Claude Code, Codex, Gemini
+CLI, opencode, Copilot, Amp, Cline, Qwen, pi and more) gets a live state:
+working, needs input, finished, errored or idle. The rail's agents section lists
+every agent in every session, grouped by who needs you: blocked and errored
+first, then finished and not yet seen, then working, then at rest. A blocked
+agent's row shows the question it asked and how long it has waited. Rows also
+show the harness, what the agent is doing, and facts it reports such as the
+model or how full its context is.
+
+<ReleaseClip
+  src="/releases/v0.8.0/agents"
+  label="Screen recording: four agent panes in tuios, with the rail listing their states"
+  steps={["Every agent in every session is in one list in the rail.", "Finished work waits for you, marked unread.", "A blocked agent moves to the top of the list, with its question.", "@n in the command palette finds the pane that needs you.", "Answer it, and the agent goes back to work."]}
+/>
+
+- In the command palette (`ctrl+p`), `@n` finds panes that need input and `@w`
+  finds working ones, across every session. `ctrl+b j` jumps to the pane
+  behind the last alert.
+- When a state changes, tuios can tell you with a dock message, an OSC 9
+  desktop notification (which reaches you over SSH) and an optional sound. The
+  `[notifications.agent]` table has per-state switches, a settle window so a
+  flapping state does not spam you, and quiet hours.
+- The `after-agent-state` hook receives the transition in environment
+  variables, never in argv, so an agent's text cannot become shell arguments.
+- `tuios set-agent-meta -w api model=opus context=41%` records facts the rail
+  draws under the row. They never change the state.
+
+### Hooks, installed for you
+
+`tuios integration install claude-code` writes tuios's hook entries into
+Claude Code's settings, so the agent reports its own state instead of tuios
+reading it off the screen. `codex`, `gemini-cli` and `opencode` work the same
+way, and `--all` installs every harness whose config directory exists.
+`tuios doctor agents` says, for every harness, whether it is on `PATH`, whether
+the integration is installed and current, and which running agent panes lack
+one. The hooks run `tuios agent-hook <harness>`, which replaces the old Python
+shim for Claude Code.
+
+### Detection
+
+- State comes from six ranked sources: the agent's own hook report, its
+  transcript, escape codes and window titles (such as Codex's "Action
+  Required"), screen rules that read the prompt, the foreground process, and
+  last of all an output stall. A lower source never overwrites a higher one
+  that is still fresh.
+- Agent CLIs are described by TOML manifests, bundled and overridable.
+  `tuios explain-agent-detect` shows why a pane was or was not recognised.
+- A process is identified by what it calls itself: its name, `argv[0]`, its
+  executable, or the script an interpreter runs. A directory called `claude` is
+  no longer an agent. An agent started through `sh -c`, `timeout`, `npx`,
+  `uvx`, `mise` or `nix` is found. This works on macOS without cgo.
+- The transcript reader reads only the last 128KB, so a 151MB transcript costs
+  652 microseconds.
+- Agents in panes on other machines are detected too.
+
+### Agents can message each other, and you
+
+```bash
+tuios list-agents                      # every agent pane and its state
+tuios send-agent-message -w build 'rebased onto main, please retest'
+tuios read-agent-messages              # your own inbox
+tuios ask-agent -w review 'which test is flaky?'   # ask and wait
+```
+
+The person at the keyboard has an inbox called `human`. An agent writes to it
+with `tuios send-agent-message -w human '...'`, the dock shows it, and
+`ctrl+b M` opens your mail from any pane. `r` replies, and the agent reads the
+answer from its own inbox. A reply typed at the keyboard is marked verified; one
+an agent sends in your name is marked claimed.
+
+<ReleaseClip
+  src="/releases/v0.8.0/mail"
+  label="Screen recording: an agent asks the person a question by mail, and the person answers from the mail dialog"
+  steps={["Two agents at work. One of them needs a decision.", "It asks you with tuios send-agent-message.", "Ctrl+B M opens your mail, from any pane.", "r replies. The agent gets the reply in its inbox.", "The agent reads your answer and carries on."]}
+/>
+
+- A message is at most 8KB, with a subject of up to 120 characters and up to
+  eight attachments, sent as paths. A session's mailbox holds 256 messages or
+  512KB. A sender gets a burst of ten, then thirty messages a minute.
+- `--reply-to <id>` answers a message and joins its thread.
+- `ask-agent` refuses a question that would close a loop of agents waiting on
+  each other, and refuses an agent that is itself blocked on a prompt
+  (`--allow-blocked` overrides that).
+- `tuios stash put <file>` copies a file into a store owned by the session and
+  prints its path, ready for `--attach`. The limits are 16MB per file and
+  256MB per session. `stash get` copies it back out, also across machines.
+
+See [Agent messaging](/docs/agent-messaging).
+
+### One prompt, several worktrees
+
+```bash
+tuios fan 3 --agent claude 'Add a retry with backoff to the HTTP client.'
+tuios worktree diff api-fan-add-a-retry-with-2
+tuios fan keep api-fan-add-a-retry-with-2 --stash
+```
+
+`tuios fan` creates several git worktrees of the repository you are in, starts
+the agent in each, and types the prompt once each agent is ready to read it.
+The rail groups the sessions under their repository. `fan keep` keeps one and
+removes the others. It refuses to throw away uncommitted work unless you pass
+`--stash` (which puts it in `git stash`) or `--force`, and it never deletes a
+branch. `tuios worktree new|ls|diff|rm` manages single worktrees the same way.
+See [Worktrees](/docs/worktrees).
+
+<ReleaseClip
+  src="/releases/v0.8.0/fan"
+  label="Screen recording: tuios fan starts three agents in three git worktrees, then fan keep keeps one"
+  steps={["tuios fan starts one agent per git worktree.", "Ctrl+B ) visits each session. Every agent has its own worktree.", "tuios worktree diff shows what one of them changed.", "fan keep keeps one. The others close, and their work goes to git stash."]}
+/>
+
+{/*
+  PLACEHOLDER: agent features still being built on separate branches
+  (worktree-wf_b78c1c88-a64-*). Keep, trim or delete this section once you
+  decide what ships in v0.8.0. Do not describe them as shipped until they merge.
+  - Inbox: what waits for you in every session, opened on prefix i
+  - Peek and respond: read and answer a blocked agent's prompt
+  - Approval round trips: answer harness permission prompts from the Inbox
+  - MCP server
+  - Scoped tokens (a process in a pane cannot act as the person)
+  - tmux shim
+  - Host targeting (host-qualified -s and -w targets are already on main;
+    describe only what the branch adds)
+  Also on those branches: 14 more `tuios integration install` harnesses,
+  set-agent-session, prompt_stalled, the grown manifest engine.
+*/}
+
+<Callout type="info" title="Coming in this release">
+  More agent features are still being built: an Inbox for everything that
+  waits for you, answering approvals from it, an MCP server, scoped tokens, a
+  tmux shim and host targeting. This section will describe the ones that make
+  it into v0.8.0.
+</Callout>
+
+## Sessions come back
+
+A bare `tuios` now starts or joins the daemon, which keeps your sessions
+running while no client is attached. The daemon also saves each session's
+structure under `$XDG_STATE_HOME/tuios/sessions` and restores it when it
+starts. A detach loses nothing. A daemon restart or a reboot ends the shells:
+what comes back is the layout, not the programs.
+
+- Each window comes back with its workspace, its place in the layout, its name
+  and its working directory. The session keeps its name and colour.
+- Each shell is new, started in the old directory. Scrollback and running
+  programs are not saved. Restored shells get `TUIOS_RESTORED=1`.
+- A state file tuios cannot read is moved aside for two weeks instead of
+  stopping the daemon.
+- Working directories come back on macOS too.
+
+`tuios daemon --no-restore` turns restore off. `tuios resurrect` lists what is
+saved, or brings one session back by name. `tuios attach` starts the daemon
+instead of refusing. See [Sessions](/docs/sessions).
+
+### One layout for every client
+
+Two clients on one session used to disagree about pane sizes, because each
+subtracted its own rail and dock and retiled. Now each client reports how much
+space it reserves on each edge, the daemon takes the largest reserve per edge,
+and every client gets one geometry. The same rule covers zoom, the
+master-stack ratio, the scrolling layout's position, hand-arranged workspaces
+and BSP trees. Session names and colours are daemon state, so a rename reaches
+every client. Reattaching to a full-screen program such as `top` no longer
+draws its rows one blank line apart
+([#123](https://github.com/Gaurav-Gosain/tuios/issues/123)). The post
+[A PTY has one size](/blog/a-pty-has-one-size) explains why.
+
+## Other machines
+
+The daemon keeps one `ssh` link per configured machine, run with
+`BatchMode=yes`, so you need to be able to `ssh` to it without typing anything.
+Nothing is nested: a remote session is drawn by your local client, with your
+theme, config and prefix key.
+
+```bash
+tuios hosts add build gaurav@buildbox   # or: tuios hosts add build --tailnet
+tuios hosts                             # every link and its state
+tuios attach --host build api           # a session on build, drawn here
+tuios new-window deploy --host build    # one pane on build, in this session
+tuios new deploy --global               # a session with panes from several machines
+```
+
+- The link finds tuios on the far machine by itself and redials with a backoff
+  when it drops. `tuios hosts` shows each link as `up`, `connecting`,
+  `reconnecting`, `unreachable`, `no_daemon`, `no_tuios` or `incompatible`.
+- A pane on another machine is laid out here, and its title bar says
+  `build:deploy`. The rail's files section and agent detection work for it.
+- In a `global` session every new window asks which machine to run on.
+- Verbs take host-qualified targets: `-s build:api`, `-w build:api:0`.
+- `tuios hosts tailnet` lists machines on your tailnet, asking the local
+  `tailscaled` with no root and no auth key.
+
+See [Remote hosts](/docs/remote-hosts) and the post
+[A pane on another machine](/blog/a-pane-on-another-machine).
+
+## The interface
+
+### Tiling, layouts and zoom
+
+A fresh install starts tiled. `n` opens a window and it takes its place in the
+layout, `ctrl+b z` zooms the focused pane, and `alt+1` to `alt+9` switch
+workspaces (`opt+1` to `opt+9` on macOS).
+
+<ReleaseClip
+  src="/releases/v0.8.0/tiling"
+  label="Screen recording: new windows tile, a pane zooms, and workspaces switch"
+  steps={["n opens a window, Enter types into it.", "Each new window takes its place in the layout.", "Ctrl+B z zooms the focused pane.", "Alt+2 switches to an empty workspace.", "Alt+1 brings the first one back."]}
+/>
+
+There are three tilers: BSP, master-stack, and a scrolling layout in the
+style of niri, which puts columns on an endless horizontal strip. All three
+honour `appearance.gap`.
+
+<ReleaseClip
+  src="/releases/v0.8.0/layouts"
+  label="Screen recording: switching to the scrolling layout, resizing a column to 70 percent, and zooming"
+  steps={["Pick the scrolling layout from the command palette.", "Panes are columns on a strip. Alt+N slides along it.", "Ctrl+B L 7 makes this column 70% wide.", "Zoom slides the pane forward, and follows the focus.", "Back to BSP tiling the same way."]}
+/>
+
+- **Zoom** slides into place instead of cutting. `appearance.zoom_size` below
+  100 zooms like a camera, with the neighbours visible at the edges, and moving
+  focus hands the zoom to the pane you land on (`appearance.zoom_follows_focus`).
+- **Percentage resize.** `ctrl+b L` then 5 to 9 sets the focused pane's width
+  to 50 to 90 percent, and shift with 5 to 9 sets its height.
+- **Master-stack** keeps your resizes across retiles, with a master and stack
+  ratio per workspace.
+- **Popups.** `tuios popup -- fzf` runs a command in a floating pane over the
+  layout and closes it when the command exits. This is how fzf, gum and other
+  pickers become tuios overlays.
+- **New windows open where you are**, in the focused pane's directory.
+- Windows the daemon creates now tile too, and resize was rebuilt so dragging
+  a shared border moves only the two panes that share it
+  ([the post](/blog/one-divider-five-windows)).
+
+See [Layout modes](/docs/layout-modes).
+
+### The rail
+
+The rail is a sidebar of sections: sessions, terminals, files, git and agents.
+Which sections it draws, in what order and how tall, is one string,
+`appearance.sidebar.sections`, with an editor on the settings page. The files
+and git sections follow the focused pane into its directory.
+
+<ReleaseClip
+  src="/releases/v0.8.0/rail"
+  label="Screen recording: the rail follows a pane into a folder, a file is created and then moved to the trash"
+  steps={["The rail follows the pane into a folder.", "Ctrl+B e moves the keyboard into the rail.", "In the file list, a makes a file.", "The git section counts the new file.", "d sends it to the trash, after asking."]}
+/>
+
+- **Sessions** each have a stable colour derived from the name, show their
+  directory and git branch, and can be renamed, dragged into an order, or
+  killed.
+- **Files** has six actions: create, rename, delete, copy, cut and paste. Only
+  delete asks first, and it moves the file to the freedesktop trash in
+  `$XDG_DATA_HOME/Trash`. Paste never overwrites.
+- **Git** shows the branch, how far it is ahead of and behind its upstream,
+  and how many files changed.
+- A program can print an OSC 7 escape claiming any directory. When the kernel
+  says the shell is somewhere else, the file actions switch off and the rail
+  says "read only: wrong folder".
+- `ctrl+b e` (or `s` in window mode) moves the keyboard into the rail.
+
+See [Session rail](/docs/session-rail).
+
+### Launcher, palette and keys
+
+`alt+space` (or `ctrl+b a`) opens a launcher over everything on your `PATH`,
+fuzzy-matched and ranked by how often and how recently you run things. Enter
+runs the program in a new pane. Tab types it into a new pane so you can add
+arguments. The command palette on `ctrl+p` finds actions, and panes in every
+session.
+
+<ReleaseClip
+  src="/releases/v0.8.0/launcher"
+  label="Screen recording: the launcher opens a program, a popup runs fzf, and the palette finds panes"
+  steps={["Alt+Space finds any program on your PATH.", "Tab opens a pane with the program typed out, ready for arguments.", "tuios popup floats fzf or gum over the layout.", "The popup closes when the program exits.", "Ctrl+P finds commands, and panes in every session."]}
+/>
+
+Every key tuios answers to is in one registry, and the keybind manager on
+`ctrl+b k` shows it: what is bound, where tuios conflicts with itself, where it
+conflicts with the program in your pane, and a Record tab that tells you who
+owns the next key you press.
+
+<ReleaseClip
+  src="/releases/v0.8.0/keybinds"
+  label="Screen recording: the keybind manager searches bindings, records a key and frees it"
+  steps={["Ctrl+B k lists every binding.", "Type to search them.", "Record: press a key, see who owns it.", "Ctrl+D frees it, so the shell gets it back.", "One Ctrl+B, then walk the panes with the arrows."]}
+/>
+
+- **Give a key back.** `ctrl+d` on the Record tab, or
+  `tuios keybinds free <key>` from a shell, takes a key off every action so
+  the program in the pane receives it. `tuios keybinds doctor` and
+  `tuios keybinds explain <key>` run the same analysis from the CLI.
+- **Prefix repeat.** After a command worth repeating, the prefix stays armed
+  for a moment, so `ctrl+b` then left left left walks three panes.
+  `appearance.prefix_repeat_time` sets how long, and 0 turns it off.
+- **New keys.** `N` in window mode makes a session, `ctrl+b (` and `ctrl+b )`
+  switch sessions, and `b` in window mode toggles the spotlight.
+- **macOS.** `opt+` bindings on keys that compose no character, such as
+  `opt+esc`, now fire. When Option+Left arrives as a readline word motion,
+  tuios says so and names the terminal setting to change.
+
+See [Keybindings](/docs/keybindings).
+
+### The mouse
+
+- Right-click opens a menu for what is under the pointer: a pane, a dock
+  segment, a workspace pill, the desktop, a session row, or a machine heading.
+  Every row is an action from the keybind registry and shows its key.
+- Alt and the left button move a pane from anywhere in it. Alt and the right
+  button resize it. Dragging a tiled pane by its title bar swaps it on release.
+- The left button selects text and copies on release: double-click for a word,
+  triple-click for a line.
+- Links in a pane (OSC 8 and bare URLs, including wrapped ones) underline under
+  the pointer. Shift and a left click opens one. A plain click does not, so a
+  click on an address still focuses the pane and selects text. A `file://` link
+  opens in `$EDITOR` in a new pane. Under `tuios ssh` and `tuios-web` an `http`
+  link is copied to your clipboard instead.
+- Every overlay row highlights under the pointer and acts on a click. Dock
+  pills and rail sessions can be dragged into an order, and the rail's edge
+  can be dragged to change its width.
+
+### Look and feel
+
+<ReleaseClip
+  src="/releases/v0.8.0/themes"
+  label="Screen recording: the theme picker previews themes live, and the settings page changes an option"
+  steps={["The theme picker is one palette search away.", "Over 340 themes. The arrows preview each one live.", "Enter keeps it.", "Ctrl+B , opens a settings page for every option.", "Changes show at once and are saved to config.toml."]}
+/>
+
+- **Themes.** 343 built-in themes with a live preview. `tuios import-theme`
+  converts a kitty, ghostty, alacritty or wezterm scheme. A theme can carry
+  `chrome` colours for the interface, so the accent can be amber without
+  turning every blue in your panes amber.
+- **Settings page** on `ctrl+b ,` (or `,` in window mode) covers every option,
+  with a colour picker, sliders for numbers, an editor for the rail sections
+  and pickers with previews. Changes apply at once and are saved to
+  `config.toml`. Editing the file by hand also reaches the running client, and
+  an error is shown on screen instead of being ignored.
+- **Glyph sets.** `appearance.glyphs` picks the shapes of borders, window
+  controls and rail marks: `default`, `unicode`, `heavy`, `ascii`, or your own
+  file.
+- **Zen mode** hides unfocused borders, always or while the mouse is still.
+- **Copy flash** sweeps a band of light over copied text.
+- **Keycast** draws your keypresses in a corner for screen recordings
+  (`tuios --show-keys`, or from the palette).
+
+<ReleaseClip
+  src="/releases/v0.8.0/eyecandy"
+  label="Screen recording: the spotlight follows the cursor between panes, then the screen saver breaks the screen into dust"
+  steps={["Ctrl+B Esc goes to window mode.", "b turns on the spotlight: everything else dims.", "i goes back to the shell, and the beam finds its cursor.", "Alt+N moves to the next pane, and the beam follows.", "Window mode again, and b turns it off.", "S starts the screen saver, made from your own screen.", "Any key brings everything back."]}
+/>
+
+- **Spotlight.** `b` in window mode dims everything outside a circle around
+  the mouse or the cursor. The `[spotlight]` table sets the radius, how dark
+  the rest goes, and what it follows.
+- **Screen saver.** 36 effects ported from terminaltexteffects, drawn from your
+  real screen. Off until you set `screensaver.enabled`. `S` in window mode
+  starts it now, and any key brings the screen back.
+
+See [Themes](/docs/themes).
+
+### Screenshots and graphics
+
+`ctrl+b C` captures a pane, the whole screen, or a region you drag with the
+mouse, and shows a preview with the file it wrote. `tuios screenshot` does the
+same from a script. It runs in the daemon from the emulator's cell grid, so it
+works on a detached session, and writes `png`, `svg`, `html`, `ansi` or `txt`
+in any theme.
+
+<ReleaseClip
+  src="/releases/v0.8.0/screenshot"
+  label="Screen recording: capture mode takes a screenshot of a pane, then tuios screenshot does the same from a shell"
+  steps={["Ctrl+B C captures a pane, the whole screen or a dragged region.", "Tab moves to the next pane, Enter takes it.", "The preview shows the image and the file it wrote.", "tuios screenshot does the same from a script, even on a detached session.", "PNG, SVG, HTML, ANSI or plain text, in any theme."]}
+/>
+
+- **Kitty graphics animation** is implemented, sending only the changed
+  regions. One measured page went from 330MB forwarded in 21.6 seconds at
+  17fps to 22MB at 73fps.
+- **Unicode placeholders**, such as the images in glow's pager, show inside a
+  pane and scroll with the text.
+- A window over part of an image crops that part instead of hiding the whole
+  image. Images no longer draw over the rail or the dock.
+- **Graphics over SSH** follow the connecting client's capabilities.
+- **Bounded memory.** An animated gif under chafa grew tuios to 5.3GB in two
+  minutes. The same run now stays at 189MB.
+
+See [Screenshots](/docs/screenshots).
+
+## Scripting and control
+
+The daemon speaks 64 verbs over a line-delimited JSON socket. `tuios
+list-verbs` lists them with their parameters and every error code they can
+return. One registry holds 156 options, and each one can be set in a running
+session.
+
+<ReleaseClip
+  src="/releases/v0.8.0/control"
+  label="Screen recording: set-config changes options live, subscribe prints events, and wait-for blocks until a pane prints a line"
+  steps={["set-config changes any option in the running session.", "subscribe prints each event as a JSON line.", "wait-for blocks until a pane prints what you are waiting for.", "Themes too. 156 options, all live."]}
+/>
+
+- **Strict input.** A parameter a verb does not take is refused with the
+  closest spelling, instead of being dropped. `set-option` refuses a path that
+  does not exist, a bad colour or an unknown theme. `run-command` refuses a
+  name it does not know (`tuios run-command --list`).
+- **`tuios subscribe`** prints the daemon's events as JSON lines, and resumes
+  after a disconnect with `--after-seq` and `--boot-id`.
+- **`tuios wait-for`** blocks until a pane prints a pattern, exits, goes idle,
+  or an agent reaches a state, in one session or with `--any-session`.
+- **Hooks run in the daemon**, so they fire with nobody attached. `tuios
+  list-hooks` shows each hook's runs, last exit code and last error.
+- **`new-session`, `split-window`, `set-layout`** and the other verbs work
+  with no client attached.
+- **Errors say what to do.** Every CLI failure prints the cause and a fix.
+- **`tuios update`** replaces the binary, but only when it installed it. It
+  verifies checksums and otherwise names the package manager that owns it.
+- **`tuios --skill`** prints recipes for an agent driving tuios from a pane. A
+  test checks every command in it against the real command tree.
+- The daemon writes a log to `$XDG_STATE_HOME/tuios/daemon.log`, and a panic in
+  the interface shows a crash report you can copy or file, with no pane
+  contents in it.
+
+See [the control protocol](/docs/control-protocol) and the post
+[The daemon said yes to an option that did not exist](/blog/the-daemon-said-yes-to-an-option-that-did-not-exist).
+
+## The web client, SSH and project tapes
+
+- **`tuios ssh` checks keys.** See [Before you upgrade](#before-you-upgrade).
+- **`tuios-web` over TLS.** `--auto-tls` creates and keeps a certificate for
+  the hostname and every interface address, so you can open a LAN address on
+  your phone. On a phone, a row of tuios commands sits near your thumb, a long
+  press opens the pane menu, and dividers are wide enough to grab.
+- The web client shows your theme, takes every interface flag `tuios` takes,
+  and can shape Arabic and ligatures with HarfBuzz (opt-in). The Docker image
+  includes `tuios-web`.
+- **Project tapes.** A `.tuios.tape` in a project describes its session:
+  windows, commands and layout. When a shell `cd`s into the project, tuios
+  offers to run it, like direnv for layouts. You read the file first, and
+  trust is tied to its hash, so any edit asks again. See
+  [Project tapes](/docs/project-tapes).
+- **Install.** Homebrew core has `tuios`. The Nix package is repaired and
+  ships `tuios-web`. `scripts/install.sh` installs to `~/.local/bin`.
+
+## The terminal emulator
+
+Behind a `ghostty` build tag, panes can run on libghostty-vt, Ghostty's
+emulation core, instead of the pure Go emulator. Release builds ship both, and
+`tuios --version` names the backend. A differential suite feeds both the same
+bytes and compares the results.
+
+A conformance corpus, a grammar-based fuzzer, differential tests against tmux
+and two metamorphic checks found bugs that any program in a pane could hit:
+
+- The cursor position report had line and column swapped.
+- Under `TERM=screen`, box drawing came out as `lqk`.
+- OSC 8 hyperlinks had their fields swapped and never worked.
+- A scroll region taller than the screen crashed the daemon and every session
+  in it.
+- A window title with a Dingbats character, which Claude Code puts in its
+  title, ended early and printed the rest into the pane.
+- NEL, DECALN, DECSTR, DECRQSS, REP, mode 47 and more were missing or wrong.
+
+## Faster and smaller
+
+Every number comes from the commit that made the change or from `docs/perf.md`
+in the tuios repository.
+
+| What | v0.7.0 | v0.8.0 |
+| --- | --- | --- |
+| Scrollback, 10,000 lines per pane | 48MB | 4.2MB |
+| Empty 207x55 pane | 1.7MB | 28KB |
+| Startup to first frame | 566ms | 68ms |
+| Keypress to echo, median | 9.75ms | 1.78ms |
+| Typing while another pane floods, median | 18 to 28ms | 0.9 to 5.4ms |
+| Typing one letter | 18.9us, 177 allocations | 1.06us, 14 |
+| Workspace switch, per pane | 47.6ms | 2.4ms |
+| Kitty animation, one page | 330MB at 17fps | 22MB at 73fps |
+| Animated gif under chafa | 5.3GB | 189MB |
+
+An idle client schedules no timer renders: with idle shells and the rail open,
+a 10 second test sees no bytes on the wire and no renders. The posts
+[48MB per pane, twice](/blog/48mb-per-pane-twice) and
+[A fifth of every frame went to changing nothing](/blog/a-fifth-of-every-frame-went-to-changing-nothing)
+cover two of these.
+
+## Other fixes
+
+- The last output of a pane, often its prompt, sometimes stayed invisible
+  until the next key. It is drawn at once.
+- A pane scrolled back stays on the line you stopped at while output arrives.
+- Clipboard copy and paste work on GNOME Terminal and other VTE terminals, and
+  over a loopback SSH connection, using the native clipboard tool.
+- Keys typed within 150ms of entering terminal mode are no longer dropped.
+- `ctrl+d` in a pane on another machine closes it at once.
+
+The full list is in the
+[changelog on GitHub](https://github.com/Gaurav-Gosain/tuios/compare/v0.7.0...v0.8.0).
+
+## Before you upgrade
+
+Most of these need nothing from you. The ones that do are marked with what to
+change.
+
+### Restart the daemon
+
+The wire protocol is version 3, and a version 2 daemon is refused with a
+message that says which side is newer. Run `tuios kill-server` and start tuios
+again. This ends every program running in your panes. The layout, window names
+and working directories come back, each pane with a new shell. The JSON verb
+protocol stays at version 1.
+
+### Keys and mouse
+
+- **Plain `ctrl+v` goes to the pane**, as 0x16, so vim's visual block works.
+  Paste from the host clipboard is `ctrl+shift+v`, `super+v` or
+  `shift+super+v`. To paste on `ctrl+v` again, bind it:
+
+  ```toml
+  [keybindings.terminal_mode]
+  terminal_paste_host = ["ctrl+v", "ctrl+shift+v", "super+v", "shift+super+v"]
+  ```
+
+- **`alt+arrows` move focus between panes** in terminal mode. They used to
+  reach the shell, where readline, fish and zsh use `alt+left` and `alt+right`
+  to move by word. To give one back, run `tuios keybinds free alt+left`, or set
+  the action to an empty list:
+
+  ```toml
+  [keybindings.terminal_mode]
+  terminal_focus_left = []
+  terminal_focus_right = []
+  ```
+
+  `ctrl+b` then the arrows still move focus.
+- **`esc` after the prefix exits prefix mode.** It used to detach. Detach is
+  `ctrl+b d`. A config with the old binding is migrated on load.
+- **Multi-select is `ctrl+shift+click`.** It used to be `ctrl+click`, which now
+  grabs the window: `ctrl` and a left drag moves it.
+- **A left drag in a pane selects text** and copies it on release. It used to
+  move the window. `appearance.copy_on_select = false` stops the copy.
+- **The mouse wheel scrolls the pane** and no longer enters copy mode. Typing
+  returns to the live screen.
+- **Right-click** in window mode opens the pane menu, and a right drag resizes.
+  In terminal mode the right button belongs to the pane: ctrl or shift and a
+  right-click opens the menu, or set `appearance.right_click_opens_menu = true`.
+- **Window-mode digits 1 to 4 select windows.** Corner snap moved to
+  `ctrl+b L` then 1 to 4. The old default bindings are migrated on load. With
+  tiling on, `h` and `l` focus the pane on that side.
+- **`q` and `ctrl+b q` open a quit menu**, with detach as the default row.
+- In the layout picker, delete moved from `d` to `ctrl+d`.
+- Notifications moved from a top-right toast to the dock. Info stays 6
+  seconds, warnings 8, and errors until dismissed. `[notifications]` sets the
+  durations.
+
+### Scripts
+
+- **`TERM_PROGRAM` is no longer `TUIOS`.** It is `ghostty` when kitty graphics
+  are forwarded and `WezTerm` for sixel, so programs turn on their graphics. A
+  script that checks for tuios should read `TUIOS_ENV` (or `TUIOS_PANE_ID`).
+  `TMUX` and `TMUX_PANE` are removed from pane environments. A pane on another
+  machine gets `TUIOS_SESSION_REMOTE` instead of `TUIOS_SESSION`.
+- **`tuios ls` with no daemon exits 3.** It lists the sessions saved on disk,
+  marked as saved. It used to print an empty list and exit 0.
+- **Appearance flags are only accepted by commands that draw**: a bare
+  `tuios`, `attach`, `new`, `ssh` and tape playback. Elsewhere they are an
+  error, so `tuios ls --theme x` now fails. Drop them from other commands.
+- **Verbs refuse unknown input.** An unknown parameter, an unknown
+  `set-option` path, a bad colour, an unknown theme and an unknown
+  `run-command` name are errors instead of being ignored.
+- `ask-agent` and `fan` send the prompt as a bracketed paste and one carriage
+  return. `ask-agent` refuses an agent blocked on a prompt unless you pass
+  `--allow-blocked`.
+- `tuios attach` with no daemon starts one instead of refusing.
+
+### Config
+
+- **Removed keys:** `daemon.default_codec` (the JSON wire codec is gone),
+  `daemon.socket_path` (it was never honoured: the socket follows
+  `XDG_RUNTIME_DIR`), and `appearance.separator_style`. Delete them.
+- **Removed flag:** `tuios tape play --visible` (`-v`), which nothing read.
+  Drop it.
+- **Removed actions:** `nav_up`, `nav_down`, `nav_left`, `nav_right`,
+  `toggle_showkeys` and `prefix_logs`. The top-left key-events overlay is
+  replaced by the keycast.
+- `appearance.max_fps` tops out at 120, the renderer's own ceiling.
+- Selection colours are settings under `[appearance.selection]`: grey
+  selection, amber search, cyan copy cursor, not bold.
+  `appearance.selection.bold = true` brings bold back.
+- Sidebar settings moved into an `[appearance.sidebar]` table. The old
+  `appearance.sidebar_*` keys are still read, and the table wins.
+- The `colorshift` screen saver effect reads as `random`.
+- **Hooks moved to the daemon:** `after-new-window`, `after-close-window`,
+  `after-focus-change`, `after-workspace-switch` and `after-agent-state` run
+  with the daemon's environment and fire once, not once per client.
+
+### SSH
+
+- **`tuios ssh` checks keys.** It admits the public keys in
+  `~/.config/tuios/authorized_keys`, or in `~/.ssh/authorized_keys` when the
+  first file is absent. `--authorized-keys FILE` names another file. Without
+  keys, a loopback address still runs unauthenticated with a warning, and any
+  other address is refused. `--no-auth` opens it on a network you trust.
+- A connection that names no session gets one called `ssh-session` when
+  several exist, instead of the first one listed.
+
+### Agents
+
+- **The Claude Code hook map changed.** `SessionStart` means idle,
+  `Notification` is read by its type, `StopFailure` means errored, and
+  `SessionEnd` sets nothing. Run `tuios integration install claude-code` to
+  write the new hooks, which call `tuios agent-hook`. The old Python shim now
+  wraps it.
+- Your own harness manifests: an idle screen rule needs a `prompt_box` region
+  or a regex, and `argv_path` matches path components of interpreter scripts
+  only.
+
+### Embedders
+
+`pkg/tuios` takes a `config.Settings` per client instead of package globals,
+many `app.OS` exports are gone, `pkg/tfx` is now the `tuiffects` module, and
+the SSH module is `charm.land/ssh`.
+
+## New defaults
+
+{/*
+  CHECK BEFORE TAGGING: tuios main at 491efd4d still has the old defaults for
+  every row in this table (sidebar off, left, 28 columns; dock bottom; titles
+  bottom; zoom_size 100; click_to_type single; scrollbar thin). These are the
+  maintainer's look that the clips were recorded with. Change DefaultConfig in
+  internal/config/userconfig.go (and ZoomSizeDefault in constants.go) before
+  the tag, or remove this section.
+*/}
+
+These defaults change in v0.8.0. The clips on this page were recorded with
+them.
+
+| Setting | v0.8.0 default | Before |
+| --- | --- | --- |
+| The rail (sidebar) | on | off |
+| Rail position and width | right, 24 columns | left, 28 columns |
+| Dock | top | bottom |
+| Window titles | top | bottom |
+| Zoom | fills 95 percent, neighbours visible | fills the screen |
+| Click on a pane | one click focuses, double click starts typing | one click starts typing |
+| Scrollbar | a thumb on a track | a thin line |
+
+To get the old ones back, add this to `config.toml`:
+
+```toml
+[appearance]
+dockbar_position = "bottom"
+window_title_position = "bottom"
+zoom_size = 100
+click_to_type = "single"
+
+[appearance.scrollbar]
+style = "thin"
+
+[appearance.sidebar]
+enabled = false
+position = "left"
+width = 28
+```
+
+Each line also works on its own, from the settings page (`ctrl+b ,`), or live
+with `tuios set-config`, for example `tuios set-config zoom_size 100`.
+`ctrl+b b` shows and hides the rail at any time.
+
+Two defaults from earlier in this cycle apply to a fresh install only: a bare
+`tuios` uses the daemon (`startup.daemon = true`) and starts tiled
+(`startup.tiled = true`). An existing config file keeps what its `[startup]`
+table says. Window controls are drawn as dots on the left of the title bar;
+`appearance.window_button_style = "pill"` and
+`appearance.window_button_position = "right"` bring back the old ones.
+`tuios --standalone` or `TUIOS_NO_DAEMON=1` runs without the daemon.
+
+## Numbers
+
+- 1,906 commits between v0.7.0 (29 March 2026) and 23 September 2026, 1,604
+  of them not merges. v0.7.0 had 157.
+- 518 fixes, 304 features, 256 test commits, 99 docs commits and 79
+  performance commits, by their conventional-commit prefix.
+- 1,970 files changed: 397,746 lines added and 31,774 removed.
+- 64 JSON verbs, 156 options you can set live, 22 agent harness manifests, 4
+  harness integrations, 343 built-in themes, 36 screen saver effects, 4 glyph
+  sets and 3 tilers.
+- 25 engineering posts on the [blog](/blog) since June.
+
+## Thanks
+
+Seven people besides me sent changes in this release:
+
+- **Sebastian Wagner** ([@SebaWag](https://github.com/SebaWag)): percentage
+  resize ([#29](https://github.com/Gaurav-Gosain/tuios/issues/29)), zen mode,
+  the dock's workspace tab format, `appearance.right_click_opens_menu`, the
+  native clipboard fallback for SSH and VTE terminals, the reattach replay fix,
+  resolved colours in `capture-pane`, and the Nix package repairs.
+- **Siriwat Uamngamsup**: entering terminal mode when keyboard focus moves to
+  another pane (`appearance.auto_enter_terminal_on_focus`).
+- **Iain**: `list-options` grouped by section, and the `--list-themes` warning
+  fix.
+- **Ronan Arraes Jardim Chagas**: `chrome.surface` in theme files.
+- **[@actes2](https://github.com/actes2)**: a resize floor so a vanishing
+  display cannot panic.
+- **[@ethanhawkes-gif](https://github.com/ethanhawkes-gif)**: a panic on a
+  wrapped nil colour.
+- **[@FaintFlower](https://github.com/FaintFlower)**: the README star chart.
+
+And thank you to everyone who filed an issue, tried a build from main, or told
+me what broke.
