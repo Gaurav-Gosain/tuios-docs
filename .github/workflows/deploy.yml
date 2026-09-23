@@ -25,8 +25,33 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Test the Worker's content negotiation
-        run: bun test worker/
+      - name: Test the Worker's content negotiation and the /learn engine
+        run: bun test worker/ lib/
+
+      # /learn runs tuios compiled to WebAssembly. It is built from the tuios
+      # commit pinned in learn/TUIOS_REF, so the page teaches a known version.
+      # Bump that file to update it.
+      - name: Read the pinned tuios ref
+        id: tuios
+        run: echo "ref=$(tr -d '[:space:]' < learn/TUIOS_REF)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tuios
+        uses: actions/checkout@v4
+        with:
+          repository: Gaurav-Gosain/tuios
+          ref: ${{ steps.tuios.outputs.ref }}
+          path: .tuios
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: .tuios/go.mod
+          cache-dependency-path: .tuios/go.sum
+
+      - name: Build the tuios engine for /learn
+        run: |
+          .tuios/cmd/tuios-wasm/build.sh "$PWD/.learn-build"
+          bun scripts/learn-engine.mjs .learn-build
 
       - name: Build
         run: bun run build
