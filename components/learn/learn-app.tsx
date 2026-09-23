@@ -7,6 +7,7 @@ import { findTrack, tracks } from "@/lib/learn/tracks";
 import type { Track } from "@/lib/learn/types";
 import { useSmallScreen } from "./hooks";
 import { Hub } from "./hub";
+import { KeyDebugPanel } from "./key-debug";
 import { Lesson } from "./lesson";
 import { MobileLearn } from "./mobile-learn";
 import { Playground } from "./playground";
@@ -96,6 +97,7 @@ export function LearnApp() {
 
   return (
     <>
+      <KeyDebugPanel />
       <Hub progress={progress} onStart={start} onPlay={startPlay} />
       {playing ? <Playground onExit={exit} /> : null}
       {active ? (

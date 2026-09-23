@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   advance,
+  altChordBlocked,
   feed,
   formatTime,
   hintLevel,
@@ -232,4 +233,47 @@ test("key bytes", () => {
 test("formatTime", () => {
   expect(formatTime(221)).toBe("3:41");
   expect(formatTime(5)).toBe("0:05");
+});
+
+describe("an alt chord that never arrives", () => {
+  const layouts = tracks.find((t) => t.id === "layouts");
+  if (!layouts) throw new Error("no layouts track");
+  const track: Track = { ...layouts, steps: [layouts.steps[0]] };
+
+  test("shows after 8 seconds with no key", () => {
+    const s = startLesson(track, 0);
+    expect(altChordBlocked(s, 7_000)).toBe(false);
+    expect(altChordBlocked(s, 8_000)).toBe(true);
+  });
+
+  test("shows early when only other keys arrive", () => {
+    let s = startLesson(track, 0);
+    for (const k of ["j", "h", "n"]) {
+      s = feed(s, key(k, "window"), 1_000).state;
+    }
+    expect(altChordBlocked(s, 1_000)).toBe(true);
+  });
+
+  test("stays hidden once an alt chord arrives", () => {
+    for (const k of ["alt+j", "∆", "alt+h"]) {
+      const s = feed(startLesson(track, 0), key(k, "window"), 500).state;
+      expect(altChordBlocked(s, 60_000)).toBe(false);
+    }
+  });
+
+  test("only when the next key is an alt chord", () => {
+    // After alt+j the step waits on n.
+    const s = feed(startLesson(track, 0), key("alt+j", "window"), 0).state;
+    expect(s.pressed).toBe(1);
+    expect(altChordBlocked(s, 60_000)).toBe(false);
+    const plain: Track = { ...layouts, steps: [layouts.steps[1]] };
+    expect(altChordBlocked(startLesson(plain, 0), 60_000)).toBe(false);
+  });
+
+  test("resets on the next step", () => {
+    const s = feed(startLesson(track, 0), key("alt+j", "window"), 0).state;
+    const next = advance(s, "clean", 1_000);
+    expect(next.altSeen).toBe(false);
+    expect(next.keysSeen).toBe(0);
+  });
 });

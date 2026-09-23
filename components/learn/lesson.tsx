@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   advance,
+  altChordBlocked,
   currentStep,
   elapsed,
   feed,
@@ -72,6 +73,10 @@ export function Lesson({
   const [termFocused, setTermFocused] = useState(false);
   const [leftTerminal, setLeftTerminal] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  // Steps whose "alt chords not arriving" note the reader closed.
+  const [altNoteClosed, setAltNoteClosed] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const lessonRef = useRef<LessonState>(startLesson(track, Date.now()));
   const tuiosRef = useRef<TuiosInstance | null>(null);
@@ -316,6 +321,11 @@ export function Lesson({
   const now = Date.now();
   const level =
     phase === "running" && step && !step.explainer ? hintLevel(lesson, now) : 0;
+  const altBlocked =
+    phase === "running" &&
+    !!step &&
+    !altNoteClosed.has(step.id) &&
+    altChordBlocked(lesson, now);
   const allHeld = new Set([...held, ...sim]);
   const seconds = phase === "booting" ? 0 : elapsed(lesson, now);
   const doneCount = lesson.results.length;
@@ -515,6 +525,31 @@ export function Lesson({
                         </span>
                         {step.hint}
                       </p>
+                    ) : null}
+                    {altBlocked && step ? (
+                      <div
+                        role="note"
+                        className="learn-fade flex items-start gap-2 rounded-lg border border-[#e0af68]/40 bg-[#e0af68]/10 px-3 py-2 text-sm"
+                      >
+                        <p className="flex-1 leading-relaxed">
+                          Option chords not arriving? A window manager such as
+                          AeroSpace, Rectangle or Raycast may be taking them.
+                          Pause it or unbind the key, or rebind tuios.
+                        </p>
+                        <button
+                          type="button"
+                          aria-label="Close this note"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() =>
+                            setAltNoteClosed((prev) =>
+                              new Set(prev).add(step.id),
+                            )
+                          }
+                          className="-mr-1 rounded p-0.5 text-fd-muted-foreground transition-colors hover:text-fd-foreground"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
                     ) : null}
                     <div className="flex items-center gap-2">
                       <button

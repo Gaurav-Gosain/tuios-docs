@@ -100,11 +100,64 @@ export function baseKey(code: string): string | undefined {
 export type KeyLike = Pick<
   KeyboardEvent,
   "key" | "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
->;
+> & { keyCode?: number; getModifierState?: (key: string) => boolean };
 
 /**
- * The bytes for an Option chord on a Mac, sent as Alt: Option+j is ESC j, the
- * same bytes alt+j sends on Linux. Null when the event is not such a chord.
+ * The physical key of an Alt chord: from code, or when a browser leaves code
+ * empty, from the US Mac Option glyph in key, or from keyCode.
+ */
+function chordBase(event: KeyLike): string | undefined {
+  const fromCode = baseKey(event.code);
+  if (fromCode || event.code) return fromCode;
+  const glyph = MAC_OPTION_GLYPHS[event.key];
+  if (glyph) return glyph;
+  const kc = event.keyCode ?? 0;
+  if (kc >= 65 && kc <= 90) return String.fromCharCode(kc + 32);
+  if (kc >= 48 && kc <= 57) return String.fromCharCode(kc);
+  return undefined;
+}
+
+/** The parts of navigator that say which system the page runs on. */
+export type NavigatorLike = {
+  platform?: string;
+  userAgent?: string;
+  userAgentData?: { platform?: string };
+};
+
+/**
+ * Whether the page runs on a Mac. Any one of the three signals is enough,
+ * since a privacy setting or a browser can blank or spoof one of them:
+ * navigator.platform is "" or "Win32" in some hardened setups.
+ */
+export function detectMac(nav: NavigatorLike | undefined): boolean {
+  if (!nav) return false;
+  return (
+    /Mac|iPhone|iPad|iPod/.test(nav.platform ?? "") ||
+    /macOS|iOS/i.test(nav.userAgentData?.platform ?? "") ||
+    /Macintosh|Mac OS X|iPhone|iPad/.test(nav.userAgent ?? "")
+  );
+}
+
+/**
+ * Whether a key value is something Alt composed rather than the plain
+ * character: a glyph outside printable ASCII, a dead key, or no value at all.
+ * Alt and a letter on Linux or Windows reports the letter itself.
+ */
+function composedKey(key: string): boolean {
+  if (key === "Dead" || key === "Unidentified" || key === "") return true;
+  return !/^[\x20-\x7e]$/.test(key);
+}
+
+/** Whether `key` is what Option and the key `base` types on a US Mac. */
+function macOptionKey(key: string, base: string): boolean {
+  if (key === "Dead") return ["e", "i", "n", "u", "`"].includes(base);
+  return MAC_OPTION_GLYPHS[key] === base;
+}
+
+/**
+ * The bytes for Alt (Option on a Mac) and a letter, digit or punctuation key,
+ * sent as ESC and the key: Option+j is ESC j, the bytes alt+j sends on Linux.
+ * Null when the terminal should handle the event itself.
  *
  * macOS types a character with Option held: Option+j is "∆", and Option+n is
  * a dead key that waits to put a tilde on the next letter. xterm's
@@ -113,17 +166,37 @@ export type KeyLike = Pick<
  * that swallows the key after it. Reading the physical key instead gives the
  * chord the reader pressed whatever the keyboard mode.
  *
+ * `mac` only widens the net. Off a Mac, or when the platform is hidden, the
+ * page still steps in when the event is plainly a composed Option key: the
+ * key is a US Mac Option glyph for that physical key, or any glyph or dead
+ * key while Alt alone is held. Alt and a plain letter, as Linux and Windows
+ * report it, is left to the terminal, and so is AltGr: Windows reports it as
+ * ctrl and alt, and Linux as the AltGraph key or modifier.
+ *
+ * The physical key comes from code. A browser that leaves code empty still
+ * reports the glyph or keyCode, so those stand in.
+ *
  * Shift is kept for letters (Option+Shift+j is ESC J). A shifted digit or
  * symbol is left to the terminal, since its shifted character depends on the
  * layout.
  */
-export function optionAsAlt(event: KeyLike): string | null {
+export function altChordBytes(event: KeyLike, mac: boolean): string | null {
   if (!event.altKey || event.ctrlKey || event.metaKey) return null;
-  const base = baseKey(event.code);
+  if (event.key === "AltGraph") return null;
+  const base = chordBase(event);
   if (!base) return null;
+  if (!mac && !macOptionKey(event.key, base)) {
+    if (!composedKey(event.key)) return null;
+    if (event.getModifierState?.("AltGraph")) return null;
+  }
   if (!event.shiftKey) return `\x1b${base}`;
   const upper = base.toUpperCase();
   return upper === base.toLowerCase() ? null : `\x1b${upper}`;
+}
+
+/** altChordBytes as a Mac sees it: every plain Option chord. */
+export function optionAsAlt(event: KeyLike): string | null {
+  return altChordBytes(event, true);
 }
 
 // What Option and a letter or digit types on a US Mac layout, for a chord
@@ -173,6 +246,14 @@ function fromMacOption(key: string): string {
   const glyph = key.startsWith("alt+") ? key.slice(4) : key;
   const base = MAC_OPTION_GLYPHS[glyph];
   return base ? `alt+${base}` : key;
+}
+
+/**
+ * Whether a chord uses alt, in tuios's notation or as a Mac Option glyph:
+ * "alt+j", "ctrl+alt+x" and "∆" are, "j" and "ctrl+b" are not.
+ */
+export function isAltChord(chord: string): boolean {
+  return chordParts(fromMacOption(chord)).slice(0, -1).includes("alt");
 }
 
 /** The bytes for a whole step, in order. */

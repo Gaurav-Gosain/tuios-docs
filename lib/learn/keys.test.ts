@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { type KeyLike, optionAsAlt, pressedNames, sameChord } from "./keys";
-import { macOptionBytes } from "./runtime";
+import {
+  altChordBytes,
+  detectMac,
+  isAltChord,
+  type KeyLike,
+  optionAsAlt,
+  pressedNames,
+  sameChord,
+} from "./keys";
+import { optionBytes } from "./runtime";
 import { tracks } from "./tracks";
 
 // A key event the way Chrome on macOS sends Option and a key: key is what
@@ -28,7 +36,9 @@ describe("Option on a Mac is Alt", () => {
     ["≤", "Comma", "\x1b,"],
   ])("key %p on %s sends %p", (key, code, bytes) => {
     expect(optionAsAlt(option(key, code))).toBe(bytes);
-    expect(macOptionBytes(option(key, code), true)).toBe(bytes);
+    expect(optionBytes(option(key, code), true)).toBe(bytes);
+    // The same whether or not the page knows it is on a Mac.
+    expect(optionBytes(option(key, code), false)).toBe(bytes);
   });
 
   test("shift is kept for a letter", () => {
@@ -47,9 +57,90 @@ describe("Option on a Mac is Alt", () => {
     expect(optionAsAlt(option("j", "KeyJ", { altKey: false }))).toBeNull();
   });
 
-  test("only on a Mac", () => {
-    // AltGr and Alt on other systems type what the reader means.
-    expect(macOptionBytes(option("∆", "KeyJ"), false)).toBeNull();
+  test("a Mac with its platform hidden or spoofed", () => {
+    // Firefox with resistFingerprinting, or a hardened Chromium, can report
+    // navigator.platform as "" or "Win32". The composed glyph still says
+    // Option was held.
+    expect(altChordBytes(option("∆", "KeyJ"), false)).toBe("\x1bj");
+    expect(altChordBytes(option("Dead", "KeyN"), false)).toBe("\x1bn");
+    expect(altChordBytes(option("Unidentified", "KeyJ"), false)).toBe("\x1bj");
+    expect(altChordBytes(option("Ô", "KeyJ", { shiftKey: true }), false)).toBe(
+      "\x1bJ",
+    );
+    // Firefox may report Option as AltGraph too. A US Option glyph still
+    // counts.
+    expect(
+      altChordBytes(
+        option("∆", "KeyJ", { getModifierState: (k) => k === "AltGraph" }),
+        false,
+      ),
+    ).toBe("\x1bj");
+  });
+
+  test("a browser that leaves code empty", () => {
+    // Firefox's remote agent, and possibly a spoofing setting, report
+    // code "" for Option+j. The glyph, or keyCode, still names the key.
+    expect(altChordBytes(option("∆", ""), false)).toBe("\x1bj");
+    expect(altChordBytes(option("∆", "", { keyCode: 0 }), true)).toBe("\x1bj");
+    expect(altChordBytes(option("Dead", "", { keyCode: 78 }), true)).toBe(
+      "\x1bn",
+    );
+    expect(altChordBytes(option("x", "", { keyCode: 0 }), true)).toBeNull();
+    // A named key with an empty code stays with the terminal.
+    expect(altChordBytes(option("ArrowLeft", ""), true)).toBeNull();
+  });
+
+  test("alt and a plain letter off a Mac is left to the terminal", () => {
+    // Linux and Windows report the letter, and the terminal sends ESC j.
+    expect(altChordBytes(option("j", "KeyJ"), false)).toBeNull();
+    expect(
+      altChordBytes(option("J", "KeyJ", { shiftKey: true }), false),
+    ).toBeNull();
+    // A German layout: the key labelled Z sits on KeyY. Its letter wins.
+    expect(altChordBytes(option("z", "KeyY"), false)).toBeNull();
+  });
+
+  test("AltGr keeps typing characters", () => {
+    // Windows reports AltGr as ctrl and alt.
+    expect(
+      altChordBytes(option("€", "KeyE", { ctrlKey: true }), false),
+    ).toBeNull();
+    expect(
+      altChordBytes(option("@", "KeyQ", { ctrlKey: true }), true),
+    ).toBeNull();
+    // Linux: the AltGraph key itself, and characters typed with it held.
+    expect(altChordBytes(option("AltGraph", "AltRight"), false)).toBeNull();
+    expect(
+      altChordBytes(option("€", "KeyE", { altKey: false }), false),
+    ).toBeNull();
+    expect(
+      altChordBytes(
+        option("€", "KeyE", { getModifierState: (k) => k === "AltGraph" }),
+        false,
+      ),
+    ).toBeNull();
+  });
+
+  test("detecting a Mac", () => {
+    const ua =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0";
+    const winUa =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0";
+    expect(detectMac({ platform: "MacIntel", userAgent: ua })).toBe(true);
+    expect(detectMac({ platform: "", userAgent: ua })).toBe(true);
+    expect(detectMac({ platform: "Win32", userAgent: ua })).toBe(true);
+    expect(
+      detectMac({
+        platform: "",
+        userAgent: "",
+        userAgentData: { platform: "macOS" },
+      }),
+    ).toBe(true);
+    expect(detectMac({ platform: "Win32", userAgent: winUa })).toBe(false);
+    expect(
+      detectMac({ platform: "Linux x86_64", userAgent: "X11; Linux x86_64" }),
+    ).toBe(false);
+    expect(detectMac(undefined)).toBe(false);
   });
 
   test("the keycap for the letter lights", () => {
@@ -112,4 +203,13 @@ describe("Option on a Mac is Alt", () => {
       );
     }
   });
+});
+
+test("isAltChord", () => {
+  expect(isAltChord("alt+j")).toBe(true);
+  expect(isAltChord("ctrl+alt+x")).toBe(true);
+  expect(isAltChord("∆")).toBe(true);
+  expect(isAltChord("j")).toBe(false);
+  expect(isAltChord("ctrl+b")).toBe(false);
+  expect(isAltChord("+")).toBe(false);
 });

@@ -4,7 +4,7 @@
  * functions so it can be tested against recorded event logs, and the React
  * side only renders it.
  */
-import { sameChord } from "./keys";
+import { isAltChord, sameChord } from "./keys";
 import type { MatchContext, Track, TuiosEvent, TuiosState } from "./types";
 
 /** Seconds of no progress before the hint shows, and before Show me glows. */
@@ -12,6 +12,12 @@ export const HINT_AFTER = 8;
 export const SHOW_ME_AFTER = 20;
 /** Wrong keys before the hint shows early. */
 export const HINT_AFTER_WRONG = 2;
+/**
+ * Seconds, or other keys, before the page says an alt chord may be taken by
+ * something outside the browser.
+ */
+export const ALT_BLOCKED_AFTER = 8;
+export const ALT_BLOCKED_AFTER_KEYS = 3;
 
 export type StepResult = "clean" | "hinted" | "skipped";
 
@@ -24,6 +30,9 @@ export type LessonState = {
   hinted: boolean;
   /** Set when the last key was a step key pressed in the wrong mode. */
   wrongMode: boolean;
+  /** Keys tuios read during this step, and whether any was an alt chord. */
+  keysSeen: number;
+  altSeen: boolean;
   results: StepResult[];
   ctx: MatchContext;
   startedAt: number;
@@ -41,6 +50,8 @@ export function startLesson(track: Track, now: number): LessonState {
     wrong: 0,
     hinted: false,
     wrongMode: false,
+    keysSeen: 0,
+    altSeen: false,
     results: [],
     ctx: { lastAction: "", state: null, mem: {} },
     startedAt: now,
@@ -74,6 +85,8 @@ export function advance(
     wrong: 0,
     hinted: false,
     wrongMode: false,
+    keysSeen: 0,
+    altSeen: false,
     results,
     ctx: { lastAction: "", state: s.ctx.state, mem: {} },
     stepStartedAt: now,
@@ -103,6 +116,11 @@ export function feed(
     // The action event, if the key has one, comes right after it.
     ctx.lastAction = "";
     next = trackKeys(s, key, mode, now);
+    next = {
+      ...next,
+      keysSeen: next.keysSeen + 1,
+      altSeen: next.altSeen || isAltChord(key),
+    };
   } else if (event.type === "action") {
     ctx.lastAction = String(event.data?.name ?? "");
   }
@@ -167,6 +185,26 @@ export function hintLevel(s: LessonState, now: number): 0 | 1 | 2 {
   if (idle >= SHOW_ME_AFTER) return 2;
   if (s.hinted || idle >= HINT_AFTER || s.wrongMode) return 1;
   return 0;
+}
+
+/**
+ * Whether the step waits on an alt chord that never arrives: the next key is
+ * an alt chord, tuios has read no alt chord this step, and the reader has
+ * either waited ALT_BLOCKED_AFTER seconds or pressed other keys. A window
+ * manager such as AeroSpace binds alt and a letter system wide, and then the
+ * browser never sees the key at all.
+ */
+export function altChordBlocked(s: LessonState, now: number): boolean {
+  const step = currentStep(s);
+  if (!step || step.explainer || s.finishedAt !== null || s.altSeen) {
+    return false;
+  }
+  const wanted = step.keys[s.pressed];
+  if (typeof wanted !== "string" || !isAltChord(wanted)) return false;
+  return (
+    now - s.stepStartedAt >= ALT_BLOCKED_AFTER * 1000 ||
+    s.keysSeen >= ALT_BLOCKED_AFTER_KEYS
+  );
 }
 
 /** Mark the hint as seen, so the step counts as hinted. */

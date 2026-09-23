@@ -17,7 +17,17 @@
  * Each lesson runs its own instance of the compiled module, so starting a
  * track always starts from an empty desktop. Compiling happens once.
  */
-import { optionAsAlt } from "./keys";
+
+import {
+  keyDebugEnabled,
+  noteHandler,
+  noteKeyDebug,
+  noteTerminalSent,
+  noteTuios,
+  setKeyDebugSource,
+  watchTextarea,
+} from "./keydebug";
+import { altChordBytes, detectMac } from "./keys";
 import type { TuiosApi, TuiosEvent } from "./types";
 
 export type EngineManifest = {
@@ -53,6 +63,10 @@ type WebTermInstance = {
     close(): void;
   }): void;
   on(event: string, fn: (arg: { cols: number; rows: number }) => void): void;
+  /** The renderer in use: "webgl", "canvas", "dom" or "vtgl". */
+  renderer?: string;
+  /** Present when the Kitty keyboard protocol is installed. */
+  keyboardProtocol?: { flags?: number };
   focus(): void;
   blur(): void;
   fit?(): void;
@@ -226,17 +240,20 @@ function addStylesheet(href: string) {
   });
 }
 
-const IS_MAC =
-  typeof navigator !== "undefined" &&
-  /Mac|iPhone|iPad/.test(navigator.platform);
+/**
+ * Whether the page runs on a Mac, from navigator.platform, userAgentData or
+ * the user agent, since a hardened browser can blank or spoof any one.
+ */
+export const IS_MAC = typeof navigator !== "undefined" && detectMac(navigator);
 
 /**
- * The bytes for an Option chord on a Mac (Option+j is ESC j), or null. Only on
- * a Mac: elsewhere Alt already sends the letter, and AltGr types characters
- * a reader means to type.
+ * The bytes for an Alt chord the page sends itself (Option+j is ESC j), or
+ * null to leave the key to the terminal. See altChordBytes: on a Mac every
+ * plain Option chord, and elsewhere only a key that Alt plainly composed, so
+ * AltGr keeps typing what the reader means.
  */
-export function macOptionBytes(e: KeyboardEvent, mac = IS_MAC) {
-  return mac ? optionAsAlt(e) : null;
+export function optionBytes(e: KeyboardEvent, mac = IS_MAC) {
+  return altChordBytes(e, mac);
 }
 
 /** F5, ctrl+r and cmd+r always reload the page, whatever tuios is doing. */
@@ -263,6 +280,8 @@ export type TuiosInstance = {
 // Instances start one at a time: the program finds its initial size and its
 // ready callback on window, which two starting at once would share.
 let bootQueue: Promise<unknown> = Promise.resolve();
+// Numbers each terminal for the key log.
+let terminals = 0;
 
 /** Start a fresh tuios in `host`. */
 export function bootTuios(
@@ -310,22 +329,44 @@ async function boot(
       // Returning false keeps the key from the terminal: a reload key goes
       // to the browser, and an Option chord is sent from here.
       onKeyEvent: (e: KeyboardEvent) => {
-        if (isReloadKey(e)) return false;
-        const alt = macOptionBytes(e);
-        if (alt === null) return true;
+        if (isReloadKey(e)) {
+          noteHandler(e, "reload key, left to the browser");
+          return false;
+        }
+        const alt = optionBytes(e);
+        if (alt === null) {
+          noteHandler(e, "left to the terminal");
+          return true;
+        }
         if (e.type === "keydown") {
           // The default would type the composed glyph or start a dead key.
           e.preventDefault();
           sendKeys(alt);
+          noteHandler(e, "alt chord, sent by the page", alt);
+        } else {
+          noteHandler(e, "alt chord, kept from the terminal");
         }
         return false;
       },
     },
-    // Option is Alt on a Mac. macOptionBytes does the work for letters and
+    // Option is Alt on a Mac. optionBytes does the work for letters and
     // digits; this covers what is left, such as Option and an arrow.
     xterm: { macOptionIsMeta: true },
   });
   await term.open(host);
+  let stopDebug = () => {};
+  const tag = `t${++terminals}`;
+  if (keyDebugEnabled()) {
+    stopDebug = watchTextarea(host.querySelector("textarea"));
+    setKeyDebugSource({
+      renderer: () => term.renderer,
+      kittyFlags: () => term.keyboardProtocol?.flags,
+      engine: manifest.ref,
+    });
+    noteKeyDebug(
+      `terminal ${tag} started, renderer ${term.renderer ?? "unknown"}`,
+    );
+  }
 
   window.tuiosInitialSize = [term.cols, term.rows];
   const ready = new Promise<TuiosApi>((resolve) => {
@@ -371,6 +412,9 @@ async function boot(
   api.onEvent((event) => {
     if (disposed) return;
     log.push(event);
+    if (event.type === "key" || event.type === "action") {
+      noteTuios(tag, event.type, event.data ?? {});
+    }
     if (log.length > 400) log.splice(0, log.length - 400);
     for (const fn of listeners) fn(event);
   });
@@ -378,6 +422,7 @@ async function boot(
     name: "wasm",
     start() {},
     send(bytes) {
+      noteTerminalSent(tag, bytes);
       if (!disposed && !hasExited) api.input(bytes);
     },
     close() {},
@@ -414,6 +459,7 @@ async function boot(
       if (disposed) return;
       disposed = true;
       listeners.clear();
+      stopDebug();
       // q in window mode quits tuios, which ends the Go program and frees
       // its memory.
       if (!hasExited) {

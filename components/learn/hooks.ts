@@ -60,6 +60,8 @@ export function useModalOverlay(ref: RefObject<HTMLElement | null>) {
       const parent: Element | null = node.parentElement;
       for (const sibling of parent?.children ?? []) {
         if (sibling === node || sibling.hasAttribute("inert")) continue;
+        // The ?debug=keys panel stays usable over a lesson.
+        if (sibling.hasAttribute("data-learn-debug")) continue;
         if (sibling.tagName === "SCRIPT" || sibling.tagName === "STYLE") {
           continue;
         }
