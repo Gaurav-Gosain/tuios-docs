@@ -98,7 +98,7 @@ export const layouts: Track = {
     {
       id: "float",
       title: "Let them float, then snap",
-      note: "t turns tiling off. h and l snap to a half.",
+      note: "t turns tiling off. h and l snap to a half. Floating windows can overlap, and the snapped one sits on top.",
       keys: ["t", "h"],
       needs: "window",
       done: seq(
