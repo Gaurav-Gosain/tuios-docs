@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Check,
   Cpu,
+  Gamepad2,
   Lock,
   SquareTerminal,
   Trophy,
@@ -17,6 +18,9 @@ import type { SetupCommand, Track } from "@/lib/learn/types";
 import { useEngineStatus } from "./hooks";
 import { Keycap, useHeldKeys } from "./keycaps";
 import { LiveTerminal } from "./live-terminal";
+
+/** The hero's buttons, for the first tracks in order. */
+const HERO_LABELS = ["Start from zero", "I know tmux", "I know zellij"];
 
 /** What the hero terminal plays by itself once it is up. */
 const HERO_DEMO: SetupCommand[] = [
@@ -32,9 +36,11 @@ const HERO_DEMO: SetupCommand[] = [
 export function Hub({
   progress,
   onStart,
+  onPlay,
 }: {
   progress: Progress;
   onStart: (track: Track) => void;
+  onPlay: () => void;
 }) {
   const onReady = useCallback(async (t: TuiosInstance) => {
     await new Promise<void>((resolve) => t.onFirstFrame(resolve));
@@ -63,7 +69,7 @@ export function Hub({
             nothing to break.
           </p>
           <div className="fade-up mt-7 flex flex-col items-center gap-3 [animation-delay:180ms] sm:flex-row">
-            {tracks.slice(0, 2).map((t, i) => (
+            {tracks.slice(0, HERO_LABELS.length).map((t, i) => (
               <button
                 key={t.id}
                 type="button"
@@ -83,7 +89,7 @@ export function Hub({
                 >
                   {i + 1}
                 </kbd>
-                {i === 0 ? "Start from zero" : "I know tmux"}
+                {HERO_LABELS[i]}
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </button>
             ))}
@@ -116,7 +122,8 @@ export function Hub({
           </div>
           <p className="hidden font-mono text-fd-muted-foreground text-xs sm:block">
             press <Keycap label="1" size="sm" /> to{" "}
-            <Keycap label={String(tracks.length)} size="sm" />
+            <Keycap label={String(tracks.length)} size="sm" />, or{" "}
+            <Keycap label="0" size="sm" /> to play
           </p>
         </div>
         <div
@@ -132,6 +139,27 @@ export function Hub({
             />
           ))}
         </div>
+        <button
+          type="button"
+          onClick={onPlay}
+          className="group mt-4 flex w-full flex-col items-start gap-4 rounded-2xl border border-fd-border border-dashed bg-fd-card/60 p-5 text-left transition-all duration-200 hover:border-fd-primary/60 hover:bg-fd-card sm:flex-row sm:items-center"
+        >
+          <Keycap label="0" />
+          <div>
+            <h3 className="font-bold text-xl">
+              Free play{" "}
+              <Gamepad2 className="ml-1 inline size-5 text-[var(--brand-a)]" />
+            </h3>
+            <p className="mt-1 text-fd-muted-foreground text-sm">
+              No steps, no timer. The real tuios and a cheat sheet you can
+              click.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 font-mono font-semibold text-sm sm:ml-auto">
+            Play
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+          </span>
+        </button>
       </section>
 
       <section className="mx-auto w-full max-w-5xl px-4 pt-20 pb-24 md:px-6">
