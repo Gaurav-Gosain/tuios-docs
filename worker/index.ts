@@ -14,7 +14,8 @@
  *
  * Before any of that, a request to a moved host (tuios.gaurav.zip,
  * www.tuios.dev) gets a 301 to the same path on https://tuios.dev. See
- * redirect.ts.
+ * redirect.ts. Then a page that moved gets a 301 to its new path (see
+ * redirects.ts).
  */
 import {
   appendVary,
@@ -24,15 +25,22 @@ import {
   quality,
 } from "./negotiate";
 import { hostRedirect } from "./redirect";
+import { movedTo } from "./redirects";
 
 type Env = { ASSETS: Fetcher };
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const moved = hostRedirect(request);
-    if (moved) return moved;
+    const hostMoved = hostRedirect(request);
+    if (hostMoved) return hostMoved;
 
     const url = new URL(request.url);
+    const moved = movedTo(url.pathname);
+    if (moved) {
+      const target = new URL(url);
+      target.pathname = moved;
+      return Response.redirect(target.toString(), 301);
+    }
     if (
       (request.method !== "GET" && request.method !== "HEAD") ||
       !isPagePath(url.pathname)
