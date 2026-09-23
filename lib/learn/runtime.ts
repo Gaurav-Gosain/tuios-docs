@@ -6,7 +6,7 @@
  * WebTerm renderer. scripts/learn-engine.mjs writes it.
  *
  * Why gzip and DecompressionStream, and not a Worker that sets
- * Content-Encoding on a brotli file: the raw wasm is about 35 MB, over the
+ * Content-Encoding on a brotli file: the raw wasm is about 27 MB, over the
  * 25 MiB limit on one static asset, so only a compressed file can ship. Having
  * the page unpack it means it works on every host the site runs on (next dev,
  * a preview, the Worker, plain static hosting) with no special headers, and
@@ -23,7 +23,16 @@ export type EngineManifest = {
   base: string;
   wasm: string;
   wasmBytes: number;
+  /** Everything the page downloads to run tuios. */
+  totalBytes?: number;
+  /** Font files under `base`, woff2 or ttf. */
+  fonts?: { regular: string; bold: string };
   ref: string;
+};
+
+const DEFAULT_FONTS = {
+  regular: "fonts/JetBrainsMonoNerdFontMono-Regular.ttf",
+  bold: "fonts/JetBrainsMonoNerdFontMono-Bold.ttf",
 };
 
 export type EngineStatus = {
@@ -260,17 +269,18 @@ async function boot(
   const GoClass = window.Go;
   if (!WebTermClass || !GoClass) throw new Error("engine scripts missing");
 
+  const fonts = manifest.fonts ?? DEFAULT_FONTS;
   const term = new WebTermClass({
     fontFamily: "JetBrainsMono Nerd Font Mono",
     fontSize,
     fonts: [
       {
-        source: `url(${manifest.base}fonts/JetBrainsMonoNerdFontMono-Regular.ttf)`,
+        source: `url(${manifest.base}${fonts.regular})`,
         weight: "400",
         style: "normal",
       },
       {
-        source: `url(${manifest.base}fonts/JetBrainsMonoNerdFontMono-Bold.ttf)`,
+        source: `url(${manifest.base}${fonts.bold})`,
         weight: "700",
         style: "normal",
       },

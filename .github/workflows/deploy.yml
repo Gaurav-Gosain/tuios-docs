@@ -48,8 +48,17 @@ jobs:
           go-version-file: .tuios/go.mod
           cache-dependency-path: .tuios/go.sum
 
+      # build.sh turns the fonts into woff2 with fonttools, which uvx fetches.
+      # Without it the fonts ship as TTF, 2.5 times the size.
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      # build.sh finds bubbletea, creack/pty and sip in the module cache with
+      # go list -m, which does not download them. It needs brotli too.
       - name: Build the tuios engine for /learn
         run: |
+          command -v brotli >/dev/null || sudo apt-get install -y brotli
+          (cd .tuios && go mod download)
           .tuios/cmd/tuios-wasm/build.sh "$PWD/.learn-build"
           bun scripts/learn-engine.mjs .learn-build
 
