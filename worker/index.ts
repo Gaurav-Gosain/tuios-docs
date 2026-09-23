@@ -58,7 +58,7 @@ export default {
       }
     }
 
-    const html = await env.ASSETS.fetch(request);
+    const html = await env.ASSETS.fetch(htmlAssetRequest(url, request));
     const res = new Response(html.body, html);
     res.headers.set("Vary", appendVary(res.headers.get("Vary")));
     if (res.headers.get("content-type")?.includes("text/html")) {
@@ -74,6 +74,24 @@ export default {
     return res;
   },
 };
+
+/**
+ * The request to hand the assets for a page. With html_handling set to
+ * auto-trailing-slash, the assets answer /x.html with a redirect to /x. A URL
+ * that names the .html file must serve it as it stands (Google's site
+ * verification file is fetched that way and does not follow the redirect), so
+ * such a request asks for /x, which the assets resolve to x.html, and the
+ * client keeps its URL.
+ */
+function htmlAssetRequest(url: URL, request: Request) {
+  if (!url.pathname.endsWith(".html")) return request;
+  const bare = new URL(url);
+  bare.pathname = url.pathname.slice(0, -".html".length) || "/";
+  if (bare.pathname.endsWith("/index")) {
+    bare.pathname = bare.pathname.slice(0, -"index".length);
+  }
+  return new Request(bare, request);
+}
 
 function notAcceptable(body: string) {
   return new Response(`Not Acceptable\n\n${body}`, {
