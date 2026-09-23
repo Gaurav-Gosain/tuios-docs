@@ -12,8 +12,9 @@ export const powerMoves: Track = {
   setup: [
     { command: "newWindow", wait: 250 },
     { command: "mode", args: ["terminal"], wait: 150 },
-    { command: "type", args: ["neofetch\r"], wait: 300 },
-    { command: "type", args: ["ls\r"] },
+    { command: "type", args: ["ls\r"], wait: 300 },
+    // Last, so it is the row the scrollback browser opens on.
+    { command: "type", args: ["neofetch\r"] },
   ],
   steps: [
     {
@@ -75,10 +76,10 @@ export const powerMoves: Track = {
     {
       id: "scrollback",
       title: "Browse old commands",
-      note: "Every command and its output, one per row.",
-      keys: ["ctrl+b", "s", "j", "esc"],
+      note: "Every command and its output, newest first.",
+      keys: ["ctrl+b", "s", "esc"],
       done: seq(opened("scrollback"), closed("scrollback")),
-      hint: "ctrl+b, then s. j and k walk the commands. esc closes it.",
+      hint: "ctrl+b, then s. Look around, then esc closes it.",
       learned: "scrollback browser",
     },
   ],

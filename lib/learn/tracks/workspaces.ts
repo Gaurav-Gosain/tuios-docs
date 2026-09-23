@@ -5,8 +5,8 @@ import { sampleWindow } from "./scenes";
 /** Nine workspaces, moving windows between them, and the session rail. */
 export const workspaces: Track = {
   id: "workspaces",
-  title: "Workspaces and the rail",
-  blurb: "Nine desktops in one terminal, and a rail that shows it all.",
+  title: "Workspaces",
+  blurb: "Nine desktops in one terminal, and a side rail that shows it all.",
   audience: "Many projects",
   minutes: 4,
   next: ["agents", "power-moves"],

@@ -75,19 +75,11 @@ export const fromZellij: Track = {
     },
     {
       id: "float",
-      title: "Float a pane, drag it",
-      note: "zellij used alt+f. Here ctrl+p is the command palette.",
+      title: "Float a pane",
+      note: "zellij used alt+f. Drag its title bar with the mouse to move it.",
       keys: ["ctrl+p", { text: "float" }, "enter"],
-      done: seq(
-        on("window.float", (e) => e.data?.floating === true),
-        on(
-          "window.move",
-          (e) =>
-            e.state?.windowList.find((w) => w.id === e.windowId)?.floating ===
-            true,
-        ),
-      ),
-      hint: "ctrl+p, type float, press enter. Then grab its top edge with the mouse and drag.",
+      done: on("window.float", (e) => e.data?.floating === true),
+      hint: "ctrl+p opens the command palette. Type float and press enter.",
       learned: "floating pane",
     },
     {
