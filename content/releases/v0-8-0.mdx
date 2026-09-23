@@ -1,6 +1,6 @@
 ---
 title: v0.8.0
-description: 'tuios now tracks the coding agents in your panes, keeps sessions in a daemon that restores them, reaches panes on other machines, and uses a tenth of the memory per pane, with a scrolling layout, a rail with files and git, a launcher, a keybind manager and a settings page for every option.'
+description: 'tuios now tracks the coding agents in your panes, keeps sessions in a daemon that restores them, reaches panes on other machines, and keeps a full scrollback in a tenth of the memory, with a scrolling layout, a rail with files and git, a launcher, a keybind manager and a settings page for every option.'
 date: '2026-09-23'
 author: Gaurav Gosain
 ---
@@ -9,20 +9,26 @@ author: Gaurav Gosain
   DRAFT for review. Before tagging:
   - Set `date` above to the tag date.
   - Recount the numbers in "Numbers" at the tag (they are for tuios main at 491efd4d).
-  - Decide on the "Coming in this release" section at the end of Agents.
-  - The "New defaults" section describes defaults that tuios main at 491efd4d
-    does not have yet (see the comment there).
+  - Decide on the agent features still on branches (see the comment at the
+    end of Agents). Nothing about them is visible on the page.
+  - If the default look changes in tuios before the tag (rail on the right,
+    dock on top, and so on), rewrite "The look in the clips" and "Defaults".
+  - Recheck "Known issues" at the tag: drop any that are fixed by then.
 */}
 
 v0.8.0 turns tuios into a place to run coding agents: it knows what the agent
 in each pane is doing and tells you when one needs you, and your sessions live
-in a daemon that brings them back after a restart, including panes on other
-machines. It is also much smaller and faster: scrollback costs 4.2MB per pane
-instead of 48MB, and startup to the first frame went from 566ms to 68ms.
+in a daemon that brings their layout back after a restart. It is also much
+smaller and faster: a full scrollback costs 4.2MB per pane instead of 48MB,
+and startup to the first frame went from 566ms to 68ms.
 
 1,906 commits in the six months since v0.7.0. If you already run tuios, read
-[Before you upgrade](#before-you-upgrade) and [New defaults](#new-defaults)
-first: some keys and defaults changed.
+[Before you upgrade](#before-you-upgrade) first: some keys changed, and an
+existing config keeps running without the daemon until you turn it on.
+
+The clips on this page were recorded with the rail on and on the right, and
+the dock on top. That is not the default look.
+[The look in the clips](#the-look-in-the-clips) has the settings.
 
 ## In short
 
@@ -139,17 +145,22 @@ See [Agent messaging](/docs/agent-messaging).
 
 ```bash
 tuios fan 3 --agent claude 'Add a retry with backoff to the HTTP client.'
-tuios worktree diff api-fan-add-a-retry-with-2
-tuios fan keep api-fan-add-a-retry-with-2 --stash
+tuios worktree diff api-fan-add-retry-backoff-http-2
+tuios fan keep api-fan-add-retry-backoff-http-2 --stash
 ```
 
 `tuios fan` creates several git worktrees of the repository you are in, starts
 the agent in each, and types the prompt once each agent is ready to read it.
-The rail groups the sessions under their repository. `fan keep` keeps one and
+Each branch is `fan/` and the first four words of the prompt that carry
+meaning, so in a repository called `api` the prompt above makes the sessions
+`api-fan-add-retry-backoff-http`, `-2` and `-3`. `--name` picks the stem
+yourself. The rail groups the sessions under their repository. `fan keep` keeps one and
 removes the others. It refuses to throw away uncommitted work unless you pass
 `--stash` (which puts it in `git stash`) or `--force`, and it never deletes a
 branch. `tuios worktree new|ls|diff|rm` manages single worktrees the same way.
-See [Worktrees](/docs/worktrees).
+See [Worktrees](/docs/worktrees). The windows of a fan session open floating
+in this release, as in the clip; `t` in window mode tiles them (see
+[Known issues](#known-issues)).
 
 <ReleaseClip
   src="/releases/v0.8.0/fan"
@@ -171,27 +182,27 @@ See [Worktrees](/docs/worktrees).
     describe only what the branch adds)
   Also on those branches: 14 more `tuios integration install` harnesses,
   set-agent-session, prompt_stalled, the grown manifest engine.
+  Add a section here only for what has merged by the tag. Nothing about these
+  is on the page or in the feeds until then.
 */}
-
-<Callout type="info" title="Coming in this release">
-  More agent features are still being built: an Inbox for everything that
-  waits for you, answering approvals from it, an MCP server, scoped tokens, a
-  tmux shim and host targeting. This section will describe the ones that make
-  it into v0.8.0.
-</Callout>
 
 ## Sessions come back
 
-A bare `tuios` now starts or joins the daemon, which keeps your sessions
-running while no client is attached. The daemon also saves each session's
-structure under `$XDG_STATE_HOME/tuios/sessions` and restores it when it
-starts. A detach loses nothing. A daemon restart or a reboot ends the shells:
-what comes back is the layout, not the programs.
+On a fresh install, a bare `tuios` starts or joins the daemon, which keeps
+your sessions running while no client is attached. An existing config file
+keeps running tuios without the daemon, and so without restore, until you turn
+it on (see [Before you upgrade](#turn-on-the-daemon)). The daemon saves each
+session's structure under `$XDG_STATE_HOME/tuios/sessions` and restores it
+when it starts. A detach loses nothing. A daemon restart or a reboot ends the
+shells: what comes back is the layout, not the programs.
 
 - Each window comes back with its workspace, its place in the layout, its name
   and its working directory. The session keeps its name and colour.
 - Each shell is new, started in the old directory. Scrollback and running
   programs are not saved. Restored shells get `TUIOS_RESTORED=1`.
+- A pane that ran on another machine comes back as a shell on this machine,
+  in the daemon's own directory, not the folder it had over there. Restore runs before the links to other machines are
+  up, so it does not wait for them.
 - A state file tuios cannot read is moved aside for two weeks instead of
   stopping the daemon.
 - Working directories come back on macOS too.
@@ -276,9 +287,8 @@ honour `appearance.gap`.
   layout and closes it when the command exits. This is how fzf, gum and other
   pickers become tuios overlays.
 - **New windows open where you are**, in the focused pane's directory.
-- Windows the daemon creates now tile too, and resize was rebuilt so dragging
-  a shared border moves only the two panes that share it
-  ([the post](/blog/one-divider-five-windows)).
+- Resize was rebuilt so dragging a shared border moves only the two panes that
+  share it ([the post](/blog/one-divider-five-windows)).
 
 See [Layout modes](/docs/layout-modes).
 
@@ -286,8 +296,12 @@ See [Layout modes](/docs/layout-modes).
 
 The rail is a sidebar of sections: sessions, terminals, files, git and agents.
 Which sections it draws, in what order and how tall, is one string,
-`appearance.sidebar.sections`, with an editor on the settings page. The files
-and git sections follow the focused pane into its directory.
+`appearance.sidebar.sections`, with an editor on the settings page. The rail
+is off by default: `ctrl+b b` shows it, and `appearance.sidebar.enabled = true`
+keeps it on. The files and git sections follow the focused pane into its
+directory. tuios reads the directory from the shell's OSC 7 report when the
+shell sends one, and otherwise from the process itself (see
+[Known issues](#known-issues) for one case where that stops).
 
 <ReleaseClip
   src="/releases/v0.8.0/rail"
@@ -493,7 +507,9 @@ See [the control protocol](/docs/control-protocol) and the post
 ## The terminal emulator
 
 Behind a `ghostty` build tag, panes can run on libghostty-vt, Ghostty's
-emulation core, instead of the pure Go emulator. Release builds ship both, and
+emulation core, instead of the pure Go emulator. Package managers install the
+pure Go build. The GitHub release adds `tuios-ghostty` archives built with
+libghostty-vt, and `scripts/install.sh` builds it by default.
 `tuios --version` names the backend. A differential suite feeds both the same
 bytes and compares the results.
 
@@ -512,9 +528,11 @@ and two metamorphic checks found bugs that any program in a pane could hit:
 ## Faster and smaller
 
 Every number comes from the commit that made the change or from `docs/perf.md`
-in the tuios repository.
+in the tuios repository. Each row is a before and after pair measured around
+one change during this cycle, on the machine and setup that change was
+measured on. It is not a run of v0.7.0 against v0.8.0.
 
-| What | v0.7.0 | v0.8.0 |
+| What | Before | After |
 | --- | --- | --- |
 | Scrollback, 10,000 lines per pane | 48MB | 4.2MB |
 | Empty 207x55 pane | 1.7MB | 28KB |
@@ -554,9 +572,27 @@ change.
 
 The wire protocol is version 3, and a version 2 daemon is refused with a
 message that says which side is newer. Run `tuios kill-server` and start tuios
-again. This ends every program running in your panes. The layout, window names
-and working directories come back, each pane with a new shell. The JSON verb
-protocol stays at version 1.
+again. This ends every session the v0.7.0 daemon holds: v0.7.0 saves nothing,
+so its layouts, window names and working directories are lost along with the
+programs in its panes. Note what you want to keep before you run it. From
+v0.8.0 on, a daemon restart brings the layout back. The JSON verb protocol
+stays at version 1.
+
+### Turn on the daemon
+
+A fresh install uses the daemon and starts tiled. An existing config file does
+not: `[startup]` has no default for keys the file leaves out, so a file that
+does not name `daemon` and `tiled` reads them as false, and tuios keeps
+running standalone and floating, with no restore. To get the new behaviour,
+add this to `config.toml`:
+
+```toml
+[startup]
+daemon = true
+tiled = true
+```
+
+`tuios --standalone` or `TUIOS_NO_DAEMON=1` runs without the daemon.
 
 ### Keys and mouse
 
@@ -603,9 +639,10 @@ protocol stays at version 1.
 
 ### Scripts
 
-- **`TERM_PROGRAM` is no longer `TUIOS`.** It is `ghostty` when kitty graphics
-  are forwarded and `WezTerm` for sixel, so programs turn on their graphics. A
-  script that checks for tuios should read `TUIOS_ENV` (or `TUIOS_PANE_ID`).
+- **`TERM_PROGRAM` is not always `TUIOS`.** It is `ghostty` when kitty
+  graphics are forwarded and `WezTerm` when sixel is, so programs turn on their
+  graphics. With neither, it is still `TUIOS`. A script that checks for tuios
+  should read `TUIOS_ENV` (or `TUIOS_PANE_ID`).
   `TMUX` and `TMUX_PANE` are removed from pane environments. A pane on another
   machine gets `TUIOS_SESSION_REMOTE` instead of `TUIOS_SESSION`.
 - **`tuios ls` with no daemon exits 3.** It lists the sessions saved on disk,
@@ -623,9 +660,9 @@ protocol stays at version 1.
 
 ### Config
 
-- **Removed keys:** `daemon.default_codec` (the JSON wire codec is gone),
+- **Removed keys:** `daemon.default_codec` (the JSON wire codec is gone) and
   `daemon.socket_path` (it was never honoured: the socket follows
-  `XDG_RUNTIME_DIR`), and `appearance.separator_style`. Delete them.
+  `XDG_RUNTIME_DIR`). Delete them.
 - **Removed flag:** `tuios tape play --visible` (`-v`), which nothing read.
   Drop it.
 - **Removed actions:** `nav_up`, `nav_down`, `nav_left`, `nav_right`,
@@ -635,12 +672,23 @@ protocol stays at version 1.
 - Selection colours are settings under `[appearance.selection]`: grey
   selection, amber search, cyan copy cursor, not bold.
   `appearance.selection.bold = true` brings bold back.
-- Sidebar settings moved into an `[appearance.sidebar]` table. The old
-  `appearance.sidebar_*` keys are still read, and the table wins.
 - The `colorshift` screen saver effect reads as `random`.
 - **Hooks moved to the daemon:** `after-new-window`, `after-close-window`,
   `after-focus-change`, `after-workspace-switch` and `after-agent-state` run
   with the daemon's environment and fire once, not once per client.
+
+If you ran a build from main during this cycle, three more apply. v0.7.0 had
+none of these keys:
+
+- `appearance.separator_style` is removed. Delete it.
+- Sidebar settings moved into an `[appearance.sidebar]` table. The old
+  `appearance.sidebar_*` keys are still read, and the table wins.
+- `appearance.sidebar.show_windows` and `show_agents` are folded into
+  `appearance.sidebar.sections` when the config loads. Edit `sections`
+  instead, for example `sections = 'sessions,terminals,files,git,agents'`.
+
+`appearance.gap` is not removed: an early `gap` key that did nothing became
+the working `appearance.gap`.
 
 ### SSH
 
@@ -650,7 +698,10 @@ protocol stays at version 1.
   keys, a loopback address still runs unauthenticated with a warning, and any
   other address is refused. `--no-auth` opens it on a network you trust.
 - A connection that names no session gets one called `ssh-session` when
-  several exist, instead of the first one listed.
+  several exist, instead of the first one listed. To reach a session, name it
+  in the username (`ssh api@host -p 2222`) or run `ssh host -p 2222 -t attach
+  api`. The usernames `tuios`, `root` and `anonymous` do not count as a name.
+- The SSH session picker is removed. v0.7.0 never showed it.
 
 ### Agents
 
@@ -660,8 +711,17 @@ protocol stays at version 1.
   write the new hooks, which call `tuios agent-hook`. The old Python shim now
   wraps it.
 - Your own harness manifests: an idle screen rule needs a `prompt_box` region
-  or a regex, and `argv_path` matches path components of interpreter scripts
-  only.
+  or a regex. `argv_path` matches whole path components, and only in the
+  script an interpreter runs, not in any argument. A manifest that matches on
+  a bare name shorter than five characters must add a `[detect.require]` block
+  (for example `exe_base = ["node"]`) or it is refused. See
+  [Agents](/docs/agents).
+
+### Terminal behaviour
+
+- ED 3 (`CSI 3 J`) now clears only the scrollback, as in other terminals. It used to clear the screen too.
+- Entering the alternate screen (modes 1049 and 1047) keeps the cursor where
+  it is. It used to move it to the top left.
 
 ### Embedders
 
@@ -669,71 +729,61 @@ protocol stays at version 1.
 many `app.OS` exports are gone, `pkg/tfx` is now the `tuiffects` module, and
 the SSH module is `charm.land/ssh`.
 
-## New defaults
+### Defaults
 
-{/*
-  CHECK BEFORE TAGGING: tuios main at 491efd4d still has the old defaults for
-  every row in this table (sidebar off, left, 28 columns; dock bottom; titles
-  bottom; zoom_size 100; click_to_type single; scrollbar thin). These are the
-  maintainer's look that the clips were recorded with. Change DefaultConfig in
-  internal/config/userconfig.go (and ZoomSizeDefault in constants.go) before
-  the tag, or remove this section.
-*/}
+- On a fresh install, a bare `tuios` uses the daemon (`startup.daemon`) and
+  starts tiled (`startup.tiled`). An existing config file does not; see
+  [Turn on the daemon](#turn-on-the-daemon).
+- Window controls are drawn as dots on the left of the title bar.
+  `appearance.window_button_style = "pill"` and
+  `appearance.window_button_position = "right"` bring back the old ones.
 
-These defaults change in v0.8.0. The clips on this page were recorded with
-them.
+### Known issues
 
-| Setting | v0.8.0 default | Before |
-| --- | --- | --- |
-| The rail (sidebar) | on | off |
-| Rail position and width | right, 24 columns | left, 28 columns |
-| Dock | top | bottom |
-| Window titles | top | bottom |
-| Zoom | fills 95 percent, neighbours visible | fills the screen |
-| Click on a pane | one click focuses, double click starts typing | one click starts typing |
-| Scrollbar | a thumb on a track | a thin line |
+- Windows in a session made by `tuios fan` open floating instead of tiled.
+  `t` in window mode tiles them.
+- In a pane whose shell does not send OSC 7, the rail's files and git sections
+  stop following the pane's directory after `tuios set-window --name` renames
+  the pane. A shell that sends OSC 7 is not
+  affected.
 
-To get the old ones back, add this to `config.toml`:
+## The look in the clips
+
+The clips were recorded with this in `config.toml`, which is not the default
+look. The default is the rail off (on the left, 28 columns when shown), the
+dock and window titles at the bottom, zoom filling the screen and a thin
+scrollbar.
 
 ```toml
 [appearance]
-dockbar_position = "bottom"
-window_title_position = "bottom"
-zoom_size = 100
-click_to_type = "single"
+dockbar_position = "top"
+window_title_position = "top"
+zoom_size = 95
 
 [appearance.scrollbar]
-style = "thin"
+style = "track"
 
 [appearance.sidebar]
-enabled = false
-position = "left"
-width = 28
+enabled = true
+position = "right"
+width = 24
 ```
 
 Each line also works on its own, from the settings page (`ctrl+b ,`), or live
-with `tuios set-config`, for example `tuios set-config zoom_size 100`.
+with `tuios set-config`, for example `tuios set-config zoom_size 95`.
 `ctrl+b b` shows and hides the rail at any time.
-
-Two defaults from earlier in this cycle apply to a fresh install only: a bare
-`tuios` uses the daemon (`startup.daemon = true`) and starts tiled
-(`startup.tiled = true`). An existing config file keeps what its `[startup]`
-table says. Window controls are drawn as dots on the left of the title bar;
-`appearance.window_button_style = "pill"` and
-`appearance.window_button_position = "right"` bring back the old ones.
-`tuios --standalone` or `TUIOS_NO_DAEMON=1` runs without the daemon.
 
 ## Numbers
 
 - 1,906 commits between v0.7.0 (29 March 2026) and 23 September 2026, 1,604
-  of them not merges. v0.7.0 had 157.
+  of them not merges. v0.7.0 had 158, 157 of them not merges.
 - 518 fixes, 304 features, 256 test commits, 99 docs commits and 79
   performance commits, by their conventional-commit prefix.
 - 1,970 files changed: 397,746 lines added and 31,774 removed.
 - 64 JSON verbs, 156 options you can set live, 22 agent harness manifests, 4
   harness integrations, 343 built-in themes, 36 screen saver effects, 4 glyph
   sets and 3 tilers.
-- 25 engineering posts on the [blog](/blog) since June.
+- 24 engineering posts on the [blog](/blog) since June.
 
 ## Thanks
 
