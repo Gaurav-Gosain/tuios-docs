@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Play } from "lucide-react";
+import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
@@ -16,6 +16,9 @@ const NARROW = "(max-width: 639px)";
  *   is close to the viewport (preload none, sources attached on intersection).
  * - In view it plays muted and loops, like a GIF. Out of view it pauses, so a
  *   page of clips decodes one or two at a time.
+ * - The clips are narrated. The sound button turns the voice on (and starts
+ *   the clip); browsers only autoplay muted video, so it starts off. The
+ *   narration's captions are `src.vtt`, a track the reader can turn on.
  * - With prefers-reduced-motion it never starts by itself. The button starts
  *   it, and the button pauses it in every case, because moving content longer
  *   than five seconds needs a way to stop it.
@@ -46,7 +49,14 @@ export function ReleaseClip({
   const [reduced, setReduced] = useState(false);
   const [visible, setVisible] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const [sound, setSound] = useState(false);
   const stepsId = useId();
+
+  // React sets the muted attribute only on mount, so follow the state by hand.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) video.muted = !sound;
+  }, [sound]);
 
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -129,6 +139,12 @@ export function ReleaseClip({
     setWanted(video.paused);
   };
 
+  const toggleSound = () => {
+    setNear(true);
+    if (!sound) setWanted(true);
+    setSound(!sound);
+  };
+
   return (
     <figure className="not-prose my-8">
       <div className="group relative overflow-hidden rounded-xl border border-fd-border bg-[#11111b] shadow-lg shadow-fd-primary/5">
@@ -153,6 +169,14 @@ export function ReleaseClip({
           {near && narrow ? (
             <source src={`${src}-vertical.mp4`} type="video/mp4" />
           ) : null}
+          {near ? (
+            <track
+              kind="captions"
+              src={`${src}.vtt`}
+              srcLang="en"
+              label="English"
+            />
+          ) : null}
           {near && !narrow ? (
             <>
               <source src={`${src}.webm`} type="video/webm" />
@@ -160,6 +184,26 @@ export function ReleaseClip({
             </>
           ) : null}
         </video>
+        <button
+          type="button"
+          onClick={toggleSound}
+          aria-label={`Narration sound: ${label}`}
+          aria-pressed={sound}
+          className={cn(
+            "absolute right-14 bottom-3 inline-flex size-9 items-center justify-center rounded-full",
+            "border border-white/15 bg-black/60 text-white backdrop-blur-sm transition-opacity",
+            "hover:bg-black/80 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-fd-primary focus-visible:outline-offset-2",
+            playing && !sound
+              ? "opacity-60 group-hover:opacity-100"
+              : "opacity-100",
+          )}
+        >
+          {sound ? (
+            <Volume2 className="size-4" aria-hidden="true" />
+          ) : (
+            <VolumeX className="size-4" aria-hidden="true" />
+          )}
+        </button>
         <button
           type="button"
           onClick={toggle}
