@@ -94,6 +94,16 @@ A widget that shows TUIOS behavior should match the code. Check it against the t
 
 `.github/workflows/deploy.yml` runs `bun install` and `bun run build` on every push to `main`, then publishes `out/` to GitHub Pages at `tuios.gaurav.zip`.
 
+## Learn page
+
+`/learn` runs the real tuios in the browser: tuios compiled to WebAssembly with a pretend shell, drawn by sip's WebTerm. The pieces:
+
+- `components/learn/`: the hub (live hero and track cards), the lesson screen, the finish panel with the share card, and the phone preview.
+- `lib/learn/`: `runtime.ts` loads and boots the wasm, `engine.ts` runs a track from tuios's event stream, `matchers.ts` has the step checks, and `tracks/` holds one file per track. Add a track by writing a file there and listing it in `tracks/index.ts`. `bun test lib/` checks the engine and every track.
+- The engine files are not in git. `bun scripts/learn-engine.mjs <dir>` copies a tuios browser build (what `cmd/tuios-wasm/build.sh` in tuios writes) into `public/learn/engine/<hash>/` and writes `public/learn/engine.json`. Without them the page shows that the engine is missing and everything else still builds.
+- Deploy builds tuios at the commit in `learn/TUIOS_REF`. Bump that file to teach a newer tuios.
+- Only a gzipped wasm ships, because the raw file is over the 25 MiB asset limit. The page unpacks it with `DecompressionStream`, so it needs no special headers on any host.
+
 ## Notes
 
 1. **Static export**: there is no server at runtime. Route handlers must be static (search uses `staticGET`, and every route sets `revalidate = false`).

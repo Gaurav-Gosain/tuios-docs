@@ -1,4 +1,5 @@
 import { markdownForAgents } from "@/lib/feed";
+import { learnMarkdown } from "@/lib/learn/markdown";
 import { markdownPath } from "@/lib/markdown-path";
 import { absoluteUrl, site } from "@/lib/site";
 import {
@@ -47,6 +48,7 @@ export async function GET() {
     "/releases",
     [["Releases", releases]],
   );
+  files["/learn.md"] = learnMarkdown();
 
   return Response.json(files);
 }

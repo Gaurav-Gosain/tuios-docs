@@ -30,6 +30,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1,
     },
+    {
+      url: absoluteUrl("/learn"),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
     ...getDocsInSidebarOrder().map(({ page }) => ({
       url: absoluteUrl(page.url),
       changeFrequency: "weekly" as const,

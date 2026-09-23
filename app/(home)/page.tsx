@@ -128,6 +128,16 @@ export default function HomePage() {
               Get started
               <ArrowRight className="size-4" />
             </Link>
+            <Link
+              href="/learn"
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-lg border border-fd-primary/40 bg-fd-primary/10 px-5 py-2.5 font-medium font-mono text-fd-foreground text-sm transition-colors hover:border-fd-primary sm:w-auto"
+            >
+              <Keyboard className="size-4 text-fd-primary" />
+              Try it in your browser
+              <span className="rounded bg-fd-primary/15 px-1.5 py-0.5 text-fd-primary text-xs">
+                5 min
+              </span>
+            </Link>
             <a
               href="https://github.com/Gaurav-Gosain/tuios"
               target="_blank"
@@ -254,7 +264,14 @@ export default function HomePage() {
                 >
                   keybindings page
                 </Link>{" "}
-                lists the rest, or run <code>tuios keybinds list</code>.
+                lists the rest, or run <code>tuios keybinds list</code>. Or{" "}
+                <Link
+                  href="/learn"
+                  className="text-fd-foreground underline decoration-fd-primary/50 underline-offset-4 hover:decoration-fd-primary"
+                >
+                  learn them hands on
+                </Link>
+                , in your browser, before you install anything.
               </p>
             </Step>
           </div>
