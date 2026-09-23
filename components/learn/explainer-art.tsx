@@ -5,6 +5,34 @@ import type { Explainer } from "@/lib/learn/types";
 
 const PANE_COLORS = ["#bb9af7", "#7aa2f7", "#9ece6a"];
 
+const FRAME =
+  "flex h-36 items-center justify-center rounded-lg border border-fd-border bg-[#0b0b13]";
+
+function AgentBox({
+  color,
+  name,
+  badge,
+}: {
+  color: string;
+  name: string;
+  badge?: string;
+}) {
+  return (
+    <div
+      className="relative flex h-16 w-20 flex-col justify-between rounded-md border p-2"
+      style={{ borderColor: color }}
+    >
+      <span className="text-white/60">agent</span>
+      <span style={{ color }}>{name}</span>
+      {badge ? (
+        <span className="ex-dot absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full bg-[#e0af68] text-[0.55rem] text-[#11111b]">
+          {badge}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function MiniDesktop({ className = "" }: { className?: string }) {
   return (
     <div
@@ -67,6 +95,92 @@ export function ExplainerArt({ art }: { art: Explainer["art"] }) {
         <div className="ex-sync font-mono text-[#bb9af7] text-xs">⇄</div>
         <div className="h-20 w-32">
           <MiniDesktop />
+        </div>
+      </div>
+    );
+  }
+  if (art === "mail") {
+    return (
+      <div aria-hidden className={FRAME}>
+        <div className="flex items-center gap-5 font-mono text-[0.65rem] text-[#cdd6f4]">
+          <AgentBox color="#bb9af7" name="review" />
+          <div className="relative h-0.5 w-20 overflow-hidden rounded bg-white/10">
+            <div className="ex-packet absolute -top-1.5 flex h-3.5 w-5 items-center justify-center rounded-sm bg-[#e0af68] text-[0.5rem] text-[#11111b]">
+              @
+            </div>
+          </div>
+          <AgentBox color="#7aa2f7" name="tests" badge="1" />
+        </div>
+      </div>
+    );
+  }
+  if (art === "fanout" || art === "worktree") {
+    const branches =
+      art === "fanout"
+        ? ["fan/dark-mode", "fan/dark-mode-2", "fan/dark-mode-3"]
+        : ["main", "feat/retry", "fix/login"];
+    return (
+      <div aria-hidden className={FRAME}>
+        <div className="flex items-center gap-4 font-mono text-[0.6rem] text-[#cdd6f4]">
+          <div className="rounded-md border border-[#bb9af7]/60 bg-[#bb9af7]/10 px-2 py-1.5 text-[#bb9af7]">
+            {art === "fanout" ? "one prompt" : "one repo"}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {branches.map((b, i) => (
+              <div
+                key={b}
+                className="ex-pop flex items-center gap-1.5 rounded-md border border-white/15 px-2 py-1"
+                style={{ animationDelay: `${i * 0.35}s` }}
+              >
+                <span
+                  className="ex-dot size-1.5 rounded-full"
+                  style={{ background: PANE_COLORS[i] }}
+                />
+                {b}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (art === "protocol" || art === "hooks") {
+    const lines =
+      art === "protocol"
+        ? [
+            '{"verb":"new-window"}',
+            '{"ok":true,"id":"a1f3"}',
+            '{"verb":"send-text"}',
+            '{"verb":"wait-for"}',
+            '{"ok":true,"exit":0}',
+            '{"verb":"capture-pane"}',
+          ]
+        : [
+            "after-new-window",
+            "  notify-send 'hi'",
+            "after-agent-state",
+            "  ~/bin/ping-phone.sh",
+            "after-focus-change",
+            "  echo moved >> log",
+          ];
+    return (
+      <div aria-hidden className={`${FRAME} overflow-hidden`}>
+        <div className="h-24 w-56 overflow-hidden font-mono text-[0.65rem] leading-5">
+          <div className="ex-scroll">
+            {[...lines, ...lines].map((line, i) => (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: the list repeats on purpose
+                key={i}
+                className={
+                  line.startsWith(" ") || line.startsWith('{"ok')
+                    ? "text-[#9ece6a]"
+                    : "text-[#7aa2f7]"
+                }
+              >
+                {line}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );

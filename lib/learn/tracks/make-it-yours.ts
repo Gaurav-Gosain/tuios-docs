@@ -1,0 +1,77 @@
+import { closed, on, opened, ran, seq, setting } from "../matchers";
+import type { Track } from "../types";
+
+/** Themes, the settings page, glyph sets, borders and the screen saver. */
+export const makeItYours: Track = {
+  id: "make-it-yours",
+  title: "Make it yours",
+  blurb: "Hundreds of themes, borders, glyphs and a screen saver.",
+  audience: "Ricers",
+  minutes: 3,
+  next: ["power-moves", "agents"],
+  setup: [
+    { command: "newWindow", wait: 250 },
+    { command: "mode", args: ["terminal"], wait: 150 },
+    { command: "type", args: ["neofetch\r"], wait: 300 },
+    { command: "newWindow", wait: 250 },
+    { command: "type", args: ["colors\r"], wait: 300 },
+    { command: "mode", args: ["window"] },
+  ],
+  steps: [
+    {
+      id: "theme",
+      title: "Try on a theme",
+      note: "Type to filter, arrows to browse. The screen repaints as you go.",
+      keys: ["ctrl+p", { text: "theme" }, "enter", { text: "tokyo" }, "enter"],
+      done: seq(opened("themePicker"), on("theme"), closed("themePicker")),
+      hint: "ctrl+p, type theme, enter. In the picker type tokyo, or browse with the arrows. Enter keeps it.",
+      learned: "themes",
+    },
+    {
+      id: "settings",
+      title: "Open the settings",
+      note: "Everything in the config file, live.",
+      keys: ["ctrl+b", ","],
+      done: opened("settings"),
+      hint: "ctrl+b, then the comma key.",
+      learned: "settings",
+    },
+    {
+      id: "borders",
+      title: "Change the borders",
+      note: "Rounded, square, double, thick and more.",
+      keys: ["down", "down", "right"],
+      done: setting("borderStyle"),
+      hint: "Down twice to Border style, then right to change it. Watch the windows behind.",
+      learned: "border style",
+    },
+    {
+      id: "glyphs",
+      title: "Swap the glyph set",
+      note: "The little shapes the frames are drawn with. Esc closes.",
+      keys: ["up", "right", "esc"],
+      done: seq(setting("glyphs"), closed("settings")),
+      hint: "Up to Glyph set, right to change it, then esc.",
+      learned: "glyphs",
+    },
+    {
+      id: "screensaver",
+      title: "Start the screen saver",
+      note: "It kicks in by itself when you step away. Any key wakes it.",
+      keys: ["S", "esc"],
+      needs: "window",
+      done: seq(opened("screensaver"), closed("screensaver")),
+      hint: "Capital S, so shift and s. Enjoy it, then press any key.",
+      learned: "screen saver",
+    },
+    {
+      id: "config",
+      title: "Keep it forever",
+      note: "It all lives in one file. Here is yours.",
+      keys: ["i", { text: "cat .config/tuios/config.toml" }, "enter"],
+      done: ran("cat"),
+      hint: "Press i to type, then cat .config/tuios/config.toml and enter.",
+      learned: "config file",
+    },
+  ],
+};

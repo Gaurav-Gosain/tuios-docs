@@ -1,0 +1,85 @@
+import { changed, closed, notified, on, opened, seq } from "../matchers";
+import type { Track } from "../types";
+
+/** The palette, the launcher, which-key, copy mode, scrollback, showkeys. */
+export const powerMoves: Track = {
+  id: "power-moves",
+  title: "Power moves",
+  blurb: "Palette, launcher, copy mode and the scrollback browser.",
+  audience: "Keyboard fans",
+  minutes: 5,
+  next: ["make-it-yours", "automation"],
+  setup: [
+    { command: "newWindow", wait: 250 },
+    { command: "mode", args: ["terminal"], wait: 150 },
+    { command: "type", args: ["neofetch\r"], wait: 300 },
+    { command: "type", args: ["ls\r"] },
+  ],
+  steps: [
+    {
+      id: "showkeys",
+      title: "Show your keys",
+      note: "Every key you press now pops up bottom right.",
+      keys: ["ctrl+b", "D", "k"],
+      done: notified(/^Showkeys: ON/),
+      hint: "ctrl+b, then capital D for the debug menu, then k.",
+      learned: "showkeys",
+    },
+    {
+      id: "which-key",
+      title: "Menus inside menus",
+      note: "After ctrl+b the panel lists every next key. t opens the window menu.",
+      keys: ["ctrl+b", "t", "esc"],
+      done: seq(changed("prefix", "window"), changed("prefix", "")),
+      hint: "ctrl+b, then t. Read the new menu, then esc.",
+      learned: "which-key",
+    },
+    {
+      id: "palette",
+      title: "Run anything by name",
+      note: "No key to remember. Just type.",
+      keys: ["ctrl+p", { text: "split vertical" }, "enter"],
+      done: on("window.open"),
+      hint: "ctrl+p opens the palette. Type split vertical and press enter.",
+      learned: "command palette",
+    },
+    {
+      id: "launcher",
+      title: "Launch a program",
+      note: "ctrl+b a opens the launcher. alt+space does too.",
+      keys: ["ctrl+b", "a", { text: "rain" }, "enter"],
+      done: seq(opened("launcher"), on("window.open")),
+      hint: "ctrl+b, then a. Type rain and press enter. It opens in a new window.",
+      learned: "launcher",
+    },
+    {
+      id: "copy-search",
+      title: "Copy mode with vim keys",
+      note: "hjkl, w, b, gg and G all work. / searches.",
+      keys: ["ctrl+b", "[", "/", { text: "WebAssembly" }, "enter"],
+      // Back to the window neofetch ran in, which has the word to find.
+      setup: [{ command: "action", args: ["select_window_1"], wait: 200 }],
+      done: seq(opened("copyMode"), opened("search"), closed("search")),
+      hint: "ctrl+b [ enters copy mode. / starts a search, type the word, enter jumps to it.",
+      learned: "copy mode",
+    },
+    {
+      id: "yank",
+      title: "Select and yank",
+      note: "v selects, e stretches it a word, y copies. q leaves.",
+      keys: ["v", "e", "y", "q"],
+      done: seq(notified(/^Yanked/), closed("copyMode")),
+      hint: "Still in copy mode: v, then e, then y. Then q to leave.",
+      learned: "yank",
+    },
+    {
+      id: "scrollback",
+      title: "Browse old commands",
+      note: "Every command and its output, one per row.",
+      keys: ["ctrl+b", "s", "j", "esc"],
+      done: seq(opened("scrollback"), closed("scrollback")),
+      hint: "ctrl+b, then s. j and k walk the commands. esc closes it.",
+      learned: "scrollback browser",
+    },
+  ],
+};
