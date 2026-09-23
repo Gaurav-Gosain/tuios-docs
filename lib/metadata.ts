@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { markdownPath } from "./markdown-path";
 import { feeds, site } from "./site";
 
 /**
@@ -46,7 +47,9 @@ export function pageMetadata({
     description,
     alternates: {
       canonical: path,
-      types: feedAlternates,
+      // The page as plain markdown, for agents and other tools that want the
+      // text without the site around it. See lib/markdown-path.ts.
+      types: { ...feedAlternates, "text/markdown": markdownPath(path) },
     },
     openGraph: {
       title: cardTitle,

@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
+import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
 import { absoluteUrl, site } from "./site";
@@ -75,8 +76,36 @@ async function markdownToHtml(markdown: string, pageUrl: string) {
     .use(remarkGfm)
     .use(remarkMdx)
     .use(remarkRehype);
-  const mdast = processor.parse(markdown) as MdastRoot;
+  const mdast = forReaders(processor.parse(markdown) as MdastRoot, pageUrl);
+  const hast = await processor.run(mdast);
+  return toHtml(hast);
+}
 
+/**
+ * A page's processed markdown as plain markdown for a reader that cannot run
+ * MDX: an agent fetching the page's .md twin. It gets the same treatment as a
+ * feed item, so widgets become a note that links to the page and links are
+ * absolute.
+ */
+export function markdownForAgents(markdown: string, pageUrl: string) {
+  const mdast = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMdx)
+    .parse(markdown) as MdastRoot;
+  return unified()
+    .use(remarkGfm)
+    .use(remarkStringify, { bullet: "-", fences: true })
+    .stringify(forReaders(mdast, pageUrl));
+}
+
+/**
+ * Rewrite parsed MDX for a reader that cannot run it: block widgets become a
+ * note linking to the page, prose containers become blockquotes, inline
+ * widgets keep their text, imports and expressions go, and links and images
+ * become absolute.
+ */
+function forReaders(mdast: MdastRoot, pageUrl: string): MdastRoot {
   visit(mdast, (node, index, parent) => {
     if (!parent || index === undefined) return;
     if (
@@ -129,9 +158,7 @@ async function markdownToHtml(markdown: string, pageUrl: string) {
       node.url = new URL(node.url, pageUrl).toString();
     }
   });
-
-  const hast = await processor.run(mdast);
-  return toHtml(hast);
+  return mdast;
 }
 
 /**
