@@ -117,6 +117,14 @@ function forReaders(mdast: MdastRoot, pageUrl: string): MdastRoot {
       // Visit the replacement so its children are rewritten too.
       return index;
     }
+    if (node.type === "mdxJsxFlowElement" && node.name === "ReleaseClip") {
+      parent.children.splice(
+        index,
+        1,
+        ...(releaseClip(node, pageUrl) as never[]),
+      );
+      return [SKIP, index + 1];
+    }
     if (node.type === "mdxJsxFlowElement") {
       const note: RootContent = {
         type: "paragraph",
@@ -176,6 +184,71 @@ const proseContainers = new Set([
 ]);
 
 type JsxFlowElement = Extract<RootContent, { type: "mdxJsxFlowElement" }>;
+
+/**
+ * A ReleaseClip for a reader that cannot play it: the poster, linked to the
+ * page, then the steps the clip shows as a list. The steps are read from the
+ * attribute's source, which the release notes write as a JSON array of
+ * strings; anything else leaves the poster alone.
+ */
+function releaseClip(node: JsxFlowElement, pageUrl: string): RootContent[] {
+  const attribute = (name: string) =>
+    node.attributes.find(
+      (entry) => entry.type === "mdxJsxAttribute" && entry.name === name,
+    );
+  const src = attribute("src")?.value;
+  const label = attribute("label")?.value;
+  if (typeof src !== "string") return [];
+  const alt = typeof label === "string" ? label : "";
+  const out: RootContent[] = [
+    {
+      type: "paragraph",
+      children: [
+        {
+          type: "link",
+          url: pageUrl,
+          children: [
+            {
+              type: "image",
+              url: new URL(`${src}.jpg`, pageUrl).toString(),
+              alt,
+            },
+          ],
+        },
+      ],
+    } as RootContent,
+  ];
+  const caption = attribute("caption")?.value;
+  if (typeof caption === "string" && caption !== "") {
+    out.push({
+      type: "paragraph",
+      children: [
+        { type: "emphasis", children: [{ type: "text", value: caption }] },
+      ],
+    } as RootContent);
+  }
+  const raw = attribute("steps")?.value;
+  if (raw && typeof raw !== "string") {
+    try {
+      const steps: unknown = JSON.parse(raw.value);
+      if (Array.isArray(steps) && steps.every((s) => typeof s === "string")) {
+        out.push({
+          type: "list",
+          ordered: true,
+          children: steps.map((step) => ({
+            type: "listItem",
+            children: [
+              { type: "paragraph", children: [{ type: "text", value: step }] },
+            ],
+          })),
+        } as RootContent);
+      }
+    } catch {
+      // Not a JSON array: the poster alone still says what the clip is.
+    }
+  }
+  return out;
+}
 
 /** A prose container as a blockquote, with its title in bold on top. */
 function proseContainer(node: JsxFlowElement): RootContent {

@@ -35,6 +35,7 @@ import { PreshapedGuard } from "@/components/mdx/preshaped-guard";
 import { QueryPath } from "@/components/mdx/query-path";
 import { RatioDrift } from "@/components/mdx/ratio-drift";
 import { ReattachReplay } from "@/components/mdx/reattach-replay";
+import { ReleaseClip } from "@/components/mdx/release-clip";
 import { RenderPathAttrs } from "@/components/mdx/render-path-attrs";
 import { RunTally } from "@/components/mdx/run-tally";
 import { ScrollColumnsRoundTrip } from "@/components/mdx/scroll-columns-round-trip";
@@ -107,6 +108,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     BinarySizeWaterfall,
     TestPurgeStages,
     KeptTestBar,
+    ReleaseClip,
     ...components,
   };
 }
