@@ -235,8 +235,10 @@ function releaseClip(node: JsxFlowElement, pageUrl: string): RootContent[] {
         out.push({
           type: "list",
           ordered: true,
+          spread: false,
           children: steps.map((step) => ({
             type: "listItem",
+            spread: false,
             children: [
               { type: "paragraph", children: [{ type: "text", value: step }] },
             ],
