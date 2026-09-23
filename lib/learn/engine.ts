@@ -99,10 +99,12 @@ export function feed(
 
   if (event.type === "key") {
     const key = String(event.data?.key ?? "");
-    const action = String(event.data?.action ?? "");
     const mode = String(event.data?.mode ?? "");
-    ctx.lastAction = action;
+    // The action event, if the key has one, comes right after it.
+    ctx.lastAction = "";
     next = trackKeys(s, key, mode, now);
+  } else if (event.type === "action") {
+    ctx.lastAction = String(event.data?.name ?? "");
   }
 
   if (!step.explainer && step.done?.(event, ctx)) {

@@ -50,6 +50,17 @@ export function keyBytes(item: KeyItem): string {
   const base = parts[parts.length - 1];
   const mods = parts.slice(0, -1);
   if (mods.includes("shift") && base === "tab") return "\x1b[Z";
+  // Arrows with a modifier are sent the way xterm sends them: alt+left is
+  // CSI 1;3D.
+  const arrow = { up: "A", down: "B", right: "C", left: "D" }[base];
+  if (arrow && mods.length) {
+    const code =
+      1 +
+      (mods.includes("shift") ? 1 : 0) +
+      (mods.includes("alt") ? 2 : 0) +
+      (mods.includes("ctrl") ? 4 : 0);
+    return `\x1b[1;${code}${arrow}`;
+  }
   let out = NAMED[base] ?? base;
   if (mods.includes("ctrl") && base.length === 1) {
     out = String.fromCharCode(base.toLowerCase().charCodeAt(0) & 0x1f);

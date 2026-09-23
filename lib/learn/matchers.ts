@@ -23,12 +23,37 @@ export function whenState(check: (state: TuiosState) => boolean): Matcher {
   return (event) => Boolean(event.state && check(event.state));
 }
 
-/** The fake shell ran this command. */
-export function ran(command: string): Matcher {
-  return on("shell.command", (event) => event.data?.command === command);
+/** An overlay opened, such as "help" or "commandPalette". */
+export function opened(name: string): Matcher {
+  return on("overlay.open", (event) => event.data?.name === name);
 }
 
-/** An event of this type caused by a key bound to one of these actions. */
+/** An overlay closed. */
+export function closed(name: string): Matcher {
+  return on("overlay.close", (event) => event.data?.name === name);
+}
+
+/** The fake shell finished this command, and knew it. */
+export function ran(command: string): Matcher {
+  return on(
+    "shell.command",
+    (event) => event.data?.command === command && event.data?.exitCode !== 127,
+  );
+}
+
+/** The fake shell finished a command line that matches. */
+export function ranLine(pattern: RegExp): Matcher {
+  return on("shell.command", (event) =>
+    pattern.test(String(event.data?.line ?? "")),
+  );
+}
+
+/** A pane's agent moved to this state. */
+export function agent(to: string): Matcher {
+  return on("agent", (event) => event.data?.to === to);
+}
+
+/** An event caused by one of these registry actions. */
 export function via(actions: string[], matcher: Matcher): Matcher {
   return (event, ctx) =>
     matcher(event, ctx) && actions.includes(ctx.lastAction);
@@ -39,7 +64,7 @@ export function any(...matchers: Matcher[]): Matcher {
   return (event, ctx) => matchers.some((m) => m(event, ctx));
 }
 
-/** The matcher, `times` times over the step. */
+/** The matcher, `n` times over the step. */
 export function times(n: number, matcher: Matcher, key = "count"): Matcher {
   return (event, ctx) => {
     if (!matcher(event, ctx)) return false;
@@ -48,13 +73,34 @@ export function times(n: number, matcher: Matcher, key = "count"): Matcher {
   };
 }
 
-/** `first`, then later `then`. */
-export function seq(first: Matcher, then: Matcher): Matcher {
+/** Each matcher in turn: the step is done when the last one matches. */
+export function seq(...matchers: Matcher[]): Matcher {
   return (event, ctx) => {
-    if (!ctx.mem.seq) {
-      if (first(event, ctx)) ctx.mem.seq = 1;
-      return false;
-    }
-    return then(event, ctx);
+    const at = ctx.mem.seq ?? 0;
+    if (!matchers[at]?.(event, ctx)) return false;
+    ctx.mem.seq = at + 1;
+    return ctx.mem.seq >= matchers.length;
   };
+}
+
+/** The focused window zoomed in (true) or back out (false). */
+export function zoomed(value: boolean): Matcher {
+  return on("window.zoom", (event) => event.data?.zoomed === value);
+}
+
+/** A window moved or changed size, once any animation settled. */
+export function moved(): Matcher {
+  return on("window.move");
+}
+
+/** A note in the dock whose text matches. */
+export function notified(pattern: RegExp): Matcher {
+  return on("notification", (event) =>
+    pattern.test(String(event.data?.message ?? "")),
+  );
+}
+
+/** A setting the settings page changes, such as "borderStyle". */
+export function setting(name: string): Matcher {
+  return on("setting", (event) => event.data?.name === name);
 }

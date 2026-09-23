@@ -325,8 +325,13 @@ async function boot(
       );
     }
   });
+  // The last events, for poking at from the console and for the Playwright
+  // checks.
+  const log: TuiosEvent[] = [];
   api.onEvent((event) => {
     if (disposed) return;
+    log.push(event);
+    if (log.length > 400) log.splice(0, log.length - 400);
     for (const fn of listeners) fn(event);
   });
   term.attach({
@@ -344,7 +349,11 @@ async function boot(
 
   // The newest instance, for poking at from the console and for the
   // Playwright checks.
-  (window as unknown as { tuiosLearn?: unknown }).tuiosLearn = { api, term };
+  (window as unknown as { tuiosLearn?: unknown }).tuiosLearn = {
+    api,
+    term,
+    log,
+  };
 
   return {
     api,
