@@ -198,12 +198,30 @@
 }
 
 /* webterm.css positions and sizes its host, and loads after this file, so
-   these win with !important. */
+   these win with !important.
+
+   The grid is a whole number of rows, so it is up to one row shorter than
+   the host. webterm paints the host with its own default background, which
+   is lighter than the terminal's, so that leftover showed as a band under
+   the dock. The host takes the terminal background and centers the grid, so
+   the leftover is split evenly above and below it. Centering is "safe": when
+   the host shrinks and the grid has not been refit yet, the grid stays at
+   the top and only the bottom rows are hidden. Padding on the host would
+   shrink the height webterm fits to, so the grid is moved with flex instead. */
 .learn-stage .learn-term {
+  --webterm-background: var(--learn-term);
   position: absolute !important;
   inset: 10px;
   width: auto !important;
   height: auto !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  justify-content: safe center;
+}
+
+.learn-stage .learn-term > .xterm {
+  flex: none;
 }
 
 /* The BSP loader: panes split as the bytes arrive. */
