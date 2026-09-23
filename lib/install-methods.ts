@@ -6,7 +6,7 @@ export const installMethods = [
   {
     id: "brew",
     label: "Homebrew",
-    command: "brew install Gaurav-Gosain/tap/tuios",
+    command: "brew install tuios",
   },
   {
     id: "script",
