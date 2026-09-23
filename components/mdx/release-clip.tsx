@@ -4,6 +4,9 @@ import { Pause, Play } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
+/** Below this width the portrait cut replaces the landscape one. */
+const NARROW = "(max-width: 639px)";
+
 /**
  * A recorded clip of tuios for a release note. `src` is the clip's path
  * without an extension: the component expects `src.webm`, `src.mp4` and the
@@ -18,6 +21,10 @@ import { cn } from "@/lib/cn";
  *   than five seconds needs a way to stop it.
  * - `steps` is the text of what the clip shows, one line per caption, so a
  *   reader who cannot see or play the video gets the same content.
+ * - On a narrow screen it shows the portrait cut instead, `src-vertical.mp4`
+ *   with the poster `src-vertical.jpg`. The landscape cut draws a 116 column
+ *   terminal, which at phone width is too small to read; the portrait cut
+ *   follows the action with a closer camera.
  */
 export function ReleaseClip({
   src,
@@ -38,12 +45,21 @@ export function ReleaseClip({
   const [wanted, setWanted] = useState<boolean | null>(null);
   const [reduced, setReduced] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [narrow, setNarrow] = useState(false);
   const stepsId = useId();
 
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReduced(query.matches);
     const onChange = () => setReduced(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    const query = window.matchMedia(NARROW);
+    setNarrow(query.matches);
+    const onChange = () => setNarrow(query.matches);
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
   }, []);
@@ -79,15 +95,22 @@ export function ReleaseClip({
     };
   }, []);
 
-  // A video element does not notice sources added after it mounted, so load
-  // them by hand once they are attached.
+  // A video element does not notice sources added or swapped after it
+  // mounted, so load them by hand once they are attached or the cut changes.
+  // data-cut records which cut is loaded. A reload stops playback; the effect
+  // below starts it again.
+  const cut = narrow ? "portrait" : "landscape";
   useEffect(() => {
-    if (near) videoRef.current?.load();
-  }, [near]);
+    const video = videoRef.current;
+    if (!video || !near || video.dataset.cut === cut) return;
+    video.dataset.cut = cut;
+    video.load();
+  }, [near, cut]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !near) return;
+    // Wait for the effect above to load the cut this render asks for.
+    if (!video || !near || video.dataset.cut !== cut) return;
     const shouldPlay = visible && (wanted ?? !reduced);
     if (shouldPlay && video.paused) {
       video.play().catch(() => {
@@ -97,7 +120,7 @@ export function ReleaseClip({
     } else if (!shouldPlay && !video.paused) {
       video.pause();
     }
-  }, [near, visible, wanted, reduced]);
+  }, [near, visible, wanted, reduced, cut]);
 
   const toggle = () => {
     const video = videoRef.current;
@@ -111,10 +134,13 @@ export function ReleaseClip({
       <div className="group relative overflow-hidden rounded-xl border border-fd-border bg-[#11111b] shadow-lg shadow-fd-primary/5">
         <video
           ref={videoRef}
-          className="block aspect-video h-auto w-full"
-          poster={`${src}.jpg`}
-          width={1920}
-          height={1080}
+          className={cn(
+            "block h-auto w-full",
+            narrow ? "aspect-[9/16]" : "aspect-video",
+          )}
+          poster={narrow ? `${src}-vertical.jpg` : `${src}.jpg`}
+          width={narrow ? 1080 : 1920}
+          height={narrow ? 1920 : 1080}
           muted
           loop
           playsInline
@@ -124,7 +150,10 @@ export function ReleaseClip({
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
         >
-          {near ? (
+          {near && narrow ? (
+            <source src={`${src}-vertical.mp4`} type="video/mp4" />
+          ) : null}
+          {near && !narrow ? (
             <>
               <source src={`${src}.webm`} type="video/webm" />
               <source src={`${src}.mp4`} type="video/mp4" />
