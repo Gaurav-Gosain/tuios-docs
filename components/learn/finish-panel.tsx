@@ -7,6 +7,7 @@ import {
   Download,
   ImageIcon,
   RotateCcw,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InstallTabs } from "@/components/home/install-tabs";
@@ -80,17 +81,34 @@ export function FinishPanel({
   onRestart,
   onExit,
   onPickTrack,
+  onClose,
 }: {
   track: Track;
   lesson: LessonState;
   onRestart: () => void;
   onExit: () => void;
   onPickTrack: (id: string) => void;
+  /** Hides the panel so the reader can keep playing in the final layout. */
+  onClose: () => void;
 }) {
   const seconds = elapsed(lesson, Date.now());
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
   const data = useMemo<ShareData>(
     () => ({
       trackTitle: track.title,
+      minutes: track.minutes,
       seconds,
       results: lesson.results,
       keys: learnedChords(track),
@@ -150,7 +168,17 @@ export function FinishPanel({
 
   return (
     <div className="learn-fade absolute inset-0 z-[70] overflow-y-auto bg-black/45 backdrop-blur-[2px]">
-      <div className="mx-auto my-8 w-[min(1040px,calc(100%-2rem))] rounded-2xl border border-fd-border bg-fd-card p-6 shadow-2xl md:p-8">
+      <div className="relative mx-auto my-8 w-[min(1040px,calc(100%-2rem))] rounded-2xl border border-fd-border bg-fd-card p-6 shadow-2xl md:p-8">
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          aria-label="Close and keep playing"
+          title="Keep playing (esc)"
+          className="absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md text-fd-muted-foreground transition-colors hover:bg-fd-accent hover:text-fd-foreground"
+        >
+          <X className="size-4" />
+        </button>
         <div className="grid gap-8 md:grid-cols-[1fr_1.15fr]">
           <div className="flex flex-col gap-5">
             <p className="font-mono text-[var(--brand-a)] text-sm">

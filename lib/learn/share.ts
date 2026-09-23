@@ -6,6 +6,8 @@ import { formatTime, type StepResult } from "./engine";
 
 export type ShareData = {
   trackTitle: string;
+  /** How long the track takes, for the "your turn" line. */
+  minutes: number;
   seconds: number;
   results: StepResult[];
   keys: string[];
@@ -220,7 +222,7 @@ export async function drawShareCard(
   ctx.textBaseline = "alphabetic";
   ctx.font = `500 24px ${MONO}`;
   ctx.fillStyle = "#7f7f95";
-  ctx.fillText("Your turn: 5 minutes, in the browser", 72, 548);
+  ctx.fillText(`Your turn: ${d.minutes} minutes, in the browser`, 72, 548);
   ctx.fillStyle = "#e6e6ef";
   const url = LEARN_URL;
   ctx.fillText(url, W - 72 - ctx.measureText(url).width, 548);

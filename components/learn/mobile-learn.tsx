@@ -1,7 +1,8 @@
 "use client";
 
 import { Check, Laptop, Link2, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { EngineManifest } from "@/lib/learn/runtime";
 import { tracks } from "@/lib/learn/tracks";
 import { absoluteUrl } from "@/lib/site";
 import { ShareCanvas } from "./finish-panel";
@@ -9,6 +10,7 @@ import { TrackPreview } from "./track-preview";
 
 const SAMPLE = {
   trackTitle: "The basics",
+  minutes: 4,
   seconds: 252,
   results: [
     "clean",
@@ -28,7 +30,29 @@ const SAMPLE = {
 };
 
 /**
- * Phones get a preview that plays by itself instead of the 8 MB download:
+ * What running tuios here would download, in MB, from engine.json. Null until
+ * it is known, or when there is no engine.
+ */
+function useDownloadSize() {
+  const [size, setSize] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch("/learn/engine.json", { cache: "no-cache" })
+      .then((res) => (res.ok ? (res.json() as Promise<EngineManifest>) : null))
+      .then((m) => {
+        const bytes = m?.totalBytes ?? m?.wasmBytes;
+        if (live && bytes) setSize((bytes / 1e6).toFixed(0));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  return size;
+}
+
+/**
+ * Phones get a preview that plays by itself instead of the engine download:
  * learning keys needs a keyboard. The link can be copied for later.
  */
 export function MobileLearn({ onTryAnyway }: { onTryAnyway: () => void }) {
@@ -37,6 +61,7 @@ export function MobileLearn({ onTryAnyway }: { onTryAnyway: () => void }) {
   const track = tracks.find((t) => t.id === trackId) ?? tracks[0];
   const url = absoluteUrl("/learn");
   const canShare = typeof navigator !== "undefined" && "share" in navigator;
+  const size = useDownloadSize();
 
   const copy = async () => {
     try {
@@ -150,7 +175,7 @@ export function MobileLearn({ onTryAnyway }: { onTryAnyway: () => void }) {
           onClick={onTryAnyway}
           className="mx-auto font-mono text-fd-muted-foreground text-xs underline underline-offset-4"
         >
-          I have a keyboard. Run it here (8 MB).
+          I have a keyboard. Run it here{size ? ` (${size} MB)` : ""}.
         </button>
       </div>
     </div>

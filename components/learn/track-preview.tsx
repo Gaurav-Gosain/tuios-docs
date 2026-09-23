@@ -198,7 +198,7 @@ export function TrackPreview({ track }: { track: Track }) {
                     {focused && sim.text.length ? (
                       sim.text.map((t) => <div key={t}>{t}</div>)
                     ) : (
-                      <span className="mr-1 text-[#9ece6a]">~ $</span>
+                      <span className="mr-1 text-[#9ece6a]">~ ❯</span>
                     )}
                     {focused ? (
                       <span className="bsp-cursor !m-0 !h-2.5 !w-1.5" />

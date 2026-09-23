@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+  type RefObject,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   type EngineStatus,
   engineStatus,
@@ -39,6 +44,35 @@ export function useSmallScreen() {
   const narrow = useMedia("(max-width: 760px)");
   if (touch === null || narrow === null) return null;
   return touch || narrow;
+}
+
+/**
+ * For a full screen overlay: the page behind stops scrolling, and everything
+ * outside `ref` is made inert, so Tab cannot reach the hidden page.
+ */
+export function useModalOverlay(ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    const made: Element[] = [];
+    let node: Element | null = ref.current;
+    while (node && node !== document.body) {
+      const parent: Element | null = node.parentElement;
+      for (const sibling of parent?.children ?? []) {
+        if (sibling === node || sibling.hasAttribute("inert")) continue;
+        if (sibling.tagName === "SCRIPT" || sibling.tagName === "STYLE") {
+          continue;
+        }
+        sibling.setAttribute("inert", "");
+        made.push(sibling);
+      }
+      node = parent;
+    }
+    return () => {
+      document.documentElement.style.overflow = prev;
+      for (const el of made) el.removeAttribute("inert");
+    };
+  }, [ref]);
 }
 
 /** Re-render every `ms` while `on` is true. */

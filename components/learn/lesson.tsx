@@ -27,15 +27,18 @@ import {
 import { chordParts, keyBytes } from "@/lib/learn/keys";
 import { markFinished, markStep } from "@/lib/learn/progress";
 import { runSetup, sleep, type TuiosInstance } from "@/lib/learn/runtime";
-import type { Track, TuiosEvent, TuiosState } from "@/lib/learn/types";
+import type { Step, Track, TuiosEvent, TuiosState } from "@/lib/learn/types";
 import { ExplainerArt } from "./explainer-art";
 import { FinishPanel } from "./finish-panel";
-import { useReducedMotion, useTicker } from "./hooks";
+import { useModalOverlay, useReducedMotion, useTicker } from "./hooks";
 import { KeySequence, useHeldKeys } from "./keycaps";
 import { LiveTerminal } from "./live-terminal";
 import { ModeBadge } from "./mode-badge";
 
 const PRAISE = ["Nice!", "Smooth.", "You got it.", "Clean.", "Yes!", "Easy."];
+
+/** How many rows the keys learned list shows. */
+const SHELF_ROWS = 5;
 
 /** Events this soon after a step starts belong to the step before it. */
 const SETTLE_MS = 150;
@@ -68,6 +71,7 @@ export function Lesson({
   const [praise, setPraise] = useState<string | null>(null);
   const [termFocused, setTermFocused] = useState(false);
   const [leftTerminal, setLeftTerminal] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   const lessonRef = useRef<LessonState>(startLesson(track, Date.now()));
   const tuiosRef = useRef<TuiosInstance | null>(null);
@@ -78,6 +82,7 @@ export function Lesson({
   const alive = useRef(true);
   const stageRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const reducedRef = useRef(reduced);
   reducedRef.current = reduced;
 
@@ -94,6 +99,11 @@ export function Lesson({
     tuiosRef.current?.term.focus();
     setLeftTerminal(false);
   }, []);
+
+  const closePanel = useCallback(() => {
+    setPanelOpen(false);
+    focusTerminal();
+  }, [focusTerminal]);
 
   const startStep = useCallback(
     async (index: number) => {
@@ -203,6 +213,10 @@ export function Lesson({
       if (!t || !step || busy.current) return;
       busy.current = true;
       focusTerminal();
+      if (lacksWindow(step, t.api.state())) {
+        t.api.command("newWindow");
+        await sleep(fast ? 150 : 400);
+      }
       const mode = t.api.state().mode;
       if (step.needs && step.needs !== mode) {
         t.api.command("mode", step.needs);
@@ -211,13 +225,17 @@ export function Lesson({
       const hold = fast ? 90 : 380;
       const between = fast ? 60 : 260;
       const typeDelay = fast ? 12 : 55;
+      // Once the step is done, the keys left over belong to no step.
+      const moved = () => lessonRef.current.index !== lesson.index;
       if (step.showMe) {
         for (const ch of step.showMe) {
+          if (moved()) break;
           t.api.input(ch);
           await sleep(typeDelay);
         }
       } else {
         for (const item of step.keys.slice(lesson.pressed)) {
+          if (moved()) break;
           if (typeof item === "string") {
             setSim(new Set(chordParts(item)));
             t.api.input(keyBytes(item));
@@ -290,14 +308,8 @@ export function Lesson({
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // The page behind should not scroll while the lesson is open.
-  useEffect(() => {
-    const prev = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.documentElement.style.overflow = prev;
-    };
-  }, []);
+  // The page behind neither scrolls nor takes focus while the lesson is open.
+  useModalOverlay(rootRef);
 
   const lesson = lessonRef.current;
   const step = currentStep(lesson);
@@ -309,7 +321,10 @@ export function Lesson({
   const doneCount = lesson.results.length;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-fd-background">
+    <div
+      ref={rootRef}
+      className="fixed inset-0 z-[60] flex flex-col bg-fd-background"
+    >
       <header className="flex h-14 shrink-0 items-center gap-4 border-fd-border border-b px-4 md:px-6">
         <Link
           href="/learn"
@@ -479,7 +494,15 @@ export function Lesson({
                         pulseNext={level >= 1}
                       />
                     </div>
-                    {lesson.wrongMode ? (
+                    {lacksWindow(step, tstate) ? (
+                      <p className="learn-fade rounded-lg border border-[#e0af68]/40 bg-[#e0af68]/10 px-3 py-2 text-sm">
+                        No window open. Press{" "}
+                        <kbd className="lk" data-size="sm">
+                          n
+                        </kbd>{" "}
+                        to open one.
+                      </p>
+                    ) : lesson.wrongMode ? (
                       <p className="learn-fade rounded-lg border border-[#e0af68]/40 bg-[#e0af68]/10 px-3 py-2 text-sm">
                         {step.needs === "window"
                           ? "You are typing into the shell. Press ctrl+b, then esc, to get to window mode."
@@ -524,8 +547,19 @@ export function Lesson({
               <div className="learn-pop">
                 <h2 className="font-bold text-2xl">All done!</h2>
                 <p className="mt-1.5 text-fd-muted-foreground text-sm">
-                  {doneCount} steps in {formatTime(seconds)}.
+                  {doneCount} steps in {formatTime(seconds)}. Keep playing as
+                  long as you like.
                 </p>
+                {phase === "finished" && !panelOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setPanelOpen(true)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-fd-primary px-4 py-2 font-medium font-mono text-fd-primary-foreground text-sm transition-opacity hover:opacity-90"
+                  >
+                    Show my card
+                    <ArrowRight className="size-4" />
+                  </button>
+                ) : null}
               </div>
             )}
           </div>
@@ -547,17 +581,29 @@ export function Lesson({
         </aside>
       </div>
 
-      {phase === "finished" ? (
+      {phase === "finished" && panelOpen ? (
         <FinishPanel
           track={track}
           lesson={lesson}
           onRestart={onRestart}
           onExit={onExit}
           onPickTrack={onPickTrack}
+          onClose={closePanel}
         />
       ) : null}
     </div>
   );
+}
+
+/**
+ * True when the step works on a window and there is none, such as after the
+ * reader pressed x on the last one or typed exit. A step that opens one with n
+ * is fine with none. A step with no mode set may be the one that moves to an
+ * empty workspace, so it only counts when there is no window anywhere.
+ */
+function lacksWindow(step: Step, state: TuiosState | null): boolean {
+  if (!state || step.explainer || step.keys.includes("n")) return false;
+  return step.needs ? state.windows === 0 : state.totalWindows === 0;
 }
 
 function LearnedShelf({
@@ -571,18 +617,24 @@ function LearnedShelf({
     .slice(0, lesson.results.length)
     .filter((s) => s.learned && !s.explainer);
   if (learned.length === 0) return null;
+  // The newest few, so the list stays short enough to keep the esc tip in view.
+  const shown = learned.slice(-SHELF_ROWS);
+  const older = learned.length - shown.length;
   return (
     <div className="rounded-xl border border-fd-border border-dashed p-4">
       <p className="font-mono text-fd-muted-foreground text-xs tracking-widest">
-        KEYS LEARNED
+        KEYS LEARNED{older > 0 ? ` (${learned.length})` : ""}
       </p>
-      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2.5">
-        {learned.map((s) => (
-          <li key={s.id} className="learn-pop flex items-center gap-2">
-            <KeySequence items={s.keys} size="sm" />
-            <span className="text-fd-muted-foreground text-xs">
+      <ul className="mt-3 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2">
+        {shown.map((s) => (
+          <li
+            key={s.id}
+            className="learn-pop col-span-2 grid grid-cols-subgrid items-start"
+          >
+            <span className="pt-0.5 text-fd-muted-foreground text-xs">
               {s.learned}
             </span>
+            <KeySequence items={s.keys} size="sm" />
           </li>
         ))}
       </ul>

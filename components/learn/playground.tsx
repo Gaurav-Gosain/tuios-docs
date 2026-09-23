@@ -2,11 +2,12 @@
 
 import { Play, RotateCcw, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { type CheatRow, cheatsheet, shellIdeas } from "@/lib/learn/cheatsheet";
 import { chordParts, keyBytes } from "@/lib/learn/keys";
 import { runSetup, sleep, type TuiosInstance } from "@/lib/learn/runtime";
 import type { KeyItem, TuiosEvent, TuiosState } from "@/lib/learn/types";
+import { useModalOverlay } from "./hooks";
 import { KeySequence, useHeldKeys } from "./keycaps";
 import { LiveTerminal } from "./live-terminal";
 import { ModeBadge } from "./mode-badge";
@@ -23,6 +24,7 @@ export function Playground({ onExit }: { onExit: () => void }) {
   const [run, setRun] = useState(0);
   const tuiosRef = useRef<TuiosInstance | null>(null);
   const busy = useRef(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   // Windows whose shell is running a program right now, such as top or the
   // agent. A shell idea typed into one would go to the program instead.
   const running = useRef(new Set<string>());
@@ -46,14 +48,8 @@ export function Playground({ onExit }: { onExit: () => void }) {
     t.term.focus();
   }, []);
 
-  // The page behind should not scroll while free play is open.
-  useEffect(() => {
-    const prev = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.documentElement.style.overflow = prev;
-    };
-  }, []);
+  // The page behind neither scrolls nor takes focus while free play is open.
+  useModalOverlay(rootRef);
 
   const play = useCallback(
     async (keys: KeyItem[], needs?: CheatRow["needs"]) => {
@@ -101,7 +97,10 @@ export function Playground({ onExit }: { onExit: () => void }) {
   const allHeld = new Set([...held, ...sim]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-fd-background">
+    <div
+      ref={rootRef}
+      className="fixed inset-0 z-[60] flex flex-col bg-fd-background"
+    >
       <header className="flex h-14 shrink-0 items-center gap-4 border-fd-border border-b px-4 md:px-6">
         <Link
           href="/learn"
@@ -174,8 +173,8 @@ export function Playground({ onExit }: { onExit: () => void }) {
                     onClick={() => runLine(idea.line)}
                     className="group flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-fd-accent"
                   >
-                    <Play className="size-3.5 shrink-0 text-[#9ece6a] opacity-60 group-hover:opacity-100" />
-                    <code className="font-mono text-[#9ece6a] text-xs">
+                    <Play className="size-3.5 shrink-0 text-[var(--learn-cmd)] opacity-60 group-hover:opacity-100" />
+                    <code className="font-mono text-[var(--learn-cmd)] text-xs">
                       {idea.line}
                     </code>
                     <span className="ml-auto text-fd-muted-foreground text-xs">
