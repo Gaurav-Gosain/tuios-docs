@@ -4,7 +4,7 @@ This file is for agents working in this repository: what it is, how it is laid o
 
 ## What this is
 
-The website for [TUIOS](https://github.com/Gaurav-Gosain/tuios), a terminal multiplexer written in Go. It is served at https://tuios.gaurav.zip and has three parts:
+The website for [TUIOS](https://github.com/Gaurav-Gosain/tuios), a terminal multiplexer written in Go. It is served at https://tuios.dev and has three parts:
 
 - **Docs** (`/docs`): the user reference.
 - **Blog** (`/blog`): long engineering posts.
@@ -92,7 +92,11 @@ A widget that shows TUIOS behavior should match the code. Check it against the t
 
 ## Deployment
 
-`.github/workflows/deploy.yml` runs `bun install` and `bun run build` on every push to `main`, then publishes `out/` to GitHub Pages at `tuios.gaurav.zip`.
+`.github/workflows/deploy.yml` runs the tests, builds the /learn engine and the site on every push to `main`, then deploys the Worker in `worker/` with `wrangler deploy`. The Worker serves `out/` from Workers static assets.
+
+The site lives at `https://tuios.dev`, set once in `lib/site.ts` (`site.url`), which metadata, canonical URLs, the sitemap, robots.txt, the feeds, JSON-LD and llms.txt all read. The OG images and the /learn share text print the bare host, so they name it as a literal.
+
+The Worker is attached to three custom domains in `worker/wrangler.jsonc`. `tuios.dev` serves the site. `www.tuios.dev` and `tuios.gaurav.zip` (the site's first address) answer every request with a permanent 301 to the same path and query on `https://tuios.dev`, with no exceptions. That redirect is in `worker/redirect.ts` and must stay permanent: old links, feed subscriptions and search results depend on it.
 
 ## Learn page
 

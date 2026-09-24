@@ -11,6 +11,10 @@
  *   naming its twin.
  * - Accept refuses both: 406.
  * Every page response carries Vary: Accept.
+ *
+ * Before any of that, a request to a moved host (tuios.gaurav.zip,
+ * www.tuios.dev) gets a 301 to the same path on https://tuios.dev. See
+ * redirect.ts.
  */
 import {
   appendVary,
@@ -19,11 +23,15 @@ import {
   preferredType,
   quality,
 } from "./negotiate";
+import { hostRedirect } from "./redirect";
 
 type Env = { ASSETS: Fetcher };
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const moved = hostRedirect(request);
+    if (moved) return moved;
+
     const url = new URL(request.url);
     if (
       (request.method !== "GET" && request.method !== "HEAD") ||

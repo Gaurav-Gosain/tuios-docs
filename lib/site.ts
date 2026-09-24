@@ -4,7 +4,7 @@
  * disagree about the host.
  */
 export const site = {
-  url: "https://tuios.gaurav.zip",
+  url: "https://tuios.dev",
   name: "TUIOS",
   title: "TUIOS: a window manager for your terminal",
   description:
@@ -35,3 +35,9 @@ export const feeds = {
 export function absoluteUrl(path: string) {
   return new URL(path, site.url).toString();
 }
+
+/**
+ * The site's first origin. It now redirects every path to site.url, see
+ * worker/redirect.ts.
+ */
+export const legacyOrigin = "https://tuios.gaurav.zip";

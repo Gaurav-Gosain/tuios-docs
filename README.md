@@ -2,7 +2,7 @@
 
 The documentation, blog and release notes for [TUIOS](https://github.com/Gaurav-Gosain/tuios), the terminal multiplexer.
 
-Live at https://tuios.gaurav.zip.
+Live at https://tuios.dev. The old address, https://tuios.gaurav.zip, redirects every path there with a 301.
 
 ## Development
 

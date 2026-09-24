@@ -17,7 +17,7 @@ const W = 1200;
 const H = 630;
 const MONO = '"Monaspace Neon", ui-monospace, Menlo, monospace';
 
-export const LEARN_URL = "tuios.gaurav.zip/learn";
+export const LEARN_URL = "tuios.dev/learn";
 
 /** Spoiler free, Wordle style. */
 export function shareText(d: ShareData) {

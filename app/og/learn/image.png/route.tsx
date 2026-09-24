@@ -189,7 +189,7 @@ export function GET() {
         <div style={{ display: "flex" }}>
           The real app, a pretend shell, nothing to install
         </div>
-        <div style={{ display: "flex" }}>tuios.gaurav.zip/learn</div>
+        <div style={{ display: "flex" }}>tuios.dev/learn</div>
       </div>
     </div>,
     { width: 1200, height: 630 },

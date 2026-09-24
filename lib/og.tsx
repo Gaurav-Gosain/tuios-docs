@@ -103,7 +103,7 @@ export function ogImage({
         }}
       >
         <div style={{ display: "flex" }}>{footer ?? ""}</div>
-        <div style={{ display: "flex" }}>tuios.gaurav.zip</div>
+        <div style={{ display: "flex" }}>tuios.dev</div>
       </div>
     </div>,
     { width: 1200, height: 630 },

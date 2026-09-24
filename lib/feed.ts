@@ -7,7 +7,7 @@ import remarkRehype from "remark-rehype";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
-import { absoluteUrl, site } from "./site";
+import { absoluteUrl, legacyOrigin, site } from "./site";
 
 /** One entry in a feed: a blog post or a release note. */
 export type FeedItem = {
@@ -214,6 +214,20 @@ function toDate(date: string) {
 }
 
 /**
+ * The permanent id of a feed entry, or of a feed, for its absolute URL.
+ *
+ * Ids were minted when the site lived on tuios.gaurav.zip. An Atom id must
+ * never change, and feed readers key RSS items on their guid, so a new host in
+ * the id would show every entry again as unread. Ids keep the first origin
+ * while links use the current one.
+ */
+export function feedId(url: string) {
+  return url.startsWith(site.url)
+    ? legacyOrigin + url.slice(site.url.length)
+    : url;
+}
+
+/**
  * The newest item's date stands in for the build time, so a rebuild with no
  * new content produces the same feed byte for byte.
  */
@@ -227,7 +241,7 @@ export function renderRss(feed: Feed) {
       (item) => `    <item>
       <title>${escapeXml(item.title)}</title>
       <link>${escapeXml(item.url)}</link>
-      <guid isPermaLink="true">${escapeXml(item.url)}</guid>
+      <guid isPermaLink="false">${escapeXml(feedId(item.url))}</guid>
       <pubDate>${toDate(item.date).toUTCString()}</pubDate>
       <dc:creator>${escapeXml(item.author)}</dc:creator>
       <description>${escapeXml(item.description)}</description>
@@ -262,7 +276,7 @@ export function renderAtom(feed: Feed) {
       (item) => `  <entry>
     <title>${escapeXml(item.title)}</title>
     <link rel="alternate" type="text/html" href="${escapeXml(item.url)}"/>
-    <id>${escapeXml(item.url)}</id>
+    <id>${escapeXml(feedId(item.url))}</id>
     <published>${toDate(item.date).toISOString()}</published>
     <updated>${toDate(item.date).toISOString()}</updated>
     <author><name>${escapeXml(item.author)}</name></author>
@@ -278,7 +292,7 @@ export function renderAtom(feed: Feed) {
   <subtitle>${escapeXml(feed.description)}</subtitle>
   <link rel="alternate" type="text/html" href="${escapeXml(absoluteUrl(feed.path))}"/>
   <link rel="self" type="application/atom+xml" href="${escapeXml(absoluteUrl(feed.feedPath))}"/>
-  <id>${escapeXml(absoluteUrl(feed.path))}</id>
+  <id>${escapeXml(feedId(absoluteUrl(feed.path)))}</id>
   <updated>${newest(feed).toISOString()}</updated>
   <author><name>${escapeXml(site.author.name)}</name><uri>${escapeXml(site.author.url)}</uri></author>
   <icon>${escapeXml(absoluteUrl("/tuios-icon.png"))}</icon>
