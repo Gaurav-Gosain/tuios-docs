@@ -32,6 +32,7 @@ app/
   layout.tsx                  root layout
   global.css                  Tailwind, Fumadocs theme, Monaspace Neon font
   (home)/                     landing page
+  brand/                      brand page, and the kit zip built from public/brand (lib/brand.ts lists the files)
   docs/[[...slug]]/           docs pages
   blog/                       blog index and blog/[slug] posts
   releases/                   releases index and releases/[slug] pages

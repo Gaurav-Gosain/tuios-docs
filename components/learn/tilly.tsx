@@ -22,7 +22,7 @@ import {
   say,
   subscribeSaid,
 } from "@/lib/learn/tilly-store";
-import { TillyFigure } from "./tilly-figure";
+import { perform, TillyFigure } from "./tilly-figure";
 
 export function usePrefs() {
   return useSyncExternalStore(subscribePrefs, getPrefs, getServerPrefs);
@@ -47,64 +47,6 @@ function bubbleMs(said: Said) {
   return said.mood === "think" || said.mood === "cheer"
     ? Math.max(read, 9000)
     : read;
-}
-
-function reducedMotion() {
-  try {
-    return matchMedia("(prefers-reduced-motion: reduce)").matches;
-  } catch {
-    return false;
-  }
-}
-
-/** The one-off moves, as Web Animations on the figure's parts. */
-function perform(svg: SVGSVGElement | null, mood: TillyMood) {
-  if (!svg || reducedMotion() || typeof svg.animate !== "function") return;
-  const part = (name: string) =>
-    svg.querySelector<SVGGElement>(`[data-part="${name}"]`);
-  const jump = part("jump");
-  const shadow = part("shadow");
-  const antennas = part("antennas");
-  const arm = part("arm-right");
-  const hop = (heights: number[], duration: number) => {
-    jump?.animate(
-      heights.map((h) => ({ transform: `translateY(${-h}px)` })),
-      { duration, easing: "ease-out" },
-    );
-    shadow?.animate(
-      heights.map((h) => ({
-        transform: `scale(${1 - h / 30})`,
-        transformOrigin: "60px 121px",
-      })),
-      { duration, easing: "ease-out" },
-    );
-  };
-  const wiggle = (duration: number) =>
-    antennas?.animate(
-      [0, -7, 6, -4, 2, 0].map((d) => ({ transform: `rotate(${d}deg)` })),
-      { duration, easing: "ease-in-out" },
-    );
-  if (mood === "happy") {
-    hop([0, 7, 0, 2, 0], 650);
-  } else if (mood === "cheer") {
-    hop([0, 10, 0, 10, 0, 3, 0], 1300);
-    wiggle(1300);
-  } else if (mood === "think") {
-    wiggle(900);
-  } else if (mood === "wave") {
-    arm?.animate(
-      [
-        { transform: "none" },
-        { transform: "translate(6px,-24px) rotate(-12deg)", offset: 0.2 },
-        { transform: "translate(8px,-26px) rotate(14deg)", offset: 0.4 },
-        { transform: "translate(6px,-24px) rotate(-12deg)", offset: 0.6 },
-        { transform: "translate(8px,-26px) rotate(14deg)", offset: 0.8 },
-        { transform: "none" },
-      ],
-      { duration: 1400, easing: "ease-in-out" },
-    );
-    hop([0, 3, 0], 400);
-  }
 }
 
 /**

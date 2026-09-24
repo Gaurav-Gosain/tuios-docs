@@ -6,8 +6,8 @@ import type { TillyMood } from "@/lib/learn/tilly";
  * tiled layout. The two top panes are the eyes, the wide pane below is the
  * mouth, a `>_` prompt. The idle bob, the blink, the cursor and the focus
  * border that hops between panes are CSS in TILLY_CSS; the one-off moves
- * (bounce, cheer, wave) are Web Animations run by components/learn/tilly.tsx
- * on the parts named by `data-part`.
+ * (bounce, cheer, wave) are Web Animations, run by `perform` below on the
+ * parts named by `data-part`.
  *
  * public/learn/tilly.svg is this figure rendered standalone, with ids on the
  * layers, by scripts/tilly-svg.tsx. Re-run it after changing the drawing.
@@ -63,6 +63,64 @@ export const TILLY_CSS = `
 @keyframes tilly-focus{0%,32%{stroke:${C.focus}}33.5%,98.5%{stroke:${C.paneEdge}}100%{stroke:${C.focus}}}
 @media (prefers-reduced-motion:reduce){.tilly *{animation:none!important;transition:none!important}}
 `;
+
+function reducedMotion() {
+  try {
+    return matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+/** The one-off moves, as Web Animations on the figure's parts. Used by the Learn page and the brand page. */
+export function perform(svg: SVGSVGElement | null, mood: TillyMood) {
+  if (!svg || reducedMotion() || typeof svg.animate !== "function") return;
+  const part = (name: string) =>
+    svg.querySelector<SVGGElement>(`[data-part="${name}"]`);
+  const jump = part("jump");
+  const shadow = part("shadow");
+  const antennas = part("antennas");
+  const arm = part("arm-right");
+  const hop = (heights: number[], duration: number) => {
+    jump?.animate(
+      heights.map((h) => ({ transform: `translateY(${-h}px)` })),
+      { duration, easing: "ease-out" },
+    );
+    shadow?.animate(
+      heights.map((h) => ({
+        transform: `scale(${1 - h / 30})`,
+        transformOrigin: "60px 121px",
+      })),
+      { duration, easing: "ease-out" },
+    );
+  };
+  const wiggle = (duration: number) =>
+    antennas?.animate(
+      [0, -7, 6, -4, 2, 0].map((d) => ({ transform: `rotate(${d}deg)` })),
+      { duration, easing: "ease-in-out" },
+    );
+  if (mood === "happy") {
+    hop([0, 7, 0, 2, 0], 650);
+  } else if (mood === "cheer") {
+    hop([0, 10, 0, 10, 0, 3, 0], 1300);
+    wiggle(1300);
+  } else if (mood === "think") {
+    wiggle(900);
+  } else if (mood === "wave") {
+    arm?.animate(
+      [
+        { transform: "none" },
+        { transform: "translate(6px,-24px) rotate(-12deg)", offset: 0.2 },
+        { transform: "translate(8px,-26px) rotate(14deg)", offset: 0.4 },
+        { transform: "translate(6px,-24px) rotate(-12deg)", offset: 0.6 },
+        { transform: "translate(8px,-26px) rotate(14deg)", offset: 0.8 },
+        { transform: "none" },
+      ],
+      { duration: 1400, easing: "ease-in-out" },
+    );
+    hop([0, 3, 0], 400);
+  }
+}
 
 export function TillyFigure({
   mood = "idle",

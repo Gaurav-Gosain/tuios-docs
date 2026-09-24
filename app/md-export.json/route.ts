@@ -1,3 +1,4 @@
+import { brandMarkdown } from "@/lib/brand";
 import { markdownForAgents } from "@/lib/feed";
 import { learnMarkdown } from "@/lib/learn/markdown";
 import { markdownPath } from "@/lib/markdown-path";
@@ -39,16 +40,17 @@ export async function GET() {
       ["Releases", releases],
     ],
   );
-  files["/blog.md"] = listing("Blog", "Posts about how TUIOS is built.", "/blog", [
+  files["/blog.md"] = listing("Blog", "Posts about how tuios is built.", "/blog", [
     ["Posts", posts],
   ]);
   files["/releases.md"] = listing(
     "Releases",
-    "What changed in each release of TUIOS.",
+    "What changed in each release of tuios.",
     "/releases",
     [["Releases", releases]],
   );
   files["/learn.md"] = learnMarkdown();
+  files["/brand.md"] = brandMarkdown();
 
   return Response.json(files);
 }

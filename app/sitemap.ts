@@ -35,6 +35,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.9,
     },
+    {
+      url: absoluteUrl("/brand"),
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
     ...getDocsInSidebarOrder().map(({ page }) => ({
       url: absoluteUrl(page.url),
       changeFrequency: "weekly" as const,
