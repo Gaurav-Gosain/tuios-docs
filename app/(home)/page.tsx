@@ -471,10 +471,10 @@ function SpinnerKeyRow() {
     <div className="flex items-center justify-between gap-4 px-5 py-3">
       <dt className="flex items-center">
         <kbd className="keycap inline-flex items-center justify-center">
-          <span
-            aria-hidden="true"
-            className="inline-block size-3.5 animate-spin rounded-full border-2 border-fd-muted-foreground/30 border-t-fd-primary motion-reduce:animate-none"
-          />
+          {/* A line box as tall as a keycap's text, so this cap is as tall as the others. */}
+          <span aria-hidden="true" className="inline-flex h-5 items-center">
+            <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-fd-muted-foreground/30 border-t-fd-primary motion-reduce:animate-none" />
+          </span>
           <span className="sr-only">a key that is still loading</span>
         </kbd>
       </dt>
