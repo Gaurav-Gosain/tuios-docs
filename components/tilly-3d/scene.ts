@@ -224,8 +224,13 @@ export async function createTilly(
     metalness: 0,
     clearcoat: 0.25,
     clearcoatRoughness: 0.28,
-    // A faint reflection reads as glass. The full studio light is a glare.
-    envMapIntensity: 0.18,
+    // A faint reflection reads as glass. The full studio light is a glare:
+    // tilted up, the screen mirrors the room's ceiling panel across the face.
+    // The map is set here and not left to scene.environment, because three.js
+    // ignores envMapIntensity for a material without its own envMap and uses
+    // scene.environmentIntensity (0.62 to 0.75) instead.
+    envMap: envTarget.texture,
+    envMapIntensity: 0.06,
     emissive: 0xffffff,
     emissiveMap: faceTex,
     emissiveIntensity: 1.05,
@@ -549,8 +554,11 @@ export async function createTilly(
     const thinking = mood === "think";
     tilt = damp(tilt, thinking ? 0.11 : 0, 6, dt);
     const yawRange = variant === "viewer" ? 0.25 : 0.38;
+    // Looking up tips the screen toward the room's ceiling light, so the
+    // upward pitch is a little smaller than the downward one.
+    const pitch = look.y * (look.y < 0 ? 0.14 : 0.2);
     body.rotation.set(
-      look.y * 0.2 + 0.05 * hover,
+      pitch + 0.05 * hover,
       look.x * yawRange,
       tilt - look.x * 0.04,
     );
