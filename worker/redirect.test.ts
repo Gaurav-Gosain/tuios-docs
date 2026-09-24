@@ -112,6 +112,18 @@ describe("hostRedirect", () => {
     expect(await res?.text()).toBe("");
   });
 
+  test("sends plain http on the canonical host to https", () => {
+    for (const method of ["GET", "HEAD"]) {
+      const res = hostRedirect(
+        new Request("http://tuios.dev/docs/sessions.md?q=1", { method }),
+      );
+      expect(res?.status).toBe(301);
+      expect(res?.headers.get("location")).toBe(
+        "https://tuios.dev/docs/sessions.md?q=1",
+      );
+    }
+  });
+
   for (const url of [
     "https://tuios.dev/",
     "https://tuios.dev/docs?q=1",
