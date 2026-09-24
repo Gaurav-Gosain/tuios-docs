@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -36,14 +36,14 @@ jobs:
         run: echo "ref=$(tr -d '[:space:]' < learn/TUIOS_REF)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout tuios
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: Gaurav-Gosain/tuios
           ref: ${{ steps.tuios.outputs.ref }}
           path: .tuios
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: .tuios/go.mod
           cache-dependency-path: .tuios/go.sum
@@ -51,7 +51,7 @@ jobs:
       # build.sh turns the fonts into woff2 with fonttools, which uvx fetches.
       # Without it the fonts ship as TTF, 2.5 times the size.
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
 
       # build.sh finds bubbletea, creack/pty and sip in the module cache with
       # go list -m, which does not download them. It needs brotli too.
@@ -68,11 +68,10 @@ jobs:
       # The Worker serves out/ from Workers static assets and negotiates each
       # page between HTML and its markdown twin. See worker/index.ts.
       - name: Deploy
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # The action's default Wrangler is 3.x, which does not read
-          # wrangler.jsonc.
-          wranglerVersion: "4.136.3"
+          # Pinned so a new Wrangler release cannot change a deploy unseen.
+          wranglerVersion: "4.137.0"
           workingDirectory: worker
           command: deploy
