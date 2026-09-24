@@ -11,8 +11,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ReleaseTag } from "@/components/article/release-tag";
+import { Wordmark } from "@/components/brand";
 import { InstallTabs } from "@/components/home/install-tabs";
 import { JsonLd, personLd } from "@/components/json-ld";
+import { TillyFigure } from "@/components/learn/tilly-figure";
 import { installMethods } from "@/lib/install-methods";
 import { pageMetadata } from "@/lib/metadata";
 import { absoluteUrl, site } from "@/lib/site";
@@ -108,7 +110,7 @@ export default function HomePage() {
             </Link>
           ) : null}
 
-          <AsciiLogo />
+          <HeroLogo />
 
           <h1 className="fade-up mt-8 max-w-3xl font-bold text-3xl text-fd-foreground leading-tight [animation-delay:80ms] sm:text-4xl md:text-5xl">
             A window manager for your terminal
@@ -162,7 +164,7 @@ export default function HomePage() {
               loop
               playsInline
               preload="metadata"
-              aria-label="A recording of TUIOS with tiled and floating terminal windows"
+              aria-label="A recording of tuios with tiled and floating terminal windows"
             />
           </div>
         </div>
@@ -355,51 +357,16 @@ export default function HomePage() {
   );
 }
 
-const LOGO = `╭─────────────────────────────────────────────────╮
-│                                                 │
-│     ████████╗██╗   ██╗██╗ ██████╗ ███████╗      │
-│     ╚══██╔══╝██║   ██║██║██╔═══██╗██╔════╝      │
-│        ██║   ██║   ██║██║██║   ██║███████╗      │
-│        ██║   ██║   ██║██║██║   ██║╚════██║      │
-│        ██║   ╚██████╔╝██║╚██████╔╝███████║      │
-│        ╚═╝    ╚═════╝ ╚═╝ ╚═════╝ ╚══════╝      │
-│                                                 │
-╰─────────────────────────────────────────────────╯`;
-
-const FRAME = new Set(["╭", "─", "╮", "│", "╰", "╯"]);
-
 /**
- * The TUIOS wordmark as box-drawing text. The frame and the letters are split
- * into runs so each run takes one span rather than one span per character.
+ * The logo at the size of a heading: Tilly, resting, and the wordmark. Tilly
+ * is the live figure from the Learn page, so it bobs and blinks.
  */
-function AsciiLogo() {
-  const runs: { frame: boolean; text: string }[] = [];
-  for (const char of LOGO) {
-    const frame = FRAME.has(char);
-    const last = runs.at(-1);
-    if (last && (last.frame === frame || char === " " || char === "\n")) {
-      last.text += char;
-    } else {
-      runs.push({ frame, text: char });
-    }
-  }
-
+function HeroLogo() {
   return (
-    <pre
-      role="img"
-      aria-label="TUIOS"
-      className="ascii-logo fade-up m-0 border-0 bg-transparent p-0 text-[0.5rem] shadow-none [animation-delay:40ms] min-[400px]:text-[0.6rem] sm:text-xs"
-    >
-      {runs.map((run, index) => (
-        <span
-          // biome-ignore lint/suspicious/noArrayIndexKey: the runs are fixed text and never reorder
-          key={index}
-          className={run.frame ? "frame" : undefined}
-        >
-          {run.text}
-        </span>
-      ))}
-    </pre>
+    <div className="fade-up flex items-center gap-3 text-[var(--brand-ink)] [animation-delay:40ms] sm:gap-5">
+      <TillyFigure className="size-20 sm:size-28" title="Tilly" />
+      <Wordmark className="h-12 w-auto sm:h-[4.5rem]" height={72} />
+    </div>
   );
 }
 
