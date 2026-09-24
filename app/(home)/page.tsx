@@ -14,7 +14,7 @@ import { ReleaseTag } from "@/components/article/release-tag";
 import { Wordmark } from "@/components/brand";
 import { InstallTabs } from "@/components/home/install-tabs";
 import { JsonLd, personLd } from "@/components/json-ld";
-import { TillyFigure } from "@/components/learn/tilly-figure";
+import { HeroTilly } from "@/components/tilly-3d/tilly-3d";
 import { installMethods } from "@/lib/install-methods";
 import { pageMetadata } from "@/lib/metadata";
 import { absoluteUrl, site } from "@/lib/site";
@@ -364,7 +364,7 @@ export default function HomePage() {
 function HeroLogo() {
   return (
     <div className="fade-up flex items-center gap-3 text-[var(--brand-ink)] [animation-delay:40ms] sm:gap-5">
-      <TillyFigure className="size-20 sm:size-28" title="Tilly" />
+      <HeroTilly className="size-20 sm:size-28" />
       <Wordmark className="h-12 w-auto sm:h-[4.5rem]" height={72} />
     </div>
   );
