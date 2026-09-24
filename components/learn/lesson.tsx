@@ -38,9 +38,7 @@ import { useModalOverlay, useReducedMotion, useTicker } from "./hooks";
 import { KeySequence, useHeldKeys } from "./keycaps";
 import { LiveTerminal } from "./live-terminal";
 import { ModeBadge } from "./mode-badge";
-import { TillyControls, TillyGuide } from "./tilly";
-
-const PRAISE = ["Nice!", "Smooth.", "You got it.", "Clean.", "Yes!", "Easy."];
+import { TillyControls, TillyGuide, usePrefs } from "./tilly";
 
 /** How many rows the keys learned list shows. */
 const SHELF_ROWS = 5;
@@ -73,7 +71,10 @@ export function Lesson({
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const [tstate, setTstate] = useState<TuiosState | null>(null);
   const [phase, setPhase] = useState<Phase>("booting");
-  const [praise, setPraise] = useState<string | null>(null);
+  // A step just completed. The card shows a tick; Tilly does the praising, and
+  // when Tilly is hidden the card adds a plain "Done" so the reader still sees it.
+  const [justDone, setJustDone] = useState(false);
+  const prefs = usePrefs();
   const [termFocused, setTermFocused] = useState(false);
   const [leftTerminal, setLeftTerminal] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -181,8 +182,8 @@ export function Lesson({
           }),
         );
       }
-      setPraise(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
-      setTimeout(() => alive.current && setPraise(null), 900);
+      setJustDone(true);
+      setTimeout(() => alive.current && setJustDone(false), 900);
       rerender();
       if (finished) {
         markFinished(track.id, elapsed(lessonRef.current, Date.now()));
@@ -499,10 +500,12 @@ export function Lesson({
                     ? `STEP ${lesson.index + 1} / ${track.steps.length}`
                     : "DONE"}
               </span>
-              {praise ? (
+              {justDone ? (
                 <span className="learn-pop inline-flex items-center gap-1 font-mono font-semibold text-[#9ece6a] text-sm">
                   <Check className="size-4" />
-                  {praise}
+                  <span className={prefs.tillyHidden ? undefined : "sr-only"}>
+                    Done
+                  </span>
                 </span>
               ) : null}
             </div>
