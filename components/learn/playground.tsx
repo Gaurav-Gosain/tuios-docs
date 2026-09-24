@@ -3,6 +3,7 @@
 import { Play, RotateCcw, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
+import { BrandMark } from "@/components/brand";
 import { type CheatRow, cheatsheet, shellIdeas } from "@/lib/learn/cheatsheet";
 import { chordParts, keyBytes } from "@/lib/learn/keys";
 import { runSetup, sleep, type TuiosInstance } from "@/lib/learn/runtime";
@@ -110,8 +111,7 @@ export function Playground({ onExit }: { onExit: () => void }) {
           }}
           className="flex items-center gap-2 font-mono font-semibold text-sm"
         >
-          {/* biome-ignore lint/performance/noImgElement: a static icon in a static export */}
-          <img src="/tuios-icon.png" alt="" width={22} height={22} />
+          <BrandMark size={24} />
           <span>
             learn <span className="text-fd-muted-foreground">/</span>{" "}
             <span className="learn-gradient-text">Free play</span>

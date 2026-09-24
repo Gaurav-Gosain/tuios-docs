@@ -44,7 +44,7 @@ function useIcon() {
   useEffect(() => {
     const img = new Image();
     img.onload = () => setIcon(img);
-    img.src = "/tuios-icon.png";
+    img.src = "/brand/mark-32.svg";
   }, []);
   return icon;
 }

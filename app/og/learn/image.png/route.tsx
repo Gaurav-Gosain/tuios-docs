@@ -1,12 +1,9 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { ImageResponse } from "next/og";
+import { OgBackground, OgHeader, og, ogFonts } from "@/lib/og";
 
 export const revalidate = false;
 
-const icon = `data:image/png;base64,${readFileSync(
-  join(process.cwd(), "public/tuios-icon.png"),
-).toString("base64")}`;
+const c = og.colors;
 
 function Cap({ label, lit }: { label: string; lit?: boolean }) {
   return (
@@ -20,14 +17,14 @@ function Cap({ label, lit }: { label: string; lit?: boolean }) {
         padding: "0 22px",
         borderRadius: 16,
         fontSize: 32,
-        fontWeight: 700,
-        color: lit ? "#ffffff" : "#e6e6ef",
+        fontWeight: 600,
+        color: lit ? c.crust : c.text,
         background: lit
-          ? "linear-gradient(180deg, #bb9af7, #7aa2f7)"
-          : "linear-gradient(180deg, #2a2a40, #1e1e2e)",
-        border: lit ? "2px solid #bb9af7" : "2px solid #3a3a55",
+          ? `linear-gradient(180deg, ${c.mauve}, ${c.blue})`
+          : `linear-gradient(180deg, ${c.surface}, ${c.base})`,
+        border: lit ? `2px solid ${c.mauve}` : "2px solid #45475a",
         boxShadow: lit
-          ? "0 3px 0 0 #0b0b13, 0 0 36px 0 rgba(187,154,247,0.55)"
+          ? "0 3px 0 0 #0b0b13, 0 0 36px 0 rgba(203,166,247,0.5)"
           : "0 8px 0 0 #0b0b13",
       }}
     >
@@ -37,10 +34,10 @@ function Cap({ label, lit }: { label: string; lit?: boolean }) {
 }
 
 const PANES: [number, number, number, number, string][] = [
-  [0, 0, 50, 100, "#bb9af7"],
-  [50, 0, 50, 50, "#7aa2f7"],
-  [50, 50, 25, 50, "#9ece6a"],
-  [75, 50, 25, 50, "#f7768e"],
+  [0, 0, 50, 100, c.mauve],
+  [50, 0, 50, 50, c.blue],
+  [50, 50, 25, 50, c.green],
+  [75, 50, 25, 50, c.red],
 ];
 
 /** The social card for /learn: the promise, the keys, and a tiled desktop. */
@@ -53,33 +50,17 @@ export function GET() {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        padding: "60px 72px",
-        color: "#e6e6ef",
-        backgroundColor: "#11111b",
-        backgroundImage:
-          "radial-gradient(circle at 90% 0%, rgba(187, 154, 247, 0.32) 0%, transparent 55%), radial-gradient(circle at 0% 100%, rgba(122, 162, 247, 0.18) 0%, transparent 50%)",
+        position: "relative",
+        padding: "58px 72px 50px",
+        fontFamily: "Fredoka",
+        color: c.text,
+        backgroundColor: c.crust,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-        {/* biome-ignore lint/performance/noImgElement: satori renders plain img elements */}
-        <img src={icon} width={52} height={52} alt="" />
-        <div style={{ display: "flex", fontSize: 32, fontWeight: 700 }}>
-          TUIOS
-        </div>
-        <div
-          style={{
-            display: "flex",
-            marginLeft: 8,
-            padding: "6px 14px",
-            borderRadius: 999,
-            border: "1px solid rgba(187, 154, 247, 0.45)",
-            color: "#bb9af7",
-            fontSize: 22,
-          }}
-        >
-          Learn
-        </div>
-      </div>
+      <OgBackground />
+      <OgHeader kind="Learn" />
+      {/* Holds the header's place in the column; the header itself is absolute. */}
+      <div style={{ display: "flex", height: 60 }} />
 
       <div style={{ display: "flex", alignItems: "center", gap: 48 }}>
         <div
@@ -90,18 +71,18 @@ export function GET() {
               display: "flex",
               flexDirection: "column",
               fontSize: 66,
-              fontWeight: 700,
+              fontWeight: 600,
               lineHeight: 1.08,
               letterSpacing: -1,
             }}
           >
             <span>Learn tuios</span>
             <span>in 5 minutes.</span>
-            <span style={{ color: "#bb9af7" }}>In your browser.</span>
+            <span style={{ color: c.mauve }}>In your browser.</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <Cap label="ctrl" lit />
-            <div style={{ display: "flex", fontSize: 30, color: "#7f7f95" }}>
+            <div style={{ display: "flex", fontSize: 30, color: c.faint }}>
               +
             </div>
             <Cap label="b" lit />
@@ -109,7 +90,7 @@ export function GET() {
               style={{
                 display: "flex",
                 fontSize: 30,
-                color: "#7f7f95",
+                color: c.faint,
                 margin: "0 6px",
               }}
             >
@@ -183,7 +164,7 @@ export function GET() {
           display: "flex",
           justifyContent: "space-between",
           fontSize: 22,
-          color: "#7f7f95",
+          color: c.faint,
         }}
       >
         <div style={{ display: "flex" }}>
@@ -192,6 +173,6 @@ export function GET() {
         <div style={{ display: "flex" }}>tuios.dev/learn</div>
       </div>
     </div>,
-    { width: 1200, height: 630 },
+    { width: 1200, height: 630, fonts: ogFonts },
   );
 }

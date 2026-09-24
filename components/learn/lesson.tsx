@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { BrandMark } from "@/components/brand";
 import {
   advance,
   altChordBlocked,
@@ -398,8 +399,7 @@ export function Lesson({
           }}
           className="flex items-center gap-2 font-mono font-semibold text-sm"
         >
-          {/* biome-ignore lint/performance/noImgElement: a static icon in a static export */}
-          <img src="/tuios-icon.png" alt="" width={22} height={22} />
+          <BrandMark size={24} />
           <span>
             learn <span className="text-fd-muted-foreground">/</span>{" "}
             <span className="learn-gradient-text">{track.title}</span>

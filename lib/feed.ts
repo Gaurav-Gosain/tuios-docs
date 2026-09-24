@@ -260,7 +260,7 @@ export function renderRss(feed: Feed) {
     <lastBuildDate>${newest(feed).toUTCString()}</lastBuildDate>
     <atom:link href="${escapeXml(absoluteUrl(feed.feedPath))}" rel="self" type="application/rss+xml"/>
     <image>
-      <url>${escapeXml(absoluteUrl("/tuios-icon.png"))}</url>
+      <url>${escapeXml(absoluteUrl("/brand/mark-128.png"))}</url>
       <title>${escapeXml(feed.title)}</title>
       <link>${escapeXml(absoluteUrl(feed.path))}</link>
     </image>
@@ -295,7 +295,7 @@ export function renderAtom(feed: Feed) {
   <id>${escapeXml(feedId(absoluteUrl(feed.path)))}</id>
   <updated>${newest(feed).toISOString()}</updated>
   <author><name>${escapeXml(site.author.name)}</name><uri>${escapeXml(site.author.url)}</uri></author>
-  <icon>${escapeXml(absoluteUrl("/tuios-icon.png"))}</icon>
+  <icon>${escapeXml(absoluteUrl("/brand/mark-128.png"))}</icon>
 ${entries}
 </feed>
 `;

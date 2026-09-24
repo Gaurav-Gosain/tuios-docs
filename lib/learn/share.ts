@@ -2,6 +2,11 @@
  * The share card and text for a finished track. The card is drawn on a canvas
  * in the browser, so nothing is stored or sent anywhere.
  */
+import {
+  WORDMARK_HEIGHT,
+  WORDMARK_PATH,
+  WORDMARK_WIDTH,
+} from "@/lib/brand-wordmark";
 import { formatTime, type StepResult } from "./engine";
 
 export type ShareData = {
@@ -155,11 +160,17 @@ export async function drawShareCard(
     ctx.drawImage(icon, 72, 62, 48, 48);
     hx = 136;
   }
+  // The wordmark from its outlines, 30 px tall, centred on the icon.
+  const wordH = 30;
+  const scale = wordH / WORDMARK_HEIGHT;
+  ctx.save();
+  ctx.translate(hx, 87 - wordH / 2);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#cdd6f4";
+  ctx.fill(new Path2D(WORDMARK_PATH));
+  ctx.restore();
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "#e6e6ef";
-  ctx.font = `700 32px ${MONO}`;
-  ctx.fillText("TUIOS", hx, 87);
-  const pillX = hx + ctx.measureText("TUIOS").width + 18;
+  const pillX = hx + WORDMARK_WIDTH * scale + 18;
   ctx.font = `500 20px ${MONO}`;
   const pillW = ctx.measureText("Learn").width + 28;
   roundRect(ctx, pillX, 70, pillW, 34, 17);

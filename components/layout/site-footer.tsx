@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLockup } from "@/components/brand";
 
 const columns = [
   {
@@ -43,17 +44,12 @@ export function SiteFooter() {
     <footer className="mt-auto border-fd-border border-t">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-4 py-12 md:grid-cols-4 md:px-6">
         <div className="col-span-2 md:col-span-1">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 font-mono font-semibold"
-          >
-            {/* biome-ignore lint/performance/noImgElement: static export, the icon is 128px */}
-            <img src="/tuios-icon.png" alt="" width={24} height={24} />
-            TUIOS
+          <Link href="/" className="inline-flex items-center">
+            <BrandLockup size={26} />
           </Link>
           <p className="mt-3 max-w-60 text-fd-muted-foreground text-sm leading-relaxed">
-            A terminal window manager that runs inside your terminal. MIT
-            licensed.
+            A terminal window manager that knows what your agents are doing.
+            MIT licensed.
           </p>
         </div>
         {columns.map((column) => (

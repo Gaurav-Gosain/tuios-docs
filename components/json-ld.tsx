@@ -35,7 +35,7 @@ export const publisherLd = {
   url: site.url,
   logo: {
     "@type": "ImageObject",
-    url: absoluteUrl("/tuios-icon.png"),
+    url: absoluteUrl("/brand/mark-512.png"),
   },
 } as const;
 

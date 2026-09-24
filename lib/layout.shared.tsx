@@ -1,14 +1,10 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import { BrandLockup } from '@/components/brand';
 
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
-      title: (
-        <>
-          <img src="/tuios-icon.png" alt="TUIOS" width={24} height={24} />
-          <span className="font-semibold">TUIOS</span>
-        </>
-      ),
+      title: <BrandLockup size={26} />,
     },
     githubUrl: 'https://github.com/Gaurav-Gosain/tuios',
     links: [

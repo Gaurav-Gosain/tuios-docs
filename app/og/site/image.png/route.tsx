@@ -6,7 +6,7 @@ export const revalidate = false;
 export function GET() {
   return ogImage({
     kind: "Terminal UI Operating System",
-    title: "A window manager for your terminal",
+    title: "A terminal window manager that knows what your agents are doing.",
     description:
       "Panes, tiling and nine workspaces inside the terminal you already use, with sessions that keep running when you detach.",
   });

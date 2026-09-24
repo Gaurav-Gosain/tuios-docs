@@ -34,9 +34,13 @@ export const metadata: Metadata = {
     images: site.image,
   },
   icons: {
-    icon: '/tuios-icon.png',
-    apple: '/tuios-icon.png',
+    icon: [
+      { url: '/favicon.ico', sizes: '32x32' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
+  manifest: '/manifest.webmanifest',
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

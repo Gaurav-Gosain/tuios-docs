@@ -35,7 +35,7 @@ app/
   docs/[[...slug]]/           docs pages
   blog/                       blog index and blog/[slug] posts
   releases/                   releases index and releases/[slug] pages
-  og/docs/[...slug]/          Open Graph images for docs pages
+  og/docs/[...slug]/          Open Graph images for docs pages (all cards are drawn by lib/og.tsx)
   og/blog/[...slug]/          Open Graph images for posts
   og/releases/[...slug]/      Open Graph images for releases
   api/search/                 static search index (staticGET)
@@ -60,7 +60,10 @@ lib/
   metadata.ts                 pageMetadata: canonical, feed links, OG and Twitter cards
   feed.ts, feeds.ts           RSS and Atom rendering, markdown to HTML for feeds
   layout.shared.tsx           nav title and top links (Docs, Blog, Releases)
-public/                       icon, demo.gif, fonts, CNAME, _headers
+public/                       favicons, web manifest, demo.gif, fonts, CNAME, _headers
+public/brand/                 the logo: Tilly mark, wordmark and lockups (SVG and PNG)
+assets/                       build-time only: the Fredoka font and the pieces of the OG card
+components/brand.tsx          the header and footer logo (mark and outlined wordmark)
 mdx-components.tsx            registers the MDX widgets
 source.config.ts              the docs, blog and releases collections
 next.config.mjs               output: 'export'
