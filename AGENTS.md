@@ -65,6 +65,10 @@ public/                       favicons, web manifest, demo.gif, fonts, CNAME, _h
 public/brand/                 the logo: Tilly mark, wordmark and lockups (SVG and PNG)
 assets/                       build-time only: the Fredoka font and the pieces of the OG card
 components/brand.tsx          the header and footer logo (mark and outlined wordmark)
+components/tilly-3d/          the 3D Tilly: scene.ts (three.js, loaded with a dynamic import) and the
+                              hero and /brand viewer components, with the 2D figure as placeholder and fallback
+lib/tilly-3d/                 the 3D Tilly's face drawing and motion math, tested by bun test lib/
+assets/tilly-3d/              tilly.py (Blender) and build.sh, which rebuild public/tilly/tilly.glb
 mdx-components.tsx            registers the MDX widgets
 source.config.ts              the docs, blog and releases collections
 next.config.mjs               output: 'export'
