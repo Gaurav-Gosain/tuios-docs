@@ -6,6 +6,7 @@ import { Wordmark } from "@/components/brand";
 import { CopyButton } from "@/components/brand-page/copy-button";
 import { TillyLarge, TillyMoods } from "@/components/brand-page/tilly-moods";
 import { breadcrumbLd, JsonLd } from "@/components/json-ld";
+import { TillyViewer } from "@/components/tilly-3d/tilly-3d";
 import {
   type BrandFile,
   type DownloadItem,
@@ -126,9 +127,7 @@ export default function BrandPage() {
         intro="Tilly is a small CRT monitor whose screen face is a tiled window layout: two panes on top are the eyes, a wide pane below holds a >_ prompt for a mouth, and the focused pane has a blue border. Tilly guides the Learn tour and stands for tuios wherever a friendly face fits better than a logo."
       >
         <div className="grid items-center gap-8 md:grid-cols-[auto_1fr]">
-          <div className="flex justify-center rounded-2xl bg-[#1e1e2e] p-8 md:p-10">
-            <TillyLarge className="size-48 sm:size-56" />
-          </div>
+          <TillyViewer className="mx-auto w-full max-w-sm md:w-[24rem]" />
           <div className="text-sm leading-relaxed">
             <h3 className="font-semibold text-base text-fd-foreground">
               Using Tilly
@@ -159,7 +158,8 @@ export default function BrandPage() {
               <Link href="/learn" className={linkClass}>
                 Learn tour
               </Link>
-              . Click any Tilly on this page to play a move.
+              . Turn the 3D Tilly around by dragging it, pick a mood under it,
+              or click any Tilly on this page to play a move.
             </p>
           </div>
         </div>
