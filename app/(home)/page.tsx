@@ -257,7 +257,7 @@ export default function HomePage() {
                 running and attaches you to a session.
               </p>
             </Step>
-            <Step n={3} title="Learn seven keys">
+            <Step n={3} title="Learn eight keys">
               <p className="mt-1 text-fd-muted-foreground text-sm leading-relaxed">
                 The table has the ones you need on day one. The{" "}
                 <Link
@@ -290,6 +290,7 @@ export default function HomePage() {
               <KeyRow keys={[["Ctrl+P"]]} action="Command palette" />
               <KeyRow keys={[["Ctrl+B", "d"]]} action="Detach, keep running" />
               <KeyRow keys={[["?"]]} action="Help" />
+              <SpinnerKeyRow />
             </dl>
           </div>
         </div>
@@ -460,6 +461,26 @@ function KeyRow({ keys, action }: { keys: string[][]; action: string }) {
         ))}
       </dt>
       <dd className="m-0 text-right text-fd-muted-foreground">{action}</dd>
+    </div>
+  );
+}
+
+// The eighth key is still loading, and always will be.
+function SpinnerKeyRow() {
+  return (
+    <div className="flex items-center justify-between gap-4 px-5 py-3">
+      <dt className="flex items-center">
+        <kbd className="keycap inline-flex items-center justify-center">
+          <span
+            aria-hidden="true"
+            className="inline-block size-3.5 animate-spin rounded-full border-2 border-fd-muted-foreground/30 border-t-fd-primary motion-reduce:animate-none"
+          />
+          <span className="sr-only">a key that is still loading</span>
+        </kbd>
+      </dt>
+      <dd className="m-0 text-right text-fd-muted-foreground italic">
+        You can never learn enough
+      </dd>
     </div>
   );
 }
