@@ -13,23 +13,25 @@ import type { TillyMood } from "@/lib/learn/tilly";
  * layers, by scripts/tilly-svg.tsx. Re-run it after changing the drawing.
  */
 
+// Catppuccin, the same values as the tuios logo, so the Learn page Tilly and
+// the mark in the header, favicon and social cards are one drawing.
 const C = {
-  outline: "#1a1b26",
-  shellTop: "#e9c2ff",
-  shellMid: "#c3a2fa",
-  shellBottom: "#9d7cd8",
-  back: "#9d7cd8",
-  deep: "#6c4bc4",
-  screen: "#15161e",
-  pane: "#24283b",
-  paneEdge: "#414868",
-  focus: "#7dcfff",
-  eye: "#a6f0f7",
-  prompt: "#9ece6a",
-  blush: "#f7a1c4",
-  rod: "#414868",
-  ballA: "#f2dc8c",
-  ballB: "#8ee8f5",
+  outline: "#11111b",
+  shellTop: "#e5cffc",
+  shellMid: "#cba6f7",
+  shellBottom: "#a987ea",
+  back: "#a987ea",
+  deep: "#8062cf",
+  screen: "#11111b",
+  pane: "#262637",
+  paneEdge: "#45475a",
+  focus: "#74c7ec",
+  eye: "#89dceb",
+  prompt: "#a6e3a1",
+  blush: "#f5c2e7",
+  rod: "#7f849c",
+  ballA: "#f9e2af",
+  ballB: "#89dceb",
 };
 
 /** Styles for the figure. Scoped to `.tilly`, so it can sit inline anywhere. */
