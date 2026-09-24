@@ -17,7 +17,7 @@ export function GET() {
     "",
     `> ${site.description}`,
     "",
-    `TUIOS is written in Go and MIT licensed. Source: ${site.repository}`,
+    `tuios is written in Go and MIT licensed. Source: ${site.repository}`,
   ];
 
   let section = "";

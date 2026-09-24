@@ -60,12 +60,12 @@ export default async function Page(props: {
             publisher: publisherLd,
             isPartOf: {
               "@type": "Blog",
-              name: "TUIOS engineering blog",
+              name: "tuios engineering blog",
               url: absoluteUrl("/blog"),
             },
           },
           breadcrumbLd([
-            { name: "TUIOS", path: "/" },
+            { name: "tuios", path: "/" },
             { name: "Blog", path: "/blog" },
             { name: page.data.title, path: page.url },
           ]),

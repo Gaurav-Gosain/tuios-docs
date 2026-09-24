@@ -68,12 +68,12 @@ export default async function Page(props: {
             publisher: publisherLd,
             about: {
               "@type": "SoftwareApplication",
-              name: "TUIOS",
+              name: "tuios",
               ...(tag ? { softwareVersion: tag.replace(/^v/, "") } : {}),
             },
           },
           breadcrumbLd([
-            { name: "TUIOS", path: "/" },
+            { name: "tuios", path: "/" },
             { name: "Releases", path: "/releases" },
             { name: page.data.title, path: page.url },
           ]),

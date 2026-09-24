@@ -5,10 +5,10 @@
  */
 export const site = {
   url: "https://tuios.dev",
-  name: "TUIOS",
-  title: "TUIOS: a window manager for your terminal",
+  name: "tuios",
+  title: "tuios: a window manager for your terminal",
   description:
-    "TUIOS is a terminal window manager with vim-style keys, tiling, nine workspaces, and sessions that keep running when you detach.",
+    "tuios is a terminal window manager with vim-style keys, tiling, nine workspaces, and sessions that keep running when you detach.",
   image: "/og/site/image.png",
   repository: "https://github.com/Gaurav-Gosain/tuios",
   author: {
@@ -20,12 +20,12 @@ export const site = {
 /** The feeds, linked from the head of every page and from the index pages. */
 export const feeds = {
   blog: {
-    title: "TUIOS engineering blog",
+    title: "tuios engineering blog",
     rss: "/blog/rss.xml",
     atom: "/blog/atom.xml",
   },
   releases: {
-    title: "TUIOS releases",
+    title: "tuios releases",
     rss: "/releases/rss.xml",
     atom: "/releases/atom.xml",
   },

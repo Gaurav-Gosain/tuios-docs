@@ -9,7 +9,7 @@ import { formatShortDate, getBlogPosts, getReadingMinutes } from "@/lib/source";
 export const metadata: Metadata = pageMetadata({
   title: "Engineering blog",
   description:
-    "Notes on building TUIOS and the tools around it: fuzzing a terminal harness, profiling a renderer, and the diagnoses that turned out to be wrong.",
+    "Notes on building tuios and the tools around it: fuzzing a terminal harness, profiling a renderer, and the diagnoses that turned out to be wrong.",
   path: "/blog",
 });
 
@@ -40,7 +40,7 @@ export default async function BlogIndex() {
             })),
           },
           breadcrumbLd([
-            { name: "TUIOS", path: "/" },
+            { name: "tuios", path: "/" },
             { name: "Blog", path: "/blog" },
           ]),
         ]}
@@ -53,7 +53,7 @@ export default async function BlogIndex() {
           Engineering blog
         </h1>
         <p className="mt-4 text-fd-muted-foreground text-lg leading-relaxed">
-          How TUIOS and the tools around it were built, measured and fixed.
+          How tuios and the tools around it were built, measured and fixed.
           Every number comes from a run you can repeat from the repository.
         </p>
         <FeedLinks rss={feeds.blog.rss} atom={feeds.blog.atom} />

@@ -16,7 +16,7 @@ import {
 export const metadata: Metadata = pageMetadata({
   title: "Releases",
   description:
-    "What changed in each release of TUIOS, with interactive figures for the fixes.",
+    "What changed in each release of tuios, with interactive figures for the fixes.",
   path: "/releases",
 });
 
@@ -37,7 +37,7 @@ export default async function ReleasesIndex() {
         data={[
           {
             "@type": "CollectionPage",
-            name: "TUIOS releases",
+            name: "tuios releases",
             description: metadata.description,
             url: absoluteUrl("/releases"),
             inLanguage: "en",
@@ -49,7 +49,7 @@ export default async function ReleasesIndex() {
             })),
           },
           breadcrumbLd([
-            { name: "TUIOS", path: "/" },
+            { name: "tuios", path: "/" },
             { name: "Releases", path: "/releases" },
           ]),
         ]}

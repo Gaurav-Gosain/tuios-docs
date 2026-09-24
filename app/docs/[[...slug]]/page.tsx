@@ -43,13 +43,13 @@ export default async function Page(props: {
             publisher: publisherLd,
             isPartOf: {
               '@type': 'WebSite',
-              name: 'TUIOS documentation',
+              name: 'tuios documentation',
               url: absoluteUrl('/docs'),
             },
-            about: { '@type': 'SoftwareApplication', name: 'TUIOS' },
+            about: { '@type': 'SoftwareApplication', name: 'tuios' },
           },
           breadcrumbLd([
-            { name: 'TUIOS', path: '/' },
+            { name: 'tuios', path: '/' },
             { name: 'Docs', path: '/docs' },
             ...(isIndex ? [] : [{ name: page.data.title, path: page.url }]),
           ]),
@@ -82,6 +82,6 @@ export async function generateMetadata(props: {
     image: getPageImage(page).url,
     // "Introduction" alone says nothing in a link preview.
     cardTitle:
-      page.slugs.length === 0 ? 'TUIOS documentation' : page.data.title,
+      page.slugs.length === 0 ? 'tuios documentation' : page.data.title,
   });
 }

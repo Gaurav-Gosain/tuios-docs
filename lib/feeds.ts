@@ -7,7 +7,7 @@ export async function getBlogFeed(format: "rss" | "atom"): Promise<Feed> {
   return {
     title: feeds.blog.title,
     description:
-      "Long engineering posts about building TUIOS: bugs, measurements, and the diagnoses that turned out to be wrong.",
+      "Long engineering posts about building tuios: bugs, measurements, and the diagnoses that turned out to be wrong.",
     path: "/blog",
     feedPath: feeds.blog[format],
     items: await Promise.all(getBlogPosts().map(toFeedItem)),
@@ -18,7 +18,7 @@ export async function getBlogFeed(format: "rss" | "atom"): Promise<Feed> {
 export async function getReleasesFeed(format: "rss" | "atom"): Promise<Feed> {
   return {
     title: feeds.releases.title,
-    description: "What changed in each release of TUIOS.",
+    description: "What changed in each release of tuios.",
     path: "/releases",
     feedPath: feeds.releases[format],
     items: await Promise.all(getReleases().map(toFeedItem)),
