@@ -8,6 +8,8 @@ on:
 permissions:
   contents: read
 
+# Deploys queue rather than cancel: a Wrangler deploy stopped halfway is worse
+# than one that lands a minute late.
 concurrency:
   group: "deploy"
   cancel-in-progress: false
@@ -15,12 +17,25 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Third-party actions are pinned to a commit with the release in a
+      # comment. Dependabot updates both.
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      # setup-bun caches the bun binary but not the packages bun install
+      # downloads.
+      - name: Cache Bun packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
 
       - name: Install dependencies
         run: bun install
@@ -52,8 +67,14 @@ jobs:
       # Without it the fonts ship as TTF, 2.5 times the size.
       # setup-uv publishes no moving major tags since v8, so it is pinned to a
       # release.
+      #
+      # The job has no Python project, so setup-uv's default cache glob matched
+      # nothing and it warned that the cache would never be invalidated. The
+      # script that calls uvx stands in for a lock file.
       - name: Setup uv
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: .tuios/cmd/tuios-wasm/build.sh
 
       # build.sh finds bubbletea, creack/pty and sip in the module cache with
       # go list -m, which does not download them. It needs brotli too.
@@ -64,13 +85,22 @@ jobs:
           .tuios/cmd/tuios-wasm/build.sh "$PWD/.learn-build"
           bun scripts/learn-engine.mjs .learn-build
 
+      # next build warned on every run that it found no build cache.
+      - name: Cache the Next.js build
+        uses: actions/cache@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('app/**', 'components/**', 'content/**', 'lib/**', '*.ts', '*.mjs') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
+
       - name: Build
         run: bun run build
 
       # The Worker serves out/ from Workers static assets and negotiates each
       # page between HTML and its markdown twin. See worker/index.ts.
       - name: Deploy
-        uses: cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@25853364521e0d392ece9b0c1e97a4b37b638087 # v4.1.2
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           # Pinned so a new Wrangler release cannot change a deploy unseen.
