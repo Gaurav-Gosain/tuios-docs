@@ -257,7 +257,7 @@ export default function HomePage() {
                 running and attaches you to a session.
               </p>
             </Step>
-            <Step n={3} title="Learn five keys">
+            <Step n={3} title="Learn seven keys">
               <p className="mt-1 text-fd-muted-foreground text-sm leading-relaxed">
                 The table has the ones you need on day one. The{" "}
                 <Link
