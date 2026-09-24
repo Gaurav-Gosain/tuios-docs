@@ -11,6 +11,8 @@ export const site = {
     "tuios is a terminal window manager with vim-style keys, tiling, nine workspaces, and sessions that keep running when you detach.",
   image: "/og/site/image.png",
   repository: "https://github.com/Gaurav-Gosain/tuios",
+  /** The repository this site is built from: brand and site questions go here. */
+  docsRepository: "https://github.com/Gaurav-Gosain/tuios-docs",
   author: {
     name: "Gaurav Gosain",
     url: "https://github.com/Gaurav-Gosain",

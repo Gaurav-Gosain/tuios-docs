@@ -484,7 +484,7 @@ export default function BrandPage() {
         <p className="mt-6 max-w-3xl text-fd-foreground leading-relaxed">
           {terms.ask}{" "}
           <a
-            href={`${site.repository}/issues`}
+            href={`${site.docsRepository}/issues`}
             target="_blank"
             rel="noopener noreferrer"
             className={linkClass}

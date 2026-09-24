@@ -310,7 +310,7 @@ export function termsText() {
     ...terms.notAllowed.map((line) => `- ${line}`),
     "",
     terms.ask,
-    `Open an issue on GitHub to ask: ${site.repository}/issues`,
+    `Open an issue on GitHub to ask: ${site.docsRepository}/issues`,
     "",
     terms.fonts,
     "",
@@ -377,7 +377,7 @@ export function brandMarkdown() {
     ...terms.allowed.map((line) => `- ${line}`),
     ...terms.notAllowed.map((line) => `- ${line}`),
     "",
-    `${terms.ask} Open an issue on GitHub to ask: ${site.repository}/issues`,
+    `${terms.ask} Open an issue on GitHub to ask: ${site.docsRepository}/issues`,
     "",
   );
   return lines.join("\n");
