@@ -6,9 +6,8 @@ icon: Bot
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Step, Steps } from 'fumadocs-ui/components/steps';
 
-TUIOS keeps an agent state for every pane. When a pane runs a coding agent such as Claude Code, Codex or Gemini CLI, the state says whether it is working, waiting for you, or done. The state is drawn on the pane's title bar and in the rail, it can raise an alert, and scripts can read it and wait on it.
+TUIOS keeps an agent state for every pane. When a pane runs a coding agent such as Claude Code, Codex or Gemini CLI, the state says whether it is working, waiting for you, or done. The state is drawn on the pane's title bar and in the rail, it can raise an alert, and scripts can read it and wait on it. Everything an agent waits on you for collects in the [Inbox](/docs/agent-inbox).
 
 **Try it live:** the [Agents track](/learn?t=agents) runs a pretend agent in your browser so you can watch its state change.
 
@@ -20,7 +19,7 @@ TUIOS keeps an agent state for every pane. When a pane runs a coding agent such 
 | `working` | `●` | `*` | Working on a task |
 | `needs_input` | `▲` | `!` | Blocked, waiting for a person |
 | `idle` | `○` | `o` | Not working and not blocked |
-| `done` | `■` | `#` | Finished its task |
+| `done` | `■` | `#` | Finished its task, and you have not looked at it yet. Once you have, it draws `○` |
 | `errored` | `×` | `x` | Stopped on an error |
 | `unknown` | `□` | `?` | An agent is there and nothing says what it is doing |
 
@@ -33,7 +32,8 @@ The state is held by the daemon, per pane. Every attached client sees it, and it
 ## Where it shows
 
 - **Title bar:** the glyph sits in each pane's title.
-- **Rail:** the agents section lists every agent pane with its state and how long it has been in it. Each session row carries the loudest state among its panes. See [Session Rail](/docs/session-rail#agent-rows).
+- **Rail:** the agents section lists every agent pane, sorted by what each needs from you, with what it is doing or asking. Each session row carries the loudest state among its panes. See [Session Rail](/docs/session-rail#agent-rows).
+- **Inbox:** <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> lists every approval, question, error and finished turn waiting for you, in every session. See [Inbox and Review](/docs/agent-inbox).
 - **Alerts:** a state change can raise a notification, a sound and a dock message. See [Alerts](#alerts).
 
 ## How TUIOS learns the state
@@ -53,7 +53,20 @@ A source can overwrite a claim from its own rank or lower, never from a higher o
 
 ### The agent reports for itself
 
-This is the most accurate source, and the only one that can reliably say `needs_input`.
+This is the most accurate source, and the only one that can reliably say `needs_input`. The usual way to report is to let TUIOS wire the agent's hooks for you:
+
+```bash
+tuios integration install claude-code    # or codex, gemini-cli, opencode, kilo, amp, ...
+tuios integration install --all          # every supported harness whose config directory exists
+tuios integration status                 # installed and current, per harness
+tuios doctor agents                      # PATH, install state, and agent panes missing an integration
+```
+
+The installer adds its hook entries to the harness's own settings file, keeps everything else in it, and saves the file as it was the first time as `<file>.tuios.bak`. It refuses a file it cannot parse rather than rewrite it. Each entry runs `tuios agent-hook`, which never blocks the harness for long and prints nothing a harness could read as an answer. `tuios integration uninstall <harness>` removes exactly what it wrote.
+
+Eight integrations report the pane's state: Claude Code, Codex, Gemini CLI, opencode, Kilo, Amp, Kimi Code CLI and Pi. Ten more (Copilot, Cursor Agent, Crush, Droid, Devin, Grok, Hermes, Qoder, Qwen Code and Antigravity) report only the conversation id, so the pane can be [resumed after a restart](/docs/agent-inbox#resuming-after-a-restart), and leave the state to the screen rules. The Claude Code and Codex hooks also feed the rail what the agent is doing now and the Inbox its [activity log](/docs/agent-inbox#what-the-agent-has-been-doing). `tuios integration install claude-code --statusline` also feeds the model, context use and cost from Claude Code's status line. It never replaces a status line of your own: `--then` chains to it.
+
+You can also report by hand, or from a script of your own:
 
 ```bash
 tuios set-agent-state working -m "running the test suite"
@@ -70,45 +83,7 @@ tuios set-agent-state working -s "$TUIOS_SESSION" -w "$TUIOS_PANE_ID" --harness 
 
 A report that loses to a higher-ranked source still exits 0 and prints `Not applied: ...` on stderr.
 
-The usual way to report is to wire the agent's lifecycle hooks to these calls once. The TUIOS repository has a working shim for Claude Code:
-
-<Steps>
-<Step>
-
-Copy the shim somewhere stable:
-
-```bash
-mkdir -p ~/.config/tuios/integrations
-cp integrations/claude-code/tuios-agent-state.sh ~/.config/tuios/integrations/
-chmod +x ~/.config/tuios/integrations/tuios-agent-state.sh
-```
-
-</Step>
-<Step>
-
-In `~/.claude/settings.json`, point the `SessionStart`, `UserPromptSubmit`, `Notification` and `Stop` hooks at it:
-
-```json
-{
-  "hooks": {
-    "Notification": [
-      { "hooks": [{ "type": "command", "command": "~/.config/tuios/integrations/tuios-agent-state.sh" }] }
-    ]
-  }
-}
-```
-
-Repeat the same entry for the other three events. The shim reads the event from its input, so one command serves all four.
-
-</Step>
-<Step>
-
-Run Claude Code in a TUIOS pane. Start and prompt submit report `working`, a notification reports `needs_input` with its message, and stop reports `done`.
-
-</Step>
-</Steps>
-
-The shim needs `tuios` and `python3` on `PATH`. Outside TUIOS it does nothing, so it is safe to leave in place. The same pattern works for any agent that can run a command on its lifecycle events. See `integrations/claude-code/README.md` in the repository.
+The old shell shim in `integrations/claude-code/` of the repository now just runs `tuios agent-hook claude-code`. Settings that still point at it keep working, but alongside an installed integration every event is reported twice. `tuios doctor agents` says so.
 
 ### Progress sequences
 
@@ -221,16 +196,61 @@ Every daemon pane gets these variables, which is how a shim or an agent finds TU
 | `TUIOS_SESSION` | The session name |
 | `TUIOS_HOST` | The hostname of the machine the pane's process runs on |
 | `TUIOS_RESTORED` | `1` in a shell started again after a restore |
+| `TUIOS_PANE_GRANTS` | What the pane may do through TUIOS as it starts, such as `admin` or `read,write,fan` |
+| `TUIOS_PANE_TOKEN` | Proves `TUIOS_PANE_ID` to the daemon where the kernel cannot name the caller's pane |
 
 A pane whose process runs on another machine has a different set. See [Remote Hosts](/docs/remote-hosts#panes-on-another-machine).
+
+## What a pane may do
+
+Every pane holds grants that say what a program in it may do through TUIOS:
+
+| Grant | Allows |
+|-------|--------|
+| `read` | Read its own session and its fan group: listings, captures, agent state, waits and events |
+| `write` | Type into the panes of its own session, and leave mail there |
+| `fan` | Write in its fan group, and start agents with `fan` and `start-agent` |
+| `respond` | Answer another pane's prompt without you |
+| `admin` | Everything else, as every pane could before grants existed. Implies `read`, `write` and `fan`, never `respond` |
+
+A pane holds the grants it was started with (`--grants` on `start-agent`, `fan` and `new-window`), or else the default of `[agents.permissions]`: `admin` under `mode = "open"`, the default, and the `grants` list under `mode = "strict"`. A pane without `admin` types only into panes that hold nothing it does not, and never gives more than it holds.
+
+```bash
+tuios pane-grants                                   # from inside a pane: what this pane may do
+tuios start-agent claude --name reviewer --grants read
+tuios set-pane-grants -w reviewer --grants read,write
+tuios set-pane-grants -w reviewer --reset           # back to the default
+```
+
+```toml
+[agents.permissions]
+mode = "strict"
+grants = ["read", "write", "fan"]
+```
+
+Some acts are yours alone whatever a pane holds: answering a held approval, answering an `ask-human` question, dismissing or snoozing an Inbox item, and writing a review note or queued reply that reads as yours. They need the nonce your attached client got when it attached, and the daemon refuses a caller inside a pane even with a copy of it.
+
+## Starting agents
+
+```bash
+tuios start-agent claude --name reviewer               # one agent in a new pane, returns once it is ready
+tuios start-agent codex --name tests --prompt 'Run the tests and fix what fails.'
+tuios start-agent --protocol acp 'opencode acp' --name helper
+```
+
+`start-agent` opens a pane in the session `-s` names (creating it if needed), starts the agent, and returns once the agent shows it is at its prompt. With `--prompt`, it types the first prompt then. `--protocol acp` or `--protocol codex` runs the agent headless over the Agent Client Protocol or the Codex app-server: the pane shows the conversation as a transcript you type into, and reports the agent's state itself. To start the same prompt in several agents at once, each in its own git worktree, see [Worktrees](/docs/worktrees#fan-out-one-prompt-several-agents).
 
 ## Letting an agent drive TUIOS
 
 TUIOS ships a skill: a guide written for an agent running inside a pane. It covers addressing panes, reading and writing them, opening panes to run work in, waiting on conditions instead of polling, reporting state, and working with other agents. It is built into the binary, so it always matches the version you run.
 
 ```bash
-tuios --skill
+tuios --skill              # the core
+tuios --skill fleet        # one topic
+tuios --skill all          # everything
 ```
+
+The topics are `panes`, `state`, `mail`, `inbox`, `fleet`, `hosts`, `grants`, `events`, `mcp`, `tmux`, `config`, `errors` and `recipes`.
 
 To install it for Claude Code:
 
@@ -240,6 +260,8 @@ tuios --skill > ~/.claude/skills/tuios/SKILL.md
 ```
 
 Run it again after you update TUIOS.
+
+An agent can also drive TUIOS as Model Context Protocol tools. `tuios integration install claude-code --mcp` registers `tuios mcp` as a server for Claude Code, Codex, Gemini CLI or opencode. It is read-only by default and reaches only the session of the pane it runs in. `--mcp-write` adds the tools that type into panes.
 
 <Callout type="info">
 Everything an agent does goes through the same `tuios` commands and [control protocol](/docs/control-protocol) you can use from a shell. There is no separate agent API.

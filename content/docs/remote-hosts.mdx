@@ -32,6 +32,7 @@ tuios hosts remove build     # drop it
 - `--ssh-option ARG`: one extra ssh argument. Repeat it, for example `--ssh-option -J --ssh-option bastion` for a jump host.
 - `--connect-timeout SECONDS`: how long one dial may take (default 10).
 - `--command PATH`: the TUIOS binary to run on the host. Without it, the link looks on the `PATH`, then in the usual install locations, then in a login shell.
+- `--repos-root DIR`: where the host keeps its checkouts, such as `~/src`. `fan --host`, `worktree new --host` and `start-agent -s HOST:SESSION` look there for a repository by its origin URL.
 
 <Callout type="warn" title="Accept the host key first">
 The daemon runs ssh with `BatchMode` on, so a link never asks for a password or about a host key. Run `ssh` to the host once by hand to accept its key, and use key-based login.
@@ -135,11 +136,13 @@ The palette has the same thing as `New window on another machine`. The pane is d
 
 The session is still an ordinary session: `tuios ls`, scripting, the mailbox, hooks and resurrection work on it as usual. The host runs only the process and its pty. It keeps no screen or scrollback for the pane, and the pane does not appear in `tuios ls` on the host.
 
-Agent detection works in such a pane: the local daemon asks the host what the pane is running. An agent inside it cannot report its own state or read its mail, though, because nothing on the host can reach your daemon. These panes have `TUIOS_PANE_HOSTED=1`, `TUIOS_HOST` set to the host, and `TUIOS_SESSION_REMOTE` set to the session name here. They do not have `TUIOS_ENV`, `TUIOS_SOCKET`, `TUIOS_PANE_ID` or `TUIOS_SESSION`.
+Agent detection works in such a pane: the local daemon asks the host what the pane is running. An agent inside it can also report its own state and read its own mail with the usual commands and hooks: the report goes to the daemon on the host, which passes it back over the link as that window and nothing else. These panes have `TUIOS_PANE_ID`, `TUIOS_PANE_HOSTED=1`, `TUIOS_HOST` set to the host, and `TUIOS_SESSION_REMOTE` set to the session name here. They do not have `TUIOS_SOCKET` or `TUIOS_SESSION`, since those would name a daemon and a session on the host.
 
 **Limits:**
 
-- The pane ends when the link drops, the same as closing it. It does not come back when the link does.
+- The pane outlives a dropped link for a while. The host keeps its process running for its `hosted_grace` (10 minutes unless the host's config says otherwise) and keeps its last 64 KB of output. The title bar reads `[reconnecting] build:deploy`, and keys are refused rather than queued. When the link comes back, the pane is reattached and what it printed meanwhile is written to it. If the grace runs out first, the pane closes.
+- Closing the pane ends its process at once.
+- A restart of this daemon does not reattach. The processes on the host wait out their grace and end.
 - A resurrected session brings the pane back as a local shell.
 - Both machines need a TUIOS new enough to open remote panes. An older one refuses with a message that says to update.
 
@@ -172,9 +175,26 @@ tuios list-agents --host build
 tuios kill-session build:api
 ```
 
-The CLI says which host answered, and `--json` adds a `host` field. A host name is matched exactly. An unknown name fails with `unknown_host` and lists the configured names, and a host that is down fails with `host_unreachable`. Nothing is queued for later.
+The CLI says which host answered, and `--json` adds a `host` field. A host name is matched exactly. An unknown name fails with `unknown_host` and lists the configured names, and a host that is down fails with `host_unreachable`. A command is not queued for later.
 
-Messages and files cross links too. See [Agent Messaging](/docs/agent-messaging#across-machines).
+Messages and files cross links too. Mail to a host whose link is down waits on this machine, under Waiting to send in the Inbox, and goes when the link is back. See [Agent Messaging](/docs/agent-messaging#across-machines).
+
+Agents on every linked host appear on the rail and in your [Inbox](/docs/agent-inbox), and `fan`, `worktree` and `start-agent` can run there. See [Worktrees](/docs/worktrees#work-from-another-machine).
+
+## What another machine may do here
+
+The `[hosts]` table on the machine a link arrives at also says what the machine of that name may do there. With no entry, a linked machine may list, send mail, open sessions and panes, and type into panes. Answering prompts for you (`respond`) is off unless you allow it:
+
+```toml
+[hosts.laptop]
+allow = ["list", "mail", "open", "write", "respond"]
+hold_mail = true      # hold its mail to agents here in your Inbox until you pass it on
+
+[hosts."*"]           # every machine with no entry of its own
+allow = ["list", "mail"]
+```
+
+Anything not allowed is refused with `forbidden`. See [What another machine may do here](/docs/configuration#what-another-machine-may-do-here) for every capability and option.
 
 ## Related
 

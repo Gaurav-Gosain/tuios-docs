@@ -147,6 +147,12 @@ The result says what ended the wait:
 
 `--force` skips the wait in step 1 and types anyway. `--lines` caps the reply (default 200).
 
+`ask-agent` never types at an agent on `needs_input`: it is waiting on a prompt, and the question would be read as the answer. That fails with `agent_blocked` and types nothing. After Enter, the target has 5 seconds (`--stall-timeout`) to show it took the question, or the call fails with `prompt_stalled`.
+
+To reach a group of agents at once, `send-agent-message --select` and `ask-agent --select` take a [selector](/docs/agent-inbox#selectors), such as `group:fan/add-retry`. They list the panes and send nothing until you say yes, or pass `--yes`.
+
+To leave a prompt for a busy agent without interrupting it, queue it: `tuios queue -w build 'text'` types it the moment the agent is at rest. See [Replying and the queue](/docs/agent-inbox#replying-and-the-queue).
+
 ## Messages to and from you
 
 The person watching the session has an inbox called `human`. It resolves before any pane name.
@@ -156,11 +162,13 @@ tuios send-agent-message -s work -w human --from "$TUIOS_PANE_ID" \
   --subject 'which retry policy?' 'exponential or fixed? both pass the suite'
 ```
 
-The message reaches the attached client at once. The dock says who wrote, and the rail's agents header shows the unread count. Open the mailbox with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>M</kbd>, the palette entry `Mail: open inbox`, or <kbd>i</kbd> on a pane's row in the rail.
+The message reaches the attached client at once. The dock says who wrote, the rail's agents header shows the unread count, and the mail waits in the [Inbox](/docs/agent-inbox). <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>M</kbd> opens the Inbox on its mail, and <kbd>m</kbd> there opens the whole mailbox, including the threads between agents. <kbd>i</kbd> on a pane's row in the rail opens the mailbox for that pane.
 
-In the mailbox, <kbd>Enter</kbd> opens a thread, <kbd>r</kbd> replies, <kbd>o</kbd> goes to the pane, <kbd>j</kbd>/<kbd>k</kbd> scroll, and <kbd>Esc</kbd> goes back. Your reply arrives in the agent's thread from `human`.
+In the Inbox, <kbd>r</kbd> on a mail row replies. In the mailbox, <kbd>Enter</kbd> opens a thread, <kbd>r</kbd> replies, <kbd>o</kbd> goes to the pane, <kbd>j</kbd>/<kbd>k</kbd> scroll, and <kbd>Esc</kbd> goes back. Your reply arrives in the agent's thread from `human`, marked `verified_human`. A pane cannot send as `human`.
 
-`ask-agent -w human` is refused, because there is no pane to type into. Send a message and wait for the reply instead.
+For a decision with fixed answers, an agent can ask you directly and wait for the answer with `tuios ask-human`. See [Questions an agent asks you](/docs/agent-inbox#questions-an-agent-asks-you).
+
+`ask-agent -w human` is refused, because there is no pane to type into. Send a message and wait for the reply, or use `ask-human`.
 
 ## Across machines
 

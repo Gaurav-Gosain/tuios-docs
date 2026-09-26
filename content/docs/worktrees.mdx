@@ -87,19 +87,58 @@ Started 3 agents on fan/add-retry-backoff-http. Each prompt is sent when its age
 
 - The count is 1 to 16.
 - The branches are a stem, then `stem-2`, `stem-3` and so on. The stem is `fan/` plus the first words of the prompt, or `--name`.
-- `--agent` is required: `claude`, `codex`, `gemini`, or any agent TUIOS has a manifest for.
+- `--agent` is required. Name the agent the way you type it, arguments included: `claude`, `"codex --model o5"`, or any program. Several, separated by commas, are cycled across the sessions, so `--agent claude,codex,gemini` with a count of 3 starts one of each.
+- `--prompt`, given once per session, gives each session its own prompt. The count is then how many there are.
+- `--env NAME` passes your value of a variable to every agent, and `--env NAME=VALUE` sets one. `PATH` is always sent.
 - `--base` sets the ref every branch starts from.
-- The prompt is not typed the moment the agent starts. TUIOS waits until the agent is at its prompt, then types it, so it never lands in a start-up screen. If the agent first asks whether to trust the folder, the prompt waits for you to answer.
+- `--grants` says what every agent may do through TUIOS. See [What a pane may do](/docs/agents#what-a-pane-may-do).
+- The prompt is not typed the moment the agent starts. TUIOS waits until the agent is at its prompt, then types it, so it never lands in a start-up screen. An agent that has not shown its prompt after 30 seconds, most often because it asks a first-run question such as whether to trust the folder, puts a question in the [Inbox](/docs/agent-inbox) asking you to look at its pane. Its prompt is typed as soon as it is ready.
 - `--wait` makes the command return only when every prompt has been sent or given up on.
+- `--host` runs the fan-out on another machine. See [Remote Hosts](/docs/remote-hosts).
 
-Follow the run and compare the results:
+Follow the run:
 
 ```bash
 tuios worktree ls --group fan/add-retry-backoff-http
-tuios worktree diff api-fan-add-retry-backoff-http-2 --stat
+tuios wait-for agent-state --select 'group:fan/add-retry-backoff-http' --until idle,done --every --timeout 3600000
 ```
 
 The `--group` listing shows whether each prompt is `pending`, `sent` or `not_sent`.
+
+### Comparing and keeping one
+
+`fan compare` shows every attempt on one line: its agent and state, the files and lines it changed against the fan's base (committed or not, untracked files included), and its last check.
+
+```bash
+tuios fan compare api-fan-demo
+```
+
+```
+fan/demo in api, 2 attempts against main
+  api-fan-demo    bash  none  0 files  +0 -0  no check yet
+  api-fan-demo-2  bash  none  2 files  +2 -0  no check yet
+Keep one with 'tuios fan keep <session>'. Compare two with 'tuios fan diff A B'.
+```
+
+`fan verify` runs one check in every attempt, in a window named `verify` in each session, and says which passed. It always runs the command you give, never one read from the repository, and the window holds no grants. A window whose check passed closes. One whose check failed stays open so you can read the output. The command exits `1` when any check failed.
+
+```bash
+tuios fan verify api-fan-demo -- 'test -f b.txt'
+```
+
+```
+Running "test -f b.txt" in 2 attempts of fan/demo.
+  api-fan-demo: failed, exit 1 in 0s. Its verify window is open with the output
+  api-fan-demo-2: passed in 0s
+1 of 2 passed.
+```
+
+`fan compare` then shows each check's result in its last column. `fan diff` shows what one attempt did differently from another, and `tuios review` shows one attempt's changes with notes you can send back to its agent. See [Reviewing an agent's changes](/docs/agent-inbox#reviewing-an-agents-changes). The review overlay's compare view (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>v</kbd>, then <kbd>w</kbd>) does all of this from the keyboard.
+
+```bash
+tuios fan diff api-fan-demo api-fan-demo-2 --stat
+tuios review api-fan-demo-2
+```
 
 Keep one and remove the others:
 
@@ -109,9 +148,22 @@ tuios fan keep api-fan-add-retry-backoff-http-2 --stash
 
 The session you name is untouched. Each sibling is removed the way `worktree rm` removes it. A sibling with uncommitted changes is left in place unless you pass `--stash` or `--force`.
 
+## Work from another machine
+
+`worktree new --host` and `fan --host` run on a machine from the [`[hosts]` table](/docs/remote-hosts), and so does `start-agent -s HOST:SESSION`. The repository is the one the current directory is in, found on the host by its origin URL under the host's `repos_root`, and `--clone` clones it there when the host has none. The agent must be installed on that machine.
+
+`worktree pull` brings the work back:
+
+```bash
+tuios worktree pull build:api-fan-add-retry-2
+tuios worktree pull build:api-fan-add-retry-2 --branch try/retry-build --detach
+```
+
+The session's commits come across as a git bundle into a new branch here, and its uncommitted work, untracked files included, as a patch applied in a new worktree on that branch. Nothing on the other machine changes. A branch that already exists here is refused, so nothing is overwritten.
+
 ## From a script
 
-The commands are wrappers over the `new-worktree`, `list-worktrees`, `remove-worktree` and `fan` verbs. `--json` on each command gives the result as JSON.
+The commands are wrappers over the `new-worktree`, `list-worktrees`, `remove-worktree`, `fan`, `compare-fan`, `verify-fan` and `keep-fan` verbs. `--json` on each command gives the result as JSON.
 
 ```json
 {"id":1,"verb":"fan","params":{"count":3,"agent":"claude","prompt":"Add a retry.","repo":"/src/api"}}

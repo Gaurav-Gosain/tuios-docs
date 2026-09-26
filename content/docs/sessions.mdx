@@ -175,7 +175,7 @@ When the daemon starts, it restores every saved session before it accepts connec
 Resurrection is crash recovery, not a snapshot. Your layout comes back and each window starts in the right directory, but whatever was running in it is gone.
 </Callout>
 
-- **Processes.** Every window gets a fresh shell. A `vim`, a build or an SSH connection that was running is not restarted.
+- **Processes.** Every window gets a fresh shell. A `vim`, a build or an SSH connection that was running is not restarted. A coding agent's conversation can come back, though: for a pane whose agent was running and whose hook reported the conversation id, the Inbox offers to resume it (`daemon.resume_agents`). See [Resuming after a restart](/docs/agent-inbox#resuming-after-a-restart).
 - **Screen contents and scrollback.** They live only in the daemon's memory and are never written to disk.
 - **The last few seconds before a crash.** A window created just before a `SIGKILL` may be missing, and a `cd` made less than 30 seconds before it may not be recorded.
 - **Your terminal's environment.** Restored shells inherit the daemon's environment and `$SHELL`, not those of the terminal you later attach from.
@@ -246,6 +246,8 @@ See the [CLI Reference](/docs/cli-reference) for `tuios hosts`, including `tuios
 | PID file | The socket path with `.pid` appended |
 | Saved sessions | `$XDG_STATE_HOME/tuios/sessions/<name>.json`, usually `~/.local/state/tuios/sessions/`, readable only by you |
 | Archived bad state | `$XDG_STATE_HOME/tuios/sessions/archive/`, pruned after 14 days |
+
+Whoever controls the socket's directory could put their own socket in its place and read what every client sends. Without `XDG_RUNTIME_DIR`, the directory is `/tmp/tuios-<uid>`, a name any local user could create first. So TUIOS creates the directory with mode `0700`, and before using one that exists it checks that it is a real directory (not a symlink) owned by you. It refuses one that is not, and tells you to set `XDG_RUNTIME_DIR` to a directory you own. A directory you own that others can open is closed to them.
 
 To run the daemon in the foreground with logging, for debugging:
 
