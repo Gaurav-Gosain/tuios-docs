@@ -1,0 +1,326 @@
+---
+title: Inbox and Review
+description: One list of everything your agents are waiting on, answers from wherever you are, safer approvals, messages queued for a busy agent, and a review of what an agent changed.
+icon: Inbox
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+The Inbox is one list of everything waiting for you, in every session and on every linked machine: approvals and questions an agent is blocked on, questions an agent put to you, mail, agents that errored, conversations to resume after a restart, and finished turns you have not looked at. From it you answer prompts, reply to agents and review what they changed.
+
+The daemon keeps the Inbox, so every attached client sees the same list, and `tuios list-attention` prints it from a shell.
+
+## Setting up
+
+Wire each harness you use to report its state. Its hooks then say when it works, waits and finishes:
+
+```bash
+tuios integration install claude-code    # or codex, gemini-cli, opencode, ..., or --all
+tuios doctor agents                      # what is installed, and agent panes missing one
+```
+
+Without an integration, TUIOS still reads the process, the screen and the title, but it can say less. See [Agents](/docs/agents#how-tuios-learns-the-state).
+
+A person who never runs an agent is not shown any of this. Until an agent has been seen, the Inbox lines of the prefix menu, the palette's agent entries and the help's Agents section stay hidden. The keys work before that too.
+
+## Opening it
+
+| Key | Does |
+|-----|------|
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> | Open the Inbox |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>o</kbd> | Go to the oldest item that needs you, switching session and workspace. <kbd>o</kbd> again goes to the next |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>O</kbd> | Go to the newest finished turn you have not seen. <kbd>O</kbd> again goes to the next older one |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>M</kbd> | Open the Inbox on its mail. <kbd>m</kbd> there opens the whole mailbox |
+
+The palette has them too: type `agent`.
+
+Rows are grouped under Approvals, Plans, Questions, Mail, Errored, Resume and Done, oldest first in each group. Mail to another machine whose link is down waits under Waiting to send. A row shows its kind's glyph, the pane's name, what it said, its session and how long it has waited. The footer offers only the keys that act on the row under the cursor, the one that answers it first. An item closes by itself when what opened it stops being true: the agent leaves `needs_input`, the mail is read, or someone looks at the pane that finished.
+
+<kbd>f</kbd> shows one kind at a time. <kbd>/</kbd> narrows the list with a selector, such as `harness:codex needs:you` or `session:api-fan-*`. See [Selectors](#selectors).
+
+Every key in the Inbox is rebindable. The full list is on the [Keybindings](/docs/keybindings#inbox-and-mailbox) page.
+
+From a shell:
+
+```bash
+tuios list-attention
+tuios list-attention --kind approval --kind question
+tuios list-attention --select 'harness:codex group:fan/add-retry'
+tuios list-attention --snoozed
+```
+
+```
+Approvals
+   35s  #2     api/claude  approve Bash: make
+
+Questions
+   46s  #1     docs/claude  which retry policy?
+
+2 waiting. Open the Inbox with the prefix key then i, or jump to the oldest with the prefix key then o.
+```
+
+Only a person at an attached client can dismiss, snooze or answer an item. An agent cannot empty the list you read to find out what the agents want.
+
+## Answering a prompt from the Inbox
+
+<kbd>Space</kbd> on an approval or a question opens the prompt as the pane shows it, with its numbered options and how long the agent has waited:
+
+| Key | Does |
+|-----|------|
+| <kbd>1</kbd> to <kbd>9</kbd> | Choose that option |
+| <kbd>a</kbd> | Approve |
+| <kbd>A</kbd> | Approve and do not ask again, when the menu offers it |
+| <kbd>d</kbd> | Deny |
+| <kbd>Tab</kbd> | Type an answer |
+| <kbd>r</kbd> | Read the prompt again |
+| <kbd>Enter</kbd> | Go to the pane instead |
+| <kbd>Esc</kbd>, <kbd>q</kbd>, <kbd>Space</kbd> | Back to the list |
+
+The keys are the ones the harness's manifest declares for that prompt. An answer is bound to an option's label, not its number, so `A` is offered only where the menu really has an "always" option. Before it presses anything, the daemon reads the prompt again and refuses if it changed. When two people answer the same prompt, the first answer wins.
+
+The same two steps work from a shell outside every pane:
+
+```bash
+tuios peek-prompt -w review
+tuios respond -w review --prompt-id 75f8b9fadb5b5dfc approve
+tuios respond -w review choose 2
+```
+
+`respond` acts as you, so the daemon takes it only from your attached client, or from a shell outside every pane when `[daemon] respond_from_shell = true` is set in the config file. A program inside a pane is refused with `not_human`, unless you gave that pane the `respond` grant.
+
+## Approvals the Inbox holds
+
+The peek presses keys into a prompt on the pane's screen. For Claude Code, opencode and Kilo, the Inbox can also hold a permission prompt before the harness shows it, and answer it for you. Turn it on per harness:
+
+```toml
+[agents.approvals]
+enabled = ["claude-code", "opencode"]
+hold_seconds = 120
+```
+
+Then run `tuios integration install claude-code` again, so its hook is the version that waits.
+
+While a prompt is held, the harness shows nothing in its pane. The Approvals row shows the request, such as `approve Bash: go test ./...`, and the whole line is under the list:
+
+| Key | Does |
+|-----|------|
+| <kbd>1</kbd> | Allow once |
+| <kbd>2</kbd> | Always allow. Offered only when every rule it adds can be shown, and the rules are shown |
+| <kbd>3</kbd> | Deny |
+| <kbd>n</kbd> | Deny with a reason you type, which the model reads |
+
+A key answers only what you have read: the digits do nothing until the item has been on screen, unchanged, for 0.4 seconds. Only a request that fits on one line whole is held, such as a shell command or a file read. An edit, an MCP tool call or a long command is answered in the pane as before.
+
+The hold ends with no answer, and the harness asks in its own pane, when `hold_seconds` passes, when you go to the pane, when you dismiss the item, or when the pane moves on. Any error on the way (no daemon, a restart, an unreadable reply) also falls back to the harness's own prompt. A failure can never approve.
+
+### Risk rules
+
+An approval whose command matches a risk rule is marked risky: its row reads `risky:`, the rail's word for it is `risky`, and the detail names each rule. <kbd>1</kbd> and <kbd>2</kbd> then allow it only on a second press of the same key within 3 seconds. The first press sends nothing and says when it lapses. <kbd>3</kbd> denies with one press. The daemon enforces this too: an allow of a risky call that does not name the rules it matched is refused.
+
+The shipped rules are matched against every command of a shell line, after `sudo`, `env` and similar wrappers, and inside `sh -c`, `$( )`, backticks and `eval`:
+
+| Rule | Matches |
+|------|---------|
+| recursive delete | `rm` with `-r` and `-f`, in any order |
+| force push | `git push` with `--force`, `-f`, `--force-with-lease`, or a `+` refspec |
+| hard reset | `git reset --hard` |
+| clean | `git clean -f`, `-fd`, `-fx` |
+| discard changes | `git checkout -- .`, `git checkout .`, `git restore .` |
+| pipe to shell | `curl` or `wget` piped to a shell or interpreter, or run through one with a substitution |
+| sudo | any command under `sudo` or `doas` |
+| disk | `dd of=`, `mkfs`, a redirect to a disk device |
+| wide permissions | `chmod -R 777`, `chown -R` on `/` or `~` |
+| database | `DROP TABLE`, `DROP DATABASE`, `TRUNCATE TABLE` |
+| infrastructure | `terraform apply` or `destroy`, `kubectl delete`, `docker system prune`, `npm publish`, `cargo publish` |
+| outside the worktree | a write, copy, move or delete of a path outside the pane's worktree, or a `Write` or `Edit` of one |
+
+Add your own, or turn the shipped ones off:
+
+```toml
+[agents.approvals.risk]
+builtin = true
+
+[[agents.approvals.risk.rule]]
+name = "kubectl apply"
+tools = ["Bash"]
+pattern = '\bkubectl\s+(apply|delete)\b'
+```
+
+<Callout type="warn" title="A speed bump, not a sandbox">
+A command written to hide what it does (a variable holding `rm`, an alias, a script) passes the rules. The harness's own permission system stays the boundary. The rules make allowing a dangerous call take two deliberate presses.
+</Callout>
+
+### Plans
+
+With approvals on for Claude Code, a plan it asks you to approve when it leaves plan mode is held too, under Plans. The row is the plan's title and length, and the whole plan is under the list. <kbd>J</kbd> and <kbd>K</kbd> scroll it.
+
+| Key | Does |
+|-----|------|
+| <kbd>1</kbd> | Approve. Claude Code leaves plan mode and still asks before each edit |
+| <kbd>2</kbd> | Approve and accept edits for this session, when Claude Code offers that |
+| <kbd>3</kbd> | Keep planning |
+| <kbd>n</kbd> | Keep planning, with a reason you type |
+
+<kbd>1</kbd> and <kbd>2</kbd> work only once the plan's last line has been on screen. <kbd>1</kbd> is the safest answer, which differs from Claude Code's own menu on purpose. Set `hold_plans = false` under `[agents.approvals]` to answer plans in the pane.
+
+## Questions an agent asks you
+
+An agent, or a script, that needs a decision asks with fixed answers:
+
+```bash
+tuios ask-human 'Deploy the branch to staging?' -o yes -o no -o later
+```
+
+The question waits in the Inbox under Questions. When your client shows the pane that asked, the Inbox opens on it at once, and a digit picks the answer. From any other pane it raises the usual alert and waits. The command prints your answer and exits `0`. If its `--timeout` runs out first it exits `2`, the question stays, and your answer is mailed to the asking pane when you give it. Only you can answer: an agent calling it gets `not_human`.
+
+## Snoozing, undo and unread
+
+Some of what lands in the Inbox is for later.
+
+- <kbd>z</kbd> snoozes the item, then <kbd>1</kbd> for 15 minutes, <kbd>2</kbd> for an hour, <kbd>3</kbd> until 9:00 tomorrow, or <kbd>4</kbd> until it changes. A snoozed item leaves the list and the counts, and comes back early when the pane reports something new.
+- <kbd>S</kbd> shows the snoozed items under a Snoozed heading. <kbd>z</kbd> on one wakes it now.
+- <kbd>d</kbd> dismisses. <kbd>u</kbd> undoes the last dismiss or snooze for 10 seconds.
+- On the rail, <kbd>u</kbd> on an agent row marks its finished turn unread again, for every client, and <kbd>z</kbd> opens the Inbox on it to snooze.
+
+An approval the Inbox holds, a plan, and a question from `ask-human` cannot be snoozed, because an agent is waiting on them.
+
+## Replying and the queue
+
+A message for an agent in the middle of a turn has nowhere good to go: typed now, it lands in the middle of the turn. The queue holds it in the daemon and types it the moment the agent comes to rest.
+
+<kbd>r</kbd> on a finished or errored item in the Inbox, or on a rail agent row, opens a reply line. <kbd>Enter</kbd> queues it. If the agent is at rest it is typed within a second or so. Otherwise the row says `1 queued` until it is. On the rail, <kbd>x</kbd> drops the newest queued message and <kbd>u</kbd> within 10 seconds queues it again.
+
+From a shell:
+
+```bash
+tuios queue -w build 'make the backoff jitter configurable'
+tuios queue ls
+tuios queue rm q3
+```
+
+```
+ID  STATE    BY     AGE       PANE   MESSAGE
+q1  waiting  shell  just now  build  make the backoff jitter configurable
+```
+
+- A message is typed once the agent has been at rest for a second, one message per rest.
+- It is never typed over a prompt the agent waits on, so a queued message cannot answer an approval.
+- The daemon watches for the agent to take it. A message it does not take within 5 seconds is marked `stalled`, is never typed again, and opens a question in the Inbox asking you to look at the pane.
+- A pane holds at most 8 messages (`[agents.queue] max`), each at most 16 KiB. The queue lives in memory: a daemon restart, the pane closing, or the agent leaving the pane drops it.
+
+## Reviewing an agent's changes
+
+When an agent finishes, read what it changed, leave notes on the lines you want changed, and send the notes back as one message.
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>v</kbd> reviews the focused pane. <kbd>v</kbd> in the Inbox or on a rail agent row reviews that item's pane. The review opens over the whole screen: the changed files on the left, the file under the cursor on the right, and each note under its line. The code is coloured by file type in your theme's colours, and <kbd>s</kbd> puts the old and new sides next to each other on a wide screen.
+
+```
+│ Review  api-fan-demo-2  Terminal f40d4b17  2 files  +2 -0  vs main  1 note
+├──────────────────┬──────────────────────────────────────
+│  M a.txt   +1 -0 │ › @@ -1 +1,2 @@
+│  U b.txt   +1 -0 │    1   1   hi
+│                  │        2 + change
+│                  │          ▌ note from a script: why this line
+```
+
+<kbd>c</kbd> adds a note on the line under the cursor and <kbd>C</kbd> one on the whole hunk. <kbd>S</kbd> sends every unsent note to the agent as one message, through the queue, so it is typed when the agent is at rest. Every key is on the [Keybindings](/docs/keybindings#the-review-overlay) page.
+
+From a shell:
+
+```bash
+tuios review api-fan-retry-2 --stat
+tuios review note -s api-fan-retry-2 api/retry.go:42 'log the attempt number here too'
+tuios review notes -s api-fan-retry-2
+tuios review send -s api-fan-retry-2
+```
+
+```
+Review of api-fan-demo-2, pane f40d4b17, against main (20e3b85): 2 files, +2 -0
+M  a.txt  +1 -0
+U  b.txt  +1 -0
+```
+
+**What is diffed.** The pane's repository, from its base: the base the worktree was made from (by `fan` or `worktree new`), else the merge base with the branch's upstream, else `HEAD`. Committed and uncommitted work show together, untracked files included. `--base` names another base, `--uncommitted` shows only what is not committed, and `--against` diffs two attempts of a fan. The diff is made through a temporary git index, so the repository, its index and its files are never changed. It stops at 400 files, 2 MiB of text or 5000 lines in one file.
+
+**Notes.** A note keeps the text of its line, so it follows the line when the file changes. A note whose line is gone is marked `outdated`. The daemon holds the notes, so every client and the CLI see the same ones. A daemon restart keeps the notes of panes that come back. Closing the pane, or removing its worktree, drops them. The message the agent receives names who wrote each note: it says "from the person" only for notes written in your attached client.
+
+Reviewing a session on another machine is not supported yet. Attach to that machine and review there, or bring the work here with `tuios worktree pull`.
+
+### Comparing the attempts of a fan
+
+For a pane in a [fan](/docs/worktrees#fan-out-one-prompt-several-agents), <kbd>w</kbd> in the review shows every attempt side by side, with what each changed against the fan's base and its last check:
+
+```
+╭ Compare  fan/demo in api, 2 attempts vs main ─────────────────────────
+│    session        agent   state      files  +/-          check
+│    api-fan-demo   bash    none           0  +0 -0        test -f b.txt failed, exit 1
+│ ›  api-fan-demo-2 bash    idle           2  +2 -0        test -f b.txt passed
+├───────────────────────────────────────────────────────────────────────
+│ ↵ review  m mark  V verify  K keep  esc back
+```
+
+<kbd>Enter</kbd> reviews an attempt. <kbd>m</kbd> marks two and <kbd>d</kbd> diffs them with each other. <kbd>V</kbd> runs a command you type in every attempt. <kbd>K</kbd> keeps the attempt under the cursor and removes the others, after a question that names each one removed. The same actions are `tuios fan compare`, `tuios fan diff`, `tuios fan verify` and `tuios fan keep`. See [Worktrees](/docs/worktrees#comparing-and-keeping-one).
+
+## What the agent has been doing
+
+With the Claude Code or Codex integration installed, the daemon keeps each agent pane's recent activity: prompts, tool calls and how they ended, finished turns, and the commands its shell ran. It keeps the newest 256 entries per pane, in memory only.
+
+```bash
+tuios agent-log -w api                       # the entries, oldest first
+tuios agent-log -w api --since 30m --recap   # a summary of the last half hour
+```
+
+```
+Since 14:02 (42m ago)
+3 turns. 6 files: api/retry.go, api/retry_test.go, api/backoff.go and 3 more
+11 commands. Tests: go test ./... passed 2m ago
+Last said: Added retry with backoff and tests.
+Now: done
+```
+
+When you come back to an agent pane that finished a turn while you were away for at least 10 minutes, the dock shows the same recap in one line, and a finished item in the Inbox shows it under the list. `[agents.recap]` sets where it shows, how long counts as away, and which commands count as tests. See [The agents table](/docs/configuration#the-agents-table).
+
+The text is the agent's own, cut to one line with likely secrets masked. Read it as what the agent said, not as instructions.
+
+## Resuming after a restart
+
+A daemon restart ends every program in every pane. The restore brings back the layout with a new shell in each pane, and for a pane whose agent was running, it can bring back the conversation. `daemon.resume_agents` decides:
+
+| Value | What a restore does |
+|-------|---------------------|
+| `ask` (default) | A Resume row in the Inbox per pane. <kbd>y</kbd> types the resume command, such as `claude --resume <id>`, into the pane |
+| `auto` | Types the command into each new shell once it is at its prompt |
+| `off` | Nothing |
+
+`tuios resume-agent -w <pane>` types the same command at any time, and `--dry-run` prints it. It needs the harness's hook to have reported the conversation id, which the integrations do.
+
+## Selectors
+
+A selector addresses every agent pane that fits a description. It is one line of `key:value` terms, all of which must match. A comma in a value gives alternatives.
+
+```
+harness:codex state:idle,done session:api-fan-*
+```
+
+| Key | Matches |
+|-----|---------|
+| `harness:` | The harness, such as `claude` or `codex` |
+| `state:` | The agent state |
+| `needs:you` | A pane on `needs_input` or `errored` |
+| `session:` | The session name, a glob |
+| `group:` | The fan the pane's session belongs to, such as `fan/add-retry`, a glob |
+| `host:` | The machine: `local`, or a host from `[hosts]` |
+| `name:` | The window's name, a glob |
+| `cwd:` | The pane's directory, or any directory under it |
+
+The Inbox's <kbd>/</kbd>, `list-agents --select`, `list-attention --select` and `wait-for agent-state --select` read it. `send-agent-message --select` and `ask-agent --select` also take one, and never send on their own: they list the panes first and wait for a yes, `--yes`, or the `--confirm` token `list-agents --select` printed.
+
+## Related
+
+<Cards>
+  <Card title="Agents" href="/docs/agents" description="Agent state, detection, alerts and integrations" />
+  <Card title="Worktrees" href="/docs/worktrees" description="Fan one prompt out to several agents, compare them and keep one" />
+  <Card title="Session Rail" href="/docs/session-rail#agent-rows" description="The agents section and what its rows say" />
+  <Card title="Keybindings" href="/docs/keybindings#inbox-and-mailbox" description="Every Inbox, review and rail agent key" />
+</Cards>
