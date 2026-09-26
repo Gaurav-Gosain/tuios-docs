@@ -215,8 +215,8 @@ export default function HomePage() {
             href="/docs/agents"
           >
             Panes running an agent show whether it is working, idle or waiting
-            for you. Agents can message each other and fan out across git
-            worktrees.
+            for you, and one Inbox lists everything they wait on. Review what an
+            agent changed, or fan one prompt out across git worktrees.
           </Feature>
           <Feature
             icon={<SquareTerminal />}

@@ -30,7 +30,7 @@ Section: `[keybindings.mode_control]`. These keys work in window mode.
 | <kbd>Esc</kbd> | `enter_window_mode` | Enter window mode |
 | <kbd>?</kbd> | `toggle_help` | Toggle the help overlay |
 | <kbd>,</kbd> | `open_settings` | Open the settings page |
-| <kbd>q</kbd> | `quit` | Quit |
+| <kbd>q</kbd> | `quit` | Quit. In a daemon session it opens the quit menu |
 | none | `hold_window_mode` | Window mode while the key is held. Unbound by default |
 
 To leave terminal mode, press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Esc</kbd>, or the direct key from [Terminal mode](#terminal-mode).
@@ -207,7 +207,11 @@ Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, then the key. Section: `[keybindings.prefix_
 | <kbd>S</kbd> | `prefix_session_switcher` | Open the session switcher |
 | <kbd>W</kbd> | `prefix_workspace_switcher` | Open the workspace switcher |
 | <kbd>j</kbd> | `prefix_jump_notif` | Jump to the pane of the newest message |
-| <kbd>M</kbd> | `prefix_mail` | Open the agent mailbox |
+| <kbd>i</kbd> | `prefix_inbox` | Open the [Inbox](/docs/agent-inbox) |
+| <kbd>o</kbd> | `prefix_next_attention` | Go to the oldest Inbox item that needs you. <kbd>o</kbd> again goes to the next |
+| <kbd>O</kbd> | `prefix_next_finished` | Go to the newest finished turn nobody has seen. <kbd>O</kbd> again goes to the next older one |
+| <kbd>v</kbd> | `prefix_review` | [Review](/docs/agent-inbox#reviewing-an-agents-changes) the focused pane's changes |
+| <kbd>M</kbd> | `prefix_mail` | Open the Inbox on its mail. <kbd>m</kbd> there opens the whole mailbox |
 | <kbd>t</kbd> | `prefix_window` | [Window prefix](#window-prefix) |
 | <kbd>m</kbd> | `prefix_minimize` | [Minimize prefix](#minimize-prefix) |
 | <kbd>w</kbd> | `prefix_workspace` | [Workspace prefix](#workspace-prefix) |
@@ -217,12 +221,12 @@ Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, then the key. Section: `[keybindings.prefix_
 | <kbd>d</kbd> | `prefix_detach` | Detach. The session keeps running |
 | <kbd>X</kbd> | `prefix_close_session` | Close the session and its panes |
 | <kbd>Esc</kbd> | `prefix_exit_mode` | Leave terminal mode. Never detaches |
-| <kbd>q</kbd> | `prefix_quit` | Quit. In a daemon session this kills the session |
+| <kbd>q</kbd> | `prefix_quit` | Quit. In a daemon session it opens the quit menu: detach, switch session, or kill the session |
 | <kbd>?</kbd> | `prefix_help` | Toggle help |
 
 In terminal mode, pressing the leader twice sends one literal <kbd>Ctrl</kbd>+<kbd>B</kbd> to the pane.
 
-After a command worth repeating, such as an arrow, the prefix stays armed for 500 ms. <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>←</kbd> <kbd>←</kbd> <kbd>←</kbd> moves three panes. Change this with `appearance.prefix_repeat_time`. `0` turns it off.
+After a command worth repeating, such as an arrow, <kbd>o</kbd> or <kbd>O</kbd>, the prefix stays armed for 500 ms. <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>←</kbd> <kbd>←</kbd> <kbd>←</kbd> moves three panes. Change this with `appearance.prefix_repeat_time`. `0` turns it off.
 
 ### Window prefix
 
@@ -313,12 +317,12 @@ Section: `[keybindings.sidebar]`. Active while the rail has the keyboard: press 
 | <kbd>k</kbd>, <kbd>↑</kbd> | `cursor_up` | Move up |
 | <kbd>g</kbd>, <kbd>Home</kbd> | `first` | First row |
 | <kbd>G</kbd>, <kbd>End</kbd> | `last` | Last row |
-| <kbd>l</kbd>, <kbd>→</kbd> | `expand` | Expand the row |
-| <kbd>h</kbd>, <kbd>←</kbd> | `collapse` | Collapse the row |
+| <kbd>l</kbd>, <kbd>→</kbd> | `expand` | Go to the next section |
+| <kbd>h</kbd>, <kbd>←</kbd> | `collapse` | Go to the previous section |
 | <kbd>Enter</kbd> | `activate` | Open the row |
 | <kbd>J</kbd>, <kbd>Shift</kbd>+<kbd>↓</kbd> | `reorder_down` | Move the session or machine down |
 | <kbd>K</kbd>, <kbd>Shift</kbd>+<kbd>↑</kbd> | `reorder_up` | Move the session or machine up |
-| <kbd>Tab</kbd>, <kbd>Shift</kbd>+<kbd>Tab</kbd> | `section` | Go to the next section |
+| <kbd>Tab</kbd>, <kbd>Shift</kbd>+<kbd>Tab</kbd> | `section` | Cycle the sessions, terminals and agents sections |
 | <kbd>1</kbd> to <kbd>9</kbd> | `jump_1` to `jump_9` | Jump to a row by number |
 | <kbd>n</kbd> | `new_session` | New session |
 | <kbd>t</kbd> | `new_window` | New window |
@@ -327,8 +331,8 @@ Section: `[keybindings.sidebar]`. Active while the rail has the keyboard: press 
 | <kbd>x</kbd> | `kill` | Open the row's close menu |
 | <kbd>m</kbd> | `menu` | Open the row's menu |
 | <kbd>i</kbd> | `mail` | Open the mailbox for the pane under the cursor |
-| <kbd>f</kbd> | `agents_filter` | Filter the agents section |
-| <kbd>o</kbd> | `agents_sort` | Sort the agents section |
+| <kbd>f</kbd> | `agents_filter` | Agents section: every session, or only this one |
+| <kbd>o</kbd> | `agents_sort` | Agents section: sort by what needs you, by priority, or by recency |
 | <kbd>/</kbd> | `palette` | Open the command palette |
 | <kbd>&lt;</kbd> | `narrow` | Narrow the rail |
 | <kbd>&gt;</kbd> | `widen` | Widen the rail |
@@ -349,6 +353,121 @@ When the cursor is on a row in the files section, section `[keybindings.sidebar_
 | <kbd>p</kbd> | `file_paste` | Paste into this folder |
 
 See [The files section](/docs/configuration#the-files-section).
+
+When the cursor is on an agent row, section `[keybindings.sidebar_agents]` answers first. So <kbd>r</kbd> and <kbd>x</kbd> act on the agent there, and keep their rail meaning on every other row:
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>r</kbd> | `agent_reply` | Reply to the agent. The message is queued and typed when the agent is at rest |
+| <kbd>v</kbd> | `agent_review` | Review the pane's changes |
+| <kbd>u</kbd> | `agent_unread` | Mark the pane's finished turn unread again, for every client |
+| <kbd>z</kbd> | `agent_snooze` | Open the Inbox on the pane's item, ready to snooze it |
+| <kbd>x</kbd> | `agent_cancel_queued` | Drop the newest queued message. <kbd>u</kbd> within 10 seconds queues it again. With nothing queued, <kbd>x</kbd> opens the row's menu as usual |
+
+<kbd>Enter</kbd> on the `+N at rest` line shows the agent rows folded there.
+
+## Inbox and mailbox
+
+The [Inbox](/docs/agent-inbox) lists everything waiting for you in every session. Open it with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd>. Its keys are in `[keybindings.inbox]`:
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>j</kbd>, <kbd>↓</kbd>, <kbd>Ctrl</kbd>+<kbd>N</kbd> | `inbox_down` | Move down |
+| <kbd>k</kbd>, <kbd>↑</kbd>, <kbd>Ctrl</kbd>+<kbd>P</kbd> | `inbox_up` | Move up |
+| <kbd>PgDn</kbd>, <kbd>PgUp</kbd> | `inbox_page_down`, `inbox_page_up` | Move a page |
+| <kbd>g</kbd>, <kbd>Home</kbd> / <kbd>G</kbd>, <kbd>End</kbd> | `inbox_first`, `inbox_last` | First or last item |
+| <kbd>Enter</kbd> | `inbox_go` | Go to the item's pane, or open a mail thread |
+| <kbd>Space</kbd> | `inbox_peek` | Read an approval's or a question's prompt and answer it from the Inbox |
+| <kbd>d</kbd>, <kbd>Delete</kbd> | `inbox_dismiss` | Dismiss the item. <kbd>u</kbd> undoes it for 10 seconds |
+| <kbd>r</kbd> | `inbox_reply` | Reply to mail, or to the agent of a finished or errored item |
+| <kbd>y</kbd> | `inbox_resume` | On a resume row, type the conversation's resume command in its pane |
+| <kbd>p</kbd> | `inbox_pass_on` | Pass on mail held from another machine |
+| <kbd>f</kbd> | `inbox_filter` | Show one kind, then the next, then all |
+| <kbd>/</kbd> | `inbox_select` | Narrow the list with a selector, such as `harness:codex needs:you` |
+| <kbd>m</kbd> | `inbox_mailbox` | Open the mailbox |
+| <kbd>v</kbd> | `inbox_review` | Review the changes in the item's pane |
+| <kbd>z</kbd> | `inbox_snooze` | Snooze the item: then <kbd>1</kbd> 15 minutes, <kbd>2</kbd> an hour, <kbd>3</kbd> until 9:00 tomorrow, <kbd>4</kbd> until it changes. On a snoozed item, wake it |
+| <kbd>u</kbd> | `inbox_undo` | Undo the last dismiss or snooze, within 10 seconds |
+| <kbd>S</kbd> | `inbox_show_snoozed` | Show or hide the snoozed items |
+| <kbd>n</kbd> | `inbox_deny_reason` | Deny a held approval, or keep a plan planning, with a reason you type |
+| <kbd>J</kbd>, <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>K</kbd>, <kbd>Ctrl</kbd>+<kbd>U</kbd> | `inbox_detail_down`, `inbox_detail_up` | Scroll the detail under the list, such as a long plan |
+| <kbd>Esc</kbd>, <kbd>q</kbd> | `inbox_close` | Close |
+
+On an approval the Inbox holds for you, <kbd>1</kbd> allows it once, <kbd>2</kbd> always allows it and <kbd>3</kbd> denies it. On a question put with `ask-human`, a digit picks that answer. The digits are not bindings.
+
+The prompt that <kbd>Space</kbd> opens has its own section, `[keybindings.inbox_peek]`:
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>a</kbd> | `peek_approve` | Approve |
+| <kbd>A</kbd> | `peek_approve_always` | Approve and do not ask again, when the menu offers it |
+| <kbd>d</kbd> | `peek_deny` | Deny |
+| <kbd>Tab</kbd> | `peek_type` | Type an answer |
+| <kbd>r</kbd> | `peek_read_again` | Read the prompt again |
+| <kbd>Enter</kbd> | `peek_go` | Go to the pane instead |
+| <kbd>Esc</kbd>, <kbd>q</kbd>, <kbd>Space</kbd> | `peek_back` | Back to the list |
+
+A digit chooses that numbered option of the prompt.
+
+The mailbox (<kbd>m</kbd> in the Inbox) uses `[keybindings.mail]`: <kbd>j</kbd>/<kbd>k</kbd> (`mail_down`, `mail_up`), <kbd>PgDn</kbd>/<kbd>PgUp</kbd> (`mail_page_down`, `mail_page_up`), <kbd>Enter</kbd> opens a thread (`mail_open`), <kbd>r</kbd> replies (`mail_reply`), <kbd>o</kbd> goes to the pane (`mail_focus_pane`) and <kbd>Esc</kbd> or <kbd>q</kbd> goes back (`mail_back`).
+
+The footers name whatever key your config binds. Until an agent has been seen, the prefix menu, the help and the palette leave out the agent keys and entries, so a person who runs no agents is not shown them. The keys work before that too, except <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>O</kbd>, which types <kbd>O</kbd> into the pane until then.
+
+## The review overlay
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>v</kbd>, or <kbd>v</kbd> in the Inbox or on a rail agent row, opens the diff of a pane's changes over the whole screen. See [Reviewing an agent's changes](/docs/agent-inbox#reviewing-an-agents-changes). These keys are fixed and are not in the config.
+
+| Keys | Does |
+|------|------|
+| <kbd>j</kbd> <kbd>k</kbd>, arrows | Move by line. With the file list focused, move through the files |
+| <kbd>Space</kbd>, <kbd>PgDn</kbd>, <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>PgUp</kbd>, <kbd>Ctrl</kbd>+<kbd>U</kbd> | Move a page |
+| <kbd>g</kbd> <kbd>G</kbd> | First or last line |
+| <kbd>]</kbd> <kbd>[</kbd> | Next or previous hunk, going on into the next or previous file |
+| <kbd>&#125;</kbd> <kbd>&#123;</kbd> | Next or previous file |
+| <kbd>s</kbd> | One column, or old and new side by side when the screen is wide enough |
+| <kbd>h</kbd> <kbd>l</kbd>, <kbd>←</kbd> <kbd>→</kbd> | Scroll the code sideways |
+| <kbd>Tab</kbd> | Focus the file list or the diff |
+| <kbd>Enter</kbd> | In the file list, open that file |
+| <kbd>c</kbd> / <kbd>C</kbd> | A note on the line under the cursor, or on the whole hunk |
+| <kbd>e</kbd> | Edit the note under the cursor |
+| <kbd>x</kbd> | Resolve (remove) the note under the cursor |
+| <kbd>S</kbd> | Send every unsent note to the agent as one message, typed when it is at rest |
+| <kbd>u</kbd> | Switch between the changes since the base and only the uncommitted ones |
+| <kbd>b</kbd> | Diff from another base |
+| <kbd>w</kbd> | The compare view, for a pane in a fan |
+| <kbd>r</kbd> | Read the diff again |
+| <kbd>Esc</kbd>, <kbd>q</kbd> | Close |
+
+The compare view lists the attempts of a fan. <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>Enter</kbd> reviews an attempt, <kbd>m</kbd> marks one and <kbd>d</kbd> diffs the two marked attempts, <kbd>V</kbd> runs a command in every attempt, <kbd>K</kbd> keeps the attempt under the cursor and removes the others after a <kbd>y</kbd>, and <kbd>Esc</kbd>, <kbd>q</kbd> or <kbd>w</kbd> go back to the review.
+
+## Lists and the settings page
+
+Every list moves the same way: the palette, the launcher, the settings page, the Inbox, the mailbox, the keybind manager, the pickers, the switchers, the menus and the tape manager.
+
+| Keys | Does |
+|------|------|
+| <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Ctrl</kbd>+<kbd>P</kbd> <kbd>Ctrl</kbd>+<kbd>N</kbd> | Move one row. Past either end, wrap round |
+| <kbd>Home</kbd> <kbd>End</kbd> | First or last row |
+| <kbd>PgUp</kbd> <kbd>PgDn</kbd> | A page, stopping at the ends |
+| <kbd>k</kbd> <kbd>j</kbd> <kbd>g</kbd> <kbd>G</kbd> | Up, down, first and last, in a list with no filter to type into |
+| <kbd>Ctrl</kbd>+<kbd>U</kbd> | Clear a typed filter |
+
+Set `appearance.wrap_lists = false` to stop at the ends instead of wrapping.
+
+The settings page (<kbd>,</kbd> in window mode, or <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>,</kbd>) reopens on the tab, row and search you left it on:
+
+| Keys | Does |
+|------|------|
+| <kbd>←</kbd> <kbd>→</kbd>, <kbd>h</kbd> <kbd>l</kbd> | Change the row's value |
+| <kbd>Enter</kbd>, <kbd>Space</kbd> | Toggle, cycle, or open the row's picker or editor |
+| <kbd>Tab</kbd> <kbd>Shift</kbd>+<kbd>Tab</kbd>, <kbd>]</kbd> <kbd>[</kbd> | Next or previous tab |
+| <kbd>1</kbd> to <kbd>9</kbd> | Go to that tab |
+| <kbd>/</kbd>, or a letter the page does not use | Search every tab |
+| <kbd>Backspace</kbd>, <kbd>Delete</kbd> | Reset the row to its default |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo the last change made on the page |
+| <kbd>Esc</kbd>, <kbd>q</kbd> | Close |
+
+A row changed from its default has a dot after its name. See [The in-app settings page](/docs/configuration#the-in-app-settings-page) for the search.
 
 ## Copy mode
 
@@ -383,7 +502,8 @@ The scrollback browser (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>s</kbd>) is a differen
 
 | Gesture | Does |
 |---------|------|
-| Click a pane | Focus it. In window mode it also starts typing, per `appearance.click_to_type` |
+| Click a pane | Focus it |
+| Double-click a pane | In window mode, also start typing in it. `appearance.click_to_type` makes it a single click, or turns it off |
 | Drag a title bar | Move the window. In tiling, swap it with the pane you drop it on |
 | <kbd>Alt</kbd> + drag | Move the window from anywhere inside it (`appearance.alt_drag`) |
 | Right-drag | Resize the window |
@@ -401,7 +521,7 @@ In copy mode, a click moves the cursor and a drag selects. Dragging past the top
 
 ## Customizing
 
-Bindings live in 19 sections under `[keybindings]` in `config.toml`. Each action takes a list of keys.
+Bindings live in 23 sections under `[keybindings]` in `config.toml`. Each action takes a list of keys.
 
 ```toml
 [keybindings]
@@ -433,7 +553,7 @@ The config file reloads on save, but only `leader_key` among the keybindings. Af
 </Callout>
 
 <Callout type="warn" title="keybinds list-custom is partial">
-`tuios keybinds list-custom` compares 9 of the 19 sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix` and `workspace_prefix`. It does not report `leader_key`. Use `tuios keybinds doctor` or read the file for the rest.
+`tuios keybinds list-custom` compares 9 of the 23 sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix` and `workspace_prefix`. It does not report `leader_key`. Use `tuios keybinds doctor` or read the file for the rest.
 </Callout>
 
 ## macOS

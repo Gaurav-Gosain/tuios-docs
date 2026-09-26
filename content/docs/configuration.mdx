@@ -35,10 +35,10 @@ Two things live outside the file: custom themes in `~/.config/tuios/themes/` and
 
 | Table | What it holds |
 |-------|---------------|
-| [`[appearance]`](#appearance) | Theme, borders, windows, mouse, tiling, dock. Sub-tables `scrollbar`, `selection` and `sidebar` |
+| [`[appearance]`](#appearance) | Theme, backgrounds, borders, windows, mouse, tiling, dock. Sub-tables `scrollbar`, `selection` and `sidebar` |
 | [`[notifications]`](#notifications) | How long messages stay up, and agent alerts |
-| [`[keybindings]`](#keybindings) | The leader key and 19 sections of bindings |
-| [`[daemon]`](#the-daemon-table) | Daemon log level and agent detection |
+| [`[keybindings]`](#keybindings) | The leader key and 23 sections of bindings |
+| [`[daemon]`](#the-daemon-table) | Daemon log level, agent detection and resuming agents |
 | [`[startup]`](#the-startup-table) | How a new session starts |
 | [`[tape]`](#the-tape-table) | Project tapes |
 | [`[debug]`](#the-debug-table) | The keycast overlay |
@@ -46,8 +46,9 @@ Two things live outside the file: custom themes in `~/.config/tuios/themes/` and
 | [`[screensaver]`](#the-screensaver-table) | The idle animation |
 | [`[spotlight]`](#the-spotlight-table) | The beam that dims all but one part of the screen |
 | [`[dock]`](#the-dock-table) | Which components the bar draws, and your own |
-| [`[hosts]`](#the-hosts-table) | Other machines this daemon links to |
+| [`[hosts]`](#the-hosts-table) | Other machines this daemon links to, and what each may do here |
 | [`[tailscale]`](#the-tailscale-table) | Which tailnet machines `tuios hosts add` offers |
+| [`[agents]`](#the-agents-table) | Approvals from the Inbox, risk rules, what a pane may do, the away recap and the queue |
 | [`[hooks]`](#hooks) | Shell commands run on events |
 
 ## Applying changes
@@ -67,18 +68,19 @@ Most of the file applies live. These parts do not:
 | `scrollback_lines` | Panes opened afterwards |
 | Custom theme files | See [Custom themes](#custom-themes) |
 
-The daemon also follows the file, but only for `[hosts]` and `preferred_shell`. Adding or removing a host opens or closes its link at once.
+The daemon also follows the file for `[hosts]`, `[agents]` and `preferred_shell`. Adding or removing a host opens or closes its link at once.
 
 ### Changing a setting at runtime
 
 ```bash
 tuios list-options                       # every path, with default and accepted values
 tuios list-options --section sidebar     # one group
+tuios list-options --search "pane bg"    # fuzzy search, best match first
 tuios get-config appearance.border_style
 tuios set-config appearance.border_style thick
 ```
 
-`set-config` changes a running session and does not write the file. A path the registry does not know is refused. An `[appearance]` option also answers to its bare name, so `border_style` and `appearance.border_style` are the same path. `set-config` cannot reach `[keybindings]`, `[hooks]`, `[hosts]`, `[tailscale]` or the `[dock]` lists, because those are maps rather than single values. `dock.clock.format` is the one `[dock]` key it can set.
+`set-config` changes a running session and does not write the file. A path the registry does not know is refused. An `[appearance]` option also answers to its bare name, so `border_style` and `appearance.border_style` are the same path. `set-config` cannot reach `[keybindings]`, `[hooks]`, `[hosts]`, `[tailscale]`, `[agents]` or the `[dock]` lists, because those are maps and lists rather than single values. For `[agents]` this is also a safeguard: a program in a pane cannot loosen it through TUIOS. `dock.clock.format` is the one `[dock]` key it can set.
 
 ### The in-app settings page
 
@@ -89,6 +91,10 @@ The settings page edits every option in the registry, in the same groups `list-o
 - **Settings** in the <kbd>Ctrl</kbd>+<kbd>P</kbd> command palette
 
 Most rows apply as you change them. Colour options open a colour picker. Two rows open editors of their own: the rail's [sections](#sections) and the dock's [components](#the-dock-table).
+
+The page reopens on the tab, row and search you left it on. <kbd>1</kbd> to <kbd>9</kbd> go to a tab. A row changed from its default has a dot after its name, and its description says what the default is. <kbd>Backspace</kbd> resets the row to its default, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes the last change made on the page.
+
+<kbd>/</kbd>, or any letter the page does not use, searches every tab. It ranks each row by its name, its config key, its value and its description, and each result names its tab. In the results, <kbd>←</kbd>, <kbd>→</kbd> and <kbd>Enter</kbd> change the row where it is, <kbd>Tab</kbd> goes to the row on its own tab, and <kbd>Esc</kbd> clears the search. The command palette reaches the same rows by name (`settings: pane background`), and `tuios list-options --search` runs the same search from a shell.
 
 <Callout type="warn" title="The settings page rewrites the whole file">
 Each change is saved by writing the full config to `config.toml`. Your comments, key order and formatting are replaced by the generated header and every option with its value. `tuios keybinds unbind` and `tuios keybinds free` write the file the same way. Keep a copy in version control if you edit the file by hand.
@@ -139,6 +145,7 @@ All keys below go under `[appearance]`.
 | `panel_padding` | `2` | 1 to 6 | Columns of padding inside overlay panels |
 | `animations_enabled` | `true` | bool | Animate transitions |
 | `max_fps` | `0` | 0, or 10 to 120 | Frame rate cap. `0` means 60 |
+| `wrap_lists` | `true` | bool | Moving past the end of a list wraps to the other end |
 
 #### border_style
 
@@ -146,11 +153,46 @@ Values: `rounded` (default), `normal`, `thick`, `double`, `block`, `outer-half-b
 
 `glyphs` uses the border of the active [glyph set](#glyph-sets). `hidden` also hides the window buttons and the scrollbar, because both are drawn on the border.
 
+### Backgrounds
+
+A cell with no background of its own is transparent, so your terminal's own background shows through. That is the default everywhere: pane content left on the default background, the space between panes, the borders, the dock and the rail. These options paint those cells instead, one surface at a time or all at once.
+
+| Key | Surface | Default |
+|-----|---------|---------|
+| `background` | Every surface below that is not set on its own | `"off"` |
+| `pane_background` | Pane content, the thin scrollbar over it, and the scrollback browser | `""` (follows `background`) |
+| `desktop_background` | Behind and between panes: gaps, the space around floating panes, an empty workspace and its welcome screen | `""` |
+| `window_chrome_background` | Pane borders and title bars, and the lines between shared borders | `""` |
+| `dock_background` | The dock | `""` |
+| `sidebar.background` | The rail, under `[appearance.sidebar]` | `""` |
+
+Each takes `off`, `theme` or a `#RRGGBB` colour:
+
+- `off` paints nothing, so your terminal's background shows through.
+- `theme` paints the active theme's background, with the theme's foreground on default-coloured text. With no theme set, it behaves as `off`.
+- `#RRGGBB` paints that colour. With a theme set, default-coloured text takes the theme's foreground, lightened or darkened until it reads on the colour.
+
+A surface's own option wins whenever it holds a value, `off` included. Left empty, it follows `background`:
+
+```toml
+[appearance]
+background = "theme"          # every surface on the theme's background
+dock_background = "#11111b"   # the dock a shade darker
+pane_background = "off"       # panes keep the terminal's own background
+
+[appearance.sidebar]
+background = "#181825"
+```
+
+Only cells with no background of their own are painted. A background a program chose, the selection and search marks, and the colours the chrome sets itself always win. A value that is not a keyword or a `#RRGGBB` colour reads as `off` for that surface, with a validation warning.
+
+While the pane background paints a colour, a program that asks the terminal for its colours (OSC 10 and 11) is told the colours it is drawn on, so it can pick a light or dark palette. All six options apply live, reach every attached client, and are on the **Backgrounds** tab of the settings page, where <kbd>x</kbd> clears a surface back to following `background`.
+
 ### Windows and titles
 
 | Key | Default | Values | What it does |
 |-----|---------|--------|--------------|
-| `window_title_position` | `"bottom"` | `bottom`, `top`, `hidden` | Where the title is drawn. `hidden` also disables rename |
+| `window_title_position` | `"top"` | `top`, `bottom`, `hidden` | Where the title is drawn. `hidden` also disables rename |
 | `window_title_format` | `""` | template | Title template. See [below](#window_title_format) |
 | `window_button_style` | `"dots"` | `dots`, `pill` | macOS-style traffic lights, or a filled pill |
 | `window_button_position` | `"left"` | `left`, `right` | Which end of the title bar holds the buttons |
@@ -183,7 +225,7 @@ Any other `{...}` produces a validation warning and is drawn as written.
 
 | Key | Default | Values | What it does |
 |-----|---------|--------|--------------|
-| `click_to_type` | `"single"` | `single`, `double`, `off` | In window mode, whether a click on a pane starts typing in it |
+| `click_to_type` | `"double"` | `double`, `single`, `off` | In window mode, what starts typing in a pane: a double click, a single click, or no click. A single click always focuses |
 | `auto_enter_terminal_on_focus` | `"off"` | `off`, `targeted`, `all` | Start typing when a keyboard focus command lands on a pane. `targeted` covers numbered select and arrows, `all` adds Tab |
 | `focus_follows_mouse` | `false` | bool | Focus the pane under the pointer |
 | `alt_drag` | `true` | bool | <kbd>Alt</kbd> + left-drag moves a pane |
@@ -221,8 +263,8 @@ Only `http`, `https`, `mailto`, `ftp` and `ftps` links go to your desktop's open
 | `niri_reverse_scroll` | `false` | bool | Reverse the wheel in the scrolling layout |
 | `niri_click_reveals` | `true` | bool | Clicking a partly hidden column brings it fully on screen |
 | `niri_hover_reveals` | `true` | bool | With `focus_follows_mouse`, hovering does the same |
-| `zoom_size` | `100` | 50 to 100 | Share of the screen a zoomed pane takes, in percent |
-| `zoom_max_width` | `0` | cells | Width cap for a zoomed pane. `0` fills the screen |
+| `zoom_size` | `95` | 50 to 100 | Share of the screen a zoomed pane takes, in percent. Below 100 the layout stays visible at the edges. `100` is fullscreen |
+| `zoom_max_width` | `0` | cells | Width cap for a zoomed pane. `0` means no cap |
 | `zoom_animation` | `true` | bool | Slide a pane into and out of zoom |
 | `zoom_follows_focus` | `true` | bool | Moving focus while zoomed zooms the pane you move to |
 
@@ -232,7 +274,7 @@ The layout a new session starts in is `startup.layout`. See [The startup table](
 
 | Key | Default | Values | What it does |
 |-----|---------|--------|--------------|
-| `dockbar_position` | `"bottom"` | `bottom`, `top`, `hidden` | Edge the dock sits on |
+| `dockbar_position` | `"top"` | `top`, `bottom`, `hidden` | Edge the dock sits on |
 | `dock_workspace_tabs` | `true` | bool | Show the clickable workspace strip |
 | `dock_workspace_tab_format` | `""` | template | Tab label with `{index}` and `{name}`. Empty means `{name}` |
 | `dock_workspace_tooltip` | `true` | bool | Show a truncated workspace name in full on hover |
@@ -262,7 +304,7 @@ The rest are in [`[appearance.sidebar]`](#the-session-rail).
 
 | Key | Default | Values | What it does |
 |-----|---------|--------|--------------|
-| `style` | `"thin"` | `thin`, `track` | A hairline thumb, or a full-height track |
+| `style` | `"track"` | `track`, `thin` | A full-height track, or a hairline thumb over the content |
 | `thumb` | `""` | one-cell glyph | Thumb glyph. Empty uses the style's own |
 | `track` | `""` | one-cell glyph, or `none` | Track glyph. Empty uses the style's own |
 | `tint` | `"quiet"` | `quiet`, `border`, `muted`, or `#RRGGBB` | Bar colour |
@@ -292,9 +334,11 @@ An empty foreground keeps the colour the program wrote. An empty background fall
 
 | Key | Default | Values | What it does |
 |-----|---------|--------|--------------|
-| `enabled` | `false` | bool | Show the rail |
-| `position` | `"left"` | `left`, `right`, `hidden` | Edge the rail sits on |
-| `width` | `28` | columns | Preferred width on a wide screen |
+| `enabled` | `true` | bool | Show the rail |
+| `position` | `"right"` | `right`, `left`, `hidden` | Edge the rail sits on |
+| `width` | `24` | columns | Preferred width on a wide screen |
+| `background` | `""` | `off`, `theme`, `#RRGGBB` | The rail's background. Empty follows `appearance.background`. See [Backgrounds](#backgrounds) |
+| `agent_rest_fold` | `"1h"` | a duration, or `off` | How long an agent row rests (idle, unknown, or done and seen) before it folds into one `+N at rest` line |
 | `sections` | `"sessions:25,terminals,files:25,agents:34"` | layout string | Which sections to draw, in what order. See [below](#sections) |
 | `show_glyphs` | `true` | bool | Agent-state glyph on each row |
 | `show_counts` | `true` | bool | Window count on each session row |
@@ -348,12 +392,14 @@ Delete uses the freedesktop.org trash in your home directory, so your desktop's 
 
 ```toml
 [appearance.sidebar.agent_row]
-tokens = ["session", "harness", "name", "elapsed", "message"]
+tokens = ["session", "need", "harness", "name", "elapsed", "context", "meta", "now", "message"]
 
 [[appearance.sidebar.agent_row.elapsed.rule]]
 gt = 30          # minutes in the current state
 fg = "warning"
 ```
+
+The `tokens` above are the shipped list. The other tokens are `state`, `host` and `prompt`. `need` says what a row wants from you, such as `approval` or `question`. `context` shows `ctx 84%` once the agent's context is 80% full. `now` is what a working agent is doing, such as `Bash: go test ./...`. `meta` draws the other keys the pane reported with `tuios set-agent-meta`, and `$` followed by a key, such as `$model` or `$cost`, places one key. See [Session Rail](/docs/session-rail#agent-rows).
 
 Each rule has one test: `equals`, `contains`, `starts_with`, `gt` or `lt`. The first matching rule wins. A mistake in this table is a warning, not an error.
 
@@ -547,6 +593,10 @@ Each section is a table under `[keybindings]`. Each action takes a list of keys.
 | `script` | While a tape plays |
 | `sidebar` | While the rail has the keyboard |
 | `sidebar_files` | While the rail's cursor is on a file row. Checked before `sidebar` |
+| `sidebar_agents` | While the rail's cursor is on an agent row. Checked before `sidebar` |
+| `inbox` | While the Inbox is open |
+| `inbox_peek` | While a prompt is open over the Inbox |
+| `mail` | While the mailbox is open |
 
 ### Key syntax
 
@@ -578,6 +628,8 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 | `agent_autodetect` | `true` | Detect an agent CLI running in a pane and show its state |
 | `agent_detect_seconds` | `0` | Seconds between checks. `0` means 2. A negative number turns detection off |
 | `agent_binaries` | `[]` | Extra program names to treat as agents, added to the built-in list |
+| `resume_agents` | `"ask"` | After a daemon restart: `ask` puts a Resume row in the Inbox for each pane whose agent was running, `auto` types each harness's resume command into the new shell, `off` does neither |
+| `respond_from_shell` | `false` | Let `tuios respond`, run from a shell outside every pane, answer an agent's prompt. A caller inside a pane is refused either way. Not settable with `set-config` |
 
 `tuios set-config daemon.log_level messages` changes the level of a running daemon at once. `verbose` and `trace` also log pane content, window titles and paths. `tuios logs` reads the log.
 
@@ -597,6 +649,8 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 
 <Callout type="info" title="Older config files keep their behaviour">
 `daemon` and `tiled` default to `true` in a new install. A config file that already exists and does not mention them reads them as `false`, so an upgrade keeps the floating, standalone start it had. Add the keys to opt in.
+
+In the same way, v0.8.0 changed eight appearance defaults: the rail is on, on the right, 24 columns wide; the dock and the window titles are on top; a zoomed pane takes 95% of the screen; a double click starts typing; and the scrollbar is a track. A config file that sets one of these keys keeps its value. The first-run file older releases wrote names most of them, so such an install keeps the old look until you remove those lines.
 </Callout>
 
 A session keeps its own layout once it is running. Attaching never rearranges a session to match your config.
@@ -748,6 +802,7 @@ connect_timeout = 5
 | `connect_timeout` | `10` | Seconds one dial may take before the host counts as unreachable |
 | `command` | `""` | The `tuios` binary on the host. Empty means the link finds it on the `PATH`, at the usual install paths, or through a login shell |
 | `ssh_options` | `[]` | Extra ssh arguments, placed before the address |
+| `repos_root` | `""` | Where the host keeps its checkouts, as the host reads it, such as `~/src`. `fan --host`, `worktree new --host` and `start-agent` look for a repository there by its origin URL |
 
 You can also manage the table from the shell. These commands edit the file, and the daemon applies the change at once:
 
@@ -758,6 +813,37 @@ tuios hosts remove build
 ```
 
 The daemon runs ssh with `BatchMode` on, so a link never asks for a password or about a host key. Run ssh to the host once by hand to accept its key.
+
+### What another machine may do here
+
+The same `[hosts.NAME]` table, read on the machine a link arrives at, also says what the machine of that name may do there. `[hosts."*"]` covers every machine with no table of its own.
+
+```toml
+[hosts.laptop]
+addr = "laptop"                  # optional: without it nothing is dialled
+allow = ["list", "mail", "open", "write", "respond"]
+hold_mail = true
+hosted_grace = "10m"
+
+[hosts."*"]
+allow = ["list", "mail"]
+```
+
+| Capability | What it lets the other machine do here |
+|------------|----------------------------------------|
+| `list` | Read sessions, windows, captures, agent state, the Inbox, prompts, waits and events |
+| `mail` | Send and read agent mail, and use the stash |
+| `open` | Start sessions, windows, worktrees, fans and agents |
+| `write` | Type into panes, close and move windows, set options and names, report agent state, attach, and pull a worktree's work |
+| `respond` | Answer for you: prompts, held approvals, `ask-human` questions, dismissing Inbox items and passing on held mail |
+
+With no table, a machine may `list`, `mail`, `open` and `write`. `respond` is opt-in. An `allow` that is set replaces that list, and `allow = []` allows nothing. Anything not allowed is refused with `forbidden`.
+
+`hold_mail = true` holds mail from that machine to an agent here in your Inbox, marked `held for NAME`, until you pass it on with <kbd>p</kbd>. `hosted_grace` is how long a pane this machine runs for the other one (a window opened there with `--host`) keeps running after the link drops: a duration, `"0"` to end it with the link, 10 minutes when unset, at most 24 hours.
+
+The name is the one the other machine gives for itself, its host name up to the first dot, unless the ssh key it logs in with pins one with `command="tuios stdio-proxy --as laptop",restrict`. Only a pinned name is a boundary. A change applies to the next call on every link.
+
+### Using a linked host
 
 Once a host is linked, you can list its sessions and agents (`tuios ls --all-hosts`, `tuios list-agents --host build`), attach to or create sessions on it (`tuios attach --host build api`, `tuios new --host build`), and open a pane whose process runs there (`tuios new-window --host build`). See [`tuios hosts`](/docs/cli-reference#hosts).
 
@@ -807,6 +893,55 @@ exclude = ["*-pad-*"]
 [tailscale.users]
 build = "admin"
 ```
+
+## The agents table
+
+`[agents]` sets how TUIOS treats the coding agents in its panes. It is outside `list-options`, and `set-config` cannot change it, so a program in a pane cannot loosen it. The daemon reads it at start and again whenever the file changes. See [Inbox and Review](/docs/agent-inbox) for what each part does.
+
+```toml
+[agents.approvals]
+enabled = ["claude-code", "opencode"]   # harnesses whose permission prompts the Inbox may answer
+hold_seconds = 120                      # 10 to 300
+hold_plans = true                       # a plan follows enabled
+
+[agents.approvals.risk]
+builtin = true                          # keep the shipped risk rules
+panes_may_allow = false                 # a pane with the respond grant may not allow a risky call
+
+[[agents.approvals.risk.rule]]
+name = "kubectl apply"
+tools = ["Bash"]                        # empty: every tool
+pattern = '\bkubectl\s+(apply|delete)\b'   # RE2, matched per command
+
+[agents.permissions]
+mode = "strict"                         # open (default) or strict
+grants = ["read", "write", "fan"]       # what a pane holds under strict
+
+[agents.recap]
+mode = "toast"                          # toast, inbox or off
+away = "10m"
+test_patterns = ["go test", "pytest"]
+
+[agents.queue]
+max = 8                                 # at most 64
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `approvals.enabled` | `[]` | Harnesses whose permission prompts wait for an answer from the Inbox: `claude-code` (or `claude`), `opencode` and `kilo`. Empty turns it off |
+| `approvals.hold_seconds` | `120` | How long a prompt waits for your answer before the harness asks in its own pane |
+| `approvals.hold_plans` | `true` | Also hold a plan an agent asks you to approve when it leaves plan mode |
+| `approvals.risk.builtin` | `true` | Keep the shipped [risk rules](/docs/agent-inbox#risk-rules) |
+| `approvals.risk.panes_may_allow` | `false` | Let a pane holding the `respond` grant allow a risky call |
+| `approvals.risk.rule` | none | Your own rules: a `name`, the `tools` it applies to, and an RE2 `pattern` |
+| `permissions.mode` | `"open"` | `open` gives a pane started with no grants of its own `admin`. `strict` gives it `grants`. Any other value reads as `strict` |
+| `permissions.grants` | `["read", "write", "fan"]` | What such a pane holds under `strict`. An empty list gives nothing |
+| `recap.mode` | `"toast"` | Where the away recap shows: `toast` in the dock and the Inbox, `inbox` only in the Inbox, `off` only in `tuios agent-log --recap` |
+| `recap.away` | `"10m"` | How long you must have been away from a pane for the dock to show its recap |
+| `recap.test_patterns` | built in | Commands that count as a test run in the recap, such as `go test` and `npm test` |
+| `queue.max` | `8` | Messages one pane's [queue](/docs/agent-inbox#replying-and-the-queue) holds |
+
+After turning on `approvals.enabled`, run `tuios integration install` for that harness again, so its hook is the version that waits. The grants are `read`, `write`, `fan`, `respond` and `admin`; see [What a pane may do](/docs/agents#what-a-pane-may-do).
 
 ## Hooks
 

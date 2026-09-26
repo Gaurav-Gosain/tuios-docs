@@ -11,22 +11,22 @@ The session rail is a sidebar down one edge of the screen. It lists your session
 
 **Try it live:** the [Workspaces track](/learn?t=workspaces) opens the rail and walks it in your browser.
 
-## Turning it on
+## Showing and hiding it
 
-The rail is off by default.
+The rail is on by default, on the right edge, 24 columns wide.
 
 | How | What it does |
 |-----|--------------|
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>b</kbd> | Show or hide the rail |
 | Palette: `Toggle sidebar` | The same |
-| `appearance.sidebar.enabled = true` | Show it on every start |
+| `appearance.sidebar.enabled` | Whether it shows on every start. Default `true` |
 
 ```bash
-tuios set-config appearance.sidebar.enabled true
-tuios set-config appearance.sidebar.position right
+tuios set-config appearance.sidebar.enabled false
+tuios set-config appearance.sidebar.position left
 ```
 
-`position` is `left` (default), `right` or `hidden`. `width` is the preferred width in columns on a wide screen (default `28`). On a narrow screen, or after <kbd>&lt;</kbd>, the rail collapses to a one-column strip of marks. Hover the strip for a label (`tooltips`).
+`position` is `right` (default), `left` or `hidden`. `width` is the preferred width in columns on a wide screen (default `24`). A config file that sets `enabled`, `position` or `width` keeps its value, so an install from before v0.8.0 whose file names them keeps the old rail. On a narrow screen, or after <kbd>&lt;</kbd>, the rail collapses to a one-column strip of marks. Hover the strip for a label (`tooltips`).
 
 ## The sections
 
@@ -80,13 +80,23 @@ While the rail has the keyboard, these keys from `[keybindings.sidebar]` apply:
 | <kbd>m</kbd> | Open the menu for the row under the cursor |
 | <kbd>x</kbd> | Open that menu on its Close or Kill entry |
 | <kbd>f</kbd> | Agents: show all sessions, or only this one |
-| <kbd>o</kbd> | Agents: sort by priority, or by most recent |
+| <kbd>o</kbd> | Agents: sort by what needs you (`you`, the default), by priority (`pri`), or by most recent (`rec`) |
 | <kbd>i</kbd> | Open the mailbox for the pane under the cursor |
 | <kbd>/</kbd> | Search every pane in every session. `@state` filters by agent state |
 | <kbd>&lt;</kbd> / <kbd>&gt;</kbd> | Collapse or expand the rail. On the divider, move the split |
 | <kbd>?</kbd> | Show the rail's keys |
 
 On a row of the files section, `[keybindings.sidebar_files]` answers first: <kbd>a</kbd> create, <kbd>r</kbd> rename, <kbd>d</kbd> delete to the trash, <kbd>D</kbd> delete permanently, <kbd>y</kbd> copy, <kbd>x</kbd> cut, <kbd>p</kbd> paste.
+
+On an agent row, `[keybindings.sidebar_agents]` answers first:
+
+| Key | Action |
+|-----|--------|
+| <kbd>r</kbd> | Reply to the agent. The line opens under the Inbox, and the message is typed when the agent is at rest |
+| <kbd>v</kbd> | [Review](/docs/agent-inbox#reviewing-an-agents-changes) the pane's changes |
+| <kbd>u</kbd> | Mark the pane's finished turn unread again, for every client |
+| <kbd>z</kbd> | Snooze the pane's Inbox item |
+| <kbd>x</kbd> | Drop the newest queued message. <kbd>u</kbd> within 10 seconds queues it again. With nothing queued, <kbd>x</kbd> opens the menu as on any row |
 
 Every key can be rebound. See [Configuration](/docs/configuration#keybindings).
 
@@ -100,14 +110,35 @@ Every key can be rebound. See [Configuration](/docs/configuration#keybindings).
 
 ## Agent rows
 
-Each row in the agents section shows the pane's agent state glyph, its name, and how long it has been in that state. When the rail has room, a second line carries the agent's harness and the note it reported.
+The agents section lists every pane running an agent, in every session. By default it is sorted by what each one needs from you, in four groups: needs you (an approval, a question, or an error), finished and not yet seen, working, and at rest. Inside a group, rows keep the order the panes were opened, so a row moves only when what it wants from you changes.
+
+Each row shows the pane's state glyph and its name. A row says how long it has been in its state once that is five minutes or more, or when the cursor or pointer is on it. The second line says the one thing the row's group is about:
+
+- **Working:** what the agent is doing now, such as `Bash: go test ./...`, when its hooks report it.
+- **Needs you:** a word for what it needs (`approval`, `question`, `risky`, `plan`) and what the pane asks.
+- **Finished, not yet seen:** the first line of what the agent last said.
+- **At rest:** nothing.
+
+`ctx 84%` appears once the agent's context is 80% full or more, and `1 queued` at the right edge while messages wait in its [queue](/docs/agent-inbox#replying-and-the-queue).
+
+```
+│ agents      2 need you
+│▎▲ review          4m
+│    risky · rm -rf bu…
+│ ■ docs
+│    Updated CHANGELOG…
+│ ● api       1 queued
+│    ctx 84% · Bash: go…
+```
+
+On a rail 30 columns wide or narrower, a pane running an agent is listed once, in the agents section, and the terminals section keeps the panes that run no agent. Rows that have rested longer than `agent_rest_fold` (an hour by default) fold into one `+N at rest` line. <kbd>Enter</kbd> or a click on it shows them again. A row that needs you, a working agent, the focused pane and a pane with messages queued never fold.
 
 `[appearance.sidebar.agent_row]` picks which tokens a row shows, in what order, and how each is coloured. It is a table, so set it in `config.toml` rather than with `set-config`:
 
 ```toml
 [appearance.sidebar.agent_row]
-# harness, name, state, elapsed, message, session, host
-tokens = ["session", "harness", "name", "elapsed", "message"]
+# the shipped list; state, host, prompt and $key are the others
+tokens = ["session", "need", "harness", "name", "elapsed", "context", "meta", "now", "message"]
 
 [[appearance.sidebar.agent_row.elapsed.rule]]
 gt = 30
@@ -129,6 +160,8 @@ A rule has exactly one test (`equals`, `contains`, `starts_with`, `gt` or `lt`) 
 | `folder_click` | `"navigate"` | `navigate`, `cd` (send the focused pane there) or `both` |
 | `file_actions` | `true` | Allow create, rename, delete, copy, cut and paste |
 | `file_delete` | `"trash"` | `trash` or `permanent` |
+| `agent_rest_fold` | `"1h"` | How long an agent row rests before it folds. A duration, or `off` |
+| `background` | `""` | The rail's background: `off`, `theme` or `#RRGGBB`. Empty follows `appearance.background` |
 
 All of these live under `[appearance.sidebar]`. `appearance.session_colors` gives each session its own colour on the rail, and `appearance.session_border` carries that colour onto every pane border.
 
