@@ -29,7 +29,7 @@ printf '{"id":1,"verb":"list-sessions"}\n' | nc -U "$SOCK" | jq .
 
 You can send several requests on one connection. They are answered in order, one response line per request line. To run requests in parallel, open more connections.
 
-The socket is only accessible to your user. There is no token or password on top of that.
+The socket is only accessible to your user: its directory is created with mode `0700`, and TUIOS refuses a directory that another user owns or that is a symlink. There is no token or password on top of that. What a program inside a pane may do over the socket is limited by the pane's [grants](/docs/agents#what-a-pane-may-do).
 
 ## Discovering the protocol
 
@@ -88,7 +88,7 @@ A caller whose version is outside the accepted range gets `protocol_mismatch`. N
 
 ## Verbs
 
-The daemon currently implements 62 verbs. `tuios list-verbs` always reflects the binary you are talking to.
+The daemon currently implements 97 verbs, some of them only for one daemon to call on another. `tuios list-verbs` always reflects the binary you are talking to.
 
 ### Discovery
 
@@ -113,7 +113,8 @@ The daemon currently implements 62 verbs. `tuios list-verbs` always reflects the
 | Verb | Purpose |
 |------|---------|
 | `list-windows` | List a session's windows with ID, index, name, workspace, size, focus and agent state. |
-| `new-window` | Create a window. Optional `name`, `workspace`, `cwd`, `focus`, `command` (an argv run instead of a shell) and `host` (run it on another machine). |
+| `get-window` | Describe one window. |
+| `new-window` | Create a window. Optional `name`, `workspace`, `cwd`, `focus`, `command` (an argv run instead of a shell), `host` (run it on another machine) and `grants`. |
 | `close-window` | Close a window. |
 | `focus-window` | Focus a window by `window`, `relative` (`next`, `prev`) or `direction` (`left`, `right`, `up`, `down`). Direction needs an attached client. |
 | `move-window` | Move a window to another workspace, optionally following it. |
@@ -141,6 +142,7 @@ The daemon currently implements 62 verbs. `tuios list-verbs` always reflects the
 | `send-text` | Write text to a window's PTY exactly as given. A trailing `\n` presses Enter. |
 | `send-keys` | Send key names such as `"ctrl+b,n"`. Keys are split on spaces and commas, so use `send-text` for ordinary text. |
 | `capture-pane` | Read a window's contents. See [Capturing windows](#capturing-windows). |
+| `run` | Type one command line at a pane's shell prompt, wait for it to finish, and return its exit code and output. Needs a shell that sends OSC 133 marks. |
 
 ### Options, themes and the dock
 
@@ -167,6 +169,39 @@ The daemon currently implements 62 verbs. `tuios list-verbs` always reflects the
 | `send-agent-message` | Leave a message for another window, or a notice for the whole session. |
 | `read-agent-messages` | Read a session's messages, or one window's inbox. |
 | `ask-agent` | Type a question into another agent's window and wait for its answer. |
+| `ask-human` | Ask the person a question with fixed answers, and wait for the answer. |
+| `set-agent-meta` | Record display metadata about a pane's agent, such as its model or context use. |
+| `set-agent-session` | Store a harness's conversation id for a pane without changing its state. |
+| `start-agent` | Start an agent in a new pane and answer once it is ready for a prompt. |
+| `resume-agent` | Type a pane's resume command for the conversation a hook recorded. |
+| `agent-activity` | Read what a pane's agent has been doing, from the activity the daemon keeps. |
+| `resolve-pane` | Name the pane a process runs in, from its terminal session and ancestors. Hooks use it. |
+| `pane-grants` | Say what the caller's pane may do through TUIOS. |
+| `set-pane-grants` | Give a pane grants, or reset it to the default. |
+| `restrict-connection` | Give up authority on this connection for as long as it is open. `tuios mcp` uses it. |
+
+### The Inbox, the queue and review
+
+| Verb | Purpose |
+|------|---------|
+| `list-attention` | List the Inbox: everything waiting for the person, on this machine and every linked host. |
+| `peek-prompt` | Read the prompt an agent is blocked on. |
+| `respond` | Answer that prompt with the keys its harness declares. Acts as the person. |
+| `get-approval` | Read a held approval or plan whole, with the risk rules it matched. |
+| `request-approval` | Hold a pane's permission prompt for an answer from the Inbox. The hooks call it for their own pane. |
+| `reply-approval` | Answer a held approval. Only an attached client can. |
+| `answer-ask` | Answer an `ask-human` question. Only an attached client can. |
+| `dismiss-attention` | Close an Inbox item. Only an attached client can. |
+| `mark-attention` | Snooze, wake, mark unread or restore an Inbox item. Only an attached client can. |
+| `release-agent-message` | Pass on mail from another machine that was held for the person. |
+| `queue-prompt` | Queue a message for a pane's agent, typed when it comes to rest. |
+| `list-queued` | List the messages waiting in a pane's queue. |
+| `cancel-queued` | Drop queued messages before they are typed. |
+| `review-diff` | Read what the agent in a pane changed against its base. |
+| `review-note` | Add, edit, remove, list or clear review notes on a pane's changes. |
+| `send-review` | Send a pane's unsent review notes to its agent, through the queue. |
+
+The verbs that act as the person need the nonce a client receives when it attaches, and refuse a caller inside a pane even when it has a copy.
 
 ### Files and worktrees
 
@@ -179,6 +214,10 @@ The daemon currently implements 62 verbs. `tuios list-verbs` always reflects the
 | `list-worktrees` | List the sessions whose directory is a git worktree. |
 | `remove-worktree` | Remove a worktree session's worktree and kill the session. Refuses uncommitted changes unless told to stash or discard them. |
 | `fan` | Start one prompt in several agents, each in its own worktree and session. |
+| `compare-fan` | Compare the attempts of a fan: changes against the base and the last check. |
+| `verify-fan` | Run one check in every attempt of a fan. |
+| `keep-fan` | Keep one attempt of a fan and remove the others. |
+| `bundle-worktree` | Read a worktree session's work out in chunks, for `tuios worktree pull`. |
 
 ### Other machines
 
@@ -189,7 +228,7 @@ The daemon currently implements 62 verbs. `tuios list-verbs` always reflects the
 | `list-host-agents` | List agent windows here and on every configured host. |
 | `open-host-connection` | Turn this connection into a connection to the daemon on a host. |
 
-Five more verbs, `open-pane`, `pane-agent`, `pane-cwd`, `resize-pane` and `read-dir`, are what one daemon calls on another to run a window's process on a different machine. You do not normally call them yourself.
+More verbs, `open-pane`, `pane-agent`, `pane-cwd`, `resize-pane`, `read-dir`, `close-pane`, `pane-calls` and `link-peer`, are what one daemon calls on another to run a window's process on a different machine. You do not normally call them yourself.
 
 ### Events and waiting
 
@@ -226,6 +265,9 @@ Long lines come back split at the window's width. The emulator does not record w
 | `window-idle` | The window prints nothing for `idle` milliseconds (default 500). |
 | `agent-state` | A window's agent state becomes one of the states in `until` (comma-separated). Without `window`, any window in the session counts. |
 | `agent-message` | A message arrives. With `window`, in that window's inbox. `thread` narrows it to one thread. |
+| `command-finished` | A shell with OSC 133 marks finishes a command. With `window`, that pane's next one, or with `command_seq` the first after that many. |
+
+`agent-state` also takes `any_session`, or a `select` selector with `every` to wait for all the panes it matches.
 
 `timeout` defaults to 30000 milliseconds. For `window-output`, `source` defaults to `recent`, so output that has already scrolled off the screen still matches.
 
@@ -248,9 +290,9 @@ Long lines come back split at the window's width. The emulator does not record w
 
 Filter with `session`, `window` and `types`. Leave `types` out to receive everything.
 
-There is no backfill: events start at the moment you subscribe. Call `list-windows` first to learn the current state, then follow the stream.
+The acknowledgement carries `seq`, the last event number when the stream went live, and `boot_id`, a random id for this daemon start. Every event carries both. To resume after a disconnect, subscribe with `after_seq` and the `boot_id` it came with: the daemon replays the events it still holds after that seq, then carries on live. When it cannot replay everything you missed, a `gap` event comes first and names the reason (`evicted`, `boot_changed`, `not_retained` or `overflow`). Output events are never replayed. After a gap, read the current state again with `list-windows` or `list-agents`.
 
-The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `agent-state`, `agent-message`, `output`, `bell`, `mode-changed`, `session-created`, `session-closed` and `gap`.
+The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `host-changed` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
 
 Events fire the same way whether a change came from a verb or from a person using the TUI. Window geometry changes do not produce events.
 
@@ -290,6 +332,20 @@ Codes are stable, so it is safe to branch on them.
 | `not_worktree` | The session is not in a git worktree. |
 | `worktree_dirty` | The worktree has uncommitted changes and neither stash nor force was passed. |
 | `git_failed` | A git command failed. The message is git's own. |
+| `repo_not_found` | No checkout on this machine has the named origin, and `clone` was not passed. |
+| `agent_blocked` | The target agent is on `needs_input`, and text typed now would answer its prompt. Nothing was typed. |
+| `prompt_stalled` | The text was typed and the agent did not show it took it in time. Look at the pane before sending again. |
+| `forbidden` | The caller may not do this: its pane's grants, or a linked machine's policy, do not allow it. |
+| `not_human` | Only the person at an attached client may make this call. |
+| `prompt_changed` | `respond` pressed nothing: the prompt is gone, is not the one `prompt_id` names, or was already answered. |
+| `risk_unacknowledged` | An allow of a risky approval did not name exactly the risk rules it matched. |
+| `confirm_required` | A write by selector carried no `confirm` token, or one for a different set of panes. Nothing was sent. |
+| `queue_full` | The pane's queue holds as many messages as `[agents.queue] max` allows. |
+| `not_resumable` | No conversation the pane can resume was recorded. |
+| `no_shell_integration` | The pane's shell sends no OSC 133 marks, so `run` cannot tell where a command ends. |
+| `not_at_prompt` | `run` typed nothing because a command is running in the pane. |
+| `not_repo` | No git repository is under the pane, so there is nothing to review. |
+| `no_notes` | `send-review` found no unsent notes. |
 | `internal` | An unexpected failure inside the daemon. |
 
 ## Examples
