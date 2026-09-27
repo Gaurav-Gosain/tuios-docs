@@ -26,10 +26,10 @@ A window target is matched in this order, and the first match wins:
 
 1. The full window ID
 2. The index `list-windows` prints
-3. A unique ID prefix, such as the 8 characters `list-windows` shows
-4. The custom name, then the window title
+3. The custom name, then the window title
+4. A unique ID prefix, such as the 8 characters `list-windows` shows
 
-An index or ID therefore beats a window that happens to be named `2`.
+An index or ID therefore beats a window that happens to be named `2`, and a name beats an ID prefix: a pane named `db` is never mistaken for a pane whose ID starts with `db`. An ambiguous name or prefix is an error, never a guess.
 
 Commands that talk to the daemon exit `3` when no daemon is running. See [Exit codes](#exit-codes).
 
@@ -63,7 +63,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 | Flag | Values | Default |
 |------|--------|---------|
 | `--theme <name>` | a theme id | none: your terminal's colours |
-| `--border-style <style>` | `rounded`, `normal`, `thick`, `double`, `hidden`, `block`, `ascii`, `outer-half-block`, `inner-half-block` | `rounded` |
+| `--border-style <style>` | `rounded`, `normal`, `thick`, `double`, `hidden`, `block`, `ascii`, `outer-half-block`, `inner-half-block`, `glyphs` | `rounded` |
 | `--dockbar-position <pos>` | `top`, `bottom`, `hidden` | `top` |
 | `--window-title-position <pos>` | `top`, `bottom`, `hidden` | `top` |
 | `--window-button-style <style>` | `dots`, `pill` | `dots` |
@@ -129,7 +129,7 @@ tuios new build --detach           # headless, for scripting
 tuios new --host buildbox ci -d    # on another machine
 ```
 
-A detached session gets one window and works at once with `send-keys`, `run-command` and `capture-pane`. It is 80x24 until a client attaches. See [Headless Sessions](/docs/sessions#headless-sessions).
+A detached session gets one window and works at once with `send-keys`, `run-command` and `capture-pane`. It is 80x24 until a client attaches. Run from a script, a service or CI, with no terminal on stdout, its panes still get `TERM=xterm-256color` and `COLORTERM=truecolor`, not `dumb`. See [Headless Sessions](/docs/sessions#headless-sessions).
 
 ### attach
 
@@ -482,7 +482,7 @@ tuios send-keys <keys> [flags]
 
 With `-w`, the keys go to that window's program, whether or not a client is attached and whichever window has the focus. Without `-w`, they go to the attached client as if you pressed them, so window-mode bindings and the prefix work. With no client attached, they go to the focused window. The command prints where the keys went.
 
-- Single keys: `i`, `Enter`, `Escape`, `Space`, `Tab`, `BTab`, `Backspace`, `Insert`, `Delete`, arrows (`Up` and so on), `Home`, `End`, `PageUp`, `PageDown`, `F1` to `F12`.
+- Single keys: `i`, `Enter`, `Escape`, `Space`, `Tab`, `BTab`, `Backspace`, `Insert`, `Delete`, arrows (`Up` and so on), `Home`, `End`, `PageUp`, `PageDown`, `F1` to `F12`. The arrows, `Home` and `End` go in their SS3 form (`ESC O H`) when the program in the pane has turned on application cursor keys (DECCKM), as a real terminal sends them.
 - Chords: `ctrl+c`, `alt+b`, `shift+Up`. Not case sensitive. tmux's `C-c` and `M-x`, and `^C`, work too.
 - An escape sequence written as `\e[A`, `\x1b[A` or `\033[A`.
 - Sequences: separate keys with a space or a comma: `"ctrl+b q"` or `"ctrl+b,q"`.
@@ -1565,7 +1565,8 @@ Variables TUIOS sets in every pane:
 | `TUIOS_RESTORED` | `1` in a shell started by a session restore |
 | `TUIOS_PANE_GRANTS` | What the pane may do through TUIOS as it starts |
 | `TUIOS_PANE_TOKEN` | Proves the pane's ID where the kernel cannot name the caller's pane |
-| `TERM`, `COLORTERM`, `TERM_PROGRAM` | Terminal identification. `COLORTERM` is `truecolor` |
+| `TERM`, `COLORTERM` | Detected from the terminal of the client that created the session. A session made with no terminal on stdout (a script, a service, CI, an agent running `tuios new --detach`) gets `xterm-256color` and `truecolor`, never `dumb` |
+| `TERM_PROGRAM` | `TUIOS`, or `ghostty` or `WezTerm` when the host terminal passes kitty or sixel graphics through |
 
 ## Exit codes
 

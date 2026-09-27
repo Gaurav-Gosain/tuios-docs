@@ -92,9 +92,10 @@ Where to look in `internal/session`:
 
 - `daemon.go`, `daemon_handlers.go`: the accept loop and per-message handling. `manager.go` owns the session table.
 - `protocol.go`, `codec.go`: length-prefixed frames with gob payloads, the binary protocol the client speaks.
+- `wire_bounds.go`, `wire_gobscan.go`: the limits on what either side decodes. Any frame is at most 16 MB. A state update or a command result, the two payloads that can nest (a layout tree, a result's data), is held to 1 MB (768 KB on 32-bit builds) before it is decoded, and every payload is scanned first and refused if it nests past 1024 levels or defines more than 1024 types. After decoding, a layout deeper than 256 splits or larger than 16383 nodes is refused, and a pane's title and name are cut to 256 bytes. A frame over its size limit is skipped unread, so the connection stays in step. The same limits apply to a linked peer daemon.
 - `verb_protocol.go`, `verb_handlers.go`, `verb_subscribe.go` and the other `verb_*.go` files: the [JSON control protocol](/docs/control-protocol). The daemon tells a JSON client from a binary one by its first byte.
 - `daemon_stream.go`: the output stream clients subscribe to, so a client draws without owning a PTY.
-- `state_merge.go`: reconciles client and daemon state, which is how several clients on one session converge.
+- `state_merge.go`: reconciles client and daemon state, which is how several clients on one session converge. The daemon owns a pane's agent state, message, harness, foreground command and grants, so those always come from its own state, never from a client's push. A pane's shell pid, directory and machine come from the daemon too whenever it has them; a push only fills a gap, as when a restore hands in a shell it just respawned.
 - `tuiclient.go`, `client.go`: the attach side.
 - `resurrection.go`: saving session structure to disk and restoring it.
 
@@ -119,7 +120,7 @@ The emulator sits behind the `vt.Terminal` interface, and exactly one implementa
 
 A differential test suite feeds the same bytes to both and compares screens, cursor, scrollback, modes and wire snapshots. `tuios --version` names the backend a binary was built with.
 
-The emulator handles CSI, OSC, ESC and DCS sequences, the alternate screen, scrollback (10,000 lines by default, `appearance.scrollback_lines`), cursor shapes, the kitty keyboard protocol, synchronized output (mode 2026), unicode width (mode 2027), colour scheme reports (mode 2031), OSC 4, 10 to 12 and 52, OSC 133 shell integration zones, and cell size reports (CSI 14t, 16t, 18t).
+The emulator handles CSI, OSC, ESC and DCS sequences, the alternate screen, scrollback (10,000 lines by default, `appearance.scrollback_lines`), cursor shapes, the kitty keyboard protocol, synchronized output (mode 2026), grapheme clustering (mode 2027, on by default in both backends, so a ZWJ emoji or a flag takes the two columns the host terminal draws it in), colour scheme reports (mode 2031), OSC 4, 10 to 12 and 52, OSC 133 shell integration zones, and cell size reports (CSI 14t, 16t, 18t).
 
 ### Rendering (`internal/app/os_render.go`, `render_*.go`)
 
@@ -264,7 +265,7 @@ go build -o tuios ./cmd/tuios
 ./tuios
 ```
 
-You need Go 1.26 or newer. The default build needs no C compiler. A [Nerd Font](https://www.nerdfonts.com) is needed for icons, or run with `--ascii-only`.
+You need Go 1.26.6 or newer. The default build needs no C compiler. A [Nerd Font](https://www.nerdfonts.com) is needed for icons, or run with `--ascii-only`.
 
 ## Platform-specific code
 

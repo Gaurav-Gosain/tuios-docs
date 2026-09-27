@@ -46,7 +46,7 @@ nix run        # build and run
 
 ## Checks
 
-CI runs these on every pull request. Run them before you push:
+CI runs these on every pull request and every push to `main`. Run the first set before you push:
 
 ```bash
 gofmt -l .          # must print nothing
@@ -55,7 +55,12 @@ go build ./...
 go test ./... -count=1 -timeout 20m
 ```
 
-CI also checks that `go.mod` is tidy in both the root module and `e2e/tui`, and runs `go test -race ./...` every night. There is no `golangci-lint` config. If you run a linter locally, keep unrelated lint fixes out of your pull request.
+CI also checks that `go.mod` is tidy in both the root module and `e2e/tui`, and runs `go test -race ./...` every night.
+
+Two more workflows run on every pull request:
+
+- **Lint** (`.github/workflows/lint.yml`): `golangci-lint` v2 with the repository's `.golangci.yml` (the standard linters plus `gosec`), `govulncheck ./...`, and `go vet ./...` with `GOOS` set to `darwin`, `windows`, `freebsd` and `openbsd`. Run `golangci-lint run ./...` locally. A finding that is wrong for one line gets a `//nolint` comment with its reason on that line.
+- **Binary size** (`.github/workflows/binary-size.yml`): `scripts/binary-size.sh` builds tuios the way the release does (`CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w"`) for linux/amd64 and darwin/arm64 and fails when a binary is over its budget. Run the script locally to see the size and the room left. To raise a budget, measure the new size on the Go version `go.mod` names and say in the commit what grew and why.
 
 The full suite is slow and uses every core. To leave the machine usable while it runs:
 
@@ -69,9 +74,9 @@ nice -n 10 go test ./... -timeout 20m
 
 | Suite | Command | Covers |
 |-------|---------|--------|
-| End-to-end TUI | `cd e2e/tui && TUIOS_E2E=1 go test -count=1 ./...` | A real `tuios` in a real PTY, checked on screen. A separate Go module |
+| End-to-end TUI | `cd e2e/tui && TUIOS_E2E=1 go test -count=1 -timeout 40m .` | A real `tuios` in a real PTY, checked on screen. A separate Go module. Set `TUIOS_E2E_BIN` to a built binary, or the suite builds one |
 | Control plane | `go test -tags e2e ./e2e/...` | Real daemons driven through the CLI |
-| ghostty backend | `PKG_CONFIG_PATH="$PWD/.ghostty-vt/native/pkgconfig" go test -tags ghostty -count=1 -short ./internal/vt/ ./internal/session/ ./internal/terminal/` | The libghostty-vt emulator |
+| ghostty backend | `PKG_CONFIG_PATH="$PWD/.ghostty-vt/native/pkgconfig" go test -tags ghostty -count=1 -short ./internal/vt/ ./internal/session/ ./internal/terminal/ ./internal/app/ ./internal/input/ ./cmd/tuios/` | The libghostty-vt emulator and the packages whose tests link it. `go build -tags ghostty ./...` alone runs none of these tests |
 | Differential | `go test -tags differential ./internal/vt/ -run TestDifferential` | The emulator against tmux. Needs `tmux` |
 | Browser | `cd clienttests && npm install && npm test` | `tuios-web` in the system Chromium, with Playwright |
 
@@ -81,31 +86,14 @@ Without `TUIOS_E2E=1` the end-to-end suite skips every test and reports success.
 
 ## Writing tests
 
-- Put tests in `*_test.go` next to the code.
-- Prefer table-driven tests with `t.Run` subtests.
-- Name benchmarks `Benchmark*`.
-- For emulator changes, add a case to the conformance corpus in `internal/vt/`. The repository's `AGENTS.md` explains how it works.
+The repository prefers end-to-end tests: a real `tuios` binary against real daemons, in `e2e/tui`. The rules, from its `AGENTS.md`:
 
-```go
-func TestFeature(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"empty", "", ""},
-		{"word", "abc", "ABC"},
-	}
+- Write the test first, not after the code. If you must test a part in isolation, first write down the ways it can fail.
+- A test that claims to cover a bug must fail on a build with the fix removed. `e2e/tui/NEGATIVE_CONTROLS.md` records those runs.
+- An end-to-end test should leave an artifact you can check again, such as a screenshot or a capture.
+- A unit test stays only when it catches a real bug the end-to-end suite misses: emulator conformance, fuzz targets, wire compatibility, security boundaries, deterministic race regressions and performance budgets.
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := Feature(tt.in); got != tt.want {
-				t.Errorf("Feature(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
-	}
-}
-```
+For emulator changes, add a case to the conformance corpus in `internal/vt/`. Unit tests that stay live in `*_test.go` next to the code, use `t.Run` subtests, and name benchmarks `Benchmark*`.
 
 ## Code style
 
