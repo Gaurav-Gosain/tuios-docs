@@ -1,6 +1,11 @@
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
+import { InboxDemo } from "@/components/docs/inbox-demo";
+import { KeybindingExplorer } from "@/components/docs/keybinding-explorer";
+import { LayoutModes } from "@/components/docs/layout-modes";
+import { ReviewWalkthrough } from "@/components/docs/review-walkthrough";
+import { SessionDiagram } from "@/components/docs/session-diagram";
 import { AgentSourceTimeline } from "@/components/mdx/agent-source-timeline";
 import { AuditChurn } from "@/components/mdx/audit-churn";
 import { BacklogFeel } from "@/components/mdx/backlog-feel";
@@ -53,6 +58,11 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Step,
     Steps,
     Mermaid,
+    InboxDemo,
+    KeybindingExplorer,
+    LayoutModes,
+    ReviewWalkthrough,
+    SessionDiagram,
     BacklogFeel,
     BenchBars,
     DividerCollide,
