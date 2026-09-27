@@ -1,6 +1,11 @@
 import { markdownPath } from "@/lib/markdown-path";
 import { absoluteUrl, feeds, site } from "@/lib/site";
-import { getBlogPosts, getDocsInSidebarOrder, getReleases } from "@/lib/source";
+import {
+  getBlogPosts,
+  getDocsInSidebarOrder,
+  getReleases,
+  getReleaseTag,
+} from "@/lib/source";
 
 export const dynamic = "force-static";
 export const revalidate = false;
@@ -19,6 +24,15 @@ export function GET() {
     "",
     `tuios is written in Go and MIT licensed. Source: ${site.repository}`,
   ];
+
+  const latest = getReleases().find((release) => getReleaseTag(release));
+  const tag = latest ? getReleaseTag(latest) : null;
+  if (latest && tag) {
+    lines.push(
+      "",
+      `The latest release is ${tag}, from ${latest.data.date}. Release notes: ${absoluteUrl(markdownPath(latest.url))}. Install: ${absoluteUrl(markdownPath("/docs/getting-started"))}`,
+    );
+  }
 
   let section = "";
   for (const entry of getDocsInSidebarOrder()) {
