@@ -131,14 +131,34 @@ The 16 ANSI colours are what programs in your panes paint with. By default TUIOS
 | `warning` | Copy-mode pill, warnings | `yellow` |
 | `error` | Error messages | `red` |
 | `info` | Info messages | `blue` |
-| `surface` | The fill of every dialog: palette, pickers, menus, which-key | A fixed dark grey |
+| `surface` | The fill of every dialog: palette, pickers, menus, which-key | A fixed dark grey, or on a light theme a step below its background |
 | `canvas`, `panel`, `card` | The darker and lighter steps around `surface` | Derived from `surface` |
 
-Dialogs sit on a fixed grey ramp so they stay readable over any pane content. `surface` moves that ramp, and TUIOS picks text colours for it by contrast, so a light surface gets dark text. Text colours cannot be set directly. A field that is not a valid hex colour is ignored on its own.
+Dialogs sit on a fixed grey ramp so they stay readable over any pane content. On a light theme the ramp is built from the theme's background instead, so a dialog is a light panel rather than a dark slab, and the screen behind it fades toward the background rather than toward black. The accent and key colours are darkened at their own hue until they read as text on it (4.5:1), and the status colours until they read as marks (3:1).
+
+`surface` moves the ramp, and TUIOS picks text colours for it by contrast, so a light surface gets dark text. Text colours cannot be set directly. A field that is not a valid hex colour is ignored on its own.
 
 ### Border colours
 
 `appearance.border_focused_color` and `appearance.border_unfocused_color` override the theme's border colours with a hex value. They live in `config.toml`, not in the theme. Clear one to hand the border back to the theme.
+
+## Colour depth
+
+The chrome is designed for each colour depth a terminal can have, rather than drawn in truecolor and stepped down. TUIOS reads the depth the way other programs do, from `TERM`, `COLORTERM` and `NO_COLOR`. There is no setting for it.
+
+| Depth | Detected when | What the chrome does |
+|---|---|---|
+| truecolor | `COLORTERM=truecolor` or `24bit`, or a terminal known to have it (kitty, Ghostty, WezTerm, Alacritty, foot) | The ramp described above |
+| 256 | `TERM` ends in `256color` and `COLORTERM` is unset: Apple Terminal, mosh, tmux without `Tc` | The greys sit on the xterm grey ramp (232 to 255), so no panel or selected row turns navy. Colours step to the nearest palette entry in OKLab, and a saturated colour never lands on a grey |
+| 16 | `TERM=xterm`, `TERM=linux`, or `NO_COLOR` set | No grounds are painted. Panels use your terminal's background and frame themselves with a line, the selected row and title chips are reverse video, and colours are your palette's slots |
+
+At 16 colours a theme's own colours give way to your terminal's palette slots, so set the terminal to the same theme to see them. The review diff is drawn per depth too: tinted lines in truecolor, fixed palette entries at 256 colours, and coloured line numbers with bold, underlined changed words at 16.
+
+mosh passes 24-bit colour but not `COLORTERM`, so over mosh TUIOS sees 256 colours. If your terminal has truecolor, `export COLORTERM=truecolor` on the far machine.
+
+## Your terminal's colours
+
+With no theme and no pane background, TUIOS asks each client's terminal for its background, foreground and 16 colours, and answers a program in a pane that asks for them (OSC 10, 11 and 4) with those. The chrome is measured against your terminal's background, so a light terminal gets the light ramp. A local client follows your system's light and dark switch as it happens. A client over SSH or in a browser asks once, when it attaches. A terminal that answers nothing, such as mosh, gets plain black and white; set a theme or `appearance.pane_background` there.
 
 ## Glyph sets
 
@@ -149,6 +169,8 @@ tuios set-config appearance.glyphs heavy
 tuios set-config appearance.border_style glyphs
 tuios list-glyphs heavy
 ```
+
+With no set configured and no `--ascii-only`, TUIOS picks one from the environment: a locale that is not UTF-8 (`C`, `POSIX`, ISO-8859-1, read from the first of `LC_ALL`, `LC_CTYPE` and `LANG` that is set) gets ASCII, and the Linux console (`TERM=linux`) gets `unicode`. `tuios list-glyphs` with no argument says which set that is and why.
 
 `border_style = "glyphs"` is what makes the border follow the set. The settings page has a searchable Glyph set picker with a live preview. Writing your own set, the roles it can name and the width rules are covered in [Configuration](/docs/configuration#glyph-sets).
 
