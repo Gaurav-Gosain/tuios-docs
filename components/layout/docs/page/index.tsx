@@ -135,7 +135,7 @@ export function DocsPage({
             </PageTOCPopoverContent>
           </PageTOCPopover>
         ))}
-      <article
+      <main
         id="nd-page"
         data-full={full}
         className={cn(
@@ -148,7 +148,7 @@ export function DocsPage({
         {children}
         {footer.enabled !== false &&
           (footer.component ?? <PageFooter items={footer.items} />)}
-      </article>
+      </main>
       {tocEnabled &&
         (tocReplace ?? (
           <div
