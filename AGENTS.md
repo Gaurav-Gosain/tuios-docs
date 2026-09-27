@@ -49,7 +49,10 @@ components/
   layout/                     customized Fumadocs docs layout and sidebar
   toc/                        table of contents
   ui/                         small Radix-based primitives
-  mdx/                        interactive MDX widgets, one file each
+  mdx/                        interactive MDX widgets for posts and release notes, one file each
+  docs/                       interactive widgets for the docs pages (layout modes, keybinding
+                              explorer, session diagram, Inbox demo, review walkthrough)
+  home/                       landing page pieces: install tabs and the screenshot showcase
 content/
   docs/                       docs pages (.mdx); meta.json sets sidebar order
   blog/                       posts (.mdx)
@@ -62,6 +65,10 @@ lib/
   feed.ts, feeds.ts           RSS and Atom rendering, markdown to HTML for feeds
   layout.shared.tsx           nav title and top links (Docs, Blog, Releases)
 public/                       favicons, web manifest, demo.gif, fonts, CNAME, _headers
+public/shots/                 whole-screen captures of tuios for the landing page and docs, 1600
+                              and 800 wide WebP (see "Screenshots" below)
+lib/keybindings/defaults.json the default bindings behind the keybinding explorer, written by
+                              scripts/keybindings.mjs from `tuios keybinds doctor --json`
 public/brand/                 the logo: Tilly mark, wordmark and lockups (SVG and PNG)
 assets/                       build-time only: the Fredoka font and the pieces of the OG card
 components/brand.tsx          the header and footer logo (mark and outlined wordmark)
@@ -89,6 +96,12 @@ Posts in `content/blog/` and pages in `content/releases/` need `title`, `descrip
 The widgets in `components/mdx/` are client components used in docs, posts and release notes, for example `<TerminalCapture>`, `<BenchBars>` and `<TapeTrustFlow>`. A widget registered in `mdx-components.tsx` can be used in any page without an import, so a new widget needs both its file and a line there. Mermaid diagrams are written as fenced `mermaid` code blocks and rendered by a remark plugin.
 
 A widget that shows TUIOS behavior should match the code. Check it against the tuios source before you use it in the docs.
+
+### Screenshots and generated data
+
+Pictures of tuios come from tuios's own renderer, never from a screen grab of a terminal. `public/shots/` holds whole-screen captures made with the `screenshot_screen` action (PNG at scale 2, frame `none`, theme `catppuccin_mocha`) from a client attached to a demo session in an isolated `HOME` and `XDG_RUNTIME_DIR`, then resized to WebP with `cwebp`. Look at each one at full size before you commit it: no personal paths, prompts or leftover notifications.
+
+The keybinding explorer reads `lib/keybindings/defaults.json`. Regenerate it after tuios changes its defaults; the header of `scripts/keybindings.mjs` has the commands, one report per platform because macOS binds `opt+` where the others bind `alt+`.
 
 ## Writing rules
 
