@@ -1,0 +1,98 @@
+---
+title: tuios v0.8.0
+description: The first release in six months. tuios now knows what the coding agents in your panes are doing, keeps your sessions in a daemon that brings them back, and runs panes on other machines.
+date: '2026-09-28'
+author: Gaurav Gosain
+---
+
+tuios v0.8.0 is out. It is the first release since v0.7.0 in March, and the
+[release notes](/releases/v0-8-0) have everything in it, with a short clip for
+each part. This post is why the release looks the way it does.
+
+## What changed in how I work
+
+For most of this year I have had three or four coding agents running at once,
+each in its own pane: one on a refactor, one writing tests, one reading a
+bug report. The panes were fine. What broke down was me. An agent would stop
+on a permission prompt, paint it once and go quiet, and I would not notice for
+twenty minutes because it looked exactly like an agent that was thinking.
+Another would finish and sit there with its answer while I watched a different
+pane.
+
+A terminal multiplexer knows a lot about a pane: its process, its output, its
+title, its directory. It did nothing with any of it. So most of v0.8.0 is tuios
+learning to tell those moments apart and telling you about them.
+
+## What v0.8.0 does about it
+
+**Every agent pane has a state.** tuios recognises 23 agent CLIs, Claude Code,
+Codex, Gemini CLI and opencode among them, and gives each pane one of working,
+needs input, finished, errored or idle. The rail lists every agent in every
+session, with the ones that need you at the top. The best source is the agent
+reporting its own state through a hook, and
+`tuios integration install --all` sets that up for every harness you have.
+Without hooks, tuios reads the transcript, the title and the screen, and ranks
+what it finds so a guess never overrides a report.
+
+**One Inbox for everything that waits.** `ctrl+b i` opens a list of every
+permission prompt, question, message and finished turn in every session. You
+can read a blocked prompt and answer it from there without going to the pane.
+Approvals can be held for you, and one that matches a risk rule, such as a
+force push or a recursive delete, needs a second press.
+
+**A review before you keep anything.** `ctrl+b v` shows the git diff of what an
+agent changed, and you can leave notes on lines and send them back as one
+message. `tuios fan` runs one prompt in several git worktrees at once, and the
+review compares the attempts side by side.
+
+**Sessions come back.** Your sessions live in a daemon now. A detach loses
+nothing, and after a restart or a reboot the daemon brings back each session's
+layout, window names and directories, with a fresh shell in each pane. If the
+agent's harness can resume a conversation, tuios offers to do that too.
+
+**Panes on other machines.** Add a machine with `tuios hosts add`, and you can
+attach a session there or open a single pane there, drawn by your local tuios
+with your own keys. It runs over plain `ssh`. A dropped link no longer kills
+the pane.
+
+## The parts you do not see
+
+A full scrollback used to cost 48MB per pane. It costs 4.2MB now. Startup to
+the first frame went from 566ms to 68ms, and the binary lost 6MB. The terminal
+emulator got a conformance suite, a fuzzer and a second backend,
+libghostty-vt, and those found bugs a program in a pane could hit: a cursor
+report with its row and column swapped, hyperlinks that never worked, and a
+scroll region that could take down the daemon with every session in it. I
+wrote about several of these on [the blog](/blog).
+
+The interface was also redrawn for the terminal you actually have. It is
+designed separately for truecolor, 256 colours and 16 colours, it reads
+properly on light themes, and with no theme set it takes its colours from your
+terminal.
+
+## If you already use tuios
+
+Read [Install or upgrade](/releases/v0-8-0#install-or-upgrade) before you
+upgrade. The short version: run `tuios kill-server` once, because the new
+client will not talk to the old daemon, and note what you want to keep first,
+because v0.7.0 saved nothing. An existing config file keeps running tuios
+without the daemon until you add `daemon = true` under `[startup]`. A few keys
+changed too: plain `ctrl+v` now goes to the program in your pane, and
+`alt+arrows` move between panes.
+
+## Try it
+
+```bash
+brew install tuios
+```
+
+Or the install script, the AUR, Nix, Go or Docker, all on
+[Getting started](/docs/getting-started). If you want to feel it out first,
+[Learn tuios](/learn) runs the real thing in your browser with a pretend
+shell.
+
+Eight people besides me sent changes in this release, and many more filed
+issues and ran builds from main. Thank you. If tuios gets an agent's state
+wrong, or your agent CLI is not on the list, open an issue on
+[GitHub](https://github.com/Gaurav-Gosain/tuios/issues). That is the part I
+most want to hear about.
