@@ -1,10 +1,13 @@
 import {
   ArrowRight,
   Bot,
+  GitCompare,
+  Inbox,
   Keyboard,
   LayoutDashboard,
   Network,
   ServerCog,
+  SlidersHorizontal,
   SquareTerminal,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -13,6 +16,7 @@ import type { ReactNode } from "react";
 import { ReleaseTag } from "@/components/article/release-tag";
 import { Wordmark } from "@/components/brand";
 import { InstallTabs } from "@/components/home/install-tabs";
+import { Showcase } from "@/components/home/showcase";
 import { JsonLd, personLd } from "@/components/json-ld";
 import { HeroTilly } from "@/components/tilly-3d/tilly-3d";
 import { installMethods } from "@/lib/install-methods";
@@ -55,7 +59,7 @@ export default function HomePage() {
             description: site.description,
             url: site.url,
             image: absoluteUrl(site.image),
-            screenshot: absoluteUrl("/demo-poster.jpg"),
+            screenshot: absoluteUrl("/shots/overview.webp"),
             applicationCategory: "DeveloperApplication",
             applicationSubCategory: "Terminal multiplexer",
             operatingSystem: "Linux, macOS, Windows, FreeBSD",
@@ -113,13 +117,13 @@ export default function HomePage() {
           <HeroLogo />
 
           <h1 className="fade-up mt-8 max-w-3xl font-bold text-3xl text-fd-foreground leading-tight [animation-delay:80ms] sm:text-4xl md:text-5xl">
-            A window manager for your terminal
+            A terminal window manager that knows what your agents are doing
           </h1>
           <p className="fade-up mt-5 max-w-2xl text-fd-muted-foreground text-lg leading-relaxed [animation-delay:140ms]">
-            Open panes, tile them, and switch between nine workspaces without
-            leaving the terminal you already use. A daemon keeps your sessions
-            running when you detach, reaches your other machines, and shows what
-            the coding agents in your panes are doing.
+            Tile panes across nine workspaces in the terminal you already use. A
+            daemon keeps sessions running when you detach and reaches your other
+            machines. The coding agents in your panes report what they are
+            doing, and one Inbox holds everything they are waiting on.
           </p>
 
           <div className="fade-up mt-8 flex w-full flex-col items-center justify-center gap-3 [animation-delay:200ms] sm:w-auto sm:flex-row">
@@ -152,46 +156,44 @@ export default function HomePage() {
         </div>
 
         <div className="fade-up mx-auto mt-12 w-full max-w-5xl px-4 [animation-delay:260ms] md:mt-16 md:px-6">
-          <div className="overflow-hidden rounded-xl border border-fd-border bg-[#11111b] shadow-2xl shadow-fd-primary/10">
-            <video
-              className="block aspect-video w-full"
-              src="/demo.mp4"
-              poster="/demo-poster.jpg"
-              width={1280}
-              height={720}
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              aria-label="A recording of tuios with tiled and floating terminal windows"
-            />
-          </div>
+          <Showcase />
         </div>
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 pt-24 md:px-6 md:pt-32">
         <SectionHeading
           eyebrow="What it does"
-          title="Everything a multiplexer does, drawn like a desktop"
+          title="A multiplexer, a desktop and a desk for your agents"
         />
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Feature
-            icon={<Keyboard />}
-            title="Keyboard first"
-            href="/docs/keybindings"
+            icon={<Bot />}
+            title="Agents you can see"
+            href="/docs/agents"
           >
-            Window mode moves and resizes panes. Terminal mode sends every key
-            to the program in the pane. Every binding can be changed in the
-            config.
+            tuios detects Claude Code, Codex and other harnesses in a pane and
+            shows whether each is working, waiting or done, in the sidebar and
+            on the pane&apos;s title.
+          </Feature>
+          <Feature icon={<Inbox />} title="One Inbox" href="/docs/agent-inbox">
+            Approvals, questions and failures from every session in one list.
+            Answer, snooze or dismiss them, and undo a slip.
+          </Feature>
+          <Feature
+            icon={<GitCompare />}
+            title="Review and fan"
+            href="/docs/worktrees"
+          >
+            Read an agent&apos;s diff and send it notes. Fan one prompt out to
+            several agents, each in its own worktree, and keep the best.
           </Feature>
           <Feature
             icon={<LayoutDashboard />}
             title="Tiling or floating"
-            href="/docs/bsp-tiling"
+            href="/docs/layout-modes"
           >
-            BSP tiling with preselection, master-stack and scrolling layouts.
-            Turn tiling off and drag windows around with the mouse instead.
+            BSP splits, master-stack or scrolling columns, or tiling off and
+            windows you drag with the mouse.
           </Feature>
           <Feature
             icon={<ServerCog />}
@@ -199,33 +201,32 @@ export default function HomePage() {
             href="/docs/sessions"
           >
             A daemon owns the panes. Detach, close the terminal, and attach
-            again later from this machine or over SSH.
+            again later from here or over SSH.
           </Feature>
           <Feature
             icon={<Network />}
             title="Other machines"
             href="/docs/remote-hosts"
           >
-            Name a host once with <code>tuios hosts add</code>. Then attach to
-            its sessions in this client, or run a single pane on it.
+            Add a host once with <code>tuios hosts add</code>, then attach to
+            its sessions in this client or run one pane on it.
           </Feature>
           <Feature
-            icon={<Bot />}
-            title="Built for coding agents"
-            href="/docs/agents"
+            icon={<SlidersHorizontal />}
+            title="Settings you can search"
+            href="/docs/configuration"
           >
-            Panes running an agent show whether it is working, idle or waiting
-            for you, and one Inbox lists everything they wait on. Review what an
-            agent changed, or fan one prompt out across git worktrees.
+            Every option on one searchable page, with a dot on what you changed.
+            Pick a theme, a background for panes and chrome, borders and glyphs.
           </Feature>
           <Feature
             icon={<SquareTerminal />}
             title="Scriptable"
             href="/docs/control-protocol"
           >
-            Drive a session from outside with <code>send-keys</code>,{" "}
-            <code>capture-pane</code> and a JSON control protocol, or replay a
-            tape script.
+            Drive a session with <code>send-keys</code>,{" "}
+            <code>capture-pane</code>, <code>wait-for</code> and a JSON control
+            protocol, or replay a tape.
           </Feature>
         </div>
         <p className="mt-8 text-center text-fd-muted-foreground text-sm leading-relaxed">

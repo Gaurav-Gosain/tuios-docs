@@ -6,9 +6,10 @@
 export const site = {
   url: "https://tuios.dev",
   name: "tuios",
-  title: "tuios: a window manager for your terminal",
+  title:
+    "tuios: a terminal window manager that knows what your agents are doing",
   description:
-    "tuios is a terminal window manager with vim-style keys, tiling, nine workspaces, and sessions that keep running when you detach.",
+    "tuios is a terminal window manager with tiling, sessions that keep running when you detach, and one Inbox for what the coding agents in your panes are waiting on.",
   image: "/og/site/image.png",
   repository: "https://github.com/Gaurav-Gosain/tuios",
   /** The repository this site is built from: brand and site questions go here. */
