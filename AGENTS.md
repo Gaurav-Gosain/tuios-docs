@@ -119,6 +119,20 @@ The site lives at `https://tuios.dev`, set once in `lib/site.ts` (`site.url`), w
 
 The Worker is attached to three custom domains in `worker/wrangler.jsonc`. `tuios.dev` serves the site. `www.tuios.dev` and `tuios.gaurav.zip` (the site's first address) answer every request with a permanent 301 to the same path and query on `https://tuios.dev`, with no exceptions. That redirect is in `worker/redirect.ts` and must stay permanent: old links, feed subscriptions and search results depend on it.
 
+A page that moved is listed in `worker/moved.ts`, which answers its old path with a 301 to the new one. The unreleased `since-v0-7-0` page became the v0.8.0 notes that way.
+
+### Release clips
+
+The `<ReleaseClip>` videos are not in git and not in the static assets. They live in the `tuios-media` R2 bucket, bound to the Worker as `MEDIA`, and `worker/media.ts` serves `/releases/<version>/<name>.mp4` and `.webm` from it with Range support. The poster (`<name>.jpg`, `<name>-vertical.jpg`) and captions (`<name>.vtt`) of each clip stay in `public/releases/<version>/`. `.gitignore` keeps video files out of `public/releases/`.
+
+To add a release's clips, upload them before the page that uses them deploys:
+
+```bash
+scripts/upload-release-media.sh v0.8.0 ~/dev/tuios-media/releases/v0.8.0/site
+```
+
+`--local` as a third argument fills the bucket `wrangler dev` uses instead. The masters and the source of the v0.8.0 clips are kept outside the repository in `~/dev/tuios-media/releases/v0.8.0/`.
+
 ## Learn page
 
 `/learn` runs the real tuios in the browser: tuios compiled to WebAssembly with a pretend shell, drawn by sip's WebTerm. The pieces:
