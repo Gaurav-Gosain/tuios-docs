@@ -1,0 +1,193 @@
+---
+title: A window named db
+description: An end-to-end test lost an agent's state about twice in a hundred runs. It was not a race. The pane was named db, db is hex, and -w tried a window id prefix before an exact name.
+date: '2026-09-26'
+author: Gaurav Gosain
+---
+
+A new end-to-end test started failing about twice in a hundred runs. It
+opens six panes, names them, marks each one as a working agent, and then
+reads the [session rail](/docs/session-rail#agent-rows) to check how an agent's
+name is cut when the rail is narrow. On a bad run it never got that far. It
+gave up waiting with this:
+
+```
+the rail never drew the short agent with its harness
+```
+
+The short agent was the pane named `db`. Its state had been set with a
+command that exited 0, and the rail still showed it as a plain pane. I filed it
+in my head as "lost agent state" and started looking for a race in the
+daemon. There was no race. The state was not lost either. It had been set on a
+different pane.
+
+## What the test does
+
+`TestNarrowRailKeepsTheAgentNameBeforeItsHarness` makes a session, names the
+first pane `deploy`, and opens five more: `migrate-billing`, `db`, `web`, `api`
+and `ci`. Then, for each name, it runs:
+
+```
+tuios set-agent-state -s rail -w <name> working --harness claude-code
+```
+
+After that it attaches a client at 80 by 24 and waits for the rail to draw
+`claude/db`. The short name is the positive half of the test: `db` leaves room
+for the harness in front of it, so if that row never appears, something is
+wrong with the rail or with the state.
+
+Every failing run had the same shape. Five panes were agents. `db` was not.
+Nothing else in the session was out of place.
+
+## How `-w` found a window
+
+`-w` takes several kinds of target, and the daemon tries them in order in
+`findWindowStateIndex` (`internal/session/session_ops.go`). Until this fix the
+order was:
+
+1. the full window id
+2. the index `list-windows` prints, if the target is all digits and in range
+3. a unique window id prefix
+4. an exact name, the one given with `--name` first, then the program's title
+
+A window id is a version 4 uuid, printed as lowercase hex. `list-windows`
+shows the first eight characters, and those work with `-w`, which is handy.
+The trouble is step 3 running before step 4. `db` is two hex digits. Any
+window whose id starts with `db` is a unique prefix match for the target `db`,
+and step 3 returns it before step 4 ever looks at the names.
+
+The first two characters of a version 4 uuid are random, so each pane's id
+starts with `db` with a chance of 1 in 256. The test has five panes that are
+not called `db`. The chance that at least one of them starts with `db` is
+1 - (255/256)^5, which is 1.9 percent. That is the "about twice in a hundred"
+I had been watching.
+
+It also explains why the failure looked like a race. It came and went between
+runs of the same code on the same machine, and it did not care about load. It
+tracked the one thing that changed from run to run: the uuids the daemon drew.
+On every failing run I went back to, another pane's id started with `db`.
+
+Of the six names, `db` is the only one that can collide. `deploy` has a `p`,
+`web` a `w`, `api` a `p` and `i`, `ci` an `i`. Only a name made entirely of
+the characters 0 to 9 and a to f can be the start of a uuid.
+
+Here is the resolver, ported from the daemon, over the six panes. The ids start
+on an unlucky draw where `web` begins with `db`:
+
+<WindowTargetOrder />
+
+With the prefix first, the table marks `web`. The run button draws fresh ids
+for each of a thousand runs and counts how often `-w db` misses the pane
+named `db`. It lands near 19. With the name first it is 0.
+
+## Two wrong outcomes, one silent
+
+The prefix rule could go wrong for `db` in two ways.
+
+If exactly one other pane's id started with `db`, the target resolved to that
+pane. `set-agent-state` marked it as working, printed nothing and exited 0.
+Nothing said which pane it had touched, so a script had no way to notice. This was the failure I saw.
+
+If two panes' ids started with `db`, and one of them could be the pane named
+`db` itself, the prefix was ambiguous. The resolver returns an error for an
+ambiguous prefix and stops there, so the command failed even though a pane had
+that exact name. That case is rarer, and at least it is loud.
+
+When only the `db` pane's own id started with `db`, the prefix rule reached the
+right pane by luck.
+
+## Making it happen every time
+
+Waiting for a 1 in 50 draw is a poor way to study a bug. The collision does not
+need luck if you pick the name after the id. I made a session, opened a second
+pane with `new-window --print-id`, and named the first pane after the first
+two characters of the second pane's id. This is a build from just before the
+fix, in a scratch set of XDG directories:
+
+<TerminalCapture
+  title="tuios at 9bc09e1e^, before the fix"
+  lines={[
+    { text: "$ tuios new-window other -s demo --no-focus --print-id", tone: "normal" },
+    { text: "def817e9-faf8-4388-8485-f594d623012f", tone: "echo" },
+    { text: "$ tuios set-window -s demo --name de", tone: "normal" },
+    { text: "$ tuios set-agent-state -s demo -w de working; echo \"exit $?\"", tone: "normal" },
+    { text: "exit 0", tone: "echo" },
+    { text: "$ tuios list-windows -s demo", tone: "normal" },
+    { text: "IDX  ID        NAME   WS  SIZE   AGENT", tone: "dim" },
+    { text: "*0   8906542f  de     1   80x24  none", tone: "echo" },
+    { text: " 1   def817e9  other  1   80x24  working", tone: "echo" }
+  ]}
+  rows={9}
+  note="The table borders from list-windows and the reply from set-window are left out. The pane named de stays at none, and the pane whose id starts with de is working."
+/>
+
+The same script against the fixed build marks the pane named after the prefix,
+and leaves the other one at `none`.
+
+## The fix
+
+A name now wins over an id prefix. The new order is: full id, index, exact
+name (the given name, then the title), and only then a unique id prefix. A
+prefix that is nobody's name still works exactly as before, so the eight
+characters `list-windows` prints are still a good way to point at a pane.
+
+The reasoning is about intent. A name is something a person or a script chose
+and typed on purpose. An id prefix that happens to equal somebody's name is a
+coincidence, and the name is almost always the one that was meant.
+
+The change is in two places, and they have to agree. The daemon resolves `-w`
+in `findWindowStateIndex`. When a client is attached, a few requests, such as
+`send-keys` and capturing a pane, are resolved by the client instead, in
+`resolveWindowTarget`
+(`internal/app/os_tape_executor.go`), and its comment already said its order
+matches the daemon's so that a target means the same thing either way. Both
+moved together. The `-w` flag's help, the CLI reference in the tuios
+repository and the skill that `tuios --skill` prints were updated to list the
+new order.
+
+The order still puts the index before the name. A pane named `2` in a session
+with three panes is reached as index 2, not by its name, because an all-digit
+target that fits the window count is read as an index. That is deliberate:
+`list-windows` prints the index in its first column, and it is what a caller
+reading that output reaches for first. A name made of digits is a name you
+can avoid. A name made of hex letters, like `db`, `cafe`, `add` or `beef`, is
+one you would never think twice about, which is why the prefix rule had to
+move and the index rule did not.
+
+## The test that makes the collision certain
+
+`TestAWindowNameWinsOverAnIdPrefix` (`e2e/tui/window_target_name_test.go`)
+does what the scratch script did. It opens a second pane, takes the first eight
+characters of its id, and names the first pane with them. Then it checks the
+setup before trusting it: the name must be on the first pane, and the prefix
+must match the second pane's id and not the first's. Otherwise a pass could
+come from the prefix simply matching nothing.
+
+It then runs `set-agent-state -w <name> working` and reads both panes back
+from `list-windows --json`. The named pane must be `working` and the other
+must still be `none`, so a state that landed on both panes or on neither
+fails too. Finally it renames the first pane and sends the same prefix again,
+which must now reach the second pane. Without that last half, removing prefix
+matching altogether would also pass.
+
+I ran it against the build before the fix as a negative control. It failed on
+3 of 3 runs, with "the pane named ... is at none, want working". The flaky rail
+test, on that same old build, failed 5 times in 300 runs, run beside a second copy
+of the same loop, and passed 300 of 300 with the fix under the same load. A shell loop of just the rail test's CLI steps, eight
+at a time, lost the state on `db` 8 times in 200 before the fix and 0 times in
+320 after, and every one of the 8 had another pane whose id started with `db`.
+Those numbers are recorded in `e2e/tui/NEGATIVE_CONTROLS.md` in the tuios
+repository, next to the other controls.
+
+## What I keep from this
+
+The flake lived for about a day. The test that exposed it landed on September
+25, and the fix on September 26. It would have lived longer if I had kept
+treating it as a timing problem, because the obvious moves for a race, a
+longer wait or a retry, would have made it rarer and left it in place.
+
+What found it was reading the failing runs as data. A flaky test is usually a
+deterministic bug with a random input, and the useful question is which input
+changes from run to run. Here it was the uuids, and every failing run agreed
+on them. Once I knew that, the bug was one comparison in the wrong place, and
+the test that pins it could make the unlucky draw happen on purpose.

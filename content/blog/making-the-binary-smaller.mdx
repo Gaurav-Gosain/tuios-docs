@@ -1,0 +1,224 @@
+---
+title: Making the binary smaller, and the idea that made it bigger
+description: Seven commits took the tuios release binary from 30.0 MB to 23.8 MB. A plan to leave screen saver data out of the binary made it 23.5 KB larger instead.
+date: '2026-09-26'
+author: Gaurav Gosain
+---
+
+On the morning of 25 September the tuios release binary for an Apple Silicon
+Mac was 29,971,890 bytes. Syntax highlighting had landed in the review diff
+earlier that morning, and its commit message said what it cost: 3.4 MB for the
+lexers. Thirty megabytes for a terminal multiplexer is a lot, and I wanted to
+know what was in there.
+
+Seven commits later the same build was 23,797,538 bytes. The features stayed.
+What went was a hidden command nobody called and one pprof option, and
+`tuios update` now needs curl. Then I tried an idea that
+was supposed to cut more, and it made the binary bigger.
+
+All sizes in this post are for the release build: `CGO_ENABLED=0`,
+`-trimpath`, `-ldflags "-s -w"`, as in `.goreleaser.yml`. MB means a
+million bytes. The numbers are copied from the commit messages, which measured
+each change on top of the one before.
+
+<BinarySizeWaterfall />
+
+## Where the bytes were
+
+The Go linker keeps what is reachable from `main` and from every imported
+package's `init`, and drops the rest. It is good at dropping unused functions.
+It cannot drop a package-level table that an `init` function or a registry
+refers to, and it cannot drop a whole networking stack when one call path
+reaches into it.
+
+So the question for each cut was the same: which import brings in this weight,
+and does the program need the import or only one small thing behind it? In
+every case below it was the second.
+
+## 2.4 MB of lexers for 88 languages
+
+The highlighting came from [chroma](https://github.com/alecthomas/chroma).
+Its `lexers` package embeds all 279 of its XML lexer definitions, 2.4 MB, and
+parses the header of every one of them at start. A review shows the files in
+a repository, and most of those 279 languages never appear in one.
+
+The review now keeps its own registry of 88 definitions, gzipped to 150 KB,
+and registers them on the first highlight rather than at start. The list
+covers the languages people keep in a repository, plus every lexer those
+delegate to. `internal/diffview/lexers/gen.go` regenerates it from the chroma
+version in `go.mod`, so an upgrade does not leave it behind.
+
+Changing which lexers exist could change which lexer a file gets, so I checked
+it against chroma's full registry on 4,117 files: this repository, chroma's
+own test corpus and the Charm module cache. Every file whose language is
+carried gets the same lexer and identical tokens. The one difference was an
+improvement: `go.mod` files had been matched as AMPL, and are now plain.
+
+That was the biggest single cut, 2,455,120 bytes, in
+[642cbf30](https://github.com/Gaurav-Gosain/tuios/commit/642cbf30).
+
+## Two copies of lipgloss
+
+Three commands, `agents`, `hosts` and `stash`, still drew their tables with
+lipgloss v1. Every other table in tuios uses v2. So the binary carried both
+versions, with v1's table package, termenv and cellbuf next to them. Moving
+the three tables to v2 removed 136,016 bytes, and piped output is byte for byte
+what it was
+([e9a06c81](https://github.com/Gaurav-Gosain/tuios/commit/e9a06c81)).
+
+## A tailscale client for one call
+
+tuios can find the other machines on your tailnet and offer them as
+[hosts](/docs/remote-hosts#machines-on-a-tailnet). To do that it linked
+tailscale's Go local API client and made one call, `Status`. That one call
+brought 627 KB of tailscale packages and their dependencies: cbor, a websocket
+library, an experimental JSON package, deephash, nacl.
+
+The `tailscale` command already makes that call. `tailscale status --json`
+talks to tailscaled the same way the Go client does, including the variants of
+the macOS app. tuios now runs it, looks for it on `PATH` and then inside the
+macOS app bundle, and decodes the output into a small struct with the fields
+discovery reads. `tuios hosts tailnet` prints byte for byte what it printed
+before. The cut was 588,016 bytes on darwin
+([758103a5](https://github.com/Gaurav-Gosain/tuios/commit/758103a5)).
+
+The larger effect came next. The tailscale client was the main reason
+`net/http` was in the binary at all.
+
+## net/http, for a flag and an update
+
+With tailscale gone, two things still pulled in `net/http`, and with it
+`crypto/tls`, x509, HTTP/2 and mime.
+
+The first was `--pprof`. It served `net/http/pprof`, the same way it did when
+I [chased the resize lag](/blog/measuring-before-optimising). pprof needs very
+little from HTTP: one request per connection, a path and a few query
+parameters. `cmd/tuios/pprof_server.go` is a small HTTP/1.1 responder over
+`runtime/pprof`. It answers the index, cmdline, every named profile with
+`debug=` and `gc=`, the CPU profile and the trace. It does not do delta
+profiles (`?seconds=` on the heap), which needed `net/http/pprof`'s profile
+merging; it answers 400 and says to diff two profiles instead. I checked it by
+hand with `curl` and `go tool pprof`, and the E2E soak, perf and daemon pprof
+tests read heap and goroutine profiles through it.
+
+The second was `tuios update`, the only code in tuios that made an HTTPS
+request. It now fetches through `curl`. That was a decision, not a detail: it
+means `tuios update` depends on a program outside the binary. I kept it
+because curl is on every machine tuios installs on (the installer itself runs
+through it), and because it honours `HTTPS_PROXY`, `NO_PROXY` and the system
+certificate store the way `net/http` did. The GitHub token goes to curl in a
+config on stdin, never as an argument, so another user's `ps` cannot read it.
+If curl is missing, the command says so and names the releases page, so an
+update can still be done by hand.
+
+That was 2,440,448 bytes on darwin
+([161c3508](https://github.com/Gaurav-Gosain/tuios/commit/161c3508)). The
+widget above will not let you take this cut without the tailscale one. Without
+it, `net/http` stays linked through tailscale's client and the two callers
+going away saves almost nothing.
+
+## Three smaller ones
+
+**Fonts.** PNG screenshots fall back to Go Mono and Go Mono Bold. The `gofont`
+packages hold them as `[]byte` literals, 352 KB. They are now embedded
+gzipped, 157 KB, and inflated once on the first PNG. The font bytes after
+inflating are identical, so screenshots do not change
+([55273c94](https://github.com/Gaurav-Gosain/tuios/commit/55273c94)).
+
+**Themes.** [bubbletint](https://github.com/lrstanley/bubbletint) defines its
+342 themes as `*Tint` literals with twenty `*Color` pointers each, and its
+default registry links all of them. tuios now fills the registry from a
+generated table, one string of RGB bytes plus names and credits, and builds the
+tints the first time it is filled. A test compares every built tint, field by
+field, with bubbletint's own, so a bubbletint update without regenerating the
+table fails the suite
+([835be997](https://github.com/Gaurav-Gosain/tuios/commit/835be997)).
+
+**fang.** [fang](https://github.com/charmbracelet/fang) styles the help and
+the errors of every command. It used `golang.org/x/text/cases` to upper-case
+the first word of a flag description, and those Unicode tables were 258 KB. It
+also carried a hidden `tuios man` command that linked a man page generator.
+tuios now carries a trimmed copy of fang under `internal/fang` with a small
+`title()` in place of `x/text`. A test compares the two on 220,000 random
+strings in several scripts. The `--help` of all 130 commands, and five error
+cases, are byte for byte what the previous binary printed. `tuios man` is the
+one visible change: it is now an unknown command. Nothing in the repository,
+the release config or the Nix package called it
+([45424d06](https://github.com/Gaurav-Gosain/tuios/commit/45424d06)).
+
+## What I did not cut
+
+There were more candidates, and I said no to them: writing my own highlighter,
+trimming cobra, replacing gopsutil, putting the screen saver behind a build
+tag. Each was a riskier rewrite for a smaller saving. I also did not split
+tuios into more binaries. `tuios-web` is separate for security reasons, and
+that is the only reason good enough.
+
+## The idea that made it bigger
+
+The screen saver has 36 effects from
+[tuiffects](https://github.com/Gaurav-Gosain/tuiffects). One of them,
+`tuffbaby`, is different from the rest: it plays a short clip of a photograph
+rendered in text, and the frames were about 18 KB of base64 in a Go source
+file. It was the one effect whose weight was data rather than code.
+
+Data can be downloaded. So the plan was effect packs. In tuiffects the frames
+moved into a pack file, 13,508 bytes of deflated frames after a header line.
+By default the pack is embedded, and nothing changes. A program built with the
+`tuiffects_nopacks` tag leaves the file out; the effect stays listed, reports
+that it is not available, and works once the program hands it the file. The
+library checks the size and a SHA-256 digest compiled into it before any
+decoder reads the file, so the file can safely come from a download. On the
+tuios side, a build without packs downloaded the file on request.
+
+The release build with all of that was 23.5 KB larger than without it.
+
+When I went back to it for this post, the tuios side was gone, so I measured
+the half that is left: tuios at main with the tuiffects change swapped in, on
+Go 1.26.6 for darwin/arm64.
+
+| tuiffects | release binary | change |
+|---|---|---|
+| before packs | 23,851,666 | |
+| packs, embedded (the default) | 23,885,170 | +33,504 |
+| packs, left out (`tuiffects_nopacks`) | 23,868,626 | +16,960 |
+
+Even with the frames left out, the binary grew by 17 KB. Comparing the symbol
+tables of the two unstripped builds with `go tool nm -size` shows why. The
+string data dropped by 17,824 bytes: that is the base64 clip, gone as
+intended. The code that registers packs, looks them up, verifies them and
+loads them was added in its place, along with the metadata Go keeps for every
+function and type in it. Together they were bigger than the data they were
+written to remove. The 23.5 KB I measured at the time was for the whole
+feature, with the download code in tuios on top of this.
+
+The measurement said to stop, so I stopped. The branches are deleted and all
+36 effects stay built in. The lesson I took is not that on-demand data is a bad
+idea. It is that 18 KB is not worth moving. The seven cuts above each removed
+a dependency tree. This one tried to remove a leaf, and the machinery to remove
+it weighed more than the leaf.
+
+## Keeping it small
+
+A size cut that nothing guards is a size cut until the next dependency.
+`scripts/binary-size.sh` builds tuios the way the release does for
+linux/amd64 and darwin/arm64, prints the sizes and fails over a budget, and
+`.github/workflows/binary-size.yml` runs it on every pull request and every
+push to main
+([7721bab0](https://github.com/Gaurav-Gosain/tuios/commit/7721bab0)).
+
+| target | when the budget was set (Go 1.26.6) | budget |
+|---|---|---|
+| linux/amd64 | 25,182,370 | 26,000,000 |
+| darwin/arm64 | 23,834,594 | 24,600,000 |
+
+The budgets are about 3% above the size on the day they were set. That is
+room for ordinary growth, and not enough for a new dependency that brings a
+large tree with it. Undoing the lexer cut or the `net/http` cut alone puts
+the binary over. Raising a budget is meant to be its own
+commit, with a message that says what grew and why it is worth the bytes. The
+rules are in `docs/perf.md` under "Binary size budget".
+
+The review highlighting that started all this still costs something. Its
+lexer definitions now take 150 KB instead of 2.4 MB, and the job will say so
+if that changes.

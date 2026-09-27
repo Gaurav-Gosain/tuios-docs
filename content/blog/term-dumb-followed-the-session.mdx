@@ -1,0 +1,206 @@
+---
+title: TERM=dumb followed the session
+description: A session created by a command with no terminal of its own gave every pane TERM=dumb for its whole life. A screenshot test found it by failing on CI with the same numbers every time.
+date: '2026-09-26'
+author: Gaurav Gosain
+---
+
+On the morning of 26 September I landed a fix for pane borders in PNG
+screenshots, with an end-to-end test that reads the PNG back and checks the
+line has no notches. It passed on my machine. On CI it failed, and then it
+failed again on the next push, with the same message both times:
+
+```
+screenshot_boxdraw_test.go:115: the stroke at x=8 runs from 3 to 27,
+too short for six cells
+```
+
+A flake does not repeat its numbers. Something about the runner made the
+test see a different screen, every time. It turned out to have nothing to do
+with borders. Any session created by a command without a terminal, which on a
+runner is every command, gave all of its panes `TERM=dumb`.
+
+## What the test typed
+
+The test creates a [headless session](/docs/sessions#headless-sessions),
+types one line into its pane, and takes a screenshot:
+
+```bash
+tuios new e2e-box --detach
+# typed into the pane with send-keys, then Enter:
+#   clear; for i in 1 2 3 4 5 6; do printf '\342\224\202\n'; done
+tuios screenshot -s e2e-box --format png --frame none --out border-column.png
+```
+
+`clear` is there so the six `│` glyphs start on the first row and the
+column they form is the brightest thing near the left edge. Then the test
+finds the column with the most ink and measures how far it runs.
+
+On the runner, `clear` did nothing. The typed command stayed on the first
+row, the glyphs printed under it, and the column with the most ink near the
+left edge was the prompt's `$`. The test measured a dollar sign and correctly
+reported that it was too short to be six cells of border.
+
+`clear` does nothing when `TERM=dumb`, and it does it quietly. The terminfo
+entry for `dumb` has no clear capability and no cursor addressing, so
+ncurses's `clear` writes zero bytes and exits 1. Nobody reads that exit
+status inside a `;` chain.
+
+## Where a pane's TERM comes from
+
+A pane in a daemon session gets its environment from the session, and the
+session got its TERM from whoever created it.
+
+A tuios client that connects to the daemon starts with a hello message.
+The hello carries a `term` and a `color_term`, which the client fills from
+`guestenv.DetectTerm`. That function trusts the environment as it is when
+`COLORTERM=truecolor` is set and `TERM` is set and is not `dumb`. Otherwise
+it asks `colorprofile.Detect` about its own stdout. With no terminal on
+stdout, the answer is `NoTTY`, and `NoTTY` maps to `dumb`.
+
+When that client creates a session (`tuios new`, with or without
+`--detach`), the daemon copies the hello's pair into the session's config.
+Every pane's environment is built from that config: an empty TERM becomes
+`xterm-256color`, and an empty COLORTERM becomes `truecolor`. `dumb` is not
+empty, so it stays. The config belongs to the session, so it applies to
+every pane created later, including the ones opened after a person attaches
+from a real terminal. Attaching to an existing session does not replace it.
+
+Pick who creates the session and which build runs:
+
+<HeadlessTerm />
+
+Two things in that table surprised me. The first is that a CI runner is not
+special. A cron job, a service, or a script whose environment has TERM but no
+`COLORTERM=truecolor` gets the same answer, because `colorprofile` looks at
+stdout, and for all of them stdout is a pipe or a file. The
+second is the pair the pane ended up with: `TERM=dumb COLORTERM=truecolor`.
+The dumb TERM came from the hello and the truecolor came from the daemon's
+default for an empty field. It describes a terminal that cannot move its
+cursor but can draw 16 million colours.
+
+## Why it passed here
+
+My terminal is Ghostty, which exports `COLORTERM=truecolor`. The E2E harness
+runs tuios as a child process with its output captured, so stdout is a pipe
+there too. But the environment it inherits from my shell passes the trust
+rule, `DetectTerm` never looks at stdout, and the session gets my TERM. The
+GitHub runner sets `TERM=dumb` and no `COLORTERM`. On the runner, every
+session in the suite was a dumb session. Most tests never noticed, because
+they check text and not where the text is. This one measured pixels on the
+first rows.
+
+## It was not a CI problem
+
+The harness was just the first caller to care. `tuios new --detach` is the
+documented starting point for scripts, and tuios is built to be driven by
+agents, whose shell tools run commands with stdout captured. Any of them
+could create a session whose panes run `less` with the "terminal is not
+fully functional" warning, full-screen programs without cursor movement, and
+`clear` as a no-op. And the damage lasts. A person who later attaches to that
+session from a real terminal sees the same panes, and every new pane they open
+in it is dumb too.
+
+The panes were never drawn on the creator's stdout. They are drawn by tuios's
+own emulator and shown to whichever client attaches. The creator's stdout had
+nothing to say about them. The other ways of making a session already got
+this right by accident. A session made by attaching from a terminal gets that
+terminal's answer, which is a real one. A session made by the `new-session`
+verb over the [control socket](/docs/control-protocol) passes no TERM, so the
+daemon gives it `xterm-256color` and `truecolor`.
+
+## The same bug, four days earlier
+
+This was the second time that week. On 22 September I fixed the same shape
+in the SSH server
+([c296ac28](https://github.com/Gaurav-Gosain/tuios/commit/c296ac28)). Its
+ephemeral panes detect TERM from the server process's stdout, and a server
+run under a service manager, `nohup` or a log file detected `NoTTY` and gave
+every pane `TERM=dumb` while drawing it on a client's real terminal. That fix
+installs `xterm-256color` and `truecolor` for the case where stdout is not a
+terminal and detection answers dumb.
+
+Its commit message ends with "Daemon panes get xterm-256color." That was true
+for a daemon session created from a terminal. It was not true for one created
+from a pipe, and I did not check, because I was fixing the other path.
+
+## The fix
+
+The client now leaves TERM out of the hello in exactly that case:
+
+```go
+termType, colorTerm := guestenv.DetectTerm()
+if termType == "dumb" && !term.IsTerminal(int(os.Stdout.Fd())) {
+	termType, colorTerm = "", ""
+}
+```
+
+An empty TERM in the hello means the daemon picks, and the daemon picks
+`xterm-256color` and `truecolor`, the same as for a session made by the
+`new-session` verb. A real terminal that answers dumb keeps its answer. Emacs's
+`M-x shell` is the usual example: it runs the shell on a pty and sets
+`TERM=dumb` on purpose, and a standalone tuios window started there already
+keeps `dumb`. A daemon session created there does the same.
+
+I left `DetectTerm` alone. It answers the question "what does this process's
+terminal support", and for a process with no terminal, `dumb` is the honest
+answer. The mistake was asking that question on behalf of panes that would
+never be drawn there. The fix is at the one place the answer is handed to the
+daemon ([b0ab22a1](https://github.com/Gaurav-Gosain/tuios/commit/b0ab22a1)).
+
+This is the pane's view of it on my machine, with `TERM=dumb` and an empty
+`COLORTERM` in the creating command's environment, as on a runner, and its
+output going to a file. The shell prints its own TERM and COLORTERM:
+
+<TerminalCapture
+  title="tuios new --detach from a pipe, TERM=dumb, macOS"
+  lines={[
+    { text: "before the fix (b0ab22a1^)", tone: "dim" },
+    { text: "TERM=dumb COLORTERM=truecolor", tone: "echo" },
+    { text: "", tone: "dim" },
+    { text: "after the fix (tuios main)", tone: "dim" },
+    { text: "TERM=xterm-256color COLORTERM=truecolor", tone: "echo" }
+  ]}
+  rows={5}
+  note="Read back with tuios capture-pane. With TERM=xterm-256color and no COLORTERM, the build before the fix gives the same dumb pair. With COLORTERM=truecolor set, both builds give xterm-256color."
+/>
+
+## The test that holds it
+
+`TestSessionMadeWithoutATerminalGivesItsPanesARealTerm` runs `tuios new
+--detach` with `TERM=dumb` and an empty `COLORTERM`, the way a runner does,
+has the pane's shell print its TERM, and reads it back with `capture-pane`.
+Before writing it, I wrote down the ways it could pass without testing
+anything:
+
+- The environment could carry a TERM and `COLORTERM=truecolor` that
+  detection trusts, so the no-terminal path never runs. The test sets both
+  variables itself.
+- A daemon started earlier, with a different environment, could create the
+  session. The test has its own base directory, and its first command starts
+  the daemon.
+- The line it reads could be the shell's echo of the typed command. The shell
+  prints the values through a `printf` format, and only a line without `%s`
+  in it counts.
+- The line could be read while the output is still arriving, cut off after
+  TERM. The output ends in a marker, and only a line ending in it is read.
+
+On the build before the fix it fails on macOS with the pane reporting
+`TERM=dumb COLORTERM=truecolor`. In an `ubuntu:24.04` container with
+`TERM=dumb`, as on a GitHub runner, the screenshot test fails as well, which
+is the failure CI had reported on both runs. Both runs are recorded in
+the suite's negative controls, next to the other fixes that were checked
+against a build without them.
+
+## What I keep from this
+
+The screenshot test was right twice. It was right that the border had a
+notch, and on CI it was right that the screen was not what it expected. I had
+read the second failure as noise in a test I had just written, when the
+repeated numbers were already saying it was not noise.
+
+The bug itself is a value that described one thing being used for another.
+The creator's terminal and the pane's terminal are different terminals, and
+for a detached session the first one does not exist. A value detected from a
+process is a fact about that process. Before passing it on, it is worth
+asking who it will describe on the other side.

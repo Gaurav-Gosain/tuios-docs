@@ -1,0 +1,244 @@
+---
+title: Tests that could not fail
+description: A resize fuzzer whose only screen check sat behind a constant false, a palette test that measured the length of a fixed-size array, and a pinned repro that lost one byte to encoding/json. All three were green, and none of them could go red.
+date: '2026-09-26'
+author: Gaurav Gosain
+---
+
+A test that passes tells you one thing: it did not fail this time. Whether it
+could have failed is a separate question, and the test cannot answer it about
+itself.
+
+In one week in September I found three tests in tuios that were green and
+could not go red. One had been that way since July. None of them was
+careless in an obvious way. Each one read like a check, sat in a file full of
+real checks, and passed every run. This post is about those three and about
+the habit that catches this kind of test: run it against code that is known to
+be broken, and watch it fail.
+
+It follows on from two earlier posts. [The fuzzer that found
+nothing](/blog/the-fuzzer-that-found-nothing) was about checks that were real
+but asked the wrong question. [Nothing failed, so nothing was
+fixed](/blog/nothing-failed-so-nothing-was-fixed) was about production code
+that was wrong and never made anything fail. These three are the same problem
+one level up: the thing that was supposed to fail was the test.
+
+## A check behind `false`
+
+`FuzzEmulatorResize` in `internal/vt/fuzz_test.go` writes half its input into
+the emulator, resizes it to a random size, writes the other half, and then
+checks the result. It was added on 18 July 2026 in
+[76348ef5](https://github.com/Gaurav-Gosain/tuios/commit/76348ef5), with the
+other parser fuzz targets. It checked that the width and height were the ones
+it had just set, and that the cursor was inside the screen. Then it had this:
+
+```go
+if _ = emu.String(); false {
+	_ = io.Discard
+}
+```
+
+`emu.String()` renders the screen as text. The result goes to the blank
+identifier, and the condition of the `if` is the constant `false`. The body
+can never run. The only way this line fails a test is if rendering panics.
+
+So the one line in the target that looked at the screen after a resize
+checked nothing about it. A resize is exactly where a cell can be left wider
+than its row, a scroll region can keep the old screen's bounds, or the render
+can come out taller than the new height. The target ran through all of those
+paths on every seed and could not report any of them.
+
+I found it while auditing the fuzz harness for
+[1d925fd7](https://github.com/Gaurav-Gosain/tuios/commit/1d925fd7) on 25
+September. The target now runs the same structural invariants as the
+generated-input targets (scroll region inside the screen and not empty, cursor
+inside, no cell running off its row), checks the render is valid UTF-8, and
+checks it has no more lines than the screen has rows.
+
+The same audit found two quieter ones. `FuzzEmulatorWriteChunked` compared
+the whole write and the chunked write through `String`, which is text only,
+so a chunk boundary that dropped a colour passed. It now compares cells and
+the cursor. And the split-write targets picked their cut points from the
+input length alone, so the fuzzer's mutations never moved the cuts. They hash
+the input now.
+
+## A length that is always 16
+
+`TestPaletteFromParams` in `internal/session/resolve_sgr_test.go` covers the
+palette a client sends when it asks for a capture with colours resolved to
+RGB. An empty palette means "use the xterm defaults". The test started like
+this:
+
+```go
+pal, err := paletteFromParams(nil)
+if err != nil {
+	t.Fatalf("paletteFromParams(nil) error: %v", err)
+}
+if len(pal) != 16 {
+	t.Fatalf("xterm palette len = %d, want 16", len(pal))
+}
+```
+
+`paletteFromParams` returns a `[16]color.Color`. That is an array, not a
+slice. Its length is part of its type, so `len(pal)` is 16 for every value it
+can hold, including sixteen nils. The check compiled, read well, and asserted
+nothing about the palette.
+
+It came in with the feature on 27 August in
+[7f5cf047](https://github.com/Gaurav-Gosain/tuios/commit/7f5cf047) and was
+fixed on 25 September in
+[47dc72ca](https://github.com/Gaurav-Gosain/tuios/commit/47dc72ca), during the
+static analysis sweep that added golangci-lint to CI. The test now checks
+that every entry is set, and that red resolves to the same colour through the
+empty palette as through the xterm table.
+
+For this post I ran the control. I changed `paletteFromParams` so an empty
+palette returns `[16]color.Color{}`, the zero value, instead of the xterm
+table. The old test passed. The new one failed:
+
+```
+resolve_sgr_test.go:144: the default palette has no colour at 0
+```
+
+The same commit is also a warning about the other direction. staticcheck
+flagged two determinism checks, one in vtgen and one in
+`scroll_strip_wire_test.go`, as comparing an expression with itself:
+
+```go
+if StateFingerprint(at(40)) != StateFingerprint(at(40)) {
+```
+
+That is not a tautology. Each side builds its own state and calls the
+function again, so a fingerprint that depended on map order or on a pointer
+would make the two sides differ. The check was real. The fix bound each call
+to its own variable, which changes nothing about what runs and makes the
+intent plain to a reader and to the linter. A lint finding says where to
+look. It does not say the test is hollow.
+
+## A repro that lost one byte
+
+This one took two commits to break and a flaky timer to notice.
+
+In August, a fuzz corpus entry for `FuzzEmulatorRenderRoundTrip` spent five
+seconds inside the grapheme segmenter. The input stacked zero-width marks
+onto one cell, and every path that grows a cell re-read its whole content, so
+the cost was quadratic in the number of marks.
+[76c5ebf0](https://github.com/Gaurav-Gosain/tuios/commit/76c5ebf0) capped what
+one cell can hold at 64 bytes (`maxClusterBytes` in `internal/vt/utf8.go`),
+and the corpus entry stayed in `testdata/fuzz` as a regression.
+
+That corpus entry was a file of raw input bytes. The vtgen targets do not
+feed those bytes to the emulator. They decode them through the generator into
+a script of named sequences, and the script is what runs. So a byte file
+means a particular script only as long as the generator does not change. The
+next change to vtgen turns the same bytes into a different script, and the
+regression passes while guarding nothing.
+
+On 25 September, 1d925fd7 fixed that. It converted both corpus entries into
+scripts, stored as JSON under `internal/vt/testdata/vtgen-repros/`, and
+replayed by `TestVTGenRepros` through all four vtgen oracles. The mark flood
+script got a time budget of 1500 ms. The other one, a margin seam bug, was
+reduced to six steps and checked against a build with its fix removed. The
+mark flood one was not.
+
+The next day the race build failed `mark-flood-stays-cheap` at 1.52 seconds
+against its 1500 ms budget. That looked like the race detector being slow,
+and the obvious move was to raise the budget. Instead I removed the cap and
+ran the repro. It passed in 30 ms. The regression test for a quadratic
+blowup did not blow up without the fix.
+
+The cause was in the JSON. Go's `encoding/json` writes a string that is not
+valid UTF-8 by replacing each bad byte with U+FFFD. A vtgen script is full of
+such bytes on purpose: eight-bit controls, overlong encodings, CESU-8
+surrogates. 8 of the 120 steps in that script carried one. One of the eight
+was the step that turned autowrap off, written with an eight-bit CSI:
+
+<JsonByteLoss />
+
+The step's description survived. The file still said "reset DECAWM autowrap,
+using eight-bit controls". The bytes under it were now a replacement
+character and three letters of text. With autowrap on, REP wraps each
+repeated flag onto the next cell, and nothing piles up anywhere. The repro was
+a script that looked right to a reader and did not do what it said.
+
+[33fc841f](https://github.com/Gaurav-Gosain/tuios/commit/33fc841f) fixed it in
+three parts:
+
+- `vtgen.Seq` has its own JSON methods. A step that is valid UTF-8 keeps the
+  readable `Bytes` field. A step that is not goes into `BytesQuoted` as a Go
+  string literal, and reads back byte for byte.
+- `pinnable`, which prints a failing script in the form a repro file takes,
+  now reads its own JSON back and refuses to print it if it is not the same
+  script. A future encoding bug shows up at the moment of pinning, not a month
+  later.
+- The repro is the original script reduced again, against an emulator without
+  the cap, to four steps: autowrap off, a resize to 120x40, a tag-sequence
+  flag, and REP with a huge count. It carries an allocation budget of 64 MB
+  as well as the time budget. Allocation does not move with machine load or
+  the race detector, so it holds in every build. The time budget is skipped
+  under `-race`.
+
+The commit records the numbers. Without the cap, the oracles take 8 seconds
+and allocate 3.5 GB. With it, 4 ms and 2.8 MB, or 47 ms and 3.7 MB under
+`-race`. I ran both versions of the repro again for this post, on a busier
+machine, with the cap removed:
+
+```
+old repro (1d925fd7):  PASS in 0.08s
+new repro (33fc841f):  FAIL
+  the oracles took 18.770589791s, over the 1500ms budget
+  the oracles allocated 3561 MB, over the 64 MB budget
+```
+
+The flaky timer was the only reason I looked. If the race build had been a
+little faster, the test would still be green and still be guarding nothing.
+
+## Run the test on broken code
+
+All three have the same fix, and it is not a better assertion style. It is a
+procedure. The AGENTS.md in the tuios repository says it in one line: a test that claims
+to cover a bug must fail on a build with the fix removed. The end-to-end suite
+keeps the record of those runs in `e2e/tui/NEGATIVE_CONTROLS.md`, which opens
+with "A regression test that has never been observed to fail on broken code
+is not evidence."
+
+Here are the three tests again, each run with its fix in place and with it
+removed:
+
+<NegativeControlBench />
+
+With the fix in place, every version of every test passes. That column is the
+one CI shows you, and it cannot tell a good test from a hollow one. The column
+that tells them apart is the one nobody runs by default.
+
+Each of the three would have been caught the first time someone ran that
+column. The palette test and the resize check needed a fault of any kind. The
+mark flood repro needed exactly the control that 1d925fd7 ran for the margin
+seam script and skipped for this one. The one repro that was checked was
+fine. The one that was not was hollow.
+
+`NEGATIVE_CONTROLS.md` adds two rules from earlier misses, and both apply
+here too:
+
+- A negative test needs its positive half. A test that asserts "X does not
+  happen when Y" must also show "X happens when not Y" in the same fixture,
+  or it may never have exercised Y at all.
+- The control deletes the call site, not the function. Cutting a function
+  proves the test is bound to it. Cutting the wiring proves something calls
+  it.
+
+Neither rule is clever. They are what it takes to know that a green result
+means something.
+
+## What I keep from this
+
+A test is a claim about what would happen if the code were wrong, and that
+claim is usually never checked. Passing on correct code is the easy half.
+Every test passes on correct code, including one that asserts nothing.
+
+The two encoding problems are the ones I think about most. The corpus bytes
+meant a script only through the generator, and the JSON meant the script
+only through `encoding/json`. Each layer looked like storage and was really a
+transformation, and each could change what the test did while leaving what it
+said untouched. A pinned repro now proves it reads back as itself before it is
+written, and it is run once against the bug it pins before it is kept.

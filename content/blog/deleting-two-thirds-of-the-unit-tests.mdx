@@ -1,0 +1,239 @@
+---
+title: Deleting two thirds of the unit tests, then putting a third back
+description: In one day I cut the tuios unit tests from 4,239 to 1,470 under a strict rule, then restored 1,395 of them. The rule asked what kind of test it was. The review asked whether a bug gets past the E2E suite without it.
+date: '2026-09-25'
+author: Gaurav Gosain
+---
+
+On 25 September I deleted most of the unit tests in tuios. It took three
+passes, all on the same day. The second one cut the suite from 4,239 test
+functions to 1,470, a cut of two thirds. The third put 1,395 back.
+
+About half of those deletions were right. Restoring the other half was also
+right. This post is about the difference between the rule the second pass used and the
+question the third pass asked, because that difference is the whole lesson.
+
+## Why delete tests at all
+
+tuios has an end-to-end suite under
+[`e2e/tui`](https://github.com/Gaurav-Gosain/tuios/tree/main/e2e/tui). It
+builds the real binary, starts real daemons, drives a real terminal and reads
+the screen back. When it says a key does something, the key did it.
+
+Most unit tests in the tree did something weaker. They built an `OS` value,
+called one handler, and checked a field. That proves the handler works. It
+says nothing about whether any key reaches the handler. One test file in
+`internal/input` says this about its own package better than I can:
+
+> Every other test here enters below the router. It arms a state, calls the
+> handler for that state, and checks what the handler did. That proves the
+> handler works. It says nothing about whether any key reaches the handler, so
+> a feature can be registered, bound, documented and completely dead with the
+> package green. That has happened, more than once.
+
+A lot of the others pinned wording, glyphs and layout constants. Change a
+label and twenty tests fail, none of them about a bug. There were 5,212 test
+functions outside `e2e/` that morning, in 211,846 lines of test code, against
+374 E2E tests. Every change paid for the unit tests, and I could not say which
+of them would catch anything.
+
+## The first pass
+
+The first pass went one package at a time, as two commits each. One commit
+dropped the tests the E2E suite already covered, or that pinned wording, or
+that restated the implementation. The next commit put back the ones no E2E test
+covered. The `internal/app` part 1 commit
+([cb317249](https://github.com/Gaurav-Gosain/tuios/commit/cb317249)) is a fair
+sample of the reasons:
+
+- covered by E2E with an equivalent assertion: the mailbox empty state, the
+  context menu targets, daemon-created windows tiling;
+- pins wording, glyphs or layout constants: badge grammar, help section
+  contents, the copy flash curve shape;
+- restates the implementation: a switch mapped case by case, a flag set by hand.
+
+The keep commit after it
+([9f403389](https://github.com/Gaurav-Gosain/tuios/commit/9f403389)) restored
+seven, each with a line saying what it holds and why E2E cannot. "E2E cannot
+cause a crash" is the reason for two of them.
+
+That pass removed 1,127 test functions, and the test code got 33,327 lines
+shorter. Then I wrote the rule down, in [AGENTS.md](https://github.com/Gaurav-Gosain/tuios/blob/main/AGENTS.md)
+([7445c658](https://github.com/Gaurav-Gosain/tuios/commit/7445c658)):
+
+> A unit test is kept only when it catches a real bug the E2E suite misses. The
+> kinds that stay are VT conformance, fuzz, wire compatibility, security
+> boundaries, deterministic race regressions and perf budgets. Do not add one
+> outside those kinds.
+
+Those are two rules, and I did not notice at the time. The first sentence is
+a question about bugs. The second is a list of categories.
+
+## The strict pass read the list
+
+By the afternoon the agent review work had landed with about 320 unit tests
+written before the rule existed, a commit had held those to it, and new fuzz
+targets had gone in. The suite stood at 4,239. The strict pass went over it
+again in shards, one branch per package range, and it read the second sentence. From
+the `internal/session` a to m commit
+([55f1d39b](https://github.com/Gaurav-Gosain/tuios/commit/55f1d39b)):
+
+> A test stays only when it is a kept kind (wire compatibility, security
+> boundary, deterministic race regression, perf budget, fuzz, or an
+> edge-case-heavy parser), names a concrete bug, and no e2e/tui test covers it.
+> The agent state machine tests (ranking, hold, idle gate, stall timer, screen
+> tier, transcript tier) are not a kept kind and go as a group.
+
+The commits named the tests they deleted, 2,670 of the 2,671 with a reason
+next to the name. That is what made the next pass possible. The reasons also
+show the problem. "Not a kept kind" is a statement about the test. It says nothing about the bug. The config migrations went as "a config migration, not a kept kind". The alt-drag
+gesture tests went as "alt-drag gesture behaviour, not a kept kind".
+`internal/input` went from 291 tests to 17.
+
+In total the strict pass deleted 2,671 test functions outright and folded 130
+more into 32 table tests. Step through the day:
+
+<TestPurgeStages />
+
+Look at `internal/vt`. It barely moves at any step, because its tests are a
+conformance corpus and fuzz targets, which are on the list and do catch bugs.
+Now look at `internal/input` and `internal/config`. Nearly everything in them
+went. Most of `internal/input` came back, and about half of `internal/config`.
+
+## The review asked the first question
+
+A spot check after the strict pass found deleted tests that guarded things no
+E2E test can reach. The first restore commit
+([5bd9055f](https://github.com/Gaurav-Gosain/tuios/commit/5bd9055f)) brought
+back 52 of them: the config migrations ("no E2E test loads an old config"),
+the test that presses every default binding through `HandleKeyPress`, the
+panic barriers of the crash overlay, and an `EPERM` retry at the spawn door
+that no E2E test can provoke.
+
+That was enough to justify a full review. It went back over the deletions,
+one package range at a time, with one question: name the bug this test
+catches, then say whether any test under `e2e/tui` fails when that bug comes back. Each per-package restore commit
+lists the tests with the bug next to each one. From the session commit
+([f7196831](https://github.com/Gaurav-Gosain/tuios/commit/f7196831)):
+
+> The E2E suite only sets a state by hand and checks the glyph renders, so
+> nothing else holds the source ranking, the hold and idle gate timing, the
+> stall timer, the screen and transcript tiers, the identity guards, or the
+> Inbox and outbox lifecycle. Most of these tests control the clock or inject a
+> fault, and many are regressions for bugs that shipped.
+
+Pick a deleted test and ask both questions:
+
+<KeptTestBar />
+
+The review found the same few gaps over and over.
+
+**Driving a path is not checking it.** The strict pass deleted the auto-enter
+focus tests because "E2E TestFocusAutoEnterAddsNoLine drives it". It does. It
+presses `1` and `alt+right` with `auto_enter_terminal_on_focus = 'targeted'`,
+and then it counts resizes and new lines in the shells, which is what it was
+written for. It never asks which mode you are in afterwards. The deleted unit
+tests ask exactly that. With the policy set to "all", the one for Tab ends:
+
+```go
+if o.Mode != app.TerminalMode {
+	t.Errorf("mode = %v after next_window, want terminal mode", o.Mode)
+}
+```
+
+**Some faults cannot be caused from outside.** A lost mouse release, a clock
+moved by 50 ms, a panic inside `View`, a spawn that fails with `EPERM` once.
+The E2E suite drives a real process through a real terminal, so it gets what
+the real process does, and the real process almost never does these things on
+cue.
+
+**Old data never reaches the E2E suite.** No E2E test loads a config file an
+older tuios wrote. `TestCornerSnapMigrationMovesTheStaleDigits` exists
+because every config file written before a fix carries `snap_corner_N = ["N"]`, and without the
+migration an upgraded install shows four key conflicts. It even had a negative
+control written into its comment: drop the migration call and it fails.
+
+**An E2E test can be too loose to notice.** The E2E mouse tests accept any
+coordinates and never set a cell size. `TestEncodeMouseCellModeUnchanged`
+checks that a click in plain SGR mode reports cells, not pixels, once the cell
+size is known. Without it, pixel scaling could leak into every click in vim
+and every E2E test would still pass.
+
+With the spot check, the review restored 1,388 test functions in nine commits:
+the first one and one per package range.
+
+## The negative controls caught the rest
+
+The tests I trust most are the ones with a negative control: a run against a
+build with the fix removed, recorded in
+[`e2e/tui/NEGATIVE_CONTROLS.md`](https://github.com/Gaurav-Gosain/tuios/blob/main/e2e/tui/NEGATIVE_CONTROLS.md).
+After the review, a docs commit
+([287e90c5](https://github.com/Gaurav-Gosain/tuios/commit/287e90c5)) went
+through every row whose only catch had been a unit test the strict pass
+removed, and rewrote it to say so. Four rows about the drag gesture ended up
+saying that. This is one of them:
+
+> none here; an `internal/app` unit test failed ("a layout update inside the
+> gesture told the pane [[58 28]]"); it was since removed, and not rerun
+> against anything that replaced it | **not caught here; the unit test that
+> caught it was removed**
+
+That is a written record of a bug that nothing would catch. The screen saver
+had the same gap. The same commit checked it directly: with the
+`screensaverFit` call dropped, both remaining anchor tests still passed,
+because their capture was exactly as tall as the canvas. The tests that used a
+taller and a shorter canvas had been deleted.
+
+The last restore
+([2863b287](https://github.com/Gaurav-Gosain/tuios/commit/2863b287)) brought
+back those gesture and screen saver tests, and the rows now read "caught in
+`internal/app`" and "caught in `internal/input`" again. With that, 1,395 of
+the deleted test functions were back, and the suite stood at 2,864.
+
+## What stayed deleted
+
+1,402 test names that the strict pass removed are still gone, along with 12
+benchmarks. Some of them could never have failed. `TestReviewShots` wrote screenshots for a person to look at, skipped unless an
+environment variable was set, and checked nothing about what it drew. A
+dependency diff test was a dump harness with no assertions. Some tested a
+helper that a kept test already exercises. Many pinned a row of text that an
+E2E frame also shows. And some of the 1,402 are simply the old names of tests
+the strict pass folded into tables.
+
+The unit test code went from 187,510 lines before the strict pass to 86,988
+after it and 144,894 after the review. Against the morning, the suite today is
+2,870 test functions instead of 5,212, and about 145,000 lines instead of
+212,000. There are 32 fuzz targets, ten more than that morning, and 410 E2E tests today.
+
+## What I took from it
+
+The list of kinds is a good guess at where the useful unit tests live. It is
+not the rule. The rule is the first sentence: a unit test stays when it
+catches a real bug the E2E suite misses. The only way to apply it is to write
+the bug down, next to the test, and then check the E2E suite against that bug.
+A category cannot do that for you.
+
+Two things made the recovery cheap, and both were habits rather than tools.
+The deletion commits named each test and gave a reason, so the review could
+argue with a specific reason instead of reconstructing one. And the negative
+controls file said, in plain words, which faults had lost their only catch.
+Without them the review would have started from a diff of 100,000 deleted
+lines, and nothing would have failed to tell it where to look. The same shape shows up in [an earlier
+audit](/blog/nothing-failed-so-nothing-was-fixed): a mistake nothing fails on is
+a mistake nobody looks at.
+
+One caveat. Most of the 1,395 restore reasons are an argument from reading
+the test and the E2E suite. The ones with a recorded negative control were
+checked by a run against a build with the fix removed. Most were not.
+
+## How I counted
+
+Test functions are counted with
+`git grep -E '^func Test[A-Z_]' <commit> -- '*_test.go' ':!e2e/**'` at each
+commit, one per package directory and name. The commits are 94dbf2bd (the
+morning), 7445c658 (after the first pass), 8f181f43 (before the strict pass),
+d905b69e (after it), 4ce75ca5 (after the review merge) and 2863b287 (after the
+last restore). "Restored" means a name deleted between 8f181f43 and d905b69e
+that exists again at the later commit. Deleted and folded counts come from the
+`func Test` lines each strict pass commit removes and adds. Lines are every
+`_test.go` file outside `e2e/`.

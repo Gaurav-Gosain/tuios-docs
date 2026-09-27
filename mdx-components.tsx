@@ -39,6 +39,14 @@ import { AgentSourceTimeline } from '@/components/mdx/agent-source-timeline';
 import { MailboxSandbox } from '@/components/mdx/mailbox-sandbox';
 import { ReattachReplay } from '@/components/mdx/reattach-replay';
 import { ScrollbackBytes } from '@/components/mdx/scrollback-bytes';
+import { HardTabHole } from '@/components/mdx/hard-tab-hole';
+import { HeadlessTerm } from '@/components/mdx/headless-term';
+import { WindowTargetOrder } from '@/components/mdx/window-target-order';
+import { NegativeControlBench } from '@/components/mdx/negative-control-bench';
+import { JsonByteLoss } from '@/components/mdx/json-byte-loss';
+import { BinarySizeWaterfall } from '@/components/mdx/binary-size-waterfall';
+import { TestPurgeStages } from '@/components/mdx/test-purge-stages';
+import { KeptTestBar } from '@/components/mdx/kept-test-bar';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -83,6 +91,14 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     MailboxSandbox,
     ReattachReplay,
     ScrollbackBytes,
+    WindowTargetOrder,
+    HeadlessTerm,
+    HardTabHole,
+    NegativeControlBench,
+    JsonByteLoss,
+    BinarySizeWaterfall,
+    TestPurgeStages,
+    KeptTestBar,
     ...components,
   };
 }

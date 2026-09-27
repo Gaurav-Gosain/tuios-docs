@@ -1,0 +1,153 @@
+---
+title: The background vanished under a tab
+description: Under tmux, a few cells beside the Inbox title showed the terminal's own background instead of the panel's. The bytes tuios sent were right. bubbletea moved the cursor with a hard tab, and tmux 3.6 and later keep that tab as one cell that a later write breaks.
+date: '2026-09-25'
+author: Gaurav Gosain
+---
+
+The [Inbox](/docs/agent-inbox) is a panel with its own background colour.
+Under tmux, two cells to the left of its title showed the terminal's ground
+instead. Other panels had the same kind of hole beside them. Outside tmux
+there was nothing wrong.
+
+The obvious suspect was the compositor. tuios draws every overlay into one
+frame, and a cell that nobody paints keeps whatever was under it. But the
+frame had the panel colour in every cell of the title row. So did
+the bytes the client wrote to the terminal: tuios's own emulator replayed
+them with the panel colour everywhere, and so did xterm. Only tmux drew the
+hole, and replaying the recorded stream in tmux went wrong at exactly one
+byte: a hard tab, `0x09`.
+
+## Nobody in tuios writes a tab
+
+tuios does not write its frames to the terminal itself. The client is a
+Bubble Tea program, and bubbletea's renderer turns each new frame into the
+shortest stream of bytes that changes the old screen into the new one. It
+skips the cells that did not change, which means it moves the cursor across
+them, and a cursor move has more than one spelling.
+
+The moves are built in ultraviolet's `relativeCursorMove`. To go right it can
+use CUF (`ESC [ 6 C` moves six columns), it can write the cells again when
+they have the current style, and when hard tabs are allowed it can use HT,
+which moves to the next tab stop. The renderer tries the moves with and
+without tabs and keeps the shortest. Tab stops sit every eight columns, and
+HT is one byte, so a move to the right that crosses a tab stop usually starts
+with a tab.
+
+Whether tabs are allowed comes from the terminal driver. When bubbletea puts
+the tty into raw mode, it keeps the state from before, and reads one field
+from it:
+
+```go
+p.useHardTabs = s.Oflag&unix.TABDLY == unix.TAB0
+```
+
+`TABDLY` is the output flag for what the driver does with a tab. `TAB0`
+means it passes tabs through untouched, and that is the default. So on every
+ordinary terminal, the client moved the cursor with tabs. That is a fair
+choice. A tab over cells that already hold what they should is a pure cursor
+move, and xterm and tuios's own emulator treat it as one.
+
+## tmux keeps the tab
+
+tmux 3.6 changed that. Its changelog has the entry "Preserve tabs for copying
+and capture-pane". When a program in a pane writes a tab, tmux looks at the
+cells the tab crosses. If they are all blank and look the same as the first
+one, tmux stores one tab cell at the start column, as wide as the jump, and
+marks the rest of the span as padding behind it. Copy mode can then hand the
+tab back to you as a tab instead of as spaces. The code is in the HT case of
+`input.c`. `capture-pane -e` shows it: where the blanks were, the line has a
+literal tab.
+
+The tab cell itself keeps the first cell's colours, so the screen still looks
+right. The trouble is what happens next. A tab cell is a wide cell, and when a
+later write lands anywhere inside its span, tmux resets the other cells of
+that span to default cells. A default cell has no background. It shows the
+terminal's ground.
+
+That is the whole bug. A panel row is mostly blank cells on the panel colour.
+One frame changes a cell past a tab stop, and the renderer moves across the
+blanks with HT, so tmux keeps them as a tab cell. A later frame changes a cell
+inside that span, perhaps a letter of the title. The write breaks the tab
+cell, and every other cell it covered loses the panel colour. The bytes are
+correct at every step. The damage is in how tmux stores them.
+
+Step through it. The row is sixteen cells wide, with tab stops at 0 and 8.
+Switch to CUF to see the same frames after the fix.
+
+<HardTabHole />
+
+I checked this exact sequence against tmux 3.7c: blank cells on a blue
+background, a tab from column 2 to column 8, then a write at column 5. With
+the tab, `capture-pane -e` shows columns 2 to 4 and 6 to 7 without the blue.
+With `ESC [ 6 C` in place of the tab, the row stays blue.
+
+## The fix is in the tty state
+
+bubbletea has no option to turn hard tabs off. It decides from the tty state
+it saved before raw mode, so the fix changes that state before bubbletea
+reads it. `withoutHardTabs` in `cmd/tuios/hardtabs_unix.go` runs just before
+the program starts:
+
+```go
+orig, err := term.GetState(fd)
+if err != nil || orig.Oflag&unix.TABDLY != unix.TAB0 {
+    return func() {}
+}
+changed := *orig
+changed.Oflag = changed.Oflag&^unix.TABDLY | unix.TAB3
+if err := term.SetState(fd, &changed); err != nil {
+    return func() {}
+}
+return func() { _ = term.SetState(fd, orig) }
+```
+
+`TAB3` tells the driver to expand tabs into spaces on output. bubbletea saves
+that state, sees that it is not `TAB0`, and never uses a tab. Then it enters
+raw mode, and raw mode turns off output processing (`OPOST`) altogether, so
+`TAB3` expands nothing while tuios runs. When the program exits, the original
+state comes back. The renderer now moves right with CUF. That costs a few
+bytes more per move, which does not matter.
+
+Both clients do this: the local one in `runLocal` in `cmd/tuios/run.go`, and
+the one that attaches to a daemon session in `runDaemonSessionOn` in
+`cmd/tuios/session_commands.go`. On platforms where bubbletea does not read
+`TABDLY`, `hardtabs_other.go` makes the call a no-op. The fix is
+[947e70ed](https://github.com/Gaurav-Gosain/tuios/commit/947e70ed2f76246d5fa648e4cf4552393abe0545).
+
+## Why the tests did not see it
+
+The end-to-end suite runs the real binary inside a terminal emulator and reads
+the screen back. That emulator is not tmux. It treats HT as a cursor move,
+like xterm does, so every screen it showed was right. No check on the final
+screen could have failed there.
+
+So the test that came with the fix
+([ca688030](https://github.com/Gaurav-Gosain/tuios/commit/ca688030),
+`TestEveryOverlayOwnsItsGround` in `e2e/tui/overlay_ground_test.go`) checks
+two things. The first is the screen: it opens every overlay (the Inbox in
+several states, help, the palette, settings, the switchers and more) over two
+panes and the rail, at 80x24 and 120x40, in a dark and a light theme, with the
+backgrounds off and on, and looks for a cell of the ground colour with the
+panel's colour on both sides of it. The second is the stream: the client's
+output must not contain a single `0x09` byte. That second check is the one
+that covers tmux without running it, because a stream with no hard tab
+cannot make a tab cell.
+
+Both checks were run against broken builds. A panel whose title row is
+padded with bare spaces fails the screen check, and a client that leaves hard
+tabs on fails the stream check. The [contributing
+guide](/docs/contributing#other-test-suites) has the command for the
+end-to-end suite.
+
+## What I keep from this
+
+The frame was right, and the bytes were right. I had been treating the byte
+stream as a description of the screen, and to most terminals it is one. To
+tmux it is also a record of how the screen was written, and it keeps some of
+that record. A cursor move and a write of the same cells are the same screen
+to xterm and different cells to tmux.
+
+So a renderer that picks the shortest spelling of a move is making a choice
+the terminal can see. When I check what reaches a terminal now, I check the
+stream as well as the screen.
