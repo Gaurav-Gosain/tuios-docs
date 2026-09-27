@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { movedTo } from "./redirects";
+import { movedTo } from "./moved";
 
 describe("movedTo", () => {
   const cases: [string, string | null][] = [
