@@ -78,6 +78,7 @@ export function InvariantBlind() {
               kind === "frame" && bug && y === 0 && x === COLS - 1;
             return (
               <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: a fixed grid of cells, keyed by column and row.
                 key={`${x}-${y}`}
                 className={cn(
                   "flex items-center justify-center bg-fd-background font-mono text-[10px] leading-none sm:text-xs",

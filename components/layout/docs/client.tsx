@@ -19,6 +19,16 @@ export const LayoutContext = createContext<{
   isNavTransparent: boolean;
 } | null>(null);
 
+/** The layout context, or an error when a component is used outside the docs layout. */
+export function useLayoutContext() {
+  const ctx = use(LayoutContext);
+  if (!ctx)
+    throw new Error(
+      "Missing LayoutContext, make sure the component is inside <DocsLayout />.",
+    );
+  return ctx;
+}
+
 export function LayoutContextProvider({
   navTransparentMode = "none",
   children,
@@ -46,7 +56,7 @@ export function LayoutContextProvider({
 }
 
 export function LayoutHeader(props: ComponentProps<"header">) {
-  const { isNavTransparent } = use(LayoutContext)!;
+  const { isNavTransparent } = useLayoutContext();
 
   return (
     <header data-transparent={isNavTransparent} {...props}>
@@ -111,9 +121,9 @@ export function LayoutTabs({
         props.className,
       )}
     >
-      {options.map((option, i) => (
+      {options.map((option) => (
         <Link
-          key={i}
+          key={option.url}
           href={option.url}
           className={cn(
             "inline-flex border-b-2 border-transparent transition-colors items-center pb-1.5 font-medium gap-2 text-fd-muted-foreground text-sm text-nowrap hover:text-fd-accent-foreground",

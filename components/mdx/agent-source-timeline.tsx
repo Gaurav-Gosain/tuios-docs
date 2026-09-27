@@ -493,6 +493,7 @@ export function AgentSourceTimeline() {
           <colgroup>
             <col className="w-[4.75rem] sm:w-24" />
             {steps.map((_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: one column per simulated step; the steps are recomputed as a whole and never reorder, so the step number is its identity.
               <col key={i} />
             ))}
           </colgroup>
@@ -505,6 +506,7 @@ export function AgentSourceTimeline() {
                 event
               </th>
               {steps.map((s, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: one column per simulated step; the steps are recomputed as a whole and never reorder, so the step number is its identity.
                 <th key={i} scope="col" className="p-0 font-normal">
                   <button
                     type="button"
@@ -538,6 +540,7 @@ export function AgentSourceTimeline() {
               </th>
               {steps.map((s, i) => (
                 <td
+                  // biome-ignore lint/suspicious/noArrayIndexKey: one column per simulated step; the steps are recomputed as a whole and never reorder, so the step number is its identity.
                   key={i}
                   className={cn(
                     "h-8 rounded text-center text-base leading-none",
@@ -583,6 +586,7 @@ export function AgentSourceTimeline() {
                     const c = s.lanes[lane.id];
                     return (
                       <td
+                        // biome-ignore lint/suspicious/noArrayIndexKey: one column per simulated step; the steps are recomputed as a whole and never reorder, so the step number is its identity.
                         key={i}
                         title={`${lane.label}: ${c.state}${c.mark === "refused" ? " (refused)" : ""}`}
                         className={cn(

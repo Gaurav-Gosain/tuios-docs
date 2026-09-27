@@ -17,7 +17,7 @@ import { buttonVariants } from "../../ui/button";
 import { LanguageToggle, LanguageToggleText } from "../language-toggle";
 import { LinkItem } from "../link-item";
 import { LargeSearchToggle, SearchToggle } from "../search-toggle";
-import { type BaseLayoutProps, resolveLinkItems } from "../shared";
+import { type BaseLayoutProps, linkItemKey, resolveLinkItems } from "../shared";
 import type { SidebarPageTreeComponents } from "../sidebar/page-tree";
 import { SidebarTabTrigger, type SidebarTabWithProps } from "../sidebar/tabs";
 import { ThemeToggle } from "../theme-toggle";
@@ -123,7 +123,7 @@ export function DocsLayout({
           .filter((v) => v.type !== "icon")
           .map((item, i, list) => (
             <SidebarLinkItem
-              key={i}
+              key={linkItemKey(item)}
               item={item}
               className={cn(i === list.length - 1 && "mb-4")}
             />
@@ -179,9 +179,9 @@ export function DocsLayout({
                     <Languages className="size-4.5" />
                   </LanguageToggle>
                 )}
-                {iconLinks.map((item, i) => (
+                {iconLinks.map((item) => (
                   <LinkItem
-                    key={i}
+                    key={linkItemKey(item)}
                     item={item}
                     className={cn(
                       buttonVariants({ size: "icon-sm", color: "ghost" }),
@@ -207,9 +207,9 @@ export function DocsLayout({
           <div className="flex flex-col gap-3 p-4 pb-2">
             <div className="flex text-fd-muted-foreground items-center gap-1.5">
               <div className="flex flex-1">
-                {iconLinks.map((item, i) => (
+                {iconLinks.map((item) => (
                   <LinkItem
-                    key={i}
+                    key={linkItemKey(item)}
                     item={item}
                     className={cn(
                       buttonVariants({

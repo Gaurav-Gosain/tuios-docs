@@ -62,5 +62,8 @@ export function Mermaid({ chart }: { chart: string }) {
     );
   }
 
-  return <div dangerouslySetInnerHTML={{ __html: svg }} />;
+  return (
+    // biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders the SVG from diagrams written in this repository's own MDX, never from user input.
+    <div dangerouslySetInnerHTML={{ __html: svg }} />
+  );
 }

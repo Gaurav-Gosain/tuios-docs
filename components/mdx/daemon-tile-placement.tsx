@@ -74,6 +74,7 @@ export function DaemonTilePlacement() {
       <div className="relative h-60 overflow-hidden bg-fd-background/40 p-3">
         {Array.from({ length: count }, (_, i) => (
           <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: the panes are a fixed count that never reorders, so the pane index is its identity.
             key={i}
             className={cn(
               "absolute flex flex-col overflow-hidden rounded-sm border shadow-sm transition-all duration-300 ease-out motion-reduce:transition-none",
@@ -127,9 +128,8 @@ export function DaemonTilePlacement() {
           reset
         </button>
 
-        <div
+        <fieldset
           className="ml-auto inline-flex overflow-hidden rounded-md border border-fd-border"
-          role="group"
           aria-label="placement version"
         >
           {(["before", "now"] as const).map((m) => (
@@ -148,7 +148,7 @@ export function DaemonTilePlacement() {
               {m}
             </button>
           ))}
-        </div>
+        </fieldset>
       </div>
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">

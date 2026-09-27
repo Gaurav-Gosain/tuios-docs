@@ -125,6 +125,15 @@ export function useSidebar(): SidebarContext {
   return ctx;
 }
 
+function useFolder() {
+  const ctx = use(FolderContext);
+  if (!ctx)
+    throw new Error(
+      "Missing FolderContext, make sure the component is inside <SidebarFolder />.",
+    );
+  return ctx;
+}
+
 export function useFolderDepth() {
   return use(FolderContext)?.depth ?? 0;
 }
@@ -192,7 +201,10 @@ export function SidebarDrawerOverlay(props: ComponentProps<"div">) {
   if (mode !== "drawer") return;
   return (
     <Presence present={open}>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the backdrop is a pointer shortcut; keyboard users close the drawer with its toggle button. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a pointer shortcut; keyboard users close the drawer with its toggle button. */}
       <div
+        aria-hidden="true"
         data-state={open ? "open" : "closed"}
         onClick={() => setOpen(false)}
         {...props}
@@ -313,7 +325,7 @@ export function SidebarFolder({
 }
 
 export function SidebarFolderTrigger(props: CollapsibleTriggerProps) {
-  const { open } = use(FolderContext)!;
+  const { open } = useFolder();
 
   return (
     <CollapsibleTrigger {...props}>
@@ -328,7 +340,7 @@ export function SidebarFolderTrigger(props: CollapsibleTriggerProps) {
 
 export function SidebarFolderLink(props: LinkProps) {
   const ref = useRef<HTMLAnchorElement>(null);
-  const { open, setOpen } = use(FolderContext)!;
+  const { open, setOpen } = useFolder();
   const { prefetch } = useSidebar();
   const pathname = usePathname();
   const active =

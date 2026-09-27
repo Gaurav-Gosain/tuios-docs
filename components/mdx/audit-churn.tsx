@@ -164,9 +164,8 @@ export function AuditChurn() {
   return (
     <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-fd-border border-b p-4">
-        <div
+        <fieldset
           className="inline-flex overflow-hidden rounded-md border border-fd-border"
-          role="group"
           aria-label="Which Go files to count"
         >
           {(["production", "tests"] as const).map((v) => (
@@ -185,7 +184,7 @@ export function AuditChurn() {
               {v}
             </button>
           ))}
-        </div>
+        </fieldset>
         <p
           className="font-mono text-fd-muted-foreground text-xs tabular-nums"
           aria-live="polite"

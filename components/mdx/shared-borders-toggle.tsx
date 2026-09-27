@@ -55,6 +55,7 @@ export function SharedBordersToggle() {
           >
             {Array.from({ length: 4 }, (_, i) => (
               <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: four fixed panes that never reorder, so the pane index is its identity.
                 key={i}
                 className={cn(
                   "flex flex-col overflow-hidden transition-all duration-300 ease-out motion-reduce:transition-none",
@@ -109,9 +110,8 @@ export function SharedBordersToggle() {
 
       {/* The switch. */}
       <div className="flex flex-wrap items-center gap-3 border-t border-fd-border px-4 py-3">
-        <div
+        <fieldset
           className="inline-flex overflow-hidden rounded-md border border-fd-border"
-          role="group"
           aria-label="border style"
         >
           {(
@@ -135,7 +135,7 @@ export function SharedBordersToggle() {
               {label}
             </button>
           ))}
-        </div>
+        </fieldset>
       </div>
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">

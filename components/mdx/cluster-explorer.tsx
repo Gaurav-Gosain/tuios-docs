@@ -109,7 +109,7 @@ function segment(input: string): Cluster[] {
 const PRESETS: { label: string; value: string }[] = [
   { label: "family emoji", value: "👨‍👩‍👧‍👦" },
   { label: "flag", value: "🇯🇵" },
-  { label: "combining marks", value: "é" + "́".repeat(3) },
+  { label: "combining marks", value: `é${"́".repeat(3)}` },
   { label: "CJK", value: "日本語" },
   { label: "zero width space", value: "a​b" },
 ];
@@ -190,6 +190,7 @@ export function ClusterExplorer() {
               const wrong = c.naive !== c.actual;
               return (
                 <tr
+                  // biome-ignore lint/suspicious/noArrayIndexKey: a row is one cluster of the typed text, and equal clusters repeat, so its position is its identity.
                   key={i}
                   className={cn(
                     "border-b border-fd-border/60 last:border-0",

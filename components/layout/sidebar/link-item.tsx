@@ -1,5 +1,6 @@
 import type { HTMLAttributes } from "react";
 import type { LinkItemType } from "../link-item";
+import { linkItemKey } from "../shared";
 import type * as Base from "./base";
 
 type InternalComponents = Pick<
@@ -44,8 +45,8 @@ export function createLinkItemRenderer({
             </SidebarFolderTrigger>
           )}
           <SidebarFolderContent>
-            {item.items.map((child, i) => (
-              <SidebarLinkItem key={i} item={child} />
+            {item.items.map((child) => (
+              <SidebarLinkItem key={linkItemKey(child)} item={child} />
             ))}
           </SidebarFolderContent>
         </SidebarFolder>

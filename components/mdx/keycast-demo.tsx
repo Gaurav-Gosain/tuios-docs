@@ -129,9 +129,9 @@ export function KeycastDemo() {
     <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
       {/* A focusable region rather than a button, so the terminal mock inside is
           valid DOM. A tabIndex of 0 makes it focusable by click and by tab. */}
-      {/* biome-ignore lint/a11y/useSemanticElements: this is an interactive canvas, not a button or listbox */}
       <div
         role="application"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: the region captures key presses to show them, so it must take focus.
         tabIndex={0}
         onKeyDown={onKeyDown}
         onFocus={() => setFocused(true)}

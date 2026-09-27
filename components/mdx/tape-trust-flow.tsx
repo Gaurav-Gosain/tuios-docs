@@ -157,12 +157,9 @@ export function TapeTrustFlow() {
               <Prompt dir="~" command="cd ~/dev/myproject" />
               <Prompt dir="~/dev/myproject" cursor />
             </Pane>
-            <div
-              className="pointer-events-none absolute right-3 top-3 max-w-[62%] rounded-md border border-amber-500/40 bg-fd-card px-3 py-2 text-[11px] text-fd-foreground shadow-sm motion-safe:animate-[fadeInUp_0.4s_ease-out]"
-              role="status"
-            >
+            <output className="pointer-events-none absolute right-3 top-3 max-w-[62%] rounded-md border border-amber-500/40 bg-fd-card px-3 py-2 text-[11px] text-fd-foreground shadow-sm motion-safe:animate-[fadeInUp_0.4s_ease-out]">
               Project tape found (untrusted). Press ? to review.
-            </div>
+            </output>
           </div>
         ) : null}
 
@@ -185,6 +182,7 @@ export function TapeTrustFlow() {
               <pre className="overflow-x-auto px-3 py-2 font-mono text-[11px] leading-5">
                 {tape.map((line, i) => (
                   <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: tape lines repeat and never reorder, so a line's position is its identity.
                     key={i}
                     className={cn(
                       "whitespace-pre px-1",

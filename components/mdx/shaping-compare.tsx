@@ -78,6 +78,7 @@ export function ShapingCompare() {
           <div className="flex min-w-max gap-1">
             {codepoints.map((cp, i) => (
               <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: codepoints repeat within a string, so a codepoint's position is its identity.
                 key={i}
                 className="flex w-11 shrink-0 flex-col items-center gap-1 rounded-sm border border-fd-border bg-fd-background/60 px-1 py-1.5"
               >

@@ -49,9 +49,8 @@ function Segmented<T extends string>({
       <span className="w-16 shrink-0 text-fd-muted-foreground text-xs">
         {label}
       </span>
-      <div
+      <fieldset
         className="inline-flex overflow-hidden rounded-md border border-fd-border"
-        role="group"
         aria-label={label}
       >
         {options.map((o) => (
@@ -70,7 +69,7 @@ function Segmented<T extends string>({
             {o}
           </button>
         ))}
-      </div>
+      </fieldset>
     </div>
   );
 }

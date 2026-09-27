@@ -31,12 +31,21 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../../../ui/collapsible";
-import { LayoutContext } from "../client";
+import { useLayoutContext } from "../client";
 
 const TocPopoverContext = createContext<{
   open: boolean;
   setOpen: (open: boolean) => void;
 } | null>(null);
+
+function useTocPopover() {
+  const ctx = use(TocPopoverContext);
+  if (!ctx)
+    throw new Error(
+      "Missing TocPopoverContext, make sure the component is inside <PageTOCPopover />.",
+    );
+  return ctx;
+}
 
 export function PageTOCPopover({
   className,
@@ -45,7 +54,7 @@ export function PageTOCPopover({
 }: ComponentProps<"div">) {
   const ref = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
-  const { isNavTransparent } = use(LayoutContext)!;
+  const { isNavTransparent } = useLayoutContext();
 
   const onClick = useEffectEvent((e: Event) => {
     if (!open) return;
@@ -69,7 +78,7 @@ export function PageTOCPopover({
           open,
           setOpen,
         }),
-        [setOpen, open],
+        [open],
       )}
     >
       <Collapsible
@@ -102,7 +111,7 @@ export function PageTOCPopoverTrigger({
   ...props
 }: ComponentProps<"button">) {
   const { text } = useI18n();
-  const { open } = use(TocPopoverContext)!;
+  const { open } = useTocPopover();
   const items = useTOCItems();
   const active = useActiveAnchor();
   const selected = useMemo(
@@ -354,6 +363,7 @@ export function PageBreadcrumb({
         );
 
         return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a breadcrumb is a path, so a crumb's depth is its identity; folders without a page have no URL to key on.
           <Fragment key={i}>
             {i !== 0 && <ChevronRight className="size-3.5 shrink-0" />}
             {item.url ? (

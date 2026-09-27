@@ -9,6 +9,17 @@ export interface SidebarPageTreeComponents {
   Separator: FC<{ item: PageTree.Separator }>;
 }
 
+/**
+ * A React key for a page tree node. The loader gives every node an $id; pages
+ * also have a URL, and a folder its index page, for trees built by hand.
+ */
+function nodeKey(node: PageTree.Node): string {
+  if (node.$id) return node.$id;
+  if (node.type === "page") return node.url;
+  if (node.type === "folder" && node.index) return node.index.url;
+  return `${node.type}:${typeof node.name === "string" ? node.name : ""}`;
+}
+
 type InternalComponents = Pick<
   typeof Base,
   | "SidebarSeparator"
@@ -72,11 +83,12 @@ export function createPageTreeRenderer({
 
     return useMemo(() => {
       function renderSidebarList(items: PageTree.Node[]) {
-        return items.map((item, i) => {
+        return items.map((item) => {
+          const key = nodeKey(item);
           if (item.type === "separator") {
-            if (Separator) return <Separator key={i} item={item} />;
+            if (Separator) return <Separator key={key} item={item} />;
             return (
-              <SidebarSeparator key={i}>
+              <SidebarSeparator key={key}>
                 {item.icon}
                 {item.name}
               </SidebarSeparator>
@@ -85,7 +97,7 @@ export function createPageTreeRenderer({
 
           if (item.type === "folder") {
             return (
-              <Folder key={i} item={item}>
+              <Folder key={key} item={item}>
                 {renderSidebarList(item.children)}
               </Folder>
             );
@@ -108,6 +120,6 @@ export function createPageTreeRenderer({
       return (
         <Fragment key={root.$id}>{renderSidebarList(root.children)}</Fragment>
       );
-    }, [Folder, Item, Separator, root]);
+    }, [Folder, Item, Separator, root, SidebarItem, SidebarSeparator]);
   };
 }
