@@ -48,6 +48,9 @@ export const releases = defineDocs({
     schema: frontmatterSchema.extend({
       date: z.string().date(),
       author: z.string(),
+      // A line short enough for the Open Graph card, used there in place of
+      // the description when set.
+      summary: z.string().max(150).optional(),
     }),
     postprocess: {
       includeProcessedMarkdown: true,

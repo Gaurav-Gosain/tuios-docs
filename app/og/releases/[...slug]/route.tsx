@@ -20,7 +20,7 @@ export async function GET(
   return ogImage({
     kind: "Release notes",
     title: page.data.title,
-    description: page.data.description,
+    description: page.data.summary ?? page.data.description,
     footer: formatPostDate(page.data.date),
   });
 }
