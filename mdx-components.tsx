@@ -41,7 +41,6 @@ import { ShrinkRace } from "@/components/mdx/shrink-race";
 import { SpentFrames } from "@/components/mdx/spent-frames";
 import { StartupPreview } from "@/components/mdx/startup-preview";
 import { StyleIdRecycle } from "@/components/mdx/style-id-recycle";
-import { TapeShrink } from "@/components/mdx/tape-shrink";
 import { TapeTrustFlow } from "@/components/mdx/tape-trust-flow";
 import { TerminalCapture } from "@/components/mdx/terminal-capture";
 import { TestPurgeStages } from "@/components/mdx/test-purge-stages";
@@ -63,7 +62,6 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ShrinkRace,
     ClusterExplorer,
     RunTally,
-    TapeShrink,
     TerminalCapture,
     TapeTrustFlow,
     StartupPreview,

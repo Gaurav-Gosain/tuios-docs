@@ -256,11 +256,6 @@ export function isAltChord(chord: string): boolean {
   return chordParts(fromMacOption(chord)).slice(0, -1).includes("alt");
 }
 
-/** The bytes for a whole step, in order. */
-export function sequenceBytes(items: KeyItem[]): string[] {
-  return items.map(keyBytes);
-}
-
 /**
  * The key names a physical key press matches, so a keycap can light up while
  * its key is held. Modifiers light their own caps.

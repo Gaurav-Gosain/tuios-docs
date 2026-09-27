@@ -5,7 +5,7 @@
  * side only renders it.
  */
 import { isAltChord, sameChord } from "./keys";
-import type { MatchContext, Track, TuiosEvent, TuiosState } from "./types";
+import type { MatchContext, Track, TuiosEvent } from "./types";
 
 /** Seconds of no progress before the hint shows, and before Show me glows. */
 export const HINT_AFTER = 8;
@@ -210,11 +210,6 @@ export function altChordBlocked(s: LessonState, now: number): boolean {
 /** Mark the hint as seen, so the step counts as hinted. */
 export function markHinted(s: LessonState): LessonState {
   return s.hinted ? s : { ...s, hinted: true };
-}
-
-/** The state the lesson last saw, or the one tuios reports now. */
-export function lastState(s: LessonState): TuiosState | null {
-  return s.ctx.state;
 }
 
 /** Seconds the lesson took, or has taken so far. */
