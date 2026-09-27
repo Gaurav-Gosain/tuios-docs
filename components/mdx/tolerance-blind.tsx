@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/cn";
 
 const COLS = 24;
 const ROWS = 12;
@@ -21,12 +21,48 @@ function defectAt(x: number, y: number): [number, number, number] {
   const dither = (hash >>> 3) % 2 === 0;
   if (edge && dither) return [EXACT[0], EXACT[1] + 1, EXACT[2]];
   if (edge) return [EXACT[0], EXACT[1], EXACT[2] - 1];
-  if (dither && (hash >>> 7) % 5 === 0) return [EXACT[0], EXACT[1] + 1, EXACT[2]];
+  if (dither && (hash >>> 7) % 5 === 0)
+    return [EXACT[0], EXACT[1] + 1, EXACT[2]];
   return EXACT;
 }
 
 function rgb([r, g, b]: [number, number, number]) {
   return `rgb(${r},${g},${b})`;
+}
+
+/** How far a pixel is off, as the largest per-channel difference. */
+function deltaOf(px: [number, number, number]) {
+  return Math.max(
+    Math.abs(px[0] - EXACT[0]),
+    Math.abs(px[1] - EXACT[1]),
+    Math.abs(px[2] - EXACT[2]),
+  );
+}
+
+/**
+ * A one-step error is invisible, which is the point of the post. The left
+ * panel multiplies each pixel's error by this much so a reader can see where
+ * the dither is. The comparison on the right uses the real values.
+ */
+const EXAGGERATE = 40;
+
+function shown([r, g, b]: [number, number, number]): [number, number, number] {
+  const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  return [
+    clamp(EXACT[0] + (r - EXACT[0]) * EXAGGERATE),
+    clamp(EXACT[1] + (g - EXACT[1]) * EXAGGERATE),
+    clamp(EXACT[2] + (b - EXACT[2]) * EXAGGERATE * 2),
+  ];
+}
+
+/**
+ * Readback noise from the instrument, not from the render. Some sessions add
+ * none, as Helium read one flat fill back 100 percent exact in one session and
+ * 74.8 percent in another, so the verdict moves while the picture does not.
+ */
+function noiseAt(x: number, y: number, session: number) {
+  if (session % 3 === 0) return 0;
+  return (x * 31 + y * 17 + session * 101) % 7 === 0 ? 1 : 0;
 }
 
 /**
@@ -50,15 +86,8 @@ export function ToleranceBlind() {
     for (let y = cy; y < ROWS - cy; y++) {
       for (let x = cx; x < COLS - cx; x++) {
         scanned++;
-        const px = defectAt(x, y);
-        // Readback noise from the instrument, not from the render. It moves the
-        // verdict between sessions while the picture on screen never changes.
-        const n = noise && ((x * 31 + y * 17 + session * 101) % 7 === 0) ? 1 : 0;
-        const delta = Math.max(
-          Math.abs(px[0] - EXACT[0]),
-          Math.abs(px[1] - EXACT[1]),
-          Math.abs(px[2] - EXACT[2]),
-        ) + n;
+        const delta =
+          deltaOf(defectAt(x, y)) + (noise ? noiseAt(x, y, session) : 0);
         if (delta > worst) worst = delta;
         if (delta > tolerance) flagged++;
       }
@@ -74,11 +103,7 @@ export function ToleranceBlind() {
     for (let x = 0; x < COLS; x++) {
       const inScan = x >= cx && x < COLS - cx && y >= cy && y < ROWS - cy;
       const px = defectAt(x, y);
-      const delta = Math.max(
-        Math.abs(px[0] - EXACT[0]),
-        Math.abs(px[1] - EXACT[1]),
-        Math.abs(px[2] - EXACT[2]),
-      );
+      const delta = deltaOf(px) + (noise ? noiseAt(x, y, session) : 0);
       cells.push({ x, y, px, inScan, caught: inScan && delta > tolerance });
     }
   }
@@ -88,18 +113,18 @@ export function ToleranceBlind() {
       <div className="grid gap-4 p-4 sm:grid-cols-2">
         <div>
           <div className="mb-2 font-mono text-xs text-fd-muted-foreground">
-            what is on screen
+            what is on screen, error shown {EXAGGERATE} times larger
           </div>
           <div
             className="grid overflow-hidden rounded"
             style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}
             role="img"
-            aria-label="A patch of flat colour with roughly half its pixels one step off, concentrated at cell edges."
+            aria-label="A patch of flat colour with many pixels one step off, concentrated at cell edges. The error is exaggerated so it can be seen."
           >
             {cells.map((c) => (
               <div
                 key={`${c.x}-${c.y}`}
-                style={{ background: rgb(c.px), aspectRatio: '1' }}
+                style={{ background: rgb(shown(c.px)), aspectRatio: "1" }}
               />
             ))}
           </div>
@@ -119,11 +144,11 @@ export function ToleranceBlind() {
               <div
                 key={`${c.x}-${c.y}`}
                 className={cn(
-                  !c.inScan && 'bg-fd-muted/20',
-                  c.inScan && !c.caught && 'bg-fd-background',
-                  c.caught && 'bg-fd-primary',
+                  !c.inScan && "bg-fd-muted/20",
+                  c.inScan && !c.caught && "bg-fd-background",
+                  c.caught && "bg-fd-primary",
                 )}
-                style={{ aspectRatio: '1' }}
+                style={{ aspectRatio: "1" }}
               />
             ))}
           </div>
@@ -132,7 +157,9 @@ export function ToleranceBlind() {
 
       <div className="flex flex-col gap-3 border-t border-fd-border p-4">
         <label className="flex items-center gap-3 text-sm">
-          <span className="w-24 shrink-0 text-fd-muted-foreground">tolerance</span>
+          <span className="w-24 shrink-0 text-fd-muted-foreground">
+            tolerance
+          </span>
           <input
             type="range"
             min={0}
@@ -174,7 +201,9 @@ export function ToleranceBlind() {
               onChange={(e) => setNoise(e.target.checked)}
               className="size-4 accent-current"
             />
-            <span className="text-fd-foreground">Instrument adds its own noise</span>
+            <span className="text-fd-foreground">
+              Instrument adds its own noise
+            </span>
           </label>
           {noise ? (
             <button
@@ -188,9 +217,12 @@ export function ToleranceBlind() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-baseline gap-x-6 border-t border-fd-border px-4 py-3 font-mono text-sm">
-        <span className={flagged ? 'text-fd-primary' : 'text-fd-foreground'}>
-          {flagged ? 'FAIL' : 'PASS'}
+      <div
+        className="flex flex-wrap items-baseline gap-x-6 border-t border-fd-border px-4 py-3 font-mono text-sm"
+        aria-live="polite"
+      >
+        <span className={flagged ? "text-fd-primary" : "text-fd-foreground"}>
+          {flagged ? "FAIL" : "PASS"}
         </span>
         <span className="text-fd-muted-foreground">
           {flagged} of {scanned} scanned pixels over tolerance
@@ -199,13 +231,16 @@ export function ToleranceBlind() {
       </div>
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
-        A model of the measured defect, not a capture of it. At tolerance 2, the
-        suite's setting, the diff map is blank while the dither is plainly visible
-        beside it. Drag tolerance to 0 and it lights up. The inset slider then
-        crops the edges where the fault concentrates, which was the second
-        blindness stacked on the first. Turn on instrument noise and press{' '}
-        <strong>new session</strong>: the verdict changes while the render does
-        not, because the measurement now has a noise floor of its own.
+        A model of the measured defect, not a capture of it. Each pixel is at
+        most one step off, which no eye can see, so the left panel draws the
+        error {EXAGGERATE} times larger. At tolerance 2, the suite's setting,
+        the diff map is blank while the dither sits beside it. Drag tolerance to
+        0 and it lights up. The inset slider then crops the edges where the
+        fault concentrates, which was the second blindness stacked on the first.
+        Set tolerance to 1, turn on instrument noise and press{" "}
+        <strong>new session</strong> a few times: the verdict changes while the
+        render does not, because the measurement now has a noise floor of its
+        own.
       </figcaption>
     </figure>
   );

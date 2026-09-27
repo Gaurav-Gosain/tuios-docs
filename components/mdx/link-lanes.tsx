@@ -513,7 +513,7 @@ export function LinkLanes() {
               aria-pressed={s.key === scenario.key}
               onClick={() => pick(s.key)}
               className={cn(
-                "rounded-md border px-2.5 py-1 font-mono text-xs",
+                "rounded-md border px-2.5 py-1 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary",
                 s.key === scenario.key
                   ? "border-fd-primary bg-fd-primary/10 text-fd-foreground"
                   : "border-fd-border text-fd-muted-foreground hover:text-fd-foreground",
@@ -532,7 +532,7 @@ export function LinkLanes() {
               aria-pressed={fixed === f}
               onClick={() => setFixed(f)}
               className={cn(
-                "px-2.5 py-1 font-mono text-xs",
+                "px-2.5 py-1 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary",
                 fixed === f
                   ? "bg-fd-primary/10 text-fd-foreground"
                   : "text-fd-muted-foreground hover:text-fd-foreground",
@@ -635,7 +635,7 @@ export function LinkLanes() {
                 onClick={() => setStep(i)}
                 aria-current={i === step ? "step" : undefined}
                 className={cn(
-                  "rounded border px-2 py-0.5 font-mono text-[11px]",
+                  "rounded border px-2 py-0.5 font-mono text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary",
                   i === step
                     ? "border-fd-primary bg-fd-primary/10 text-fd-foreground"
                     : i < step
@@ -667,7 +667,7 @@ export function LinkLanes() {
             type="button"
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
-            className="rounded-md border border-fd-border px-3 py-1 text-sm disabled:opacity-40"
+            className="rounded-md border border-fd-border px-3 py-1 text-sm disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary"
           >
             Back
           </button>
@@ -677,7 +677,7 @@ export function LinkLanes() {
               setStep((s) => Math.min(scenario.steps.length - 1, s + 1))
             }
             disabled={step === scenario.steps.length - 1}
-            className="rounded-md border border-fd-border bg-fd-primary/10 px-3 py-1 text-sm disabled:opacity-40"
+            className="rounded-md border border-fd-border bg-fd-primary/10 px-3 py-1 text-sm disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary"
           >
             Next step
           </button>

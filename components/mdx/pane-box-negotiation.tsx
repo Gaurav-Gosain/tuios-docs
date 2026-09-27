@@ -7,7 +7,8 @@ import { cn } from "@/lib/cn";
  * Two clients on one session, over one daemon that runs two shells.
  *
  * This is a model of the mechanism, not a capture. The constants are the real
- * ones: the rail is 28 columns on a screen at least 90 wide, 16 from 60 to 89
+ * ones: the rail is 24 columns (the default since 5cdd9e0b; it was 28 when
+ * this was fixed) on a screen at least 90 wide, 16 from 60 to 89
  * and 3 from 40 to 59 (GetSidebarWidth), and the dock is 2 rows
  * (config.DockHeight). The session's size is the minimum over its clients in
  * both modes, as it has been since b71def75.
@@ -83,7 +84,7 @@ const STEP_MS = 900;
 
 function railWidth(renderWidth: number): number {
   if (renderWidth < 40) return 0;
-  let w = renderWidth < 60 ? 3 : renderWidth < 90 ? 16 : 28;
+  let w = renderWidth < 60 ? 3 : renderWidth < 90 ? 16 : 24;
   // The pane floor: never leave the panes fewer than 30 columns.
   if (renderWidth - w < 30) {
     if (renderWidth - 16 >= 30) w = 16;

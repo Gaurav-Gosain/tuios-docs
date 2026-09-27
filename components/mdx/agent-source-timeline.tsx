@@ -108,6 +108,8 @@ const PRESETS: { label: string; events: EventKind[] }[] = [
 ];
 
 const MAX_STEPS = 9;
+
+const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary';
 const STALL = 30;
 const GRACE = 2;
 const SETTLE = 0.4;
@@ -428,6 +430,7 @@ export function AgentSourceTimeline() {
               onClick={() => setMode(m)}
               className={cn(
                 'px-2.5 py-1 text-xs',
+                FOCUS,
                 mode === m
                   ? 'bg-fd-primary text-fd-primary-foreground'
                   : 'text-fd-muted-foreground hover:bg-fd-muted',
@@ -465,6 +468,7 @@ export function AgentSourceTimeline() {
                     aria-label={`Step ${i + 1}: ${LABEL[s.kind]} at ${fmt(s.t)}`}
                     className={cn(
                       'flex w-full flex-col items-center rounded px-0 py-1 leading-tight',
+                      FOCUS,
                       i === current ? 'bg-fd-muted text-fd-foreground' : 'text-fd-muted-foreground hover:bg-fd-muted/60',
                     )}
                   >
@@ -568,7 +572,10 @@ export function AgentSourceTimeline() {
             type="button"
             disabled={full}
             onClick={() => add(e.kind)}
-            className="rounded-md border border-fd-border px-2 py-1 text-xs text-fd-foreground hover:bg-fd-muted disabled:opacity-40"
+            className={cn(
+              'rounded-md border border-fd-border px-2 py-1 text-xs text-fd-foreground hover:bg-fd-muted disabled:opacity-40',
+              FOCUS,
+            )}
           >
             + {e.label}
           </button>
@@ -583,7 +590,7 @@ export function AgentSourceTimeline() {
               setEvents(p.events);
               setSelected(null);
             }}
-            className="rounded-md bg-fd-muted px-2 py-1 text-xs text-fd-foreground hover:bg-fd-muted/70"
+            className={cn('rounded-md bg-fd-muted px-2 py-1 text-xs text-fd-foreground hover:bg-fd-muted/70', FOCUS)}
           >
             {p.label}
           </button>
@@ -594,7 +601,7 @@ export function AgentSourceTimeline() {
             setEvents([]);
             setSelected(null);
           }}
-          className="rounded-md px-2 py-1 text-xs text-fd-muted-foreground hover:bg-fd-muted"
+          className={cn('rounded-md px-2 py-1 text-xs text-fd-muted-foreground hover:bg-fd-muted', FOCUS)}
         >
           clear
         </button>

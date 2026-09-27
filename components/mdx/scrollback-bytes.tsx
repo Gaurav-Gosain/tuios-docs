@@ -14,7 +14,9 @@ import { cn } from "@/lib/cn";
  *   token starting 0xF8 to 0xFF wherever the style, the link or the cell
  *   width is something a plain byte cannot say.
  *
- * The byte strips were checked against the Go encoder for every preset. Cell
+ * The byte strips were checked against the Go encoder for every preset. The
+ * text encoding follows main after 7c08d601, which stores a multi-rune
+ * cluster as its bytes rather than as an index into a table. Cell
  * widths for typed text come from a small table here rather than from the
  * emulator's width tables, so an unusual character can come out a column off.
  */
@@ -215,7 +217,6 @@ export function encodeText(line: Cell[], width: number): Byte[] {
   const n = trimmedLength(line);
   let fg = 0;
   let attrs = 0;
-  const interned = new Map<string, number>();
   for (let i = 0; i < n; i++) {
     const c = line[i];
     const cfg = packColorText(c.fg);
@@ -236,13 +237,11 @@ export function encodeText(line: Cell[], width: number): Byte[] {
     } else if (cps.length === 1) {
       push(utf8(c.content), "text");
     } else {
-      let idx = interned.get(c.content);
-      if (idx === undefined) {
-        idx = interned.size;
-        interned.set(c.content, idx);
-      }
+      // Since 7c08d601 a cluster is stored as its bytes, not as an index
+      // into a per-pane table.
+      const bytes = utf8(c.content);
       push([0xfc], "token");
-      push(uvarint(idx), "payload");
+      push([...uvarint(bytes.length), ...bytes], "payload");
     }
   }
   return out;

@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 
 const H = 200;
 const MIN = 28;
@@ -54,14 +54,17 @@ export function DividerCollide() {
           // the right column is dragged along by an edge match.
           return {
             leftSplit: y,
-            rightSplit: Math.max(MIN, Math.min(H - MIN, prev.rightSplit + delta)),
-            moved: ['top left', 'bottom left', 'top right', 'bottom right'],
+            rightSplit: Math.max(
+              MIN,
+              Math.min(H - MIN, prev.rightSplit + delta),
+            ),
+            moved: ["top left", "bottom left", "top right", "bottom right"],
           };
         }
         return {
           leftSplit: y,
           rightSplit: prev.rightSplit,
-          moved: ['top left', 'bottom left'],
+          moved: ["top left", "bottom left"],
         };
       });
     },
@@ -76,21 +79,23 @@ export function DividerCollide() {
     const up = () => {
       dragging.current = false;
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
     return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
     };
   }, [apply]);
 
   const pane = (label: string, style: React.CSSProperties, dim: boolean) => (
     <div
       className={cn(
-        'absolute flex items-center justify-center rounded-sm font-mono text-xs',
-        dim ? 'bg-fd-muted/25 text-fd-muted-foreground' : 'bg-fd-muted/55 text-fd-foreground',
+        "absolute flex items-center justify-center rounded-sm font-mono text-xs",
+        dim
+          ? "bg-fd-muted/25 text-fd-muted-foreground"
+          : "bg-fd-muted/55 text-fd-foreground",
       )}
       style={style}
     >
@@ -105,16 +110,24 @@ export function DividerCollide() {
         className="relative mx-auto my-4 select-none"
         style={{ height: H, maxWidth: 520 }}
       >
-        {pane('top left', { left: 0, right: '50.5%', top: 0, height: leftSplit - 2 }, false)}
         {pane(
-          'bottom left',
-          { left: 0, right: '50.5%', top: leftSplit + 2, bottom: 0 },
+          "top left",
+          { left: 0, right: "50.5%", top: 0, height: leftSplit - 2 },
           false,
         )}
-        {pane('top right', { left: '50.5%', right: 0, top: 0, height: rightSplit - 2 }, true)}
         {pane(
-          'bottom right',
-          { left: '50.5%', right: 0, top: rightSplit + 2, bottom: 0 },
+          "bottom left",
+          { left: 0, right: "50.5%", top: leftSplit + 2, bottom: 0 },
+          false,
+        )}
+        {pane(
+          "top right",
+          { left: "50.5%", right: 0, top: 0, height: rightSplit - 2 },
+          true,
+        )}
+        {pane(
+          "bottom right",
+          { left: "50.5%", right: 0, top: rightSplit + 2, bottom: 0 },
           true,
         )}
 
@@ -123,6 +136,7 @@ export function DividerCollide() {
           role="slider"
           tabIndex={0}
           aria-label="Divider in the left column. Drag it, or use the arrow keys."
+          aria-orientation="vertical"
           aria-valuenow={Math.round(leftSplit)}
           aria-valuemin={MIN}
           aria-valuemax={H - MIN}
@@ -132,23 +146,28 @@ export function DividerCollide() {
             apply(e.clientY);
           }}
           onKeyDown={(e) => {
-            const d = e.key === 'ArrowUp' ? -CELL : e.key === 'ArrowDown' ? CELL : 0;
+            const d =
+              e.key === "ArrowUp" ? -CELL : e.key === "ArrowDown" ? CELL : 0;
             if (!d) return;
             e.preventDefault();
             const box = boxRef.current;
             if (box) apply(box.getBoundingClientRect().top + leftSplit + d);
           }}
-          className="absolute left-0 h-1 cursor-row-resize bg-fd-primary focus:outline-none focus:ring-2 focus:ring-fd-primary"
-          style={{ right: '50.5%', top: leftSplit - 2 }}
-        />
+          // The bar is 4px, too thin to hit with a finger, so the element is a
+          // 20px band centred on it and the bar is drawn inside.
+          className="group absolute left-0 flex h-5 cursor-row-resize touch-none items-center focus:outline-none"
+          style={{ right: "50.5%", top: leftSplit - 10 }}
+        >
+          <span className="h-1 w-full rounded-sm bg-fd-primary group-focus-visible:ring-2 group-focus-visible:ring-fd-primary group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-fd-card" />
+        </div>
 
         {/* The divider nobody grabbed. */}
         <div
           className={cn(
-            'absolute h-1',
-            !tree && collinear ? 'bg-fd-primary/60' : 'bg-fd-border',
+            "absolute h-1",
+            !tree && collinear ? "bg-fd-primary/60" : "bg-fd-border",
           )}
-          style={{ left: '50.5%', right: 0, top: rightSplit - 2 }}
+          style={{ left: "50.5%", right: 0, top: rightSplit - 2 }}
           aria-hidden="true"
         />
       </div>
@@ -164,7 +183,9 @@ export function DividerCollide() {
             }}
             className="size-4 accent-current"
           />
-          <span className="text-fd-foreground">Find neighbours through the tree</span>
+          <span className="text-fd-foreground">
+            Find neighbours through the tree
+          </span>
         </label>
 
         <button
@@ -187,30 +208,35 @@ export function DividerCollide() {
           }
           className="rounded-md border border-fd-border px-3 py-1.5 text-sm text-fd-foreground hover:border-fd-primary/60 focus:outline-none focus:ring-1 focus:ring-fd-primary"
         >
-          {collinear ? 'nudge the right divider' : 'realign the dividers'}
+          {collinear ? "nudge the right divider" : "realign the dividers"}
         </button>
 
         <span className="font-mono text-xs text-fd-muted-foreground">
-          dividers {collinear ? 'collinear' : 'offset'}
+          dividers {collinear ? "collinear" : "offset"}
         </span>
       </div>
 
-      <div className="border-t border-fd-border px-4 py-3 font-mono text-xs">
-        <span className="text-fd-muted-foreground">changed on last event: </span>
+      <div
+        className="border-t border-fd-border px-4 py-3 font-mono text-xs"
+        aria-live="polite"
+      >
+        <span className="text-fd-muted-foreground">
+          changed on last event:{" "}
+        </span>
         <span
           className={cn(
-            moved.length > 2 ? 'text-fd-primary' : 'text-fd-foreground',
+            moved.length > 2 ? "text-fd-primary" : "text-fd-foreground",
           )}
         >
-          {moved.length ? moved.join(', ') : 'nothing yet, drag the divider'}
+          {moved.length ? moved.join(", ") : "nothing yet, drag the divider"}
         </span>
       </div>
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         Drag the divider in the left column. All four panes move, because the
         right column's divider sits on the same row and an edge scan cannot tell
-        two dividers apart. Press <strong>nudge</strong> and drag again: the same
-        gesture now leaves the right column alone. That is the whole of
+        two dividers apart. Press <strong>nudge</strong> and drag again: the
+        same gesture now leaves the right column alone. That is the whole of
         "sometimes", and fresh splits are all 0.5, so collinear is the default
         state. Switch to tree mode and alignment stops mattering, because the
         tree names exactly the two subtrees a divider separates.

@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * The real generated tape, with the time each command costs the child before the
@@ -18,12 +18,12 @@ interface Cmd {
 }
 
 const TAPE: Cmd[] = [
-  { text: 'Spawn ./myapp', cost: 0, required: true },
+  { text: "Spawn ./myapp", cost: 0, required: true },
   { text: 'Type "hello"', cost: 8 },
-  { text: 'Key Down', cost: 4 },
-  { text: 'WaitStable @250ms', cost: 30 },
-  { text: 'Mouse Drag 10 4 20 12', cost: 6 },
-  { text: 'Key Ctrl+c Ctrl+c Ctrl+c', cost: 0, required: true },
+  { text: "Key Down", cost: 4 },
+  { text: "WaitStable @250ms", cost: 30 },
+  { text: "Mouse Drag 10 4 20 12", cost: 6 },
+  { text: "Key Ctrl+c Ctrl+c Ctrl+c", cost: 0, required: true },
 ];
 
 /** Time the child needs to call MakeRaw and stop the kernel eating input. */
@@ -46,42 +46,62 @@ interface Step {
 
 function initial(): Step {
   const kept = TAPE.map((_, i) => i);
-  return { kept, tried: null, accepted: null, replays: [], rate: failureRate(kept) };
+  return {
+    kept,
+    tried: null,
+    accepted: null,
+    replays: [],
+    rate: failureRate(kept),
+  };
 }
 
 export function ShrinkRace() {
   const [threshold, setThreshold] = useState(1);
   const [step, setStep] = useState<Step>(initial);
-  const [history, setHistory] = useState<number[]>([failureRate(initial().kept)]);
+  const [history, setHistory] = useState<number[]>([
+    failureRate(initial().kept),
+  ]);
   const [done, setDone] = useState(false);
+  // Index into the removable commands of the next deletion to try. A rejected
+  // deletion moves it on; an accepted one leaves it pointing at the command
+  // that slid into the deleted one's place.
+  const [cursor, setCursor] = useState(0);
 
   const reset = (t = threshold) => {
     const s = initial();
     setStep(s);
     setHistory([s.rate]);
     setDone(false);
+    setCursor(0);
     setThreshold(t);
   };
 
-  // One shrinker pass: propose deleting the first removable command, replay it
+  // One shrinker step: propose deleting the next removable command, replay it
   // `threshold` times, and accept the deletion if every replay still failed.
   const advance = () => {
     if (done) return;
     const removable = step.kept.filter((i) => !TAPE[i].required);
-    if (!removable.length) {
+    if (cursor >= removable.length) {
       setDone(true);
       return;
     }
-    const tried = removable[0];
+    const tried = removable[cursor];
     const candidate = step.kept.filter((i) => i !== tried);
     const rate = failureRate(candidate);
-    const replays = Array.from({ length: threshold }, () => Math.random() < rate);
+    const replays = Array.from(
+      { length: threshold },
+      () => Math.random() < rate,
+    );
     const accepted = replays.every(Boolean);
 
     const kept = accepted ? candidate : step.kept;
     setStep({ kept, tried, accepted, replays, rate: failureRate(kept) });
     setHistory((h) => [...h, failureRate(kept)]);
-    if (!accepted && removable.length === 1) setDone(true);
+    const nextCursor = accepted ? cursor : cursor + 1;
+    setCursor(nextCursor);
+    if (nextCursor >= kept.filter((i) => !TAPE[i].required).length) {
+      setDone(true);
+    }
   };
 
   const runAll = () => {
@@ -94,9 +114,18 @@ export function ShrinkRace() {
       for (const tried of removable) {
         const candidate = cur.kept.filter((i) => i !== tried);
         const rate = failureRate(candidate);
-        const replays = Array.from({ length: threshold }, () => Math.random() < rate);
+        const replays = Array.from(
+          { length: threshold },
+          () => Math.random() < rate,
+        );
         if (replays.every(Boolean)) {
-          cur = { kept: candidate, tried, accepted: true, replays, rate: failureRate(candidate) };
+          cur = {
+            kept: candidate,
+            tried,
+            accepted: true,
+            replays,
+            rate: failureRate(candidate),
+          };
           rates.push(cur.rate);
           progressed = true;
           break;
@@ -113,10 +142,10 @@ export function ShrinkRace() {
   const chart = useMemo(() => {
     const w = 100;
     const h = 28;
-    if (history.length < 2) return '';
+    if (history.length < 2) return "";
     return history
       .map((r, i) => `${(i / (history.length - 1)) * w},${h - r * h}`)
-      .join(' ');
+      .join(" ");
   }, [history]);
 
   return (
@@ -128,15 +157,16 @@ export function ShrinkRace() {
             const isTried = step.tried === i && step.accepted === false;
             return (
               <div
-                key={i}
+                key={c.text}
                 className={cn(
-                  kept && !isTried && 'text-fd-foreground',
-                  isTried && 'text-fd-muted-foreground',
-                  !kept && 'text-fd-muted-foreground/60 line-through decoration-fd-primary/70',
+                  kept && !isTried && "text-fd-foreground",
+                  isTried && "text-fd-muted-foreground",
+                  !kept &&
+                    "text-fd-muted-foreground/60 line-through decoration-fd-primary/70",
                 )}
               >
                 {c.text}
-                {isTried ? '   (tried, kept: it passed a replay)' : ''}
+                {isTried ? "   (tried, kept: it passed a replay)" : ""}
               </div>
             );
           })}
@@ -149,9 +179,9 @@ export function ShrinkRace() {
           onClick={advance}
           disabled={done}
           className={cn(
-            'rounded-md border border-fd-border px-3 py-1.5 text-sm text-fd-foreground',
-            'hover:border-fd-primary/60 focus:outline-none focus:ring-1 focus:ring-fd-primary',
-            'disabled:cursor-not-allowed disabled:opacity-40',
+            "rounded-md border border-fd-border px-3 py-1.5 text-sm text-fd-foreground",
+            "hover:border-fd-primary/60 focus:outline-none focus:ring-1 focus:ring-fd-primary",
+            "disabled:cursor-not-allowed disabled:opacity-40",
           )}
         >
           step
@@ -172,8 +202,8 @@ export function ShrinkRace() {
           reset
         </button>
 
-        <label className="ml-auto flex items-center gap-3 text-sm">
-          <span className="whitespace-nowrap text-fd-muted-foreground">
+        <label className="ml-auto flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-fd-muted-foreground">
             replays before accepting
           </span>
           <input
@@ -225,10 +255,10 @@ export function ShrinkRace() {
         Each command gives the child a few milliseconds to reach raw mode before
         the control characters arrive, so deleting one makes the tape fail more
         often. At one replay the shrinker keeps every deletion that raises the
-        failure rate and walks straight to the two-command tape, which is what it
-        actually produced. Raise the bar and it stalls, refusing deletions that
-        only fail sometimes. The line is the failure rate climbing as the tape
-        gets shorter.
+        failure rate and walks straight to the two-command tape, which is what
+        it actually produced. Raise the bar and it stalls, refusing deletions
+        that only fail sometimes. The line is the failure rate climbing as the
+        tape gets shorter.
       </figcaption>
     </figure>
   );

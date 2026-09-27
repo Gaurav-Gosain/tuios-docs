@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * The flags the PTY fix clears, plus the one it deliberately keeps. ICANON is in
@@ -15,9 +15,14 @@ interface Flags {
   ICANON: boolean;
 }
 
-const DEFAULT_FLAGS: Flags = { ISIG: true, ECHO: true, IXON: true, ICANON: true };
+const DEFAULT_FLAGS: Flags = {
+  ISIG: true,
+  ECHO: true,
+  IXON: true,
+  ICANON: true,
+};
 
-type ChildState = 'running' | 'killed' | 'stopped';
+type ChildState = "running" | "killed" | "stopped";
 
 interface Lane {
   written: string[];
@@ -34,16 +39,16 @@ interface Key {
 }
 
 const KEYS: Key[] = [
-  { label: '^C', byte: 0x03 },
-  { label: '^S', byte: 0x13 },
-  { label: '^Q', byte: 0x11 },
-  { label: '^D', byte: 0x04 },
-  { label: 'hello', byte: -1, text: 'hello' },
-  { label: 'Enter', byte: 0x0d },
+  { label: "^C", byte: 0x03 },
+  { label: "^S", byte: 0x13 },
+  { label: "^Q", byte: 0x11 },
+  { label: "^D", byte: 0x04 },
+  { label: "hello", byte: -1, text: "hello" },
+  { label: "Enter", byte: 0x0d },
 ];
 
 function hex(b: number) {
-  return `0x${b.toString(16).padStart(2, '0')}`;
+  return `0x${b.toString(16).padStart(2, "0")}`;
 }
 
 /**
@@ -53,76 +58,85 @@ function hex(b: number) {
  */
 export function LineDiscipline() {
   const [flags, setFlags] = useState<Flags>(DEFAULT_FLAGS);
-  const [child, setChild] = useState<ChildState>('running');
+  const [child, setChild] = useState<ChildState>("running");
   const [lanes, setLanes] = useState<Lane>(EMPTY);
-  const [lineBuf, setLineBuf] = useState<string>('');
+  const [lineBuf, setLineBuf] = useState<string>("");
 
   const reset = () => {
-    setChild('running');
+    setChild("running");
     setLanes(EMPTY);
-    setLineBuf('');
+    setLineBuf("");
   };
 
   const send = (k: Key) => {
-    if (child === 'killed') return;
+    if (child === "killed") return;
 
     const written: string[] = [];
     const received: string[] = [];
     const echoed: string[] = [];
+    // The canonical line buffer is worked on locally and stored once, so a
+    // line completed by this key is delivered in the same update.
+    let buf = lineBuf;
+    let next: ChildState = child;
 
     const bytes = k.text
       ? Array.from(k.text, (c) => c.charCodeAt(0))
       : [k.byte];
 
     for (const b of bytes) {
-      written.push(k.text ? String.fromCharCode(b) : hex(b));
+      const shown = k.text ? String.fromCharCode(b) : hex(b);
+      written.push(shown);
 
       // ISIG turns 0x03 into a signal. The program never sees the byte, and the
       // discipline echoes a literal ^C, which is the two-byte screen capture the
       // whole investigation started from.
       if (b === 0x03 && flags.ISIG) {
-        if (flags.ECHO) echoed.push('^C');
-        setChild('killed');
-        setLanes((l) => ({
-          written: [...l.written, ...written],
-          received: [...l.received, ...received],
-          echoed: [...l.echoed, ...echoed],
-        }));
-        return;
+        if (flags.ECHO) echoed.push("^C");
+        next = "killed";
+        break;
       }
 
       // Flow control stops output without anything looking wrong. A stray 0x13
       // in a tape could stall a session indefinitely.
       if (b === 0x13 && flags.IXON) {
-        setChild('stopped');
+        next = "stopped";
         continue;
       }
       if (b === 0x11 && flags.IXON) {
-        setChild((c) => (c === 'stopped' ? 'running' : c));
+        if (next === "stopped") next = "running";
+        continue;
+      }
+
+      // In canonical mode ^D is the end-of-file character: it hands over the
+      // line so far without a newline, or a zero-length read on an empty line.
+      if (b === 0x04 && flags.ICANON) {
+        received.push(buf ? buf : "EOF");
+        buf = "";
         continue;
       }
 
       // Echo puts harness keystrokes back on the master, where a screen model
       // reading that stream counts them as program output.
-      if (flags.ECHO) echoed.push(k.text ? String.fromCharCode(b) : hex(b));
+      if (flags.ECHO) echoed.push(shown);
 
-      // Canonical mode holds bytes until a newline. This is the one the fix
-      // keeps, because it is what a real terminal does to a not-yet-raw program.
-      if (flags.ICANON && b !== 0x0d) {
-        setLineBuf((s) => s + (k.text ? String.fromCharCode(b) : hex(b)));
+      // Canonical mode holds bytes until a newline (Enter arrives as one,
+      // through ICRNL). This is the one the fix keeps, because it is what a
+      // real terminal does to a program that has not gone raw.
+      if (flags.ICANON) {
+        if (b === 0x0d) {
+          received.push(`${buf}\\n`);
+          buf = "";
+        } else {
+          buf += shown;
+        }
         continue;
       }
-      if (flags.ICANON && b === 0x0d) {
-        setLineBuf((s) => {
-          if (s) received.push(`${s}\\n`);
-          return '';
-        });
-        continue;
-      }
 
-      received.push(k.text ? String.fromCharCode(b) : hex(b));
+      received.push(shown);
     }
 
+    setChild(next);
+    setLineBuf(buf);
     setLanes((l) => ({
       written: [...l.written, ...written],
       received: [...l.received, ...received],
@@ -145,15 +159,21 @@ export function LineDiscipline() {
 
   const lane = (title: string, items: string[], tone: string) => (
     <div className="min-w-0 flex-1">
-      <div className="mb-1.5 font-mono text-xs text-fd-muted-foreground">{title}</div>
+      <div className="mb-1.5 font-mono text-xs text-fd-muted-foreground">
+        {title}
+      </div>
       <div
         className={cn(
-          'h-24 overflow-y-auto rounded border border-fd-border bg-fd-background p-2',
-          'font-mono text-xs leading-5',
+          "h-24 overflow-y-auto rounded border border-fd-border bg-fd-background p-2",
+          "font-mono text-xs leading-5",
           tone,
         )}
       >
-        {items.length ? items.join(' ') : <span className="opacity-40">nothing</span>}
+        {items.length ? (
+          items.join(" ")
+        ) : (
+          <span className="opacity-40">nothing</span>
+        )}
       </div>
     </div>
   );
@@ -166,12 +186,12 @@ export function LineDiscipline() {
             key={k.label}
             type="button"
             onClick={() => send(k)}
-            disabled={child === 'killed'}
+            disabled={child === "killed"}
             className={cn(
-              'rounded-md border border-fd-border px-3 py-1.5 font-mono text-sm',
-              'text-fd-foreground transition-colors',
-              'hover:border-fd-primary/60 focus:outline-none focus:ring-1 focus:ring-fd-primary',
-              'disabled:cursor-not-allowed disabled:opacity-40',
+              "rounded-md border border-fd-border px-3 py-1.5 font-mono text-sm",
+              "text-fd-foreground transition-colors",
+              "hover:border-fd-primary/60 focus:outline-none focus:ring-1 focus:ring-fd-primary",
+              "disabled:cursor-not-allowed disabled:opacity-40",
             )}
           >
             {k.label}
@@ -187,30 +207,33 @@ export function LineDiscipline() {
       </div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-fd-border px-4 py-3">
-        {flagRow('ISIG', 'turns bytes into signals')}
-        {flagRow('ECHO', 'writes input back up the master')}
-        {flagRow('IXON', 'flow control')}
-        {flagRow('ICANON', 'line buffering, the fix keeps this')}
+        {flagRow("ISIG", "turns bytes into signals")}
+        {flagRow("ECHO", "writes input back up the master")}
+        {flagRow("IXON", "flow control")}
+        {flagRow("ICANON", "line buffering, the fix keeps this")}
       </div>
 
       <div className="flex flex-col gap-4 p-4 sm:flex-row">
-        {lane('written to the master', lanes.written, 'text-fd-foreground')}
-        {lane('received by the program', lanes.received, 'text-fd-foreground')}
-        {lane('echoed back', lanes.echoed, 'text-fd-primary')}
+        {lane("written to the master", lanes.written, "text-fd-foreground")}
+        {lane("received by the program", lanes.received, "text-fd-foreground")}
+        {lane("echoed back", lanes.echoed, "text-fd-primary")}
       </div>
 
-      <div className="flex items-center gap-3 border-t border-fd-border px-4 py-2.5 font-mono text-xs">
+      <div
+        className="flex flex-wrap items-center gap-3 border-t border-fd-border px-4 py-2.5 font-mono text-xs"
+        aria-live="polite"
+      >
         <span className="text-fd-muted-foreground">child:</span>
         <span
           className={cn(
-            child === 'running' && 'text-fd-foreground',
-            child === 'killed' && 'text-fd-primary',
-            child === 'stopped' && 'text-fd-muted-foreground',
+            child === "running" && "text-fd-foreground",
+            child === "killed" && "text-fd-primary",
+            child === "stopped" && "text-fd-muted-foreground",
           )}
         >
-          {child === 'running' && 'running'}
-          {child === 'killed' && 'killed by interrupt'}
-          {child === 'stopped' && 'stopped by flow control'}
+          {child === "running" && "running"}
+          {child === "killed" && "killed by interrupt"}
+          {child === "stopped" && "stopped by flow control"}
         </span>
         {flags.ICANON && lineBuf ? (
           <span className="ml-auto text-fd-muted-foreground">
@@ -222,12 +245,12 @@ export function LineDiscipline() {
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         Press <code>^C</code> with <code>ISIG</code> on. The program receives
         nothing, the child dies, and a literal <code>^C</code> lands in the echo
-        lane, which is the entire screen tuitest captured. Turn{' '}
+        lane, which is the entire screen tuitest captured. Turn{" "}
         <code>ISIG</code> off and the same press arrives as an ordinary byte.
-        Press <code>^S</code> to stall output with nothing visibly wrong, then{' '}
+        Press <code>^S</code> to stall output with nothing visibly wrong, then{" "}
         <code>^Q</code> to revive it. The echo lane is the third bug: harness
-        keystrokes coming back up the master, where a screen model counts them as
-        output the program never wrote.
+        keystrokes coming back up the master, where a screen model counts them
+        as output the program never wrote.
       </figcaption>
     </figure>
   );

@@ -1,10 +1,12 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 
 const COLS = 10;
 const ROWS = 4;
+/** One stable id per cell, so the grid needs no array index as a key. */
+const CELL_IDS = Array.from({ length: COLS * ROWS }, (_, i) => `cell-${i}`);
 
 /**
  * The three states the capture's cell went through, at the measured numbers.
@@ -13,28 +15,28 @@ const ROWS = 4;
  */
 const ROUNDS = [
   {
-    id: 'one',
-    label: 'round one: height guessed',
+    id: "one",
+    label: "round one: height guessed",
     host: 0.455,
-    hostNote: 'kitty, 10 x 22 px',
+    hostNote: "kitty, 10 x 22 px",
     capture: 0.486,
-    captureNote: 'M advance over 1.25 em',
+    captureNote: "M advance over 1.25 em",
   },
   {
-    id: 'two',
-    label: 'round two: both from the font',
+    id: "two",
+    label: "round two: both from the font",
     host: 0.45,
-    hostNote: 'kitty, 9 x 20 px',
+    hostNote: "kitty, 9 x 20 px",
     capture: 0.4,
-    captureNote: '5.76 x 14.4 px',
+    captureNote: "5.76 x 14.4 px",
   },
   {
-    id: 'fixed',
-    label: 'fixed: asked the terminal',
+    id: "fixed",
+    label: "fixed: asked the terminal",
     host: 0.4545,
-    hostNote: 'kitty, 10 x 22 px',
+    hostNote: "kitty, 10 x 22 px",
     capture: 0.4545,
-    captureNote: 'grown to the host cell',
+    captureNote: "grown to the host cell",
   },
 ] as const;
 
@@ -54,13 +56,13 @@ function CellGrid({ ratio, label }: { ratio: number; label: string }) {
         role="img"
         aria-label={`${label}, cell aspect ratio ${ratio}.`}
       >
-        {Array.from({ length: COLS * ROWS }, (_, i) => (
+        {CELL_IDS.map((id, i) => (
           <div
-            key={i}
+            key={id}
             className="flex items-center justify-center bg-fd-background font-mono text-[10px] text-fd-muted-foreground"
             style={{ height: cellH }}
           >
-            {'tuios$ ls -l'[i % 12] ?? ''}
+            {"tuios$ ls -l"[i % 12] ?? ""}
           </div>
         ))}
       </div>
@@ -85,12 +87,13 @@ export function CellShape() {
           <button
             key={r.id}
             type="button"
+            aria-pressed={i === idx}
             onClick={() => setIdx(i)}
             className={cn(
-              'rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-fd-primary',
+              "rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-fd-primary",
               i === idx
-                ? 'border-fd-primary/60 text-fd-foreground'
-                : 'border-fd-border text-fd-muted-foreground hover:border-fd-primary/40',
+                ? "border-fd-primary/60 text-fd-foreground"
+                : "border-fd-border text-fd-muted-foreground hover:border-fd-primary/40",
             )}
           >
             {r.label}
@@ -99,30 +102,36 @@ export function CellShape() {
       </div>
 
       <div className="flex flex-col gap-4 overflow-x-auto border-t border-fd-border p-4 sm:flex-row sm:gap-8">
-        <CellGrid ratio={round.host} label={`the terminal (${round.hostNote})`} />
+        <CellGrid
+          ratio={round.host}
+          label={`the terminal (${round.hostNote})`}
+        />
         <CellGrid
           ratio={round.capture}
           label={`the capture (${round.captureNote})`}
         />
       </div>
 
-      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-fd-border px-4 py-3 font-mono text-sm">
+      <div
+        className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-fd-border px-4 py-3 font-mono text-sm"
+        aria-live="polite"
+      >
         <span className="text-fd-muted-foreground">
-          host {round.host.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}
+          host {round.host.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}
         </span>
         <span className="text-fd-muted-foreground">
-          capture{' '}
-          {round.capture.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}
+          capture{" "}
+          {round.capture.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}
         </span>
         <span
           className={
-            Math.abs(offBy) < 0.05 ? 'text-fd-foreground' : 'text-fd-primary'
+            Math.abs(offBy) < 0.05 ? "text-fd-foreground" : "text-fd-primary"
           }
         >
           {Math.abs(offBy) < 0.05
-            ? 'same shape'
-            : `${offBy > 0 ? '+' : ''}${offBy.toFixed(1)}% ${
-                offBy > 0 ? 'wider' : 'narrower'
+            ? "same shape"
+            : `${offBy > 0 ? "+" : ""}${offBy.toFixed(1)}% ${
+                offBy > 0 ? "wider" : "narrower"
               } per cell`}
         </span>
       </div>

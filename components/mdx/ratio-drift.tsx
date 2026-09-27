@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * The layout writes a ratio out as integer rows by truncating, and the sync
@@ -27,6 +27,9 @@ interface Pass {
 export function RatioDrift() {
   const [extent, setExtent] = useState(START_EXTENT);
   const [ratio, setRatio] = useState(0.5);
+  // The stored ratio as the fraction it was read back as. It starts as the
+  // split's own 1/2 and becomes line/extent from the pass that last synced it.
+  const [fraction, setFraction] = useState("1/2");
   const [history, setHistory] = useState<Pass[]>([
     { ratio: 0.5, line: applyLayout(0.5, START_EXTENT), extent: START_EXTENT },
   ]);
@@ -36,29 +39,42 @@ export function RatioDrift() {
   const bottom = extent - line;
 
   const sync = () => {
-    const next = syncFromGeometry(applyLayout(ratio, extent), extent);
+    const synced = applyLayout(ratio, extent);
+    const next = syncFromGeometry(synced, extent);
     setRatio(next);
-    setHistory((h) => [...h, { ratio: next, line: applyLayout(next, extent), extent }]);
+    setFraction(`${synced}/${extent}`);
+    setHistory((h) => [
+      ...h,
+      { ratio: next, line: applyLayout(next, extent), extent },
+    ]);
   };
 
   const resize = (delta: number) => {
     const e = Math.max(10, Math.min(60, extent + delta));
     setExtent(e);
-    setHistory((h) => [...h, { ratio, line: applyLayout(ratio, e), extent: e }]);
+    setHistory((h) => [
+      ...h,
+      { ratio, line: applyLayout(ratio, e), extent: e },
+    ]);
   };
 
   const reset = () => {
     setExtent(START_EXTENT);
     setRatio(0.5);
-    setHistory([{ ratio: 0.5, line: applyLayout(0.5, START_EXTENT), extent: START_EXTENT }]);
+    setFraction("1/2");
+    setHistory([
+      {
+        ratio: 0.5,
+        line: applyLayout(0.5, START_EXTENT),
+        extent: START_EXTENT,
+      },
+    ]);
   };
 
   const drifted = Math.abs(ratio - 0.5) > 1e-9;
-  const even = Math.abs(top - bottom) <= 1;
 
   // The fraction is shown alongside the decimal because 14/29 explains where
   // 0.482759 came from and a decimal on its own does not.
-  const fraction = `${line}/${extent}`;
 
   const chartPoints = history
     .map((p, i) => {
@@ -67,7 +83,7 @@ export function RatioDrift() {
       const y = 24 - ((p.ratio - 0.44) / 0.07) * 24;
       return `${x},${Math.max(0, Math.min(24, y))}`;
     })
-    .join(' ');
+    .join(" ");
 
   return (
     <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
@@ -89,9 +105,17 @@ export function RatioDrift() {
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
-          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 font-mono text-sm">
+          <div
+            className="flex flex-wrap items-baseline gap-x-6 gap-y-1 font-mono text-sm"
+            aria-live="polite"
+          >
             <span className="text-fd-muted-foreground">stored ratio</span>
-            <span className={cn('tabular-nums', drifted ? 'text-fd-primary' : 'text-fd-foreground')}>
+            <span
+              className={cn(
+                "tabular-nums",
+                drifted ? "text-fd-primary" : "text-fd-foreground",
+              )}
+            >
               {ratio.toFixed(6)}
             </span>
             <span className="text-fd-muted-foreground">= {fraction}</span>
@@ -126,7 +150,7 @@ export function RatioDrift() {
           </svg>
           <div className="font-mono text-xs text-fd-muted-foreground">
             dashed line is 0.500, {history.length - 1} pass
-            {history.length === 2 ? '' : 'es'} so far
+            {history.length === 2 ? "" : "es"} so far
           </div>
         </div>
       </div>
@@ -167,11 +191,11 @@ export function RatioDrift() {
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         Press <strong>sync once</strong>. The ratio goes from 0.500 to 0.482759,
-        which is 14/29, and every press after that leaves it there. One-way, then
-        a fixed point, which is why a test that syncs a fresh layout and finds it
-        stable can never see the loss that already happened. Now grow the pair to
-        36 rows: {even ? 'the split is still even' : 'the split is visibly lopsided'}.
-        At 0.5 that would be 18 rows against 18.
+        which is 14/29, and every press after that leaves it there. One-way,
+        then a fixed point, which is why a test that syncs a fresh layout and
+        finds it stable can never see the loss that already happened. Now grow
+        the pair to 36 rows: 14/29 of 36 truncates to 17 rows against 19, where
+        0.5 would have given 18 against 18.
       </figcaption>
     </figure>
   );

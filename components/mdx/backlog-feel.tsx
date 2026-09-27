@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * Measured range for a composed frame during a tiling resize, in milliseconds.
@@ -83,33 +83,41 @@ export function BacklogFeel() {
     };
   }, [coalesce, frameCost]);
 
-  const clamp = (x: number) => Math.max(60, Math.min(x, 560));
+  // The divider stays 60px from either edge of the figure, so it cannot be
+  // dragged out of view on a narrow screen.
+  const clamp = useCallback((x: number) => {
+    const width = boxRef.current?.clientWidth ?? 620;
+    return Math.max(60, Math.min(x, Math.max(120, width - 60)));
+  }, []);
 
   // One event per cell crossed, which is what a terminal actually reports. A
   // single pointer event that travels several cells produces one motion event
   // per cell, so a fast drag emits far more events than the browser delivers.
   // Emitting only one per pointer event would drain trivially and hide the
   // effect this figure exists to show.
-  const emit = useCallback((clientX: number) => {
-    const box = boxRef.current;
-    if (!box) return;
-    const x = clamp(clientX - box.getBoundingClientRect().left);
-    setPointerX(x);
+  const emit = useCallback(
+    (clientX: number) => {
+      const box = boxRef.current;
+      if (!box) return;
+      const x = clamp(clientX - box.getBoundingClientRect().left);
+      setPointerX(x);
 
-    const cell = Math.round(x / CELL);
-    if (lastCell.current === null) {
+      const cell = Math.round(x / CELL);
+      if (lastCell.current === null) {
+        lastCell.current = cell;
+        return;
+      }
+      if (lastCell.current === cell) return;
+
+      const step = cell > lastCell.current ? 1 : -1;
+      for (let c = lastCell.current + step; ; c += step) {
+        queue.current.push({ x: clamp(c * CELL) });
+        if (c === cell) break;
+      }
       lastCell.current = cell;
-      return;
-    }
-    if (lastCell.current === cell) return;
-
-    const step = cell > lastCell.current ? 1 : -1;
-    for (let c = lastCell.current + step; ; c += step) {
-      queue.current.push({ x: clamp(c * CELL) });
-      if (c === cell) break;
-    }
-    lastCell.current = cell;
-  }, []);
+    },
+    [clamp],
+  );
 
   // Dragging is tracked in a ref as well as in state. The window listeners below
   // are installed once and would otherwise read `dragging` from the render
@@ -143,18 +151,19 @@ export function BacklogFeel() {
       if (!draggingRef.current) return;
       emit(e.clientX);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', settle);
-    window.addEventListener('pointercancel', settle);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", settle);
+    window.addEventListener("pointercancel", settle);
     return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', settle);
-      window.removeEventListener('pointercancel', settle);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", settle);
+      window.removeEventListener("pointercancel", settle);
     };
   }, [emit, settle]);
 
   const onKey = (e: React.KeyboardEvent) => {
-    const delta = e.key === 'ArrowLeft' ? -CELL : e.key === 'ArrowRight' ? CELL : 0;
+    const delta =
+      e.key === "ArrowLeft" ? -CELL : e.key === "ArrowRight" ? CELL : 0;
     if (!delta) return;
     e.preventDefault();
     const x = clamp(pointerX + delta);
@@ -163,6 +172,16 @@ export function BacklogFeel() {
   };
 
   const lag = Math.round(Math.abs(pointerX - drawnX));
+  const [maxValue, setMaxValue] = useState(560);
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const update = () => setMaxValue(Math.max(120, box.clientWidth - 60));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
@@ -194,19 +213,20 @@ export function BacklogFeel() {
           aria-label="Pane divider. Drag it, or use the arrow keys."
           aria-valuenow={Math.round(drawnX)}
           aria-valuemin={60}
-          aria-valuemax={560}
+          aria-valuemax={maxValue}
           onPointerDown={onDown}
           onKeyDown={onKey}
           className={cn(
-            'absolute inset-y-0 w-1 cursor-col-resize bg-fd-primary',
-            'focus:outline-none focus:ring-2 focus:ring-fd-primary focus:ring-offset-1',
+            "absolute inset-y-0 w-1 cursor-col-resize bg-fd-primary",
+            "focus:outline-none focus:ring-2 focus:ring-fd-primary focus:ring-offset-1",
           )}
           style={{ left: drawnX }}
         />
 
         <div className="pointer-events-none absolute right-3 top-3 rounded bg-fd-card/90 px-2.5 py-1.5 font-mono text-xs tabular-nums text-fd-muted-foreground">
-          queue {String(queueDepth).padStart(3)} · lag {String(lag).padStart(3)}px
-          {peak > 0 ? ` · peak ${peak}` : ''}
+          queue {String(queueDepth).padStart(3)} · lag {String(lag).padStart(3)}
+          px
+          {peak > 0 ? ` · peak ${peak}` : ""}
         </div>
       </div>
 
@@ -227,7 +247,9 @@ export function BacklogFeel() {
         </label>
 
         <label className="flex flex-1 items-center gap-3 text-sm">
-          <span className="whitespace-nowrap text-fd-muted-foreground">frame cost</span>
+          <span className="whitespace-nowrap text-fd-muted-foreground">
+            frame cost
+          </span>
           <input
             type="range"
             min={FRAME_MIN}
@@ -247,12 +269,12 @@ export function BacklogFeel() {
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         Drag the divider. With coalescing off, one motion event composes one
         frame, so the queue drains at one event per frame cost while the drag
-        emits one event per cell crossed. Keep moving and the gap grows; stop and
-        it catches up. That growth is what separates a backlog from a slow frame.
-        Turn coalescing on and the same drag pins to the pointer. Either way the
-        divider lands exactly where you released, because every event still
-        updates the geometry and only the redundant frames are dropped. The
-        slider spans the measured range for a real resize frame.
+        emits one event per cell crossed. Keep moving and the gap grows; stop
+        and it catches up. That growth is what separates a backlog from a slow
+        frame. Turn coalescing on and the same drag pins to the pointer. Either
+        way the divider lands exactly where you released, because every event
+        still updates the geometry and only the redundant frames are dropped.
+        The slider spans the measured range for a real resize frame.
       </figcaption>
     </figure>
   );

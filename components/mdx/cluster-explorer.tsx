@@ -1,13 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { cn } from '@/lib/cn';
 
 /**
  * East Asian Wide and Fullwidth ranges, plus the emoji ranges that present as
- * wide by default. Not exhaustive, and deliberately so: this mirrors the kind of
- * per-codepoint table a terminal ships, and the argument the component makes is
- * that no such table can be sufficient on its own.
+ * wide by default. Not exhaustive, and deliberately so: this mirrors the kind
+ * of per-codepoint table a terminal ships, and the argument the component
+ * makes is that no such table can be sufficient on its own.
+ *
+ * The "cells used" column takes the width of the cluster's first codepoint
+ * that is not zero-width, which holds for the presets below. It does not model
+ * scripts whose spacing marks widen a cluster (Devanagari, for one), so there
+ * is no preset for them.
  */
 const WIDE: [number, number][] = [
   [0x1100, 0x115f],
@@ -103,7 +108,6 @@ const PRESETS: { label: string; value: string }[] = [
   { label: 'combining marks', value: 'é' + '́'.repeat(3) },
   { label: 'CJK', value: '日本語' },
   { label: 'zero width space', value: 'a​b' },
-  { label: 'devanagari', value: 'नमस्ते' },
 ];
 
 /**
@@ -112,6 +116,7 @@ const PRESETS: { label: string; value: string }[] = [
  * from another terminal did not fix anything.
  */
 export function ClusterExplorer() {
+  const inputId = useId();
   const [value, setValue] = useState('👨‍👩‍👧‍👦 日本語 é́');
   const clusters = useMemo(() => segment(value), [value]);
 
@@ -123,13 +128,13 @@ export function ClusterExplorer() {
     <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
       <div className="border-b border-fd-border p-4">
         <label
-          htmlFor="cluster-input"
+          htmlFor={inputId}
           className="mb-2 block text-sm font-medium text-fd-foreground"
         >
           Text to measure
         </label>
         <input
-          id="cluster-input"
+          id={inputId}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           spellCheck={false}

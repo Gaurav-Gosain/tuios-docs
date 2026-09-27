@@ -1,6 +1,6 @@
-import { cn } from '@/lib/cn';
+import { cn } from "@/lib/cn";
 
-type Tone = 'normal' | 'echo' | 'dim';
+type Tone = "normal" | "echo" | "dim";
 
 export interface CaptureLine {
   text: string;
@@ -21,9 +21,9 @@ export interface TerminalCaptureProps {
 }
 
 const TONE: Record<Tone, string> = {
-  normal: 'text-fd-foreground',
-  echo: 'text-fd-primary',
-  dim: 'text-fd-muted-foreground',
+  normal: "text-fd-foreground",
+  echo: "text-fd-primary",
+  dim: "text-fd-muted-foreground",
 };
 
 /**
@@ -56,23 +56,30 @@ export function TerminalCapture({
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <section
+          className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+          aria-label={title}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls sideways must be reachable by keyboard
+          tabIndex={0}
+        >
           <pre
             className={cn(
-              'min-w-max px-4 py-3 font-mono text-sm',
-              boxDrawing ? 'leading-[1.15]' : 'leading-6',
+              "min-w-max px-4 py-3 font-mono text-sm",
+              boxDrawing ? "leading-[1.15]" : "leading-6",
             )}
           >
             {lines.map((line, i) => (
-              <div key={i} className={cn(TONE[line.tone ?? 'normal'])}>
-                {line.text || ' '}
+              // biome-ignore lint/suspicious/noArrayIndexKey: the lines are static and can repeat
+              <div key={i} className={cn(TONE[line.tone ?? "normal"])}>
+                {line.text || " "}
               </div>
             ))}
             {Array.from({ length: padding }, (_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: padding rows have no identity
               <div key={`pad-${i}`}>&nbsp;</div>
             ))}
           </pre>
-        </div>
+        </section>
       </div>
 
       {note ? (
