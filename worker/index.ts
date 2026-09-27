@@ -30,7 +30,9 @@ import {
 } from "./negotiate";
 import { hostRedirect } from "./redirect";
 
-type Env = { ASSETS: Fetcher; MEDIA: R2Bucket };
+// MEDIA is optional: until the R2 bucket is bound, a clip path falls through
+// to the assets, which answer 404, and the page shows the clip's poster.
+type Env = { ASSETS: Fetcher; MEDIA?: R2Bucket };
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -45,7 +47,7 @@ export default {
       return Response.redirect(target.toString(), 301);
     }
     const key = mediaKey(url.pathname);
-    if (key) return serveMedia(request, env.MEDIA, key);
+    if (key && env.MEDIA) return serveMedia(request, env.MEDIA, key);
     if (
       (request.method !== "GET" && request.method !== "HEAD") ||
       !isPagePath(url.pathname)
