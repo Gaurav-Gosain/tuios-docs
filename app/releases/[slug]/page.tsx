@@ -79,7 +79,11 @@ export default async function Page(props: {
           ]),
         ]}
       />
-      <MDX components={getMDXComponents()} />
+      {/* Long config keys in inline code must wrap on a phone rather than
+          widen the page. */}
+      <div className="contents [&_:not(pre)>code]:[overflow-wrap:anywhere]">
+        <MDX components={getMDXComponents()} />
+      </div>
     </ArticleLayout>
   );
 }
