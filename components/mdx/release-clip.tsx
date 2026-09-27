@@ -12,8 +12,12 @@ const NARROW = "(max-width: 639px)";
  * without an extension: the component expects `src.webm`, `src.mp4` and the
  * poster `src.jpg` next to each other under public/.
  *
- * - The poster shows at once, and the page loads no video bytes until the clip
- *   is close to the viewport (preload none, sources attached on intersection).
+ * - Nothing loads until the clip comes near the viewport: the poster within
+ *   about two screens, the video within 400px (preload none, sources attached
+ *   on intersection). Until then the frame holds its size, so the page does
+ *   not jump. The poster also waits so that a phone fetches only the portrait
+ *   one. The clips themselves are served from R2 by the Worker (see
+ *   worker/media.ts).
  * - In view it plays muted and loops, like a GIF. Out of view it pauses, so a
  *   page of clips decodes one or two at a time.
  * - The clips are narrated. The sound button turns the voice on (and starts
@@ -42,6 +46,7 @@ export function ReleaseClip({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [near, setNear] = useState(false);
+  const [posterNear, setPosterNear] = useState(false);
   const [playing, setPlaying] = useState(false);
   // Null until the reader asks: then true or false wins over the automatic
   // play and pause that follow the viewport.
@@ -78,10 +83,17 @@ export function ReleaseClip({
     const video = videoRef.current;
     if (!video) return;
     if (typeof IntersectionObserver === "undefined") {
+      setPosterNear(true);
       setNear(true);
       setVisible(true);
       return;
     }
+    const posterObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setPosterNear(true);
+      },
+      { rootMargin: "1600px 0px" },
+    );
     // Attach the sources a little before the clip scrolls in, so it is ready
     // to play when it arrives.
     const nearObserver = new IntersectionObserver(
@@ -97,9 +109,11 @@ export function ReleaseClip({
       },
       { threshold: [0, 0.35, 1] },
     );
+    posterObserver.observe(video);
     nearObserver.observe(video);
     visibleObserver.observe(video);
     return () => {
+      posterObserver.disconnect();
       nearObserver.disconnect();
       visibleObserver.disconnect();
     };
@@ -154,7 +168,13 @@ export function ReleaseClip({
             "block h-auto w-full",
             narrow ? "aspect-[9/16]" : "aspect-video",
           )}
-          poster={narrow ? `${src}-vertical.jpg` : `${src}.jpg`}
+          poster={
+            posterNear || near
+              ? narrow
+                ? `${src}-vertical.jpg`
+                : `${src}.jpg`
+              : undefined
+          }
           width={narrow ? 1080 : 1920}
           height={narrow ? 1920 : 1080}
           muted
