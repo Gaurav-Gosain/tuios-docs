@@ -1,7 +1,7 @@
 ---
 title: I shipped three fixes for a bug I had not found
-description: A tuios pane went blank on focus changes. I shipped three real fixes for other bugs before I reproduced it. The cause was a width read from the first line.
-date: '2026-06-23'
+description: A tuios pane went blank on focus changes. I shipped three real fixes for other bugs before I reproduced it, and the cause was a window width read from its first line.
+date: '2026-07-19'
 author: Gaurav Gosain
 ---
 
@@ -101,10 +101,16 @@ off-screen.
   note="One measurement, taken from one line, deciding the fate of the whole window."
 />
 
-Which panes have a blank first line? The ones running full-screen applications
-that just repainted, and the ones scrolled so row zero is empty. That is why it
-was intermittent, and why it followed focus changes: a focus change triggers a
-repaint.
+Which panes have a blank first line? A full-screen application whose top row
+is empty, nvim among them. Several things had to line up for that line to
+reach the guard empty. Shared borders were on, so a tiled pane's content went
+to the clip with no box around it to pad it. The pane was unfocused, and the
+unfocused render path trims trailing spaces, which turns a blank row into an
+empty string. And the pane was the leftmost tile, the only one at x = 0. Once
+the layer came out empty, the compositor cached it and served it on every
+later frame until focusing the pane rebuilt it. That is why it was
+intermittent, why it followed focus changes, and why focusing the pane again
+brought the content back.
 
 The fix takes the maximum width across all lines instead of trusting the first.
 Here is the guard on the same layout. Blank a first line and pick a

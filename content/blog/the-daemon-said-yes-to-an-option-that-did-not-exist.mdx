@@ -1,6 +1,6 @@
 ---
 title: The daemon said yes to an option that did not exist
-description: Driving the tuios control socket like a machine found a command that lost its spaces, a dropped parameter, and 88 settings of which six applied live.
+description: Driving the tuios control socket the way a program would found a command that lost its spaces, a parameter that was silently dropped, and 88 settings of which six applied live.
 date: '2026-08-21'
 author: Gaurav Gosain
 ---
@@ -44,6 +44,13 @@ The examples in that documentation are held by a test that parses every one
 of them against the real command tree, so the docs cannot drift from the
 binary.
 
+Update, September 2026: `tuios send-keys --help` now carries the same
+warning, and one parser serves both routes a `send-keys` call can take. A
+word that looks like a misspelt key name, such as `Dwon` or `F13`, is refused
+with the closest key name and nothing is sent. A lower-case word such as
+`echo` is still typed as its characters, so the example above still types
+`echohello`. The widget runs that parser.
+
 ## The parameter that fell on the floor
 
 `new-window` takes a session and a name. I asked it for a workspace too:
@@ -82,7 +89,7 @@ workspace parameter misspelt:
     { text: "<- error.code     invalid_params", tone: "echo" },
     { text: "   message        verb new-window has no parameter workspce", tone: "echo" },
     { text: "   did_you_mean   workspace", tone: "echo" },
-    { text: "   accepted       session, name, workspace, cwd, focus, command, host", tone: "echo" },
+    { text: "   accepted       session, name, workspace, cwd, focus, command, host, grants", tone: "echo" },
     { text: "   detail         An unknown parameter is refused rather than", tone: "echo" },
     { text: "                  silently ignored. Fix the name and retry.", tone: "echo" }
   ]}
@@ -193,7 +200,10 @@ whole lifetime. The features were not broken. They were never wired to
 anything, and no green is as untrustworthy as the green of a test that cannot
 reach the wire.
 
-_Note, September 2026: an earlier version of this post showed the option
+_Note, September 2026: the placement tests in that suite were removed in a
+later pass over the unit tests, which kept a unit test only where the E2E
+suite did not already cover the same behaviour. The option and parameter
+tests are still in `internal/session`. An earlier version of this post showed the option
 example as `tuios set-option ...`. There was no such CLI command: `set-option`
 is the socket verb, and the CLI command at the time was `tuios set-config`.
 It also said the skill steered whole commands toward `run-command`, which

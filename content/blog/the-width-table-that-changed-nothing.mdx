@@ -1,7 +1,7 @@
 ---
 title: I ported a correct emoji width table and it fixed nothing
-description: Emoji widths were wrong in the tuios browser client. I ported ghostty's per-codepoint width table and nothing changed, because width belongs to clusters.
-date: '2026-06-27'
+description: Emoji widths were wrong in the tuios browser client. I ported ghostty's per-codepoint width table and nothing changed, because a terminal gives width to grapheme clusters, not to codepoints.
+date: '2026-07-19'
 author: Gaurav Gosain
 ---
 
@@ -52,6 +52,13 @@ values rather than treated as outstanding bugs. That is a deliberate choice:
 pretending they are bugs means either carrying a patch forever or having a
 permanently red test.
 
+Update, September 2026: two of those six have since gone. A Devanagari
+consonant with a spacing vowel sign and a lone regional indicator now measure
+the same as in ghostty-vt, so 41 of the 45 agree. The four that remain are
+zero-width characters standing alone (a combining mark, a zero-width joiner, a
+zero-width space) and the soft hyphen, and the test fails if that list
+changes.
+
 The real fix was already available and was not a table at all. Use a segmenter
 that implements UAX 29, and let the cluster boundaries fall out of it.
 Everything else follows.
@@ -94,7 +101,7 @@ Side by side, the three comparisons and what each one accepts:
 
 | Suite | Compared by | Passes when |
 | --- | --- | --- |
-| Width corpus, 45 cases | cursor advance, as integers | equal to ghostty-vt (39 agree, 6 asserted as documented divergences) |
+| Width corpus, 45 cases | cursor advance, as integers | equal to ghostty-vt (39 agreed at the time, 6 asserted as documented divergences; 41 and 4 now) |
 | Four golden scenarios | differing pixels against the reference | under 2 percent |
 | Emoji golden scenario | differing pixels against the reference | under 5 percent |
 | Torture corpus, 24 entries | ink coverage per cell | the right cell holds the right amount of glyph |

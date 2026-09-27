@@ -324,6 +324,12 @@ about 0.9 MB to the binary. Embedding tsnet, so tuios would be its own tailnet
 node, would add 15 MB and need an auth key, so it is not used. A host added
 this way is still reached over ssh like every other host.
 
+Update, September 2026: the size work replaced the local API client with a
+run of `tailscale status --json`
+([758103a5](https://github.com/Gaurav-Gosain/tuios/commit/758103a5)). It
+makes the same call and prints the same list, and it took 627 KB of tailscale
+packages, and most of the reason `net/http` was linked, out of the binary.
+
 ## What agents get from this
 
 This is the part I built it for. An agent in a laptop pane can now drive
@@ -340,6 +346,8 @@ tuios wait-for window-idle -w build:api:0
 The answer names the host it came from, and `--json` adds a `host` field. An
 unknown host fails with `unknown_host` and lists the configured names. A host
 that is down fails with `host_unreachable`, and nothing is queued for later.
+(Mail is the exception since 23 September: see the update at the end of the
+next section.)
 
 Mail crosses links too, and it is
 [marked](https://github.com/Gaurav-Gosain/tuios/commit/5ccf6d84). A message
@@ -357,6 +365,19 @@ host can reach the laptop daemon. That follows from the first invariant: the
 far side never gets a channel into the hub. A hosted pane also ends when its
 link drops, and a resurrected session brings it back as a local shell, without
 the host's name on it.
+
+Update, September 2026: two of those limits went five days after this was
+written. Since [3cd7e5e4](https://github.com/Gaurav-Gosain/tuios/commit/3cd7e5e4)
+a process in a hosted pane gets `TUIOS_PANE_HOSTED=1` and its pane id, and
+`set-agent-state` and the mail verbs it runs are carried to the daemon that
+holds its window. The invariant held: the laptop opens the channel the
+reports travel on, with a `pane-calls` verb over the link, and the far daemon
+only writes to it. Since
+[d4bba3fe](https://github.com/Gaurav-Gosain/tuios/commit/d4bba3fe) a hosted
+pane survives a dropped link. The far machine keeps the process for a grace
+period (ten minutes by default), the frame reads `[reconnecting]`, and the
+output printed meanwhile is replayed when the link is back. Mail to a host
+whose link is down now waits in an outbox and goes in order when it returns.
 
 ## What I keep from this
 

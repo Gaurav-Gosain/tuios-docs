@@ -38,7 +38,8 @@ allocation by allocation, twice per pane per frame at flood rates.
 The waste has a sibling: before the box is rendered, the content is measured
 with `lipgloss.Size` and clamped with `MaxWidth` and `MaxHeight`, a full
 ANSI-aware walk over a string the renderer itself just produced to known
-dimensions. Measuring what you just made, then wrapping what cannot wrap.
+dimensions. So the renderer measured what it had just made, then wrapped what
+could not wrap.
 
 ## Deleting work is a correctness claim
 
@@ -136,3 +137,15 @@ would keep even if the performance win evaporated: it converts "this call
 does nothing here" from a belief the optimisation rests on into a sentence
 the suite checks against real Unicode on every run. Beliefs rot. Sentences
 fail loudly.
+
+Update, September 2026: the identity test did not survive the strict pass over
+the unit tests on 2026-09-25
+([62c0bd8a](https://github.com/Gaurav-Gosain/tuios/commit/62c0bd8a)), which
+dropped it as a precondition of the differential test. The differential test,
+the two desynchronising tests and the end-to-end test remain, and the end-to-end
+test still has its negative control recorded in
+[`e2e/tui/NEGATIVE_CONTROLS.md`](https://github.com/Gaurav-Gosain/tuios/blob/main/e2e/tui/NEGATIVE_CONTROLS.md).
+The same afternoon the fix landed, a follow-up
+([9a4f9a3d](https://github.com/Gaurav-Gosain/tuios/commit/9a4f9a3d)) stopped
+calling `Style.Render` for a pre-shaped body at all and draws the border
+directly, since the rest of that call measured the body four more times.

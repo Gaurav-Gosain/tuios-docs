@@ -7,7 +7,9 @@ author: Gaurav Gosain
 
 The rail in tuios has an agents section. Every pane running a coding agent is
 listed there, ordered by who needs you: errored first, then waiting for input,
-then working, then finished and not yet seen, then finished and seen or idle.
+then finished and not yet seen, then working, then finished and seen, then
+idle. (Since 23 September the default sort draws those as four groups: needs
+you, finished and unread, working, and at rest.)
 If you run four agents in four worktrees, that list is supposed to answer one
 question without you looking at any of them. Which one is waiting for me?
 
@@ -160,7 +162,10 @@ func blockerOverridesClaim(w *WindowState, r AgentReport, now time.Time) bool {
 A screen rule that matches a blocking state may take a higher claim only if the
 pane has painted since that claim was stamped, and the claim has stood
 unrefreshed for two seconds. The two seconds give a hook the chance to describe
-the new screen first. If it does, the hook wins as before.
+the new screen first. If it does, the hook wins as before. (The function has
+since gained one case: a displaced claim that says the agent is at rest,
+`idle` or `unknown`, gets no grace, because it is not a source part way
+through describing the new screen.)
 
 The part I almost left out is what happens after. The screen tier only ever
 asserts `needs_input`. If the override simply took the pane, nothing would

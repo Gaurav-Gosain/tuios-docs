@@ -1,7 +1,7 @@
 ---
 title: My multiplexer lied about what it could do
-description: kitty icat drew nothing when tuios ran in a browser client. The graphics passthrough said yes to file transmission without asking the host.
-date: '2026-07-02'
+description: kitty icat drew nothing when tuios ran in a browser client, because the graphics passthrough said yes to file transmission without asking the host.
+date: '2026-07-19'
 author: Gaurav Gosain
 ---
 
@@ -97,6 +97,18 @@ There was a second bug hiding in the same function. Quiet mode has two levels,
 code treated both as "say nothing". A guest that asked for `q=1` and hit an
 error got silence, waited out its timeout, and never tried the next medium. An
 error has to reach a guest that only suppressed successes.
+
+Update, September 2026: the daemon had its own copy of the lie. When a pane
+runs under the session daemon, the daemon answers `a=q` itself, because an
+answer that goes out to a client and back arrives after a probing guest has
+given up. It answered `OK` to every query, whatever the medium and whatever
+`q` said. Since
+[dd51c91a](https://github.com/Gaurav-Gosain/tuios/commit/dd51c91a) it honours
+`q` and refuses file media when the path would be read on another machine: a
+pane that runs on another host over a link, or a session that a client
+attached over a link is drawing. The same commit fixed a second reason icat
+drew nothing: it sends unpadded base64, and the parser only accepted padded
+payloads.
 
 ## Ask, or say no
 

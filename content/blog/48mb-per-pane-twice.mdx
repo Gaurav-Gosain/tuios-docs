@@ -144,10 +144,17 @@ one narrow cell in the current style. Anything a plain byte cannot say is a toke
 | byte | token | what follows |
 |---|---|---|
 | `0xFF` | style change | fg, bg and underline colour as uvarints, then attributes and underline style |
-| `0xFE` | link change | 0 for no link, otherwise 1 plus an index into the link table |
+| `0xFE` | link change | 0 for no link, 1 for a link new to this line (its URL and params follow), 2+k for the line's k-th link |
 | `0xFD` | cell of width other than one | the width as a byte, then the cell's content |
-| `0xFC` | grapheme of more than one rune | an index into the grapheme table |
+| `0xFC` | grapheme of more than one rune | the cluster's bytes, after their length as a uvarint |
 | `0xFB` | empty content | nothing; this is what a wide character's spacer holds |
+
+Update, September 2026: when this landed, `0xFE` and `0xFC` carried an index
+into per-pane tables of links and clusters. Nothing pruned those tables, so a
+pane printing a new link on every line grew for its whole life. Since
+[7c08d601](https://github.com/Gaurav-Gosain/tuios/commit/7c08d601) a line
+carries its own links and clusters, as the table above shows. Plain text and
+colour cost the same as before.
 
 The trick is the range. The bytes `0xF8` to `0xFF` never start a UTF-8
 sequence, so a reader can tell a token from the start of a character without
@@ -213,8 +220,8 @@ The screen now has a grid of its own. A row is nil until something is written
 on it, and a nil row reads as blanks. A write that would leave the row blank
 does not allocate it. A row that has been written stays allocated, so a flood
 never allocates a row it already has. An empty pane held 28KB when this
-landed. The test that pins it logs 33,576 bytes on main today, still far under
-the 1.3MB one grid of cells costs.
+landed. `TestEmptyPaneCostsNoGrid`, which pins it, logs 34,289 bytes on main
+in late September, still far under the 1.3MB one grid of cells costs.
 
 Replacing the storage under the whole screen is the kind of change that looks
 right and is subtly wrong. The cell semantics are ultraviolet's own: a write

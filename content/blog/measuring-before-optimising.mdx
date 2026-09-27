@@ -1,7 +1,7 @@
 ---
 title: The benchmark said 27x faster. It felt worse.
 description: Fixing pane resize lag in TUIOS with Go benchmarks and pprof. Two of four theories were wrong, and the benchmark measured the wrong thing for three rounds.
-date: '2026-07-11'
+date: '2026-07-19'
 author: Gaurav Gosain
 ---
 
@@ -33,7 +33,7 @@ intermediate frames go.
 <BenchBars
   groups={["2", "4", "9"]}
   series={[
-    { label: "before", values: [4070, 5316, 6663], tone: "baseline" },
+    { label: "before", values: [4069, 5316, 6663], tone: "baseline" },
     { label: "after", values: [24, 42, 115], tone: "subject" }
   ]}
   unit="us"
@@ -61,8 +61,13 @@ places below. `-count=5` runs the whole thing five times, and the spread across
 those runs is the only thing that tells you whether a 15% improvement is real.
 Absolute timings on this machine drift with thermal state, so anything I
 compared had to be interleaved rather than measured an hour apart.
+(`BenchmarkResizeMotion` itself is gone: it was removed with two other resize
+benchmarks in the September 2026 test cleanup, in
+[23baa53f](https://github.com/Gaurav-Gosain/tuios/commit/23baa53f). The flags
+work the same on any benchmark.)
 
-TUIOS wires up `net/http/pprof` behind a flag:
+TUIOS serves pprof behind a `--pprof` flag. At the time that meant
+`net/http/pprof`:
 
 ```go
 if pprofAddr != "" {
@@ -78,6 +83,12 @@ enabled. They are sampled too, because recording every event made a `--pprof`
 run feel much slower than a normal one. For a program that spends its life
 waiting on PTY reads and holding locks, those are the two profiles that explain
 anything.
+
+Since September 2026 the flag is served by a small HTTP/1.1 responder over
+`runtime/pprof` (`cmd/tuios/pprof_server.go`) instead, so that `net/http` and
+`crypto/tls` stay out of the binary
+([161c3508](https://github.com/Gaurav-Gosain/tuios/commit/161c3508)). The
+sample rates are the same, and `go tool pprof` reads it the same way.
 
 <Callout title="Corrected 22 September 2026">
   An earlier version of this post showed `SetBlockProfileRate(1)` and
