@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useId, useRef, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useEffect, useId, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * A model of the scrolling layout's strip across a session switch.
@@ -22,7 +22,7 @@ import { cn } from '@/lib/cn';
 const SCREEN = 80;
 const DEFAULT_WIDTH = 0.55;
 const PRESETS = [0.333, 0.5, 0.55, 0.667, 0.9];
-const PANES = ['A', 'B', 'C'];
+const PANES = ["A", "B", "C"];
 // The fixed scale every strip is drawn at, in cells. Three columns at the
 // widest preset are 216 cells, so this holds any strip the widget can build.
 const SCALE = 224;
@@ -42,11 +42,16 @@ interface Strip {
   viewportX: number;
 }
 
-type Mode = 'before' | 'after';
+type Mode = "before" | "after";
 
-const initialCols = (): Column[] => PANES.map((p) => ({ panes: [p], prop: 0, active: 0 }));
+const initialCols = (): Column[] =>
+  PANES.map((p) => ({ panes: [p], prop: 0, active: 0 }));
 
-const initialStrip = (): Strip => ({ cols: initialCols(), focused: 0, viewportX: 0 });
+const initialStrip = (): Strip => ({
+  cols: initialCols(),
+  focused: 0,
+  viewportX: 0,
+});
 
 const cloneCols = (cols: Column[]): Column[] =>
   cols.map((c) => ({ panes: [...c.panes], prop: c.prop, active: c.active }));
@@ -106,18 +111,16 @@ const columnHolding = (cols: Column[], pane: string | undefined) =>
   );
 
 const describe = (cols: Column[]) =>
-  cols
-    .map((c) => `[${c.panes.join(',')}] ${widthOf(c)}`)
-    .join('  ');
+  cols.map((c) => `[${c.panes.join(",")}] ${widthOf(c)}`).join("  ");
 
 export function ScrollColumnsRoundTrip() {
-  const [mode, setMode] = useState<Mode>('before');
+  const [mode, setMode] = useState<Mode>("before");
   const [local, setLocal] = useState<Strip>(initialStrip);
   // The second client builds its own strip from the window list, as every
   // client did. Before the fix nothing it received ever changed it.
   const [peerCols, setPeerCols] = useState<Column[]>(initialCols);
   const [away, setAway] = useState(false);
-  const [result, setResult] = useState('');
+  const [result, setResult] = useState("");
   const timer = useRef<number | undefined>(undefined);
   const id = useId();
 
@@ -128,7 +131,7 @@ export function ScrollColumnsRoundTrip() {
   // its own and takes only the offset, which it clamps to its own strip.
   const commit = (next: Strip) => {
     setLocal(next);
-    if (mode === 'after') setPeerCols(cloneCols(next.cols));
+    if (mode === "after") setPeerCols(cloneCols(next.cols));
   };
 
   // Keyboard actions show the whole column with a peek beside it. A click
@@ -137,7 +140,7 @@ export function ScrollColumnsRoundTrip() {
     if (away) return;
     const next = fn({ ...local, cols: cloneCols(local.cols) });
     if (!next) return;
-    setResult('');
+    setResult("");
     commit(click ? ensureVisible(next) : reveal(next, PEEK));
   };
 
@@ -191,7 +194,7 @@ export function ScrollColumnsRoundTrip() {
     setAway(false);
     setLocal(initialStrip());
     setPeerCols(initialCols());
-    setResult('');
+    setResult("");
   };
 
   const switchAndBack = () => {
@@ -205,7 +208,7 @@ export function ScrollColumnsRoundTrip() {
       // Before: the state names the panes and the offset, so the strip is
       // built from the window list. After: it is built from the columns the
       // state carries. Either way the session's offset is laid over it.
-      const cols = mode === 'after' ? saved : initialCols();
+      const cols = mode === "after" ? saved : initialCols();
       const focused = columnHolding(cols, pane);
       const next: Strip = { cols, focused, viewportX: clampView(cols, savedX) };
       setLocal(next);
@@ -217,19 +220,21 @@ export function ScrollColumnsRoundTrip() {
       for (const c of saved) {
         const now = cols[columnHolding(cols, c.panes[0])];
         if (widthOf(c) !== widthOf(now))
-          lost.push(`${c.panes.join('+')} was ${widthOf(c)} cells, now ${widthOf(now)}`);
+          lost.push(
+            `${c.panes.join("+")} was ${widthOf(c)} cells, now ${widthOf(now)}`,
+          );
       }
       setResult(
         lost.length
-          ? `Back on the session: ${lost.join('; ')}.`
-          : 'Back on the session: every column as you left it.',
+          ? `Back on the session: ${lost.join("; ")}.`
+          : "Back on the session: every column as you left it.",
       );
     };
 
     const reduce =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setResult('');
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setResult("");
     if (reduce) {
       rebuild();
       return;
@@ -245,17 +250,17 @@ export function ScrollColumnsRoundTrip() {
   };
 
   const state =
-    mode === 'after'
+    mode === "after"
       ? `scroll_strip: {viewport_x: ${local.viewportX}}\nworkspace_scroll_columns: {1: [${local.cols
           .map(
             (c) =>
-              `{windows: [${c.panes.join(', ')}]${c.prop ? `, proportion: ${c.prop}` : ''}}`,
+              `{windows: [${c.panes.join(", ")}]${c.prop ? `, proportion: ${c.prop}` : ""}}`,
           )
-          .join(', ')}]}`
+          .join(", ")}]}`
       : `scroll_strip: {viewport_x: ${local.viewportX}}\n(no columns)`;
 
   const btn =
-    'rounded-md border border-fd-border px-2.5 py-1.5 text-sm text-fd-foreground hover:border-fd-primary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary disabled:opacity-40 disabled:hover:border-fd-border';
+    "rounded-md border border-fd-border px-2.5 py-1.5 text-sm text-fd-foreground hover:border-fd-primary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary disabled:opacity-40 disabled:hover:border-fd-border";
 
   const canConsume = local.focused < local.cols.length - 1;
   const canExpel = (local.cols[local.focused]?.panes.length ?? 0) > 1;
@@ -264,14 +269,14 @@ export function ScrollColumnsRoundTrip() {
     <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
       <fieldset className="m-0 min-w-0 flex flex-wrap items-center gap-2 border-0 border-b border-fd-border bg-fd-muted/40 px-3 py-2">
         <legend className="sr-only">Which build of tuios</legend>
-        {(['before', 'after'] as const).map((m) => (
+        {(["before", "after"] as const).map((m) => (
           <label
             key={m}
             className={cn(
-              'relative cursor-pointer rounded-md px-2.5 py-1 font-mono text-xs has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-fd-primary',
+              "relative cursor-pointer rounded-md px-2.5 py-1 font-mono text-xs has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-fd-primary",
               mode === m
-                ? 'bg-fd-primary text-fd-primary-foreground'
-                : 'text-fd-muted-foreground hover:text-fd-foreground',
+                ? "bg-fd-primary text-fd-primary-foreground"
+                : "text-fd-muted-foreground hover:text-fd-foreground",
             )}
           >
             <input
@@ -285,7 +290,7 @@ export function ScrollColumnsRoundTrip() {
               }}
               className="sr-only"
             />
-            {m === 'before' ? 'before the fix' : 'after the fix'}
+            {m === "before" ? "before the fix" : "after the fix"}
           </label>
         ))}
         <span className="ml-auto font-mono text-xs text-fd-muted-foreground">
@@ -301,11 +306,20 @@ export function ScrollColumnsRoundTrip() {
           onPane={focusPane}
           interactive
         />
-        <StripView label="second client, same session" strip={peer} away={false} />
+        <StripView
+          label="second client, same session"
+          strip={peer}
+          away={false}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-fd-border p-3 sm:p-4">
-        <button type="button" className={btn} onClick={() => focusStep(-1)} disabled={away || local.focused === 0}>
+        <button
+          type="button"
+          className={btn}
+          onClick={() => focusStep(-1)}
+          disabled={away || local.focused === 0}
+        >
           focus left
         </button>
         <button
@@ -316,13 +330,28 @@ export function ScrollColumnsRoundTrip() {
         >
           focus right
         </button>
-        <button type="button" className={btn} onClick={cycleWidth} disabled={away}>
+        <button
+          type="button"
+          className={btn}
+          onClick={cycleWidth}
+          disabled={away}
+        >
           cycle width
         </button>
-        <button type="button" className={btn} onClick={consume} disabled={away || !canConsume}>
+        <button
+          type="button"
+          className={btn}
+          onClick={consume}
+          disabled={away || !canConsume}
+        >
           stack next pane below
         </button>
-        <button type="button" className={btn} onClick={expel} disabled={away || !canExpel}>
+        <button
+          type="button"
+          className={btn}
+          onClick={expel}
+          disabled={away || !canExpel}
+        >
           unstack
         </button>
         <button
@@ -333,42 +362,55 @@ export function ScrollColumnsRoundTrip() {
         >
           switch session and back
         </button>
-        <button type="button" className={cn(btn, 'ml-auto')} onClick={reset}>
+        <button type="button" className={cn(btn, "ml-auto")} onClick={reset}>
           reset
         </button>
       </div>
 
       <div className="grid gap-3 border-t border-fd-border px-3 py-3 font-mono text-xs sm:grid-cols-2 sm:px-4">
         <div>
-          <div className="mb-1 text-fd-muted-foreground">what the daemon holds</div>
-          <pre className="whitespace-pre-wrap break-words text-fd-foreground">{state}</pre>
+          <div className="mb-1 text-fd-muted-foreground">
+            what the daemon holds
+          </div>
+          <pre className="whitespace-pre-wrap break-words text-fd-foreground">
+            {state}
+          </pre>
         </div>
         <div>
-          <div className="mb-1 text-fd-muted-foreground">columns, width in cells</div>
-          <div className="text-fd-foreground">this client: {describe(local.cols)}</div>
-          <div className="text-fd-foreground">second client: {describe(peerCols)}</div>
+          <div className="mb-1 text-fd-muted-foreground">
+            columns, width in cells
+          </div>
+          <div className="text-fd-foreground">
+            this client: {describe(local.cols)}
+          </div>
+          <div className="text-fd-foreground">
+            second client: {describe(peerCols)}
+          </div>
         </div>
       </div>
 
       <div
         aria-live="polite"
         className={cn(
-          'border-t border-fd-border px-3 py-3 font-mono text-xs sm:px-4',
-          result.startsWith('Back on the session: every') ? 'text-fd-foreground' : 'text-fd-primary',
+          "border-t border-fd-border px-3 py-3 font-mono text-xs sm:px-4",
+          result.startsWith("Back on the session: every")
+            ? "text-fd-foreground"
+            : "text-fd-primary",
         )}
       >
         {away
           ? 'On session "elsewhere". This client has thrown its strip away.'
-          : result || 'Widen a column or stack two panes, then switch session and back.'}
+          : result ||
+            "Widen a column or stack two panes, then switch session and back."}
       </div>
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         A model of the strip, at the sizes the regression tests use. The tinted
         band is the screen. Before the fix the daemon kept only the offset, so a
-        round trip rebuilt one column per pane at 44 cells and laid the old offset
-        over a strip it no longer matched. The second client never took the
-        columns at all, so the same offset showed it different panes. After the
-        fix both read the columns from the session.
+        round trip rebuilt one column per pane at 44 cells and laid the old
+        offset over a strip it no longer matched. The second client never took
+        the columns at all, so the same offset showed it different panes. After
+        the fix both read the columns from the session.
       </figcaption>
     </figure>
   );
@@ -399,8 +441,8 @@ function StripView({
       </div>
       <div
         className={cn(
-          'relative h-24 rounded-sm bg-fd-background transition-opacity duration-300 motion-reduce:transition-none',
-          away && 'opacity-20',
+          "relative h-24 rounded-sm bg-fd-background transition-opacity duration-300 motion-reduce:transition-none",
+          away && "opacity-20",
         )}
       >
         {/* The screen: the part of the strip the client draws. A tinted band
@@ -415,35 +457,45 @@ function StripView({
         {strip.cols.map((col, ci) => {
           const x = xOf(strip.cols, ci);
           const w = widthOf(col);
-          const inView = x + w > strip.viewportX && x < strip.viewportX + SCREEN;
+          const inView =
+            x + w > strip.viewportX && x < strip.viewportX + SCREEN;
           return (
             <div
-              key={col.panes.join('')}
+              key={col.panes.join("")}
               className="absolute top-0 bottom-0 flex flex-col gap-0.5 p-0.5 transition-[left,width] duration-300 ease-out motion-reduce:transition-none"
               style={{ left: pct(x), width: pct(w) }}
             >
               {col.panes.map((p, pi) => {
                 const isFocus = ci === strip.focused && pi === col.active;
                 const cls = cn(
-                  'flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-sm border font-mono text-xs',
-                  isFocus ? 'border-fd-primary' : 'border-fd-border',
-                  inView ? 'bg-fd-muted/60 text-fd-foreground' : 'bg-fd-muted/20 text-fd-muted-foreground',
+                  "flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-sm border font-mono text-xs",
+                  isFocus ? "border-fd-primary" : "border-fd-border",
+                  inView
+                    ? "bg-fd-muted/60 text-fd-foreground"
+                    : "bg-fd-muted/20 text-fd-muted-foreground",
                 );
                 const body = (
                   <>
                     <span className="font-semibold">{p}</span>
-                    {pi === 0 && <span className="hidden tabular-nums opacity-70 sm:inline">{w}</span>}
+                    {pi === 0 && (
+                      <span className="hidden tabular-nums opacity-70 sm:inline">
+                        {w}
+                      </span>
+                    )}
                   </>
                 );
                 return interactive && onPane ? (
                   <button
                     key={p}
                     type="button"
-                    aria-label={`Pane ${p}, column ${ci + 1}, ${w} cells wide${isFocus ? ', focused' : ''}`}
+                    aria-label={`Pane ${p}, column ${ci + 1}, ${w} cells wide${isFocus ? ", focused" : ""}`}
                     aria-pressed={isFocus}
                     disabled={away}
                     onClick={() => onPane(ci, pi)}
-                    className={cn(cls, 'focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary')}
+                    className={cn(
+                      cls,
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary",
+                    )}
                   >
                     {body}
                   </button>

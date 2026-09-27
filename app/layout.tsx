@@ -1,8 +1,8 @@
-import { RootProvider } from 'fumadocs-ui/provider/next';
-import './global.css';
-import type { Metadata } from 'next';
-import { feedAlternates } from '@/lib/metadata';
-import { site } from '@/lib/site';
+import { RootProvider } from "fumadocs-ui/provider/next";
+import "./global.css";
+import type { Metadata } from "next";
+import { feedAlternates } from "@/lib/metadata";
+import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: {
@@ -20,27 +20,27 @@ export const metadata: Metadata = {
   openGraph: {
     title: site.title,
     description:
-      'Panes, tiling and nine workspaces inside the terminal you already use, with sessions that keep running when you detach.',
-    url: '/',
+      "Panes, tiling and nine workspaces inside the terminal you already use, with sessions that keep running when you detach.",
+    url: "/",
     siteName: site.name,
-    type: 'website',
+    type: "website",
     images: site.image,
   },
   twitter: {
-    card: 'summary_large_image',
+    card: "summary_large_image",
     title: site.title,
     description:
-      'Panes, tiling and nine workspaces inside the terminal you already use, with sessions that keep running when you detach.',
+      "Panes, tiling and nine workspaces inside the terminal you already use, with sessions that keep running when you detach.",
     images: site.image,
   },
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: '32x32' },
-      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
     ],
-    apple: '/apple-touch-icon.png',
+    apple: "/apple-touch-icon.png",
   },
-  manifest: '/manifest.webmanifest',
+  manifest: "/manifest.webmanifest",
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -50,7 +50,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <RootProvider
           search={{
             options: {
-              type: 'static',
+              type: "static",
             },
           }}
         >

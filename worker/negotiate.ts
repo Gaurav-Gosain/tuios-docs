@@ -81,7 +81,9 @@ export function preferredType(header: string | null): Produced | null {
       !best ||
       next.q > best.q ||
       (next.q === best.q && next.index < best.index) ||
-      (next.q === best.q && next.index === best.index && next.order < best.order)
+      (next.q === best.q &&
+        next.index === best.index &&
+        next.order < best.order)
     ) {
       best = next;
     }

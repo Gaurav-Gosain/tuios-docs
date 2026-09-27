@@ -1,4 +1,4 @@
-import { cn } from '@/lib/cn';
+import { cn } from "@/lib/cn";
 
 export interface ShrinkStage {
   /** The tape at this point, one command per line. */
@@ -62,8 +62,8 @@ export function TapeShrink({ stages, caption }: TapeShrinkProps) {
 
               <p
                 className={cn(
-                  'border-t border-fd-border px-4 py-2.5 text-sm',
-                  'text-fd-muted-foreground',
+                  "border-t border-fd-border px-4 py-2.5 text-sm",
+                  "text-fd-muted-foreground",
                 )}
               >
                 {stage.note}

@@ -24,7 +24,10 @@ describe("preferredType", () => {
     ["text/markdown, text/*;q=0.1", "text/markdown"],
     ["text/markdown, */*;q=0.8", "text/markdown"],
     // A typical browser prefers HTML.
-    ["text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "text/html"],
+    [
+      "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "text/html",
+    ],
     ["application/pdf", null],
     ["text/html;q=0, text/markdown;q=0", null],
     ["TEXT/MARKDOWN", "text/markdown"],

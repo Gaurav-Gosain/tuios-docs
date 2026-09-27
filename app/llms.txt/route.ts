@@ -28,16 +28,26 @@ export function GET() {
       lines.push("", `## ${heading}`, "");
     }
     const { page } = entry;
-    lines.push(link(page.data.title, markdownPath(page.url), page.data.description));
+    lines.push(
+      link(page.data.title, markdownPath(page.url), page.data.description),
+    );
   }
 
   lines.push("", "## Blog", "");
   for (const post of getBlogPosts()) {
-    lines.push(link(post.data.title, markdownPath(post.url), post.data.description));
+    lines.push(
+      link(post.data.title, markdownPath(post.url), post.data.description),
+    );
   }
   lines.push("", "## Releases", "");
   for (const release of getReleases()) {
-    lines.push(link(release.data.title, markdownPath(release.url), release.data.description));
+    lines.push(
+      link(
+        release.data.title,
+        markdownPath(release.url),
+        release.data.description,
+      ),
+    );
   }
   lines.push(
     "",

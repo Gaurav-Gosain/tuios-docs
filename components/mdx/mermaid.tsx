@@ -15,7 +15,7 @@ export function Mermaid({ chart }: { chart: string }) {
     async function render() {
       try {
         const mermaid = (await import("mermaid")).default;
-        
+
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: "loose",
@@ -26,7 +26,7 @@ export function Mermaid({ chart }: { chart: string }) {
 
         const result = await mermaid.render(
           id.replace(/:/g, "_"),
-          chart.replaceAll("\\n", "\n")
+          chart.replaceAll("\\n", "\n"),
         );
 
         if (!cancelled) {

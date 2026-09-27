@@ -3,11 +3,7 @@ import { markdownForAgents } from "@/lib/feed";
 import { learnMarkdown } from "@/lib/learn/markdown";
 import { markdownPath } from "@/lib/markdown-path";
 import { absoluteUrl, site } from "@/lib/site";
-import {
-  getBlogPosts,
-  getDocsInSidebarOrder,
-  getReleases,
-} from "@/lib/source";
+import { getBlogPosts, getDocsInSidebarOrder, getReleases } from "@/lib/source";
 
 export const dynamic = "force-static";
 export const revalidate = false;
@@ -30,19 +26,17 @@ export async function GET() {
     files[markdownPath(page.url)] = await pageMarkdown(page);
   }
 
-  files["/index.md"] = listing(
-    site.name,
-    site.description,
-    "/",
-    [
-      ["Docs", docs],
-      ["Blog", posts],
-      ["Releases", releases],
-    ],
-  );
-  files["/blog.md"] = listing("Blog", "Posts about how tuios is built.", "/blog", [
-    ["Posts", posts],
+  files["/index.md"] = listing(site.name, site.description, "/", [
+    ["Docs", docs],
+    ["Blog", posts],
+    ["Releases", releases],
   ]);
+  files["/blog.md"] = listing(
+    "Blog",
+    "Posts about how tuios is built.",
+    "/blog",
+    [["Posts", posts]],
+  );
   files["/releases.md"] = listing(
     "Releases",
     "What changed in each release of tuios.",
@@ -79,7 +73,13 @@ function listing(
   path: string,
   sections: [string, TextPage[]][],
 ) {
-  const lines = [`# ${title}`, "", `URL: ${absoluteUrl(path)}`, "", `> ${description}`];
+  const lines = [
+    `# ${title}`,
+    "",
+    `URL: ${absoluteUrl(path)}`,
+    "",
+    `> ${description}`,
+  ];
   for (const [heading, pages] of sections) {
     lines.push("", `## ${heading}`, "");
     for (const page of pages) {

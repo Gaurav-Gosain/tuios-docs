@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * The guard that decides whether a pane body may skip lipgloss.Wrap. The
@@ -23,12 +23,12 @@ interface Sample {
 }
 
 const SAMPLES: Sample[] = [
-  { label: 'ascii', text: 'ls -la', cols: 6 },
-  { label: 'cjk', text: '你好世界', cols: 8 },
-  { label: 'combining', text: 'café', cols: 4 },
-  { label: 'zwj family', text: '\u{1F468}‍\u{1F469}‍\u{1F467} ok', cols: 5 },
-  { label: 'flag pair', text: '\u{1F1EF}\u{1F1F5} jp', cols: 5 },
-  { label: 'blocks', text: '▀▄█▌▐░▒▓', cols: 8 },
+  { label: "ascii", text: "ls -la", cols: 6 },
+  { label: "cjk", text: "你好世界", cols: 8 },
+  { label: "combining", text: "café", cols: 4 },
+  { label: "zwj family", text: "\u{1F468}‍\u{1F469}‍\u{1F467} ok", cols: 5 },
+  { label: "flag pair", text: "\u{1F1EF}\u{1F1F5} jp", cols: 5 },
+  { label: "blocks", text: "▀▄█▌▐░▒▓", cols: 8 },
 ];
 
 const PANE_COLS = 10;
@@ -43,7 +43,7 @@ export function PreshapedGuard() {
   // Mid-resize the emulator's grid can lag the pane. Every row the emulator
   // produced is exactly as wide as its own grid, which is what the guard sees.
   const rows = SAMPLES.map((s) => {
-    const line = s.text + ' '.repeat(grid - s.cols);
+    const line = s.text + " ".repeat(grid - s.cols);
     return {
       ...s,
       line,
@@ -74,14 +74,20 @@ export function PreshapedGuard() {
               <th scope="col" className="px-2 py-2 text-right font-normal">
                 runes
               </th>
-              <th scope="col" className="px-3 py-2 text-right font-normal sm:px-4">
+              <th
+                scope="col"
+                className="px-3 py-2 text-right font-normal sm:px-4"
+              >
                 columns
               </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.label} className="border-b border-fd-border/60 last:border-b-0">
+              <tr
+                key={r.label}
+                className="border-b border-fd-border/60 last:border-b-0"
+              >
                 <td className="px-3 py-1.5 sm:px-4">
                   <span className="whitespace-pre rounded-sm px-0.5 text-fd-foreground outline outline-1 outline-fd-border">
                     {r.line}
@@ -98,8 +104,10 @@ export function PreshapedGuard() {
                 </td>
                 <td
                   className={cn(
-                    'px-3 py-1.5 text-right tabular-nums sm:px-4',
-                    r.columns === PANE_COLS ? 'text-fd-foreground' : 'text-fd-primary',
+                    "px-3 py-1.5 text-right tabular-nums sm:px-4",
+                    r.columns === PANE_COLS
+                      ? "text-fd-foreground"
+                      : "text-fd-primary",
                   )}
                 >
                   {r.columns}
@@ -137,7 +145,7 @@ export function PreshapedGuard() {
       >
         {vouches ? (
           <span className="text-fd-foreground">
-            every row is {PANE_COLS} columns, {rows.length} rows: publishes{' '}
+            every row is {PANE_COLS} columns, {rows.length} rows: publishes{" "}
             {PANE_COLS}x{rows.length}, wrap skipped
           </span>
         ) : (
@@ -152,9 +160,9 @@ export function PreshapedGuard() {
         A model of the guard, with a pane {PANE_COLS} columns wide. At the
         pane&apos;s own width the byte and rune counts are all over the place
         and the column count is {PANE_COLS} on every row, which is the only
-        number the guard trusts. Drag the grid off the pane&apos;s width, as
-        it is for a moment during a resize, and the renderer declines to vouch
-        for the frame instead of reporting a rectangle that is wrong. Your
+        number the guard trusts. Drag the grid off the pane&apos;s width, as it
+        is for a moment during a resize, and the renderer declines to vouch for
+        the frame instead of reporting a rectangle that is wrong. Your
         browser&apos;s font may not draw every glyph at exactly one or two
         columns; the counts are what the emulator&apos;s grid decides.
       </figcaption>

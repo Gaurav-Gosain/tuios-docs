@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useId, useMemo, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useId, useMemo, useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * East Asian Wide and Fullwidth ranges, plus the emoji ranges that present as
@@ -63,7 +63,7 @@ function codepointWidth(cp: number) {
 }
 
 function hex(cp: number) {
-  return `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`;
+  return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
 interface Cluster {
@@ -91,23 +91,27 @@ function segment(input: string): Cluster[] {
   ).Segmenter;
 
   const pieces = Seg
-    ? Array.from(new Seg('en', { granularity: 'grapheme' }).segment(input), (s) => s.segment)
+    ? Array.from(
+        new Seg("en", { granularity: "grapheme" }).segment(input),
+        (s) => s.segment,
+      )
     : chars;
 
   return pieces.map((text) => {
     const codepoints = Array.from(text, (c) => c.codePointAt(0) ?? 0);
     const naive = codepoints.reduce((n, cp) => n + codepointWidth(cp), 0);
-    const base = codepoints.find((cp) => codepointWidth(cp) > 0) ?? codepoints[0];
+    const base =
+      codepoints.find((cp) => codepointWidth(cp) > 0) ?? codepoints[0];
     return { text, codepoints, naive, actual: codepointWidth(base) || 1 };
   });
 }
 
 const PRESETS: { label: string; value: string }[] = [
-  { label: 'family emoji', value: '👨‍👩‍👧‍👦' },
-  { label: 'flag', value: '🇯🇵' },
-  { label: 'combining marks', value: 'é' + '́'.repeat(3) },
-  { label: 'CJK', value: '日本語' },
-  { label: 'zero width space', value: 'a​b' },
+  { label: "family emoji", value: "👨‍👩‍👧‍👦" },
+  { label: "flag", value: "🇯🇵" },
+  { label: "combining marks", value: "é" + "́".repeat(3) },
+  { label: "CJK", value: "日本語" },
+  { label: "zero width space", value: "a​b" },
 ];
 
 /**
@@ -117,7 +121,7 @@ const PRESETS: { label: string; value: string }[] = [
  */
 export function ClusterExplorer() {
   const inputId = useId();
-  const [value, setValue] = useState('👨‍👩‍👧‍👦 日本語 é́');
+  const [value, setValue] = useState("👨‍👩‍👧‍👦 日本語 é́");
   const clusters = useMemo(() => segment(value), [value]);
 
   const naiveTotal = clusters.reduce((n, c) => n + c.naive, 0);
@@ -139,9 +143,9 @@ export function ClusterExplorer() {
           onChange={(e) => setValue(e.target.value)}
           spellCheck={false}
           className={cn(
-            'w-full rounded-md border border-fd-border bg-fd-background px-3 py-2',
-            'font-mono text-base text-fd-foreground',
-            'focus:border-fd-primary focus:outline-none focus:ring-1 focus:ring-fd-primary',
+            "w-full rounded-md border border-fd-border bg-fd-background px-3 py-2",
+            "font-mono text-base text-fd-foreground",
+            "focus:border-fd-primary focus:outline-none focus:ring-1 focus:ring-fd-primary",
           )}
         />
         <div className="mt-3 flex flex-wrap gap-2">
@@ -151,10 +155,10 @@ export function ClusterExplorer() {
               type="button"
               onClick={() => setValue(p.value)}
               className={cn(
-                'rounded-md border border-fd-border px-2.5 py-1 text-xs',
-                'text-fd-muted-foreground transition-colors',
-                'hover:border-fd-primary/50 hover:text-fd-foreground',
-                'focus:outline-none focus:ring-1 focus:ring-fd-primary',
+                "rounded-md border border-fd-border px-2.5 py-1 text-xs",
+                "text-fd-muted-foreground transition-colors",
+                "hover:border-fd-primary/50 hover:text-fd-foreground",
+                "focus:outline-none focus:ring-1 focus:ring-fd-primary",
               )}
             >
               {p.label}
@@ -167,8 +171,12 @@ export function ClusterExplorer() {
         <table className="w-full min-w-max text-sm">
           <thead>
             <tr className="border-b border-fd-border bg-fd-muted/40 text-left">
-              <th className="px-4 py-2 font-medium text-fd-muted-foreground">cluster</th>
-              <th className="px-4 py-2 font-medium text-fd-muted-foreground">codepoints</th>
+              <th className="px-4 py-2 font-medium text-fd-muted-foreground">
+                cluster
+              </th>
+              <th className="px-4 py-2 font-medium text-fd-muted-foreground">
+                codepoints
+              </th>
               <th className="px-4 py-2 text-right font-medium text-fd-muted-foreground">
                 table sum
               </th>
@@ -183,16 +191,19 @@ export function ClusterExplorer() {
               return (
                 <tr
                   key={i}
-                  className={cn('border-b border-fd-border/60 last:border-0', wrong && 'bg-fd-primary/5')}
+                  className={cn(
+                    "border-b border-fd-border/60 last:border-0",
+                    wrong && "bg-fd-primary/5",
+                  )}
                 >
                   <td className="px-4 py-2 font-mono text-base">{c.text}</td>
                   <td className="px-4 py-2 font-mono text-xs text-fd-muted-foreground">
-                    {c.codepoints.map(hex).join(' ')}
+                    {c.codepoints.map(hex).join(" ")}
                   </td>
                   <td
                     className={cn(
-                      'px-4 py-2 text-right font-mono tabular-nums',
-                      wrong ? 'text-fd-primary' : 'text-fd-muted-foreground',
+                      "px-4 py-2 text-right font-mono tabular-nums",
+                      wrong ? "text-fd-primary" : "text-fd-muted-foreground",
                     )}
                   >
                     {c.naive}
@@ -211,13 +222,15 @@ export function ClusterExplorer() {
               </td>
               <td
                 className={cn(
-                  'px-4 py-2 text-right font-mono tabular-nums',
-                  disagrees ? 'text-fd-primary' : '',
+                  "px-4 py-2 text-right font-mono tabular-nums",
+                  disagrees ? "text-fd-primary" : "",
                 )}
               >
                 {naiveTotal}
               </td>
-              <td className="px-4 py-2 text-right font-mono tabular-nums">{actualTotal}</td>
+              <td className="px-4 py-2 text-right font-mono tabular-nums">
+                {actualTotal}
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -226,14 +239,15 @@ export function ClusterExplorer() {
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         {disagrees ? (
           <>
-            The table says {naiveTotal} columns. The terminal uses {actualTotal}. Highlighted
-            rows are where adding up per-codepoint answers gives the wrong result, because a
-            cluster occupies one advance however many codepoints it contains.
+            The table says {naiveTotal} columns. The terminal uses {actualTotal}
+            . Highlighted rows are where adding up per-codepoint answers gives
+            the wrong result, because a cluster occupies one advance however
+            many codepoints it contains.
           </>
         ) : (
           <>
-            These agree, which is the easy case. Try the family emoji or the combining marks
-            preset to make them disagree.
+            These agree, which is the easy case. Try the family emoji or the
+            combining marks preset to make them disagree.
           </>
         )}
       </figcaption>

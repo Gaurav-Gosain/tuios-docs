@@ -1,18 +1,18 @@
-import { blog, docs, releases } from 'fumadocs-mdx:collections/server';
-import type { Node as PageTreeNode } from 'fumadocs-core/page-tree';
-import { type InferPageType, loader } from 'fumadocs-core/source';
-import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
-import { site } from './site';
+import { blog, docs, releases } from "fumadocs-mdx:collections/server";
+import type { Node as PageTreeNode } from "fumadocs-core/page-tree";
+import { type InferPageType, loader } from "fumadocs-core/source";
+import { lucideIconsPlugin } from "fumadocs-core/source/lucide-icons";
+import { site } from "./site";
 
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
-  baseUrl: '/docs',
+  baseUrl: "/docs",
   source: docs.toFumadocsSource(),
   plugins: [lucideIconsPlugin()],
 });
 
 export const blogSource = loader({
-  baseUrl: '/blog',
+  baseUrl: "/blog",
   source: blog.toFumadocsSource(),
 });
 
@@ -28,7 +28,7 @@ export function getBlogPosts() {
 }
 
 export const releasesSource = loader({
-  baseUrl: '/releases',
+  baseUrl: "/releases",
   source: releases.toFumadocsSource(),
 });
 
@@ -50,36 +50,36 @@ export function getReleases() {
  * main that no tag holds yet, and returns null.
  */
 export function getReleaseTag(page: InferPageType<typeof releasesSource>) {
-  const slug = page.slugs[0] ?? '';
-  return /^v\d+(-\d+)*$/.test(slug) ? slug.replaceAll('-', '.') : null;
+  const slug = page.slugs[0] ?? "";
+  return /^v\d+(-\d+)*$/.test(slug) ? slug.replaceAll("-", ".") : null;
 }
 
 export function getReleasePageImage(
   page: InferPageType<typeof releasesSource>,
 ) {
-  const segments = [...page.slugs, 'image.png'];
+  const segments = [...page.slugs, "image.png"];
 
   return {
     segments,
-    url: `/og/releases/${segments.join('/')}`,
+    url: `/og/releases/${segments.join("/")}`,
   };
 }
 
 export function getBlogPageImage(page: InferPageType<typeof blogSource>) {
-  const segments = [...page.slugs, 'image.png'];
+  const segments = [...page.slugs, "image.png"];
 
   return {
     segments,
-    url: `/og/blog/${segments.join('/')}`,
+    url: `/og/blog/${segments.join("/")}`,
   };
 }
 
 export function formatPostDate(date: string) {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -90,7 +90,7 @@ export function formatPostDate(date: string) {
  * add no words at all.
  */
 export async function getReadingMinutes(page: {
-  data: { getText: (type: 'processed') => Promise<string> };
+  data: { getText: (type: "processed") => Promise<string> };
 }) {
   const words = await getWordCount(page);
   return Math.max(1, Math.round(words / 230));
@@ -98,28 +98,28 @@ export async function getReadingMinutes(page: {
 
 /** Words in the processed markdown of a page, code blocks included. */
 export async function getWordCount(page: {
-  data: { getText: (type: 'processed') => Promise<string> };
+  data: { getText: (type: "processed") => Promise<string> };
 }) {
-  const text = await page.data.getText('processed');
+  const text = await page.data.getText("processed");
   return text.split(/\s+/).filter(Boolean).length;
 }
 
 /** Short date for dense lists, such as "27 Aug 2026". */
 export function formatShortDate(date: string) {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
   });
 }
 
 export function getPageImage(page: InferPageType<typeof source>) {
-  const segments = [...page.slugs, 'image.png'];
+  const segments = [...page.slugs, "image.png"];
 
   return {
     segments,
-    url: `/og/docs/${segments.join('/')}`,
+    url: `/og/docs/${segments.join("/")}`,
   };
 }
 
@@ -130,15 +130,14 @@ export function getPageImage(page: InferPageType<typeof source>) {
  */
 export function getDocsInSidebarOrder() {
   const pages = new Map(source.getPages().map((page) => [page.url, page]));
-  const ordered: { section: string; page: InferPageType<typeof source> }[] =
-    [];
-  let section = 'Docs';
+  const ordered: { section: string; page: InferPageType<typeof source> }[] = [];
+  let section = "Docs";
 
   const walk = (nodes: PageTreeNode[]) => {
     for (const node of nodes) {
-      if (node.type === 'separator') {
-        section = typeof node.name === 'string' ? node.name : section;
-      } else if (node.type === 'folder') {
+      if (node.type === "separator") {
+        section = typeof node.name === "string" ? node.name : section;
+      } else if (node.type === "folder") {
         walk(node.children);
       } else {
         const page = pages.get(node.url);
@@ -151,17 +150,17 @@ export function getDocsInSidebarOrder() {
   walk(source.pageTree.children);
 
   for (const page of pages.values()) {
-    ordered.push({ section: 'Other pages', page });
+    ordered.push({ section: "Other pages", page });
   }
   return ordered;
 }
 
 export async function getLLMText(page: InferPageType<typeof source>) {
-  const processed = await page.data.getText('processed');
+  const processed = await page.data.getText("processed");
 
   const description = page.data.description
     ? `\n\n> ${page.data.description}`
-    : '';
+    : "";
 
   return `# ${page.data.title}
 

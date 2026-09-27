@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 
 /**
  * A model of the backlog, not a capture of it. The constants that are the
@@ -83,7 +83,7 @@ export function SpentFrames() {
         const y = 40 - (d / maxDepth) * 38;
         return `${x.toFixed(2)},${y.toFixed(2)}`;
       })
-      .join(' ');
+      .join(" ");
 
   const deathX = (FLOOD_MS / maxLen) * 100;
 
@@ -157,11 +157,11 @@ export function SpentFrames() {
 
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-fd-border px-4 py-3 font-mono text-sm">
         <span className="text-fd-muted-foreground">
-          still painting after exit: {(every.tailMs / 1000).toFixed(2)}s /{' '}
+          still painting after exit: {(every.tailMs / 1000).toFixed(2)}s /{" "}
           {every.framesAfter} frames
         </span>
         <span className="text-fd-primary">
-          paced: {(paced.tailMs / 1000).toFixed(2)}s / {paced.framesAfter}{' '}
+          paced: {(paced.tailMs / 1000).toFixed(2)}s / {paced.framesAfter}{" "}
           frames
         </span>
       </div>

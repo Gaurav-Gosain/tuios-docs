@@ -49,8 +49,8 @@ export function SiteFooter() {
             <BrandLockup size={26} />
           </Link>
           <p className="mt-3 max-w-60 text-fd-muted-foreground text-sm leading-relaxed">
-            A terminal window manager that knows what your agents are doing.
-            MIT licensed.
+            A terminal window manager that knows what your agents are doing. MIT
+            licensed.
           </p>
         </div>
         {columns.map((column) => (

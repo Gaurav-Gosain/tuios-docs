@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * The keycast overlay, on the reader's own keyboard. Focus the box and every
@@ -17,32 +17,32 @@ const TIMEOUT = 2600;
 // Keys that would scroll the page. These are the only defaults swallowed while
 // the box is focused; everything else is left alone.
 const SCROLL_KEYS = new Set([
-  ' ',
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-  'PageUp',
-  'PageDown',
-  'Home',
-  'End',
+  " ",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
 ]);
 
 const SPECIAL: Record<string, string> = {
-  Enter: 'Enter',
-  Escape: 'Esc',
-  Tab: 'Tab',
-  Backspace: 'Backspace',
-  Delete: 'Delete',
-  ArrowUp: '↑',
-  ArrowDown: '↓',
-  ArrowLeft: '←',
-  ArrowRight: '→',
-  Home: 'Home',
-  End: 'End',
-  PageUp: 'PgUp',
-  PageDown: 'PgDn',
-  ' ': 'Space',
+  Enter: "Enter",
+  Escape: "Esc",
+  Tab: "Tab",
+  Backspace: "Backspace",
+  Delete: "Delete",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+  Home: "Home",
+  End: "End",
+  PageUp: "PgUp",
+  PageDown: "PgDn",
+  " ": "Space",
 };
 
 interface Chip {
@@ -59,18 +59,18 @@ function isSingleLetter(key: string) {
 
 function describe(e: React.KeyboardEvent) {
   const mods: string[] = [];
-  if (e.ctrlKey) mods.push('Ctrl');
-  if (e.altKey) mods.push('Alt');
+  if (e.ctrlKey) mods.push("Ctrl");
+  if (e.altKey) mods.push("Alt");
   // Shift is implied by an uppercase letter, so it is shown only on other keys,
   // the same rule the overlay uses.
-  if (e.shiftKey && !isSingleLetter(e.key)) mods.push('Shift');
+  if (e.shiftKey && !isSingleLetter(e.key)) mods.push("Shift");
   const base = SPECIAL[e.key] ?? e.key;
   return { base, mods };
 }
 
 function label(chip: Chip) {
   const key =
-    chip.mods.length > 0 ? `${chip.mods.join('+')} + ${chip.base}` : chip.base;
+    chip.mods.length > 0 ? `${chip.mods.join("+")} + ${chip.base}` : chip.base;
   return chip.count > 1 ? `${key} ×${chip.count}` : key;
 }
 
@@ -91,7 +91,7 @@ export function KeycastDemo() {
 
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     // Bare modifier presses are not keys in their own right.
-    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+    if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
     if (SCROLL_KEYS.has(e.key)) e.preventDefault();
 
     const { base, mods } = describe(e);
@@ -100,16 +100,28 @@ export function KeycastDemo() {
       if (
         last &&
         last.base === base &&
-        last.mods.join('+') === mods.join('+')
+        last.mods.join("+") === mods.join("+")
       ) {
         const next = prev.slice();
-        next[next.length - 1] = { ...last, count: last.count + 1, ts: Date.now() };
+        next[next.length - 1] = {
+          ...last,
+          count: last.count + 1,
+          ts: Date.now(),
+        };
         return next;
       }
       idRef.current += 1;
-      const chip: Chip = { id: idRef.current, base, mods, count: 1, ts: Date.now() };
+      const chip: Chip = {
+        id: idRef.current,
+        base,
+        mods,
+        count: 1,
+        ts: Date.now(),
+      };
       const appended = [...prev, chip];
-      return appended.length > MAX ? appended.slice(appended.length - MAX) : appended;
+      return appended.length > MAX
+        ? appended.slice(appended.length - MAX)
+        : appended;
     });
   }, []);
 
@@ -129,8 +141,8 @@ export function KeycastDemo() {
         }}
         aria-label="Keycast demo. Focus and type to see your keypresses drawn as chips."
         className={cn(
-          'relative block h-56 w-full cursor-text select-none overflow-hidden bg-fd-background/40 text-left',
-          'focus:outline-none',
+          "relative block h-56 w-full cursor-text select-none overflow-hidden bg-fd-background/40 text-left",
+          "focus:outline-none",
         )}
       >
         {/* A faint workspace behind the overlay. */}
@@ -139,11 +151,13 @@ export function KeycastDemo() {
             zsh
           </div>
           <div className="px-2 py-1.5 font-mono text-[11px] text-fd-muted-foreground">
-            <span className="text-fd-primary">~</span> ${' '}
+            <span className="text-fd-primary">~</span> ${" "}
             <span
               className={cn(
-                'ml-0.5 inline-block h-3.5 w-2 translate-y-0.5',
-                focused ? 'bg-fd-foreground motion-safe:animate-pulse' : 'border border-fd-muted-foreground',
+                "ml-0.5 inline-block h-3.5 w-2 translate-y-0.5",
+                focused
+                  ? "bg-fd-foreground motion-safe:animate-pulse"
+                  : "border border-fd-muted-foreground",
               )}
             />
           </div>

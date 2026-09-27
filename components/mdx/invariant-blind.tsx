@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 
 const COLS = 12;
 const ROWS = 4;
@@ -13,17 +13,17 @@ const ROWS = 4;
  * the row without it, and everything after shifts one column left.
  */
 function screenRow(bug: boolean, y: number): string[] {
-  const row = Array.from({ length: COLS }, () => 'E');
-  if (bug && y === 0) row[0] = '◌́';
+  const row = Array.from({ length: COLS }, () => "E");
+  if (bug && y === 0) row[0] = "◌́";
   return row;
 }
 
 function frameRow(bug: boolean, y: number): string[] {
-  if (!bug || y !== 0) return Array.from({ length: COLS }, () => 'E');
+  if (!bug || y !== 0) return Array.from({ length: COLS }, () => "E");
   // The frame drops the zero-width cell, so the E's shift left and the last
   // column comes out blank.
-  const row = Array.from({ length: COLS }, () => 'E');
-  row[COLS - 1] = '';
+  const row = Array.from({ length: COLS }, () => "E");
+  row[COLS - 1] = "";
   return row;
 }
 
@@ -41,50 +41,51 @@ export function InvariantBlind() {
   const [bug, setBug] = useState(false);
 
   const structural: Check[] = [
-    { name: 'the screen has a size', detail: `${COLS}x${ROWS}`, pass: true },
-    { name: 'the scroll region is inside it', detail: '', pass: true },
-    { name: 'the cursor is inside it', detail: '', pass: true },
-    { name: 'no cell is wider than the row', detail: '', pass: true },
+    { name: "the screen has a size", detail: `${COLS}x${ROWS}`, pass: true },
+    { name: "the scroll region is inside it", detail: "", pass: true },
+    { name: "the cursor is inside it", detail: "", pass: true },
+    { name: "no cell is wider than the row", detail: "", pass: true },
   ];
 
   const roundTrip: Check = bug
     ? {
-        name: 'the frame redraws the screen',
+        name: "the frame redraws the screen",
         detail: `cell (${COLS - 1},0): screen "E", frame blank`,
         pass: false,
       }
     : {
-        name: 'the frame redraws the screen',
-        detail: 'every cell agrees',
+        name: "the frame redraws the screen",
+        detail: "every cell agrees",
         pass: true,
       };
 
-  const grid = (kind: 'screen' | 'frame') => (
+  const grid = (kind: "screen" | "frame") => (
     <div
       className="grid gap-px overflow-hidden rounded bg-fd-border/60"
       style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}
       role="img"
       aria-label={
-        kind === 'screen'
-          ? 'The grid the emulator holds.'
-          : 'The frame it emits, replayed into a fresh emulator.'
+        kind === "screen"
+          ? "The grid the emulator holds."
+          : "The frame it emits, replayed into a fresh emulator."
       }
     >
       {Array.from({ length: ROWS }, (_, y) =>
-        (kind === 'screen' ? screenRow(bug, y) : frameRow(bug, y)).map(
+        (kind === "screen" ? screenRow(bug, y) : frameRow(bug, y)).map(
           (ch, x) => {
-            const zeroWidth = kind === 'screen' && bug && y === 0 && x === 0;
-            const missing = kind === 'frame' && bug && y === 0 && x === COLS - 1;
+            const zeroWidth = kind === "screen" && bug && y === 0 && x === 0;
+            const missing =
+              kind === "frame" && bug && y === 0 && x === COLS - 1;
             return (
               <div
                 key={`${x}-${y}`}
                 className={cn(
-                  'flex items-center justify-center bg-fd-background font-mono text-[10px] leading-none sm:text-xs',
-                  zeroWidth && 'text-fd-primary',
-                  missing && 'bg-fd-primary/20',
-                  !zeroWidth && !missing && 'text-fd-muted-foreground',
+                  "flex items-center justify-center bg-fd-background font-mono text-[10px] leading-none sm:text-xs",
+                  zeroWidth && "text-fd-primary",
+                  missing && "bg-fd-primary/20",
+                  !zeroWidth && !missing && "text-fd-muted-foreground",
                 )}
-                style={{ aspectRatio: '1 / 1.4' }}
+                style={{ aspectRatio: "1 / 1.4" }}
               >
                 {ch}
               </div>
@@ -102,13 +103,13 @@ export function InvariantBlind() {
           <div className="mb-2 font-mono text-xs text-fd-muted-foreground">
             the screen the emulator holds
           </div>
-          {grid('screen')}
+          {grid("screen")}
         </div>
         <div>
           <div className="mb-2 font-mono text-xs text-fd-muted-foreground">
             its own frame, replayed
           </div>
-          {grid('frame')}
+          {grid("frame")}
         </div>
       </div>
 
@@ -144,9 +145,11 @@ export function InvariantBlind() {
           </span>
           <div className="flex items-baseline gap-2">
             <span
-              className={roundTrip.pass ? 'text-fd-foreground' : 'text-fd-primary'}
+              className={
+                roundTrip.pass ? "text-fd-foreground" : "text-fd-primary"
+              }
             >
-              {roundTrip.pass ? 'PASS' : 'FAIL'}
+              {roundTrip.pass ? "PASS" : "FAIL"}
             </span>
             <span className="text-fd-muted-foreground">
               {roundTrip.name}: {roundTrip.detail}

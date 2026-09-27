@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * The same string drawn two ways. The top row is what an unshaped terminal grid
@@ -13,14 +13,14 @@ import { cn } from '@/lib/cn';
  */
 
 function hex(cp: number) {
-  return `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`;
+  return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
 const PRESETS: { label: string; value: string }[] = [
-  { label: 'Arabic phrase', value: 'السلام عليكم' },
-  { label: 'Latin ligature', value: 'ffi' },
-  { label: 'Arabic with harakat', value: 'مُحَمَّد' },
-  { label: 'Devanagari', value: 'नमस्ते' },
+  { label: "Arabic phrase", value: "السلام عليكم" },
+  { label: "Latin ligature", value: "ffi" },
+  { label: "Arabic with harakat", value: "مُحَمَّد" },
+  { label: "Devanagari", value: "नमस्ते" },
 ];
 
 export function ShapingCompare() {
@@ -45,9 +45,9 @@ export function ShapingCompare() {
           onChange={(e) => setValue(e.target.value)}
           spellCheck={false}
           className={cn(
-            'w-full rounded-md border border-fd-border bg-fd-background px-3 py-2',
-            'font-mono text-base text-fd-foreground',
-            'focus:border-fd-primary focus:outline-none focus:ring-1 focus:ring-fd-primary',
+            "w-full rounded-md border border-fd-border bg-fd-background px-3 py-2",
+            "font-mono text-base text-fd-foreground",
+            "focus:border-fd-primary focus:outline-none focus:ring-1 focus:ring-fd-primary",
           )}
         />
         <div className="mt-3 flex flex-wrap gap-2">
@@ -57,10 +57,10 @@ export function ShapingCompare() {
               type="button"
               onClick={() => setValue(p.value)}
               className={cn(
-                'rounded-md border border-fd-border px-2.5 py-1 text-xs',
-                'text-fd-muted-foreground transition-colors',
-                'hover:border-fd-primary/50 hover:text-fd-foreground',
-                'focus:outline-none focus:ring-1 focus:ring-fd-primary motion-reduce:transition-none',
+                "rounded-md border border-fd-border px-2.5 py-1 text-xs",
+                "text-fd-muted-foreground transition-colors",
+                "hover:border-fd-primary/50 hover:text-fd-foreground",
+                "focus:outline-none focus:ring-1 focus:ring-fd-primary motion-reduce:transition-none",
               )}
             >
               {p.label}
@@ -83,7 +83,7 @@ export function ShapingCompare() {
               >
                 <span
                   className="flex h-8 items-center justify-center font-mono text-2xl leading-none text-fd-foreground"
-                  style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
+                  style={{ direction: "ltr", unicodeBidi: "isolate" }}
                 >
                   {String.fromCodePoint(cp)}
                 </span>
@@ -105,16 +105,16 @@ export function ShapingCompare() {
           dir="auto"
           className="rounded-sm border border-fd-primary/40 bg-fd-primary/5 px-3 py-3 font-mono text-2xl leading-tight text-fd-foreground"
         >
-          {value || ' '}
+          {value || " "}
         </div>
       </div>
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
-        The top row is {codepoints.length} codepoints in {codepoints.length}{' '}
+        The top row is {codepoints.length} codepoints in {codepoints.length}{" "}
         cells, each glyph isolated in memory order. The bottom row is the same
         string shaped: letters join, ligatures form, marks land on their base,
-        and Arabic runs right to left. A per-codepoint terminal grid can only draw
-        the top row.
+        and Arabic runs right to left. A per-codepoint terminal grid can only
+        draw the top row.
       </figcaption>
     </figure>
   );

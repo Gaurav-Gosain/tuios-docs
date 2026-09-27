@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * The four stages of the project-tape trust boundary, walked one screen at a
@@ -16,7 +16,7 @@ const TAPE_BASE = [
   'Session "myproject"',
   'RenameWindow "server"',
   'Type "pnpm dev" Enter',
-  'Split vertical',
+  "Split vertical",
   'Type "nvim ." Enter',
 ];
 
@@ -26,19 +26,19 @@ const EDITED_LINE = 'Type "pnpm dev --host" Enter';
 
 const STAGES = [
   {
-    label: 'detect',
-    note: 'Detection is passive. A badge and a notification appear. Nothing runs.',
+    label: "detect",
+    note: "Detection is passive. A badge and a notification appear. Nothing runs.",
   },
   {
-    label: 'review',
-    note: 'The full tape is shown before anything executes. r runs it once, t trusts and runs, n never asks again.',
+    label: "review",
+    note: "The full tape is shown before anything executes. r runs it once, t trusts and runs, n never asks again.",
   },
   {
-    label: 'run',
-    note: 'Run once or Trust and run builds a session named after the project and switches you into it.',
+    label: "run",
+    note: "Run once or Trust and run builds a session named after the project and switches you into it.",
   },
   {
-    label: 're-enter',
+    label: "re-enter",
     note: 'Flip "edit the tape" on. One line changes, trust reverts to untrusted, and the flow is back at detect. Trust bound to the path would have missed the edit.',
   },
 ] as const;
@@ -47,22 +47,22 @@ function Pill({
   tone,
   children,
 }: {
-  tone: 'untrusted' | 'trusted';
+  tone: "untrusted" | "trusted";
   children: React.ReactNode;
 }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 font-mono text-[11px] font-medium',
-        tone === 'untrusted'
-          ? 'bg-amber-500/12 text-amber-700 dark:text-amber-300'
-          : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 font-mono text-[11px] font-medium",
+        tone === "untrusted"
+          ? "bg-amber-500/12 text-amber-700 dark:text-amber-300"
+          : "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
       )}
     >
       <span
         className={cn(
-          'size-1.5 rounded-full',
-          tone === 'untrusted' ? 'bg-amber-500' : 'bg-emerald-500',
+          "size-1.5 rounded-full",
+          tone === "untrusted" ? "bg-amber-500" : "bg-emerald-500",
         )}
         aria-hidden="true"
       />
@@ -105,7 +105,7 @@ function Pane({
   return (
     <div
       className={cn(
-        'flex min-w-0 flex-col overflow-hidden rounded-sm border border-fd-border/70 bg-fd-background/60',
+        "flex min-w-0 flex-col overflow-hidden rounded-sm border border-fd-border/70 bg-fd-background/60",
         className,
       )}
     >
@@ -169,14 +169,17 @@ export function TapeTrustFlow() {
         {/* Stage 1: the review dialog. */}
         {stage === 1 ? (
           <div className="flex h-full items-center justify-center">
-            <div className="absolute inset-0 bg-fd-foreground/10" aria-hidden="true" />
+            <div
+              className="absolute inset-0 bg-fd-foreground/10"
+              aria-hidden="true"
+            />
             <div className="relative w-full max-w-md overflow-hidden rounded-md border border-fd-border bg-fd-card shadow-lg">
               <div className="flex items-center justify-between gap-3 border-b border-fd-border px-3 py-2">
                 <span className="font-mono text-xs text-fd-foreground">
                   Review .tuios.tape
                 </span>
                 <Pill tone="untrusted">
-                  {edited ? 'changed since trust' : 'untrusted'}
+                  {edited ? "changed since trust" : "untrusted"}
                 </Pill>
               </div>
               <pre className="overflow-x-auto px-3 py-2 font-mono text-[11px] leading-5">
@@ -184,10 +187,10 @@ export function TapeTrustFlow() {
                   <div
                     key={i}
                     className={cn(
-                      'whitespace-pre px-1',
+                      "whitespace-pre px-1",
                       edited && i === EDITED_INDEX
-                        ? 'rounded-sm bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                        : 'text-fd-foreground',
+                        ? "rounded-sm bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                        : "text-fd-foreground",
                     )}
                   >
                     {line}
@@ -214,7 +217,9 @@ export function TapeTrustFlow() {
           <div className="grid h-full grid-cols-2 gap-2">
             <Pane title="server">
               <div className="text-fd-muted-foreground">$ pnpm dev</div>
-              <div className="text-fd-foreground">VITE v5.4.0 ready in 312 ms</div>
+              <div className="text-fd-foreground">
+                VITE v5.4.0 ready in 312 ms
+              </div>
               <div className="text-fd-muted-foreground">
                 Local: http://localhost:5173/
               </div>
@@ -264,7 +269,7 @@ export function TapeTrustFlow() {
             <Pill tone="trusted">tape: trusted</Pill>
           ) : (
             <Pill tone="untrusted">
-              {edited ? 'tape: changed since trust' : 'tape: untrusted'}
+              {edited ? "tape: changed since trust" : "tape: untrusted"}
             </Pill>
           )}
         </div>
@@ -291,7 +296,11 @@ export function TapeTrustFlow() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2" role="tablist" aria-label="tape trust stages">
+        <div
+          className="flex items-center gap-2"
+          role="tablist"
+          aria-label="tape trust stages"
+        >
           {STAGES.map((s, i) => (
             <button
               key={s.label}
@@ -301,10 +310,10 @@ export function TapeTrustFlow() {
               aria-label={`${s.label} stage`}
               onClick={() => go(i)}
               className={cn(
-                'size-2.5 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary focus-visible:ring-offset-1 focus-visible:ring-offset-fd-card motion-reduce:transition-none',
+                "size-2.5 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary focus-visible:ring-offset-1 focus-visible:ring-offset-fd-card motion-reduce:transition-none",
                 i === stage
-                  ? 'bg-fd-primary'
-                  : 'bg-fd-muted-foreground/30 hover:bg-fd-muted-foreground/60',
+                  ? "bg-fd-primary"
+                  : "bg-fd-muted-foreground/30 hover:bg-fd-muted-foreground/60",
               )}
             />
           ))}

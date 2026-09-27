@@ -2,19 +2,19 @@ import {
   rehypeCodeDefaultOptions,
   remarkMdxMermaid,
 } from "fumadocs-core/mdx-plugins";
-import type { ShikiTransformer } from "shiki";
 import {
   defineConfig,
   defineDocs,
   frontmatterSchema,
   metaSchema,
-} from 'fumadocs-mdx/config';
-import { z } from 'zod';
+} from "fumadocs-mdx/config";
+import type { ShikiTransformer } from "shiki";
+import { z } from "zod";
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
 export const docs = defineDocs({
-  dir: 'content/docs',
+  dir: "content/docs",
   docs: {
     schema: frontmatterSchema,
     postprocess: {
@@ -27,7 +27,7 @@ export const docs = defineDocs({
 });
 
 export const blog = defineDocs({
-  dir: 'content/blog',
+  dir: "content/blog",
   docs: {
     schema: frontmatterSchema.extend({
       date: z.string().date(),
@@ -43,7 +43,7 @@ export const blog = defineDocs({
 });
 
 export const releases = defineDocs({
-  dir: 'content/releases',
+  dir: "content/releases",
   docs: {
     schema: frontmatterSchema.extend({
       date: z.string().date(),

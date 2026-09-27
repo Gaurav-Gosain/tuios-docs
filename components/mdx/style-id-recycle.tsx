@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * A model of the style ID cache in the libghostty-vt backend. The library
@@ -19,13 +19,18 @@ interface Style {
   name: string;
 }
 
-const PINK = 'rgb(255 105 180)';
-const PROMPT: Style = { fg: '#ffffff', bg: PINK, name: 'white on pink' };
-const BRANCH: Style = { fg: '#ffffff', bg: PINK, name: 'white on pink, bold', bold: true };
+const PINK = "rgb(255 105 180)";
+const PROMPT: Style = { fg: "#ffffff", bg: PINK, name: "white on pink" };
+const BRANCH: Style = {
+  fg: "#ffffff",
+  bg: PINK,
+  name: "white on pink, bold",
+  bold: true,
+};
 // Mid tones, readable on both the light and the dark page background.
-const DIR: Style = { fg: 'rgb(59 130 246)', name: 'blue' };
-const EXE: Style = { fg: 'rgb(22 163 74)', name: 'green' };
-const DEFAULT: Style = { fg: 'currentColor', name: 'default' };
+const DIR: Style = { fg: "rgb(59 130 246)", name: "blue" };
+const EXE: Style = { fg: "rgb(22 163 74)", name: "green" };
+const DEFAULT: Style = { fg: "currentColor", name: "default" };
 
 interface Cell {
   key: string;
@@ -34,11 +39,11 @@ interface Cell {
 }
 
 const STEPS = [
-  'the prompt is drawn',
-  'a frame is composed',
-  'clear',
-  'ls prints file names',
-  'the next frame is composed',
+  "the prompt is drawn",
+  "a frame is composed",
+  "clear",
+  "ls prints file names",
+  "the next frame is composed",
 ] as const;
 
 interface State {
@@ -51,12 +56,16 @@ interface State {
   shown: { key: string; text: string; style: Style }[] | null;
 }
 
-function run(upTo: number, composeFirst: boolean, clearEachSnapshot: boolean): State {
+function run(
+  upTo: number,
+  composeFirst: boolean,
+  clearEachSnapshot: boolean,
+): State {
   // ID 0 is the default style, which is never freed.
   const interned = new Map<number, Style>([[0, DEFAULT]]);
   const cache = new Map<number, Style>();
   let screen: Cell[] = [];
-  let shown: State['shown'] = null;
+  let shown: State["shown"] = null;
 
   const compose = () => {
     if (clearEachSnapshot) cache.clear();
@@ -76,8 +85,8 @@ function run(upTo: number, composeFirst: boolean, clearEachSnapshot: boolean): S
         interned.set(1, PROMPT);
         interned.set(2, BRANCH);
         screen = [
-          { key: 'cwd', text: ' ~/code ', id: 1 },
-          { key: 'branch', text: ' main ', id: 2 },
+          { key: "cwd", text: " ~/code ", id: 1 },
+          { key: "branch", text: " main ", id: 2 },
         ];
         break;
       case 1:
@@ -94,11 +103,11 @@ function run(upTo: number, composeFirst: boolean, clearEachSnapshot: boolean): S
         interned.set(1, DIR);
         interned.set(2, EXE);
         screen = [
-          { key: 'cmd', text: 'cmd/', id: 1 },
-          { key: 'gap1', text: ' ', id: 0 },
-          { key: 'docs', text: 'docs/', id: 1 },
-          { key: 'gap2', text: ' ', id: 0 },
-          { key: 'install', text: 'install.sh', id: 2 },
+          { key: "cmd", text: "cmd/", id: 1 },
+          { key: "gap1", text: " ", id: 0 },
+          { key: "docs", text: "docs/", id: 1 },
+          { key: "gap2", text: " ", id: 0 },
+          { key: "install", text: "install.sh", id: 2 },
         ];
         break;
       case 4:
@@ -140,13 +149,13 @@ function Toggle({
       aria-checked={on}
       onClick={() => onChange(!on)}
       className={cn(
-        'rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-fd-primary',
+        "rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-fd-primary",
         on
-          ? 'border-fd-primary/60 text-fd-foreground'
-          : 'border-fd-border text-fd-muted-foreground hover:border-fd-primary/40',
+          ? "border-fd-primary/60 text-fd-foreground"
+          : "border-fd-border text-fd-muted-foreground hover:border-fd-primary/40",
       )}
     >
-      {on ? 'on' : 'off'}: {label}
+      {on ? "on" : "off"}: {label}
     </button>
   );
 }
@@ -182,13 +191,13 @@ export function StyleIdRecycle() {
           <li key={label}>
             <button
               type="button"
-              aria-current={i === step ? 'step' : undefined}
+              aria-current={i === step ? "step" : undefined}
               onClick={() => setStep(i)}
               className={cn(
-                'rounded-md border px-2.5 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-fd-primary',
+                "rounded-md border px-2.5 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-fd-primary",
                 i === step
-                  ? 'border-fd-primary/60 text-fd-foreground'
-                  : 'border-fd-border text-fd-muted-foreground hover:border-fd-primary/40',
+                  ? "border-fd-primary/60 text-fd-foreground"
+                  : "border-fd-border text-fd-muted-foreground hover:border-fd-primary/40",
               )}
             >
               {i + 1}. {label}
@@ -207,7 +216,11 @@ export function StyleIdRecycle() {
             return (
               <div key={id} className="leading-7">
                 <span className="text-fd-muted-foreground">id {id} </span>
-                {s ? <Swatch style={s} /> : <span className="text-fd-muted-foreground">free</span>}
+                {s ? (
+                  <Swatch style={s} />
+                ) : (
+                  <span className="text-fd-muted-foreground">free</span>
+                )}
               </div>
             );
           })}
@@ -218,13 +231,18 @@ export function StyleIdRecycle() {
           </div>
           {ids.map((id) => {
             const s = st.cache.get(id);
-            const stale =
-              s !== undefined && st.interned.get(id) !== s;
+            const stale = s !== undefined && st.interned.get(id) !== s;
             return (
               <div key={id} className="leading-7">
                 <span className="text-fd-muted-foreground">id {id} </span>
-                {s ? <Swatch style={s} /> : <span className="text-fd-muted-foreground">empty</span>}
-                {stale ? <span className="ml-2 text-fd-primary">stale</span> : null}
+                {s ? (
+                  <Swatch style={s} />
+                ) : (
+                  <span className="text-fd-muted-foreground">empty</span>
+                )}
+                {stale ? (
+                  <span className="ml-2 text-fd-primary">stale</span>
+                ) : null}
               </div>
             );
           })}
@@ -240,8 +258,8 @@ export function StyleIdRecycle() {
           role="img"
           aria-label={
             st.shown
-              ? `Screen: ${st.shown.map((c) => `${c.text.trim() || 'space'} in ${c.style.name}`).join(', ')}`
-              : 'No frame composed yet.'
+              ? `Screen: ${st.shown.map((c) => `${c.text.trim() || "space"} in ${c.style.name}`).join(", ")}`
+              : "No frame composed yet."
           }
         >
           {st.shown
@@ -257,7 +275,7 @@ export function StyleIdRecycle() {
                   {c.text}
                 </span>
               ))
-            : ' '}
+            : " "}
         </div>
       </div>
 
@@ -271,8 +289,8 @@ export function StyleIdRecycle() {
           </span>
         ) : wrong ? (
           <span className="text-fd-primary">
-            file names on hot pink: the cache answered for the styles that
-            used to hold those IDs
+            file names on hot pink: the cache answered for the styles that used
+            to hold those IDs
           </span>
         ) : (
           <span className="text-fd-foreground">
@@ -283,12 +301,12 @@ export function StyleIdRecycle() {
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         A model of the sequence in the post, with a made-up prompt and file
-        names. Step through it, then turn off the frame before{' '}
+        names. Step through it, then turn off the frame before{" "}
         <code>clear</code>: nothing caches the doomed conversion and the bug
-        disappears, which is the situation the differential suite was in when
-        it compared once at the end. Turn on the per-snapshot clear, which is
-        the fix, and the cache still does its job within a frame but stops
-        answering for a style that is gone.
+        disappears, which is the situation the differential suite was in when it
+        compared once at the end. Turn on the per-snapshot clear, which is the
+        fix, and the cache still does its job within a frame but stops answering
+        for a style that is gone.
       </figcaption>
     </figure>
   );

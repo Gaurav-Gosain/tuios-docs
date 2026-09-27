@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * Tiled windows can share borders. With individual borders every pane draws its
@@ -23,11 +23,11 @@ interface Corner {
 // The five junctions of a 2x2 grid: the centre cross, and the four T-junctions
 // where an interior separator meets the outer frame.
 const JUNCTIONS: Corner[] = [
-  { glyph: '┼', style: { left: '50%', top: '50%' } },
-  { glyph: '┬', style: { left: '50%', top: 0 } },
-  { glyph: '┴', style: { left: '50%', bottom: 0 } },
-  { glyph: '├', style: { left: 0, top: '50%' } },
-  { glyph: '┤', style: { right: 0, top: '50%' } },
+  { glyph: "┼", style: { left: "50%", top: "50%" } },
+  { glyph: "┬", style: { left: "50%", top: 0 } },
+  { glyph: "┴", style: { left: "50%", bottom: 0 } },
+  { glyph: "├", style: { left: 0, top: "50%" } },
+  { glyph: "┤", style: { right: 0, top: "50%" } },
 ];
 
 export function SharedBordersToggle() {
@@ -40,7 +40,7 @@ export function SharedBordersToggle() {
           bsp workspace
         </span>
         <span className="ml-auto font-mono text-xs tabular-nums text-fd-muted-foreground">
-          each pane&rsquo;s content: {shared ? '78x24' : '76x22'}
+          each pane&rsquo;s content: {shared ? "78x24" : "76x22"}
         </span>
       </div>
 
@@ -49,24 +49,24 @@ export function SharedBordersToggle() {
         <div className="relative h-52 rounded-sm border border-fd-border/70 bg-fd-background">
           <div
             className={cn(
-              'grid h-full grid-cols-2 grid-rows-2 transition-all duration-300 ease-out motion-reduce:transition-none',
-              shared ? 'gap-0 p-0' : 'gap-1.5 p-1.5',
+              "grid h-full grid-cols-2 grid-rows-2 transition-all duration-300 ease-out motion-reduce:transition-none",
+              shared ? "gap-0 p-0" : "gap-1.5 p-1.5",
             )}
           >
             {Array.from({ length: 4 }, (_, i) => (
               <div
                 key={i}
                 className={cn(
-                  'flex flex-col overflow-hidden transition-all duration-300 ease-out motion-reduce:transition-none',
+                  "flex flex-col overflow-hidden transition-all duration-300 ease-out motion-reduce:transition-none",
                   shared
-                    ? 'rounded-none border-0'
-                    : 'rounded-sm border border-fd-border/70',
+                    ? "rounded-none border-0"
+                    : "rounded-sm border border-fd-border/70",
                 )}
               >
                 <div
                   className={cn(
-                    'flex items-center gap-1 px-1.5 py-0.5 transition-colors duration-300 motion-reduce:transition-none',
-                    shared ? 'bg-fd-muted/25' : 'bg-fd-muted/40',
+                    "flex items-center gap-1 px-1.5 py-0.5 transition-colors duration-300 motion-reduce:transition-none",
+                    shared ? "bg-fd-muted/25" : "bg-fd-muted/40",
                   )}
                 >
                   <span
@@ -116,8 +116,8 @@ export function SharedBordersToggle() {
         >
           {(
             [
-              ['individual borders', false],
-              ['shared borders', true],
+              ["individual borders", false],
+              ["shared borders", true],
             ] as const
           ).map(([label, value]) => (
             <button
@@ -126,10 +126,10 @@ export function SharedBordersToggle() {
               aria-pressed={shared === value}
               onClick={() => setShared(value)}
               className={cn(
-                'px-3 py-1.5 font-mono text-xs transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-fd-primary motion-reduce:transition-none',
+                "px-3 py-1.5 font-mono text-xs transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-fd-primary motion-reduce:transition-none",
                 shared === value
-                  ? 'bg-fd-primary text-fd-primary-foreground'
-                  : 'text-fd-muted-foreground hover:text-fd-foreground',
+                  ? "bg-fd-primary text-fd-primary-foreground"
+                  : "text-fd-muted-foreground hover:text-fd-foreground",
               )}
             >
               {label}
@@ -140,10 +140,10 @@ export function SharedBordersToggle() {
 
       <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         With <strong>individual borders</strong> every pane draws its own frame,
-        so the gutter between two panes is two cells wide. With{' '}
+        so the gutter between two panes is two cells wide. With{" "}
         <strong>shared borders</strong> the panes render borderless, a single
-        separator line is drawn between them with proper junction characters, and
-        the content areas grow into the freed cells.
+        separator line is drawn between them with proper junction characters,
+        and the content areas grow into the freed cells.
       </figcaption>
     </figure>
   );
