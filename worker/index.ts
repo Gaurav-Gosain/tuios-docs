@@ -4,7 +4,8 @@
  * acceptmarkdown.com Cloudflare Workers recipe. The build writes both side by
  * side (out/docs/sessions.html and out/docs/sessions.md, see
  * scripts/export-markdown.mjs), and wrangler.jsonc sets run_worker_first so
- * every request reaches this code before the assets.
+ * every page, markdown twin and clip request reaches this code before the
+ * assets. Other files (chunks, fonts, images) never reach it.
  *
  * - Accept prefers text/markdown: the twin, as text/markdown.
  * - Accept prefers text/html, or says nothing: the page, with a Link header

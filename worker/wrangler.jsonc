@@ -9,9 +9,43 @@
   "assets": {
     "directory": "../out",
     "binding": "ASSETS",
-    // The Worker sees every request. Without this, a URL that matches a
-    // file is served straight from the assets and never negotiated.
-    "run_worker_first": true,
+    // The Worker runs first only where it has work to do: pages (negotiated
+    // between HTML and markdown, and moved pages redirected), markdown twins,
+    // and release clips. Every other file is served straight from the assets.
+    // A request served from the assets never invokes the Worker, so it does
+    // not count against the Workers request quota. With true here, each page
+    // view also ran the Worker for every chunk, font and image it loaded,
+    // and the free daily quota ran out on release day.
+    //
+    // "*" matches across "/", and a "!" pattern wins over the others. A page
+    // path has no dot in its last segment (see isPagePath in negotiate.ts),
+    // so excluding the asset extensions leaves pages, .html, .md and the
+    // clips (.mp4, .webm) to the Worker.
+    "run_worker_first": [
+      "/*",
+      "!/_next/*",
+      "!/api/*",
+      "!/*.js",
+      "!/*.css",
+      "!/*.txt",
+      "!/*.json",
+      "!/*.xml",
+      "!/*.woff2",
+      "!/*.woff",
+      "!/*.ttf",
+      "!/*.svg",
+      "!/*.png",
+      "!/*.jpg",
+      "!/*.jpeg",
+      "!/*.webp",
+      "!/*.gif",
+      "!/*.ico",
+      "!/*.glb",
+      "!/*.vtt",
+      "!/*.wasm",
+      "!/*.br",
+      "!/*.webmanifest"
+    ],
     // /docs/sessions serves out/docs/sessions.html, and unknown paths get
     // out/404.html with a 404 status.
     "html_handling": "auto-trailing-slash",
