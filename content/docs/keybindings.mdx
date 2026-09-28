@@ -12,6 +12,8 @@ TUIOS has two modes. **Window mode** is for managing panes. **Terminal mode** se
 
 The leader key is <kbd>Ctrl</kbd>+<kbd>B</kbd>. Press it, release it, then press a command key. The leader works in both modes.
 
+To send the leader key to the program in the pane, press it two times in terminal mode. The pane gets the leader that you configured, such as <kbd>Ctrl</kbd>+<kbd>A</kbd>.
+
 Every table on this page names the config section that holds the binding and the action name to use in it. Every action is rebindable. See [Customizing](#customizing) at the end.
 
 **Try it live:** [Learn tuios](/learn) has you press these keys in the real app, in your browser. [Free play](/learn?t=play) has a cheat sheet you can click.
@@ -540,6 +542,20 @@ close_window = []          # unbind: the key goes back to the pane
 
 An empty list and a missing line are different. A missing action gets its default back at the next load. An empty list stays empty. Key syntax and every section are on the [Configuration](/docs/configuration#keybindings) page.
 
+### Modifier spellings
+
+A key in `config.toml` can spell a modifier in more than one way. TUIOS reads each spelling as the same key.
+
+| Write | TUIOS reads it as | Where |
+|-------|-------------------|-------|
+| `opt+`, `option+` | `alt+` | macOS only |
+| `cmd+`, `command+` | `super+` | All platforms |
+| `control+` | `ctrl+` | All platforms |
+
+The order of the modifiers does not matter, so `shift+ctrl+x` is the same key as `ctrl+shift+x`. This applies to `leader_key`, to every binding table, and to `tuios keybinds explain`, `free` and `unbind`. `tuios keybinds explain opt+f12` prints `opt+f12 (tuios reads it as alt+f12)`. `tuios keybinds doctor` lists each key that TUIOS cannot read.
+
+A `super+` chord needs a terminal that sends the Super key. Most macOS terminals keep Command chords for their own menus. Ghostty and kitty send an unbound Command chord through the Kitty keyboard protocol. A `super+` chord on F1 to F12, such as `super+f12`, works the same way. On a Mac keyboard, F12 can also be a media key, and then TUIOS does not get it.
+
 Inspect and change bindings from the shell:
 
 ```bash
@@ -561,6 +577,33 @@ The config file reloads on save, but only `leader_key` among the keybindings. Af
 <Callout type="warn" title="keybinds list-custom is partial">
 `tuios keybinds list-custom` compares 9 of the 23 sections: `window_management`, `workspaces`, `layout`, `mode_control`, `system`, `prefix_mode`, `window_prefix`, `minimize_prefix` and `workspace_prefix`. It does not report `leader_key`. Use `tuios keybinds doctor` or read the file for the rest.
 </Callout>
+
+## Other keyboard layouts
+
+Bindings work with layouts for non-Latin scripts, such as Cyrillic, Greek, Hebrew or Arabic. When no binding matches the character that a key types, TUIOS uses the key at the same position on a US layout. On a Ukrainian layout, the key that types `ш` is the US <kbd>i</kbd> key. So <kbd>Ctrl</kbd>+<kbd>B</kbd> then that key opens the Inbox.
+
+- A binding on the typed character wins. You can still bind `ш` yourself.
+- Text that you type into a pane, a rename or a search keeps the character that you typed.
+- <kbd>Ctrl</kbd> on a non-Latin key sends the control code of the US key to the pane. <kbd>Ctrl</kbd>+<kbd>с</kbd> is <kbd>Ctrl</kbd>+<kbd>C</kbd> in the shell.
+
+Latin layouts, such as AZERTY, QWERTZ or Dvorak, use the letters on their keys. A letter or a <kbd>Ctrl</kbd> chord means the key that it types, not the US key at its position. On Dvorak, <kbd>Ctrl</kbd> with the key that types `b` is <kbd>Ctrl</kbd>+<kbd>B</kbd>, the leader. The showkeys strip, the binding recorder and a tape show the chord the same way. `tuios keybinds explain` checks the key as you write it, so give it the Latin key.
+
+This needs a terminal that sends the US-layout key through the Kitty keyboard protocol: Ghostty, kitty, WezTerm or foot. Other terminals send only the typed character. With those terminals, use a Latin layout for TUIOS commands.
+
+<Callout type="info" title="Codes such as [97u in the shell">
+In window mode, TUIOS tells the terminal to send every key as a code. TUIOS resets this when it stops. After `kill -9` or a dropped ssh connection, the terminal can stay in this mode. The shell then shows codes such as `[97u` when you type. To reset the terminal, run `printf '\033[=0;1u'`, or close the tab.
+</Callout>
+
+## Keys sent to a pane
+
+In terminal mode, TUIOS sends these keys to the program in the pane:
+
+- The keypad keys, with Num Lock on or off. Keypad <kbd>Enter</kbd> sends Enter.
+- <kbd>Begin</kbd>, the center key of the keypad with Num Lock off.
+- F13 and higher. A program that uses the legacy encoding gets them in the form that xterm sends.
+- <kbd>Insert</kbd>, <kbd>Delete</kbd>, <kbd>Page Up</kbd> and <kbd>Page Down</kbd> with their modifiers. <kbd>Ctrl</kbd>+<kbd>Delete</kbd> stays <kbd>Ctrl</kbd>+<kbd>Delete</kbd>.
+
+A program that uses the Kitty keyboard protocol gets each key with the number that the protocol gives it. Caps Lock, Num Lock and a modifier key pressed alone reach that program only when it asks for every key.
 
 ## macOS
 

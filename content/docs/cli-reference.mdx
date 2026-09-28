@@ -996,7 +996,7 @@ tuios list-agents --select 'harness:codex state:idle,done'
 tuios list-agents --json | jq -r '.agents[] | select(.state=="needs_input") | .window_id'
 ```
 
-The states are `needs_input`, `errored`, `done`, `idle`, `working` and `unknown`. The JSON also carries `needs_you`, `queued` (messages waiting in the pane's [queue](#queue)), `completion_seq`, `finished_unread` and the agent's `meta`. The `ID` and `NAME` columns work with `-w`. `--session` cannot be combined with `--all-hosts` or `--host`.
+The states are `needs_input`, `errored`, `done`, `idle`, `working` and `unknown`. The JSON also carries `needs_you`, `queued` (messages waiting in the pane's [queue](#queue)), `completion_seq`, `finished_unread`, the agent's `meta`, `identity` and `confidence` (how TUIOS recognised the harness), and `evidence_age_ms`. The `ID` and `NAME` columns work with `-w`. `--session` cannot be combined with `--all-hosts` or `--host`.
 
 ### get-agent-state and set-agent-state
 
@@ -1019,6 +1019,8 @@ tuios set-agent-state none                  # clear it
 - `--agent-session-id <id>`: the harness's conversation id, stored for a later resume.
 
 Sources are ranked in that order, highest first. A source cannot overwrite a state set by a higher-ranked source. A refused report prints why on stderr and changes nothing. The [harness integrations](#integration) report for you.
+
+`get-agent-state --json` carries `identity`, `confidence` and `evidence_age_ms`: the milliseconds since the last evidence about the state arrived, or `null` for a pane that never had a state. See [Agents](/docs/agents#reading-the-state).
 
 ### set-agent-meta and set-agent-session
 
