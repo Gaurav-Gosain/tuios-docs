@@ -143,7 +143,7 @@ All keys below go under `[appearance]`.
 | `session_border` | `false` | bool | Also draw that colour on every pane border |
 | `zen_mode` | `"disabled"` | `disabled`, `always`, `mouse` | Hide borders never, always, or while the mouse is idle |
 | `panel_padding` | `2` | 1 to 6 | Columns of padding inside overlay panels |
-| `motion` | `"full"` | `none`, `basic`, `full` | How much moves. `basic` animates window slides and zoom. `full` adds the fade of a dialog opening (truecolor only), the shimmer on a working agent's row and the confetti. `none` moves nothing |
+| `motion` | `"full"` | `none`, `basic`, `full` | How much moves. `basic` animates window slides, zoom and the copy sweep. `full` adds the fade of a dialog opening (truecolor only), the shimmer on a working agent's row and the confetti. `none` moves nothing |
 | `modal_dim` | `30` | 0 to 90 | Dim the screen behind a dialog, in percent. `0` turns it off. At 16 colours the text goes faint instead |
 | `max_fps` | `0` | 0, or 10 to 120 | Frame rate cap. `0` means 60 |
 | `wrap_lists` | `true` | bool | Moving past the end of a list wraps to the other end |
@@ -197,7 +197,7 @@ While the pane background paints a colour, a program that asks the terminal for 
 |-----|---------|--------|--------------|
 | `window_title_position` | `"top"` | `top`, `bottom`, `hidden` | Where the title is drawn. `hidden` also disables rename |
 | `window_title_format` | `""` | template | Title template. See [below](#window_title_format) |
-| `window_button_style` | `"dots"` | `dots`, `pill` | macOS-style traffic lights, or a filled pill |
+| `window_button_style` | `"dots"` | `dots`, `pill` | macOS-style traffic lights, or a filled pill. On the left, the pill puts close at the outer corner: close, zoom, minimize |
 | `window_button_position` | `"left"` | `left`, `right` | Which end of the title bar holds the buttons |
 | `hide_window_buttons` | `false` | bool | Hide the minimize, zoom and close buttons |
 | `window_button_zoom` | `true` | bool | Show the zoom button on tiled panes |
@@ -324,7 +324,7 @@ The rest are in [`[appearance.sidebar]`](#the-session-rail).
 | `search_bg`, `search_fg` | `"#8A6D2F"`, `"#F5E7C8"` | Every search match |
 | `match_bg`, `match_fg` | `"#E5A93D"`, `"#1C1B19"` | The match the cursor is on |
 | `cursor_bg`, `cursor_fg` | `"#39C5CF"`, `"#08222B"` | The copy mode cursor |
-| `flash` | `true` | Sweep a band of light over text you just copied |
+| `flash` | `true` | Sweep a band of light over text you just copied. `appearance.motion = "none"` also turns it off |
 | `flash_color` | `""` | Colour of the sweep |
 | `flash_ms` | `420` | Length of the sweep, 80 to 3000 ms |
 | `flash_style` | `"diagonal"` | `diagonal`, `diagonal-reverse`, `horizontal`, `vertical` |
@@ -554,6 +554,14 @@ Selecting an id that is not registered yet, with `set-config` or the settings pa
 
 `[notifications.agent.states]` turns alerts on per state: `needs_input`, `errored` and `done` default to `true`. `idle` and `working` default to `false`.
 
+To hear an alert, set `sound = true`. `sound_mode` then decides how:
+
+- `audio` plays a short cue through the audio player of the machine that runs TUIOS: `paplay`, `pw-play` or `aplay` on Linux, `afplay` on macOS, PowerShell on Windows. If the machine has no player, the alert is silent and TUIOS shows no message.
+- `bell` sends a BEL character to your terminal. Your terminal decides what a bell does, and some terminals make no sound. In kitty, check that `enable_audio_bell` is `yes`. Other terminals have a similar bell setting.
+- `both` does the two.
+
+Over SSH or in the browser, `audio` plays on the server, not where you sit. Use `bell` there. See [Agents](/docs/agents#hear-an-alert).
+
 `[notifications.agent.sounds]` replaces the two built-in cues with your own files: `needs_input` (also used for `errored`) and `done` (also used for `idle`). A path that does not exist falls back to the built-in cue.
 
 The `after-agent-state` [hook](/docs/hooks) follows the same rules, including the settle wait.
@@ -570,6 +578,8 @@ leader_key = "ctrl+a"
 ```
 
 `alt+space` is already the app launcher.
+
+`opt+` and `option+` mean `alt+` (macOS only), `cmd+` and `command+` mean `super+`, and `control+` means `ctrl+`. See [Modifier spellings](/docs/keybindings#modifier-spellings). Press the leader two times in terminal mode to send it to the pane.
 
 ### Sections
 

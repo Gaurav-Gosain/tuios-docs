@@ -131,7 +131,14 @@ tuios wait-for agent-state -s work --until needs_input
 tuios wait-for agent-state -w build --until idle,done --timeout 600000
 ```
 
-`get-agent-state --json` includes `state`, `message`, `needs_you`, the winning `source`, the `harness_id`, and `identity` and `confidence` saying how the harness was recognised. `list-windows --json` carries each pane's `agent_state` too.
+`get-agent-state --json` includes `state`, `message`, `needs_you`, the winning `source`, the `harness_id`, and `identity` and `confidence` saying how the harness was recognised. `list-agents` rows and `explain-agent-detect` carry `identity` and `confidence` too. `list-windows --json` carries each pane's `agent_state`.
+
+The same three commands report `evidence_age_ms`: the milliseconds since the last evidence about the state arrived. Confidence says how TUIOS learned the state, and the age says how long ago.
+
+- A report from the agent, a detector change and the stall timer reset the age.
+- A title or screen rule that reads the same claim again does not reset it.
+- For a state that the detector or the stall timer inferred (`source` `detect` or `stall`), new output from the pane also resets it. A pane that keeps printing reads fresh.
+- The value is `null` for a pane that never had a state.
 
 ## When a pane is marked wrong
 
@@ -182,6 +189,30 @@ working = false
 ```
 
 The notification is written into the stream your terminal draws, so it reaches the terminal in front of you even when the session runs on another machine. Alerts are raised by an attached client, so a detached session tracks state without announcing it. See [Configuration](/docs/configuration#notifications) and [Hooks](/docs/hooks) for the command contract.
+
+### Hear an alert
+
+Alerts make no sound by default. To hear them, turn on `sound`:
+
+```toml
+[notifications.agent]
+sound = true
+sound_mode = "audio"       # audio, bell or both
+```
+
+You can also run `tuios set-config notifications.agent.sound true`, or use the Alerts tab of the settings page (<kbd>,</kbd> in window mode).
+
+| `sound_mode` | What you hear |
+|--------------|---------------|
+| `audio` | A short cue from the audio player of the machine that runs TUIOS. This is the default |
+| `bell` | Your terminal's bell. TUIOS sends a BEL character, and the terminal decides what to do with it |
+| `both` | The cue and the bell |
+
+- **`audio`** uses `paplay`, `pw-play` or `aplay` on Linux, `afplay` on macOS and PowerShell on Windows. If the machine has none of them, the alert is silent and TUIOS shows no message.
+- **`bell`** depends on your terminal's own bell setting. Some terminals make no sound for a bell, or only flash the window. In kitty, check that `enable_audio_bell` is `yes`. Other terminals have a similar setting.
+- **Over SSH or in the browser**, `audio` plays on the server, not on the machine in front of you. Use `bell` there.
+
+TUIOS plays at most one cue every `sound_cooldown_seconds` (3 by default), across all panes. `[notifications.agent.sounds]` sets your own files for the cues. See [Configuration](/docs/configuration#agent-alerts).
 
 ## Environment in a pane
 
