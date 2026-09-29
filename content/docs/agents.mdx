@@ -241,7 +241,7 @@ Every pane holds grants that say what a program in it may do through TUIOS:
 | `read` | Read its own session and its fan group: listings, captures, agent state, waits and events |
 | `write` | Type into the panes of its own session, and leave mail there |
 | `fan` | Write in its fan group, and start agents with `fan` and `start-agent` |
-| `respond` | Answer another pane's prompt without you |
+| `respond` | Answer another pane's prompt without you, and type into a pane that waits on a prompt |
 | `admin` | Everything else, as every pane could before grants existed. Implies `read`, `write` and `fan`, never `respond` |
 
 A pane holds the grants it was started with (`--grants` on `start-agent`, `fan` and `new-window`), or else the default of `[agents.permissions]`: `admin` under `mode = "open"`, the default, and the `grants` list under `mode = "strict"`. A pane without `admin` types only into panes that hold nothing it does not, and never gives more than it holds.
@@ -259,7 +259,37 @@ mode = "strict"
 grants = ["read", "write", "fan"]
 ```
 
-Some acts are yours alone whatever a pane holds: answering a held approval, answering an `ask-human` question, dismissing or snoozing an Inbox item, and writing a review note or queued reply that reads as yours. They need the nonce your attached client got when it attached, and the daemon refuses a caller inside a pane even with a copy of it.
+The daemon checks the grants on every way into a pane: the control socket, the link sockets, the tmux shim's pane holder, prompts, `send-keys`, `run-command` and typing through the client protocol.
+
+- **Prompts.** A pane without `respond` cannot type into another pane that waits on a prompt. This applies to a pane with `admin` too. To give `respond` to one pane, use `tuios set-pane-grants` or `--grants`.
+- **`run-command`.** From a pane without `respond`, `run-command` cannot type or press keys. Use `send-keys` or `send-text` with `-w`.
+- **`send-keys` with `PREFIX`.** `send-keys` with `PREFIX` from a pane is refused. Use the TUIOS command for the action, such as `focus-window`, `new-window` or `split-window`.
+- **`send-keys` with no window.** From a pane, `send-keys` with no `-w` types into the focused pane. TUIOS does not read these keys as key bindings.
+- **Link sockets.** A process inside a pane, or a process that the daemon started, cannot connect to a link socket.
+
+Some acts are yours alone whatever a pane holds: answering a held approval, answering an `ask-human` question, dismissing or snoozing an Inbox item, and writing a review note or queued reply that reads as yours. They need the nonce your attached client got when it attached, and the daemon refuses a caller inside a pane even with a copy of it. The Inbox also refuses an answer that `send-keys` typed. This covers the digit keys, the second press of a risky allow, question answers and the release of held mail.
+
+### Changes that wait
+
+A change to `config.toml` that gives panes or other machines more waits for you:
+
+- A change that narrows `[agents.permissions]`, `[hosts]` or a link policy applies at once.
+- A change that widens them waits. An example is `mode = "strict"` to `mode = "open"`. A new host, or a host that dials another way, waits too.
+- To apply a change that waits, run `tuios config apply` from a terminal outside TUIOS. A daemon restart also applies it.
+
+```bash
+tuios config apply
+```
+
+While a change waits, the Inbox shows an item, and `tuios pane-grants` and the daemon log say so. `tuios hosts add` from a pane also waits. A host that you add with "Add a host" on the settings page applies at once.
+
+When the daemon starts and finds wider grants than at the last run, it says so in the log, in `tuios pane-grants` and in the Inbox.
+
+<Callout type="warn" title="Upgrading from v0.8.0">
+- A pane that types into another pane's prompt needs the `respond` grant. `admin` does not include it.
+- A script in a pane that sends `PREFIX` with `send-keys` fails now. Use the TUIOS command for the action.
+- A config change that widens grants or hosts waits for `tuios config apply`.
+</Callout>
 
 ## Starting agents
 

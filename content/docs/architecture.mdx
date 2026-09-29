@@ -153,11 +153,12 @@ Kitty graphics (`internal/app/kitty_*.go`):
 
 - Image data is forwarded without re-encoding.
 - Image IDs are reused across frames, so video does not flicker. `mpv --vo=kitty` and [youterm](https://github.com/Gaurav-Gosain/youterm) work.
-- Shared memory (`t=s`) and file path (`t=f`) transmission are forwarded when the host terminal supports them.
+- Shared memory (`t=s`) and file path (`t=f`) transmission are forwarded when the host terminal supports them. A file must belong to you, and its path must be absolute. TUIOS does not read from `/proc`, `/sys` or `/dev`, other than `/dev/shm`. A temporary file (`t=t`) name must hold `tty-graphics-protocol`.
 - Placements follow the window as it moves and scrolls, and are cropped to the part another window does not cover.
 - Unicode placeholders are drawn when the host terminal is known to support them.
 - Animation frames (`a=f`, `a=a`, `a=c`) are forwarded, and animated programs are sent as changed rectangles rather than whole images.
 - Output is wrapped in synchronized output (mode 2026).
+- While a program has a synchronized update open, TUIOS holds its image commands, per window. They go to the host when the update ends, so a delete and the next image arrive together. A hold ends after 1 second, or when the held data is too large. A move, resize or scroll of the pane goes out at once.
 
 Sixel (`internal/app/sixel_passthrough.go`) is passed through as is. An image that does not fit inside its window is hidden, because pixel-level clipping is not implemented.
 
@@ -191,7 +192,7 @@ The benchmarks are in `internal/app/*_bench_test.go`. The repository's `docs/per
 `tuios ssh` (`internal/server/ssh.go`) serves TUIOS over SSH with Wish.
 
 - **Sessions.** By default each connection attaches to a daemon session, so sessions persist and several people can share one. With `--ephemeral`, each connection gets its own standalone session.
-- **Authentication.** Public keys from `~/.config/tuios/authorized_keys`, or `~/.ssh/authorized_keys` if that is absent. With no keys configured, the server accepts every connection on `localhost` and refuses to start on any other address unless you pass `--no-auth`.
+- **Authentication.** Public keys from `~/.config/tuios/authorized_keys`, or the file that `--authorized-keys` names. A key with options is not accepted. With no keys file, the server does not start unless you pass `--no-auth`. See [`tuios ssh`](/docs/cli-reference#ssh).
 - **Host key.** Generated on first run, or given with `--key-path`.
 
 ```bash
