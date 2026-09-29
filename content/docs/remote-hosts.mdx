@@ -21,7 +21,9 @@ tuios hosts add build gaurav@buildbox
 
 The name (`build`) is what you type later. It takes letters, digits, dot, dash and underscore. The address is anything ssh understands, including an alias from `~/.ssh/config`.
 
-The command writes the `[hosts]` table in your config file. A running daemon follows the file, so no restart is needed. The link is tested at once and the result is printed. A host that does not answer is still added.
+The command writes the `[hosts]` table in your config file. The link is tested at once and the result is printed. A host that does not answer is still added.
+
+From a terminal outside TUIOS, the running daemon opens the new host with no restart. From a pane, the new host waits for `tuios config apply` from a terminal outside TUIOS. A host that you add with "Add a host" on the settings page applies at once. See [Changes that wait](/docs/agents#changes-that-wait).
 
 ```bash
 tuios hosts                  # every host and the state of its link
@@ -67,7 +69,9 @@ command = "/opt/tools/tuios"
 ssh_options = ["-J", "bastion"]
 ```
 
-A machine behind NAT is a reachability problem for ssh, not for TUIOS. Any tool that works as an ssh `ProxyCommand` works here too. See [Configuration](/docs/configuration#the-hosts-table) for an example.
+`ssh_options` accepts only safe options, such as `-J`, `-p` and `-o Keyword=value`. TUIOS drops a host with a refused option, such as `ProxyCommand` or a port forward, and `tuios hosts` names the reason. Put such options in `~/.ssh/config`. See [Rules for ssh_options](/docs/configuration#rules-for-ssh_options).
+
+A machine behind NAT is a reachability problem for ssh. Any tool that works as an ssh `ProxyCommand` in `~/.ssh/config` works here too. See [Configuration](/docs/configuration#reaching-a-host-you-cannot-ssh-to-directly) for an example.
 
 ## Machines on a tailnet
 

@@ -114,6 +114,26 @@ When you attach, you get the session exactly as you left it: the same windows, p
 
 A client that dies without detaching, because its terminal closed or its SSH connection dropped, counts as a detach. The daemon notices the connection close and keeps the session running.
 
+### Nested attach
+
+Inside a TUIOS pane, `tuios attach` refuses to attach the session that holds the pane. A bare `tuios attach` or `tuios` in a pane also refuses, because it names no session.
+
+- To show a different session in the pane, name that session: `tuios attach other`.
+- To attach the same session, open a terminal outside TUIOS.
+- To attach anyway, use `tuios attach --force`, or set `TUIOS_ALLOW_NESTED=1`.
+
+The same refusal applies to a chain. For example, session A shows session B in a pane, and a pane of B then attaches A.
+
+TUIOS finds the pane in these ways:
+
+- The client runs on the pane's terminal.
+- The client's output reaches the pane. This finds `script`, and ssh from the pane to the same machine or to the TUIOS SSH server. The attach does not wait for this check. If TUIOS finds the pane in the first 2 seconds, it detaches the client with the same message.
+- A client with no terminal runs under the pane's shell, or has the pane's `TUIOS_` variables.
+
+A terminal window that you start from a pane can attach, because its output does not reach the pane. New panes do not get the `TUIOS_` variables of an outer TUIOS pane.
+
+TUIOS cannot find a client behind tmux or mosh in a pane. These redraw the screen and do not pass the output through. Such an attach goes through, and the session shrinks to 20x6 until the inner client exits. A forced attach also stays at 20x6 or more.
+
 ## Switching sessions
 
 <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>S</kbd> opens the session switcher.
@@ -140,6 +160,7 @@ Several clients can attach to one session at the same time, for example two term
 - The session is drawn at the size of the smallest attached client.
 - Each client keeps its own input mode and copy mode position, so one person entering terminal mode does not change what another is doing.
 - Focus is shared. The newest focus change wins, from any client or from a command such as `tuios focus-window`.
+- Each change to the tiling tree goes to the daemon, which applies it and gives it a number. Two clients that change one layout at the same time end on the same layout.
 - Each client shows a short notice when another client joins or leaves.
 
 ```bash
@@ -151,7 +172,7 @@ tuios attach pairing
 ```
 
 <Callout type="warn">
-Every attached client has full control: it sees all output, types into every shell and can close windows. There are no read-only clients. Local clients are limited to your own user by the socket's permissions. SSH clients are limited by `tuios ssh` authentication, and browser clients by whatever you put in front of `tuios-web`.
+Every attached client has full control: it sees all output, types into every shell and can close windows. There are no read-only clients. Local clients are limited to your own user by the socket's permissions. SSH clients are limited by `tuios ssh` authentication, and browser clients by the `tuios-web` password. See [Who can connect](/docs/web#who-can-connect).
 </Callout>
 
 ## Session resurrection

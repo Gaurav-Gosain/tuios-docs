@@ -39,7 +39,7 @@ Three flags work on every command:
 
 - `--debug`: enable debug logging.
 - `--cpuprofile <file>`: write a CPU profile.
-- `--pprof <addr>`: serve `net/http/pprof` on this address, for example `localhost:6060`. The server has no authentication, so bind it to localhost.
+- `--pprof <addr>`: serve `net/http/pprof` on this address, for example `:6060`. With no host, the server listens on 127.0.0.1 only. The profiles have no password. Give `0.0.0.0:6060` only on a network you trust.
 
 These work only on a bare `tuios`:
 
@@ -143,6 +143,7 @@ tuios attach [session-name] [flags]
 - `--host <name>`: attach to a session on a machine from the `[hosts]` table.
 - `--ssh`: with `--host`, run ssh to the host and use its own `tuios`. Press the prefix twice to send it to the remote client.
 - `--hold`: after a failure, wait for <kbd>Enter</kbd> before exiting.
+- `--force`: attach from inside a pane of the same session. See [Attach from inside a pane](#attach-from-inside-a-pane).
 - The [interface flags](#interface-flags).
 
 ```bash
@@ -152,6 +153,16 @@ tuios attach --host build api # the session api on the machine build
 ```
 
 With no name, `attach` opens the most recent session. If the daemon is not running, it starts, restores the sessions saved on disk, and opens one of them. With nothing saved, it opens a new session. A name that matches no session is an error unless you pass `-c`.
+
+#### Attach from inside a pane
+
+Inside a TUIOS pane, `tuios attach` refuses to attach the session that holds the pane. A bare `tuios attach` or `tuios` in a pane also refuses, because it names no session.
+
+- To show a different session in the pane, name that session.
+- To attach the same session, open a terminal outside TUIOS.
+- To attach anyway, use `--force` or set `TUIOS_ALLOW_NESTED=1`.
+
+The same refusal applies to a chain. For example, session A shows session B in a pane, and a pane of B then attaches A. See [Nested attach](/docs/sessions#nested-attach) for how TUIOS finds the pane.
 
 ### ls
 
@@ -488,6 +499,12 @@ With `-w`, the keys go to that window's program, whether or not a client is atta
 - Sequences: separate keys with a space or a comma: `"ctrl+b q"` or `"ctrl+b,q"`.
 - `PREFIX` and `$PREFIX` expand to your leader key, without `-w` and with a client attached. In bash and zsh, use single quotes so the shell does not expand `$PREFIX` first: `tuios send-keys 'PREFIX q'`.
 
+From inside a pane, `send-keys` works differently:
+
+- `send-keys` with `PREFIX` is refused. The message names the TUIOS command to use instead, such as `focus-window`, `new-window` or `split-window`.
+- Without `-w`, the keys go to the focused pane. TUIOS does not read them as key bindings.
+- The Inbox does not take an answer that `send-keys` typed.
+
 A word that looks like a misspelled key, such as `Dwon` or `F13`, is refused with the list of names, and nothing is sent. To type text, use `send-text`: `send-keys` splits on spaces, so `'echo hello'` types `echohello`.
 
 ```bash
@@ -820,7 +837,13 @@ tuios config edit     # open it in $EDITOR
 tuios config reset    # overwrite it with the defaults
 ```
 
+```bash
+tuios config apply    # apply config.toml to the running daemon now
+```
+
 `config edit` uses `$EDITOR`, then `$VISUAL`, then the first of `vim`, `vi`, `nano` and `emacs` it finds. `config reset` asks first, and replaces the file including your keybindings.
+
+`config apply` applies changes to `config.toml` that give panes or other machines more. The daemon applies a change that gives less at once. A change that gives more waits for `config apply` or a daemon restart. This covers `[agents.permissions]`, `[hosts]` and link policies. Run `config apply` from a terminal outside TUIOS. It is refused from inside a pane. It prints each change that it applied. See [Changes that wait](/docs/agents#changes-that-wait).
 
 ### set-config
 
@@ -1315,6 +1338,8 @@ tuios set-pane-grants -w reviewer --reset
 
 The grants are `read`, `write`, `fan`, `respond` and `admin`, or `none`. A pane may change only its own grants unless it holds `admin`, and never give more than it holds. See [What a pane may do](/docs/agents#what-a-pane-may-do).
 
+`pane-grants` also says when a change to `config.toml` waits for `tuios config apply`.
+
 ### mcp
 
 Serve the TUIOS control surface as Model Context Protocol tools over stdin and stdout, for a harness to load.
@@ -1364,11 +1389,11 @@ The daemon keeps one ssh link to each host.
 | `unreachable` | The last attempt failed. The line under the table says why |
 | `incompatible` | The remote daemon speaks a protocol this build does not serve. Upgrade one side |
 
-`hosts add` writes the host to the config file and tests the link. The daemon opens it at once. Options:
+`hosts add` writes the host to the config file and tests the link. From a terminal outside TUIOS, the daemon opens it at once. From a pane, it waits for `tuios config apply`. Options:
 
 - `--command <path>`: the `tuios` binary on the host. By default the link looks on the `PATH`, then the usual install paths, then a login shell.
 - `--connect-timeout <s>`: seconds one dial may take. Default `10`.
-- `--ssh-option <arg>`: one extra ssh argument. Repeat for more.
+- `--ssh-option <arg>`: one extra ssh argument. Repeat for more. Only safe options are accepted. See [Rules for ssh_options](/docs/configuration#rules-for-ssh_options).
 - `--tailnet`: take the address from the tailnet machine with that name.
 - `--repos-root <dir>`: where the host keeps its checkouts, such as `~/src`, for `fan --host`, `worktree new --host` and `start-agent`.
 
@@ -1439,25 +1464,45 @@ tuios ssh [flags]
 - `--host <addr>`: the address to listen on. Default `localhost`.
 - `--port <port>`: default `2222`.
 - `--key-path <path>`: the host key. Generated if not given.
-- `--authorized-keys <path>`: public keys allowed to connect. Default `~/.config/tuios/authorized_keys`, then `~/.ssh/authorized_keys`.
+- `--authorized-keys <path>`: public keys allowed to connect. Default `~/.config/tuios/authorized_keys`. Keys with options are not accepted.
 - `--no-auth`: accept every connection without checking keys. Use only on a trusted network.
 - `--default-session <name>`: put every connection in this session.
 - `--ephemeral`: run without the daemon. Nothing persists.
 - The [interface flags](#interface-flags).
 
-Every connection gets a shell on this machine, so the server checks keys:
+Every connection gets a shell on this machine, so the server checks keys. It reads only `~/.config/tuios/authorized_keys`. It does not read `~/.ssh/authorized_keys` unless you name that file with `--authorized-keys`.
 
 - With keys, only their holders connect. A key added while the server runs works on the next connection.
-- With no keys, on `localhost`, every connection is accepted with a warning.
-- With no keys, on any other address, the server refuses to start unless you pass `--no-auth`.
+- With no keys file, the server does not start. This applies to `localhost` too. The server prints three ways to start.
+- With `--no-auth`, every connection is accepted, and the server prints a warning. On `localhost`, every user on this machine can connect.
+- An empty `--host` listens on every interface. The server applies the rules for a network address to it.
+
+A keys file that cannot be read, does not parse, or holds no key stops startup. TUIOS does not apply the rules in `sshd_config` to the keys.
+
+TUIOS does not accept a key that has options, such as `command=`, `from=` or `restrict`. TUIOS cannot apply these options, and every session is a full TUIOS. The log names the line of each refused key. A file that holds only keys with options stops startup. To let such a key in, add it again with no options.
 
 A client picks its session in this order: `--default-session`, then the SSH user name unless it is generic (`tuios`, `root`, `anonymous`), then a command argument (`ssh -p 2222 host attach work`), then the first session, or a new one.
 
 ```bash
+# Add your public key. Use your own public key file.
+mkdir -p ~/.config/tuios
 cat ~/.ssh/id_ed25519.pub >> ~/.config/tuios/authorized_keys
 tuios ssh --host 0.0.0.0 --port 2222
 ssh -p 2222 work@server
+
+# Or use the keys that sshd accepts
+tuios ssh --host 0.0.0.0 --authorized-keys ~/.ssh/authorized_keys
 ```
+
+<Callout type="warn" title="Upgrading from v0.8.0">
+In v0.8.1, `tuios ssh` does not start without a keys file, on `localhost` too. It also stops reading `~/.ssh/authorized_keys` by itself. If your key is only in that file, do one of these:
+
+- Add your public key to `~/.config/tuios/authorized_keys`, as in the example above.
+- Start with `--authorized-keys ~/.ssh/authorized_keys`.
+- Start with `--no-auth`. Then every user on this machine can connect, or everyone who reaches the port on a network address.
+
+A key with options is not accepted now. Add the key again with no options if it must open a TUIOS session.
+</Callout>
 
 The settings page on an SSH client changes only that session. It never writes the server's config file. The web terminal is a separate binary, `tuios-web`. See [Web Terminal](/docs/web).
 
@@ -1542,6 +1587,8 @@ Variables TUIOS reads:
 | Variable | Effect |
 |----------|--------|
 | `TUIOS_NO_DAEMON=1` | A bare `tuios` runs standalone, like `--standalone` |
+| `TUIOS_ALLOW_NESTED=1` | `tuios attach` inside a pane attaches the session that holds the pane, like `--force` |
+| `TUIOS_WEB_PASSWORD` | The password of `tuios-web`. `tuios-web` does not pass it to panes. Prefer `--password-file` |
 | `XDG_CONFIG_HOME` | Config directory. Default `~/.config` |
 | `XDG_STATE_HOME` | Where `daemon.log`, saved sessions and debug logs go |
 | `XDG_DATA_HOME` | Tape recordings and worktrees |

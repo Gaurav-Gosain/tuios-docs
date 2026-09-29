@@ -69,7 +69,7 @@ Most of the file applies live. These parts do not:
 | `scrollback_lines` | Panes opened afterwards |
 | Custom theme files | See [Custom themes](#custom-themes) |
 
-The daemon also follows the file for `[hosts]`, `[agents]` and `preferred_shell`. Adding or removing a host opens or closes its link at once.
+The daemon also follows the file for `[hosts]`, `[agents]` and `preferred_shell`. Removing a host closes its link at once. A change that gives panes or other machines more waits for `tuios config apply`. This covers a new host, a wider `[agents.permissions]` and a wider link policy. See [Changes that wait](/docs/agents#changes-that-wait).
 
 ### Changing a setting at runtime
 
@@ -332,8 +332,32 @@ The rest are in [`[appearance.sidebar]`](#the-session-rail).
 | `flash_style` | `"diagonal"` | `diagonal`, `diagonal-reverse`, `horizontal`, `vertical` |
 | `copy_entry` | `"cursor"` | Where the copy cursor starts. `cursor` is the terminal cursor, usually the prompt line, as in tmux. `center` is the first column of the middle row |
 | `multi_format` | `"plain"` | The format that [multi copy mode](/docs/layout-modes#multi-copy-mode) starts with: `plain`, `markdown` or `json` |
+| `osc52_write` | `"focused"` | What OSC 52 from a pane does to the host clipboard: `off`, `ask`, `focused` or `on`. See [Clipboard writes from a pane](#clipboard-writes-from-a-pane) |
 
 An empty foreground keeps the colour the program wrote. An empty background falls back to the default.
+
+### Clipboard writes from a pane
+
+A program in a pane sets the clipboard with OSC 52. An editor uses OSC 52 to yank over ssh. Any output can also carry OSC 52, for example a file that a program prints. `appearance.selection.osc52_write` controls what happens.
+
+| Value | What happens |
+|---|---|
+| `off` | The host clipboard does not change. |
+| `ask` | The dock shows a message. Click the message to copy the text. |
+| `focused` | The focused pane copies. A write from another pane shows a message in the dock. This is the default. |
+| `on` | Every pane copies. This is the behaviour of v0.8.0. |
+
+```toml
+[appearance.selection]
+osc52_write = "focused"
+```
+
+- When the focused pane copies text with a line break or a control character, the dock shows one line for that pane. A one-line copy shows nothing.
+- Each pane keeps one clipboard ask. A click copies only the text that the dock shows. If the text changes first, click the new message.
+- In each mode, the pane keeps its own copy. The program reads it back with an OSC 52 query.
+- TUIOS drops a clipboard reply that answers no read request of TUIOS.
+
+Pastes, notifications, OSC 66 text and link addresses lose their control characters. A paste into a pane keeps its tabs and line breaks. Text that holds `ESC[201~` cannot end a bracketed paste early.
 
 ### The session rail
 
@@ -848,16 +872,40 @@ connect_timeout = 5
 | `addr` | required | Anything ssh accepts, including an `ssh_config` alias. A host with no `addr`, or with one that starts with `-`, is ignored and logged |
 | `connect_timeout` | `10` | Seconds one dial may take before the host counts as unreachable |
 | `command` | `""` | The `tuios` binary on the host. Empty means the link finds it on the `PATH`, at the usual install paths, or through a login shell |
-| `ssh_options` | `[]` | Extra ssh arguments, placed before the address |
+| `ssh_options` | `[]` | Extra ssh arguments, placed before the address. Only safe options are accepted. See [Rules for ssh_options](#rules-for-ssh_options) |
 | `repos_root` | `""` | Where the host keeps its checkouts, as the host reads it, such as `~/src`. `fan --host`, `worktree new --host` and `start-agent` look for a repository there by its origin URL |
 
-You can also manage the table from the shell. These commands edit the file, and the daemon applies the change at once:
+You can also manage the table from the shell. These commands edit the file:
 
 ```bash
 tuios hosts add build gaurav@buildbox
 tuios hosts test build
 tuios hosts remove build
 ```
+
+A change that gives a machine less applies at once, also on links that are open. A new host, a host that dials another way, or a change that gives a machine more waits for `tuios config apply` from a terminal outside TUIOS. A daemon restart also applies it. So `tuios hosts add` from a pane waits. A host that you add with "Add a host" on the settings page applies at once. See [Changes that wait](/docs/agents#changes-that-wait).
+
+### Rules for ssh_options
+
+`ssh_options` accepts only options that cannot run code or write files on this machine. Write each option as `-o Keyword=value`, with one plain value and no quotes.
+
+- Accepted examples: `-p`, `-i`, `-l`, `-J`, `Port`, `User`, `HostName`, `HostKeyAlias`, `IdentityFile`, `StrictHostKeyChecking`, the `ServerAlive` options and the algorithm lists.
+- Refused: `ProxyCommand`, `LocalCommand`, the known hosts files, `ControlPath`, `-F` and socket forwards.
+- Refused: port forwards (`-L`, `-R`, `-D`).
+- `-J` and `ProxyJump` take host names only. `ForwardAgent` takes only `yes` or `no`.
+- A host `addr` or `command` cannot start with a dash.
+
+TUIOS drops a host with a refused option. `tuios hosts` and the Inbox name the reason. Put a refused option in `~/.ssh/config`, and name that host in `addr`.
+
+```toml
+[hosts.build]
+addr = "gaurav@buildbox"
+ssh_options = ["-J", "bastion", "-o", "ServerAliveInterval=30"]
+```
+
+<Callout type="warn" title="Upgrading from v0.8.0">
+After the upgrade, look in the Inbox or run `tuios hosts`. A host with a refused option is dropped. Move the option, such as `ProxyCommand` or `LocalForward`, into `~/.ssh/config`. Keep port forwards in `~/.ssh/config` too.
+</Callout>
 
 The daemon runs ssh with `BatchMode` on, so a link never asks for a password or about a host key. Run ssh to the host once by hand to accept its key.
 
@@ -888,7 +936,7 @@ With no table, a machine may `list`, `mail`, `open` and `write`. `respond` is op
 
 `hold_mail = true` holds mail from that machine to an agent here in your Inbox, marked `held for NAME`, until you pass it on with <kbd>p</kbd>. `hosted_grace` is how long a pane this machine runs for the other one (a window opened there with `--host`) keeps running after the link drops: a duration, `"0"` to end it with the link, 10 minutes when unset, at most 24 hours.
 
-The name is the one the other machine gives for itself, its host name up to the first dot, unless the ssh key it logs in with pins one with `command="tuios stdio-proxy --as laptop",restrict`. Only a pinned name is a boundary. A change applies to the next call on every link.
+The name is the one the other machine gives for itself, its host name up to the first dot, unless the ssh key it logs in with pins one with `command="tuios stdio-proxy --as laptop",restrict`. Only a pinned name is a boundary. A change that allows less applies to the next call on every link. A change that allows more waits for `tuios config apply`.
 
 ### Using a linked host
 
@@ -896,7 +944,7 @@ Once a host is linked, you can list its sessions and agents (`tuios ls --all-hos
 
 ### Reaching a host you cannot ssh to directly
 
-A host behind NAT, with no port forward and no jump host, is a network problem to solve under TUIOS. Any tool that pipes stdio to a remote port works as an ssh `ProxyCommand`, and `ssh_options` is where you name it.
+A host behind NAT, with no port forward and no jump host, is a network problem to solve under TUIOS. Any tool that pipes stdio to a remote port works as an ssh `ProxyCommand`. `ssh_options` refuses `ProxyCommand`, so name it in `~/.ssh/config`.
 
 Tailscale's [tailcat](https://github.com/tailscale/tailcat) is one such tool. It carries a connection over WireGuard with no Tailscale account and no open port. Run it on the far side against sshd:
 
@@ -904,12 +952,20 @@ Tailscale's [tailcat](https://github.com/tailscale/tailcat) is one such tool. It
 tailcat --serve=22
 ```
 
-Then name it in the host entry:
+Then add a host to `~/.ssh/config` that uses it:
+
+```text
+Host laptop-tailcat
+    HostName laptop
+    User gaurav
+    ProxyCommand tailcat <token> 22
+```
+
+Name that host in the host entry:
 
 ```toml
 [hosts.laptop]
-addr = "gaurav@laptop"
-ssh_options = ["-o", "ProxyCommand=tailcat <token> 22"]
+addr = "laptop-tailcat"
 ```
 
 ssh still decides who may connect: the tunnel only carries bytes to sshd, which asks for your key as usual. A leaked tailcat token gives reachability, not access. TUIOS adds no identity system of its own and opens no listening port.
@@ -988,7 +1044,9 @@ max = 8                                 # at most 64
 | `recap.test_patterns` | built in | Commands that count as a test run in the recap, such as `go test` and `npm test` |
 | `queue.max` | `8` | Messages one pane's [queue](/docs/agent-inbox#replying-and-the-queue) holds |
 
-After turning on `approvals.enabled`, run `tuios integration install` for that harness again, so its hook is the version that waits. The grants are `read`, `write`, `fan`, `respond` and `admin`; see [What a pane may do](/docs/agents#what-a-pane-may-do).
+After turning on `approvals.enabled`, run `tuios integration install` for that harness again, so its hook is the version that waits. The grants are `read`, `write`, `fan`, `respond` and `admin`. See [What a pane may do](/docs/agents#what-a-pane-may-do).
+
+A change to `[agents.permissions]` that gives panes less applies at once. A change that gives more, such as `strict` to `open`, waits. Run `tuios config apply` from a terminal outside TUIOS, or restart the daemon. See [Changes that wait](/docs/agents#changes-that-wait).
 
 ## Hooks
 

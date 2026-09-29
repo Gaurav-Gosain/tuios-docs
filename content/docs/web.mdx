@@ -13,8 +13,12 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 It is a separate binary from `tuios`, so the main binary contains no web server. It is built on [sip](https://github.com/Gaurav-Gosain/sip), a library for serving any Bubble Tea program in a browser.
 
-<Callout title="tuios-web has no login" type="error">
-Anyone who can reach the port gets a shell as the user running `tuios-web`. There is no password or token. Keep it on `localhost`, or put a reverse proxy with authentication in front of it. See [Security](#security).
+<Callout title="Every browser gets a shell" type="warn">
+A browser that opens `tuios-web` gets a shell as the user who runs it. Set a password to control who connects. See [Who can connect](#who-can-connect).
+</Callout>
+
+<Callout title="Upgrading from v0.8.0" type="info">
+In v0.8.1, a bind to an address other than `localhost` needs a password. See [Upgrade from v0.8.0](#upgrade-from-v080).
 </Callout>
 
 ## Install
@@ -69,18 +73,22 @@ By default every browser attaches to one daemon session called `web`, created th
 
 ## Reaching it from another device
 
-Binding anything other than a loopback address needs TLS, because otherwise every keystroke crosses the network in clear text. `tuios-web` refuses to start without one of these:
+A bind to an address other than loopback needs TLS and a password. TLS encrypts the keystrokes. The password controls who connects. `tuios-web` does not start without both, and it prints the commands to use.
 
 ```bash
-# HTTPS from a self-signed certificate tuios-web generates and keeps
-tuios-web --host 0.0.0.0 --auto-tls
+# HTTPS from a self-signed certificate that tuios-web makes and keeps,
+# and a new password at each start. tuios-web prints the password.
+tuios-web --host 0.0.0.0 --auto-tls --random-password
 
-# HTTPS from a certificate you already have
-tuios-web --host 0.0.0.0 --cert cert.pem --key key.pem
+# HTTPS from a certificate you already have, and a password in a file
+tuios-web --host 0.0.0.0 --cert cert.pem --key key.pem \
+  --password-file ~/.config/tuios/web-password
 
-# Plain HTTP, only on a network you trust
-tuios-web --host 0.0.0.0 --insecure
+# Plain HTTP and no password, only on a network you trust
+tuios-web --host 0.0.0.0 --insecure --no-auth
 ```
+
+An empty `--host` listens on every interface. `tuios-web` applies the same rules to it as to `0.0.0.0`.
 
 With `--auto-tls`, each browser shows a certificate warning on its first visit, because the certificate is self-signed. `tuios-web cert info` explains what the warning looks like and how to make it go away. The other `cert` subcommands are `new` (replace the certificate), `path` (print its path) and `rm` (delete it and the key).
 
@@ -106,6 +114,11 @@ On phones and tablets, `tuios-web` adds a key bar with the prefix key and button
 | `--cert-dir` | sip's directory in your user config dir | Where `--auto-tls` keeps its certificate |
 | `--cert-host` | | Extra DNS name or IP for the `--auto-tls` certificate. Repeatable. |
 | `--insecure` | off | Allow plain HTTP on a non-loopback address |
+| `--random-password` | off | Make a new password at start and print it |
+| `--password-file` | | Read the password from the first line of this file. The file must be yours, with mode 600 or 400. |
+| `--user` | `tuios` | User name that the browser must give with the password |
+| `--no-auth` | off | Serve a non-loopback address with no password |
+| `--allow-host` | | On a loopback `--host`, also accept this host name in the Host header. Give the name with no port. Repeatable. |
 | `--read-only` | off | Ignore all input from browsers |
 | `--max-connections` | `0` | Maximum concurrent connections. `0` means no limit. |
 | `--default-session` | `web` | Session every browser attaches to |
@@ -148,17 +161,47 @@ TUIOS tells programs what the browser can do. A program that asks whether it can
 
 ## Security
 
-<Callout title="There is no authentication" type="error">
-`tuios-web` has no login of any kind. Whoever reaches the port gets a full shell with your privileges.
+### Who can connect
 
-Browser connections from other web sites are refused: a WebSocket or WebTransport connection must come from a page served by `tuios-web` itself. That stops a page you happen to visit from opening a shell on `localhost:7681`, but it is not authentication. Programs that are not browsers send no origin and are accepted.
-</Callout>
+Every browser that opens `tuios-web` gets a shell on this machine. The session switcher reaches every session. Set a password to control who connects. The browser asks for a user name and the password. The user name is `tuios`. Use `--user` to change it.
 
-If anyone but you can reach the port:
+`tuios-web` reads the password from one of these:
 
-1. **Put authentication in a reverse proxy.** `tuios-web` has none of its own.
-2. **Bind to localhost** with `--host 127.0.0.1` so that only the proxy can reach it.
-3. **Use TLS** end to end, or at least between the browser and the proxy.
+- `--random-password`: `tuios-web` makes a new password at each start. It prints the password and a URL that holds it.
+- `--password-file <path>`: `tuios-web` reads the first line of the file. The file must belong to you, with mode 600 or 400. `tuios-web` does not check the file mode on Windows.
+- `TUIOS_WEB_PASSWORD`: `tuios-web` reads this environment variable. It does not pass the variable to panes. Your own processes can still read it from `/proc`, so use `--password-file` if you can.
+
+No flag takes the password itself, because other users can see command line arguments in `ps`. Give only one password source. A password and `--no-auth` do not go together.
+
+```bash
+# Make a password file that only you can read
+mkdir -p ~/.config/tuios
+(umask 077; head -c 18 /dev/urandom | base64 > ~/.config/tuios/web-password)
+tuios-web --host 0.0.0.0 --auto-tls --password-file ~/.config/tuios/web-password
+```
+
+What `tuios-web` needs depends on the address:
+
+| `--host` | Password | What happens |
+|---|---|---|
+| `localhost` or another loopback address | Optional | With no password, other users on this machine can connect. `tuios-web` prints one line at start to say so. |
+| Any other address, or an empty `--host` | Required | `tuios-web` does not start without a password or `--no-auth`. |
+
+With a password, sessions use WebSocket. A WebTransport connection carries no password, so `tuios-web` refuses it and the browser falls back to WebSocket.
+
+### The Host check
+
+On a loopback address, `tuios-web` accepts a session only when the Host header names this machine, such as `localhost` or `127.0.0.1`. This stops a web page that points its own name at 127.0.0.1 (DNS rebinding). A refused session gets the message "tuios-web does not answer to this host name".
+
+Browser connections from other web sites are also refused. A WebSocket or WebTransport connection must come from a page that `tuios-web` served.
+
+To accept the host name of a reverse proxy, use `--allow-host`. See [Behind a reverse proxy](#behind-a-reverse-proxy).
+
+### If other people can reach the port
+
+1. **Set a password** with `--random-password` or `--password-file`.
+2. **Use TLS** with `--auto-tls` or `--cert`, or put a proxy with TLS in front.
+3. **Bind to localhost** with `--host 127.0.0.1` when a proxy or an SSH tunnel carries the traffic.
 4. **Limit connections** with `--max-connections`.
 5. **Use `--read-only`** for demos, so viewers cannot type.
 
@@ -172,9 +215,24 @@ WebTransport always runs over TLS.
 
 ## Behind a reverse proxy
 
-Run `tuios-web` on `127.0.0.1` and let the proxy handle TLS and authentication. Most proxies carry only the WebSocket connection, so browsers use WebSocket rather than WebTransport.
+Run `tuios-web` on `127.0.0.1` and let the proxy handle TLS. Most proxies carry only the WebSocket connection, so browsers use WebSocket.
 
 The proxy must pass the original `Host` header through. `tuios-web` compares it with the page's origin and refuses the WebSocket connection if they differ.
+
+The proxy sends its own host name, such as `tuios.example.com`. Add that name with `--allow-host`. Give the name with no port. `--allow-host` works only with a loopback `--host`.
+
+`--allow-host` needs a password or `--no-auth`, because the proxy lets the network in. Pick one of these:
+
+```bash
+# tuios-web asks for the password. The proxy adds no login of its own.
+tuios-web --host 127.0.0.1 --allow-host tuios.example.com \
+  --password-file ~/.config/tuios/web-password
+
+# The proxy asks for the login, as in the examples below.
+tuios-web --host 127.0.0.1 --allow-host tuios.example.com --no-auth
+```
+
+`tuios-web` uses HTTP basic auth. Do not put a second basic auth login in the proxy in front of a `tuios-web` password. The browser sends only one login.
 
 ### Nginx with basic auth
 
@@ -260,9 +318,12 @@ ingress:
 ### Run both
 
 ```bash
-tuios-web --host 127.0.0.1
+tuios-web --host 127.0.0.1 --allow-host tuios.example.com \
+  --password-file ~/.config/tuios/web-password
 cloudflared tunnel run tuios
 ```
+
+With Cloudflare Access in front, you can use `--no-auth` in place of the password.
 </Step>
 </Steps>
 
@@ -284,7 +345,7 @@ services:
       - "traefik.http.services.tuios.loadbalancer.server.port=7681"
 ```
 
-The `basicauth` middleware is the only access control here. Without it, this publishes a shell to the internet.
+The `basicauth` middleware is the only access control here, because the container runs `tuios-web` with `--no-auth`. Without the middleware, this publishes a shell to the internet.
 
 ## Running as a service
 
@@ -301,8 +362,9 @@ RUN go build -o /out/tuios-web ./cmd/tuios-web
 FROM debian:bookworm-slim
 COPY --from=build /out/tuios-web /usr/local/bin/tuios-web
 EXPOSE 7681
-# Plain HTTP inside the container: terminate TLS and authenticate at a proxy in front of it.
-ENTRYPOINT ["tuios-web", "--host", "0.0.0.0", "--insecure"]
+# Plain HTTP and no password inside the container: a proxy in front of it
+# must add TLS and a login. Or replace --no-auth with --password-file.
+ENTRYPOINT ["tuios-web", "--host", "0.0.0.0", "--insecure", "--no-auth"]
 ```
 
 ### systemd
@@ -316,7 +378,8 @@ After=network.target
 [Service]
 Type=simple
 User=tuios
-ExecStart=/usr/local/bin/tuios-web --host 127.0.0.1 --port 7681
+# The file must belong to the user tuios, with mode 600 or 400.
+ExecStart=/usr/local/bin/tuios-web --host 127.0.0.1 --port 7681 --password-file /home/tuios/.config/tuios/web-password
 Restart=always
 RestartSec=5
 
@@ -369,7 +432,15 @@ Each browser connection runs a TUIOS client inside `tuios-web`, which attaches t
 
 ### It refuses to start on `0.0.0.0`
 
-That is the TLS requirement. Add `--auto-tls`, `--cert` and `--key`, or `--insecure`. The error message lists the exact commands.
+A non-loopback address needs TLS and a password. Add `--auto-tls`, or `--cert` and `--key`, or `--insecure`. Add `--random-password`, `--password-file` or `--no-auth`. The error message lists the commands.
+
+### The session is refused with "does not answer to this host name"
+
+The Host header does not name this machine. This happens behind a reverse proxy. Start `tuios-web` with `--allow-host` and the proxy's host name.
+
+### It refuses the password file
+
+The file must belong to you, with mode 600 or 400. Run `chmod 600` on the file.
 
 ### WebTransport does not connect
 
@@ -393,9 +464,23 @@ When the session stops, the browser shows a last message before the connection c
 
 This needs a `tuios-web` newer than v0.8.0. Older builds, which use sip before v0.8.2, can close the tab before the message arrives.
 
+### The browser asks for a login
+
+`tuios-web` has a password. Give the user name `tuios`, or the name from `--user`, and the password. With `--random-password`, `tuios-web` prints both at start.
+
 ### The tab stays open after quitting
 
 In a daemon session, <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>q</kbd> opens the quit menu, and its default is to detach. Detaching or killing the session from that menu ends the browser connection. If the page does not close, reload it.
+
+## Upgrade from v0.8.0
+
+v0.8.1 adds passwords to `tuios-web`. Some commands that worked in v0.8.0 are refused now.
+
+- A bind to an address other than `localhost` needs a password. `--auto-tls` or `--cert` alone is not enough. Add `--random-password` or `--password-file`. On a network you trust, add `--no-auth`.
+- An empty `--host` listens on every interface, so the same rule applies to it.
+- A reverse proxy on this machine sends its own host name. Add that name with `--allow-host`, and add a password or `--no-auth`.
+- On `localhost` with no password, `tuios-web` still starts. It prints one line to say that other users on this machine can connect.
+- The password file must belong to you, with mode 600 or 400.
 
 ## Related
 
