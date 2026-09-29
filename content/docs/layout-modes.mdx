@@ -88,6 +88,8 @@ A column holds one pane by default. It can hold several stacked vertically, whic
 | Input | Action |
 |-------|--------|
 | <kbd>Alt</kbd>+<kbd>Left</kbd> / <kbd>Alt</kbd>+<kbd>Right</kbd> (terminal mode) | Focus the column to the left or right |
+| <kbd>h</kbd> / <kbd>l</kbd> (window mode) | Focus the column to the left or right |
+| <kbd>j</kbd> / <kbd>k</kbd> (window mode), <kbd>Alt</kbd>+<kbd>Down</kbd> / <kbd>Alt</kbd>+<kbd>Up</kbd> (terminal mode) | Focus the pane below or above in a column of stacked panes |
 | <kbd>Alt</kbd>+<kbd>P</kbd> / <kbd>Alt</kbd>+<kbd>N</kbd> | Focus the column to the left or right |
 | <kbd>H</kbd> / <kbd>L</kbd>, or <kbd>Ctrl</kbd>+<kbd>Left</kbd> / <kbd>Ctrl</kbd>+<kbd>Right</kbd> (window mode) | Move the focused column left or right along the strip |
 | <kbd>&lt;</kbd> / <kbd>&gt;</kbd> (window mode) | Shrink or grow the focused column by four cells |
@@ -198,17 +200,80 @@ The preview is the first three non-empty lines of the pane, taken when the list 
 
 ## Typing into several panes
 
-Multifocus sends your typing to several panes at once, like tmux's `synchronize-panes`.
+Multifocus sends your typing to several panes at once, like tmux's `synchronize-panes`. Use it to run the same command on several hosts.
 
 | Input | Action |
 |-------|--------|
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+click on a pane | Add or remove it from the set |
-| Palette: `Toggle multifocus` | Add or remove the focused pane |
+| Palette: `Toggle multifocus`, or action `toggle_multifocus_active` | Add or remove the focused pane |
+| Palette: `Toggle multifocus on all panes`, or action `toggle_multifocus_all` | Add every visible pane on the workspace. When all of them are in the set, remove them. Panes on other workspaces stay in the set |
 | Palette: `Clear multifocus` | Empty the set |
 
-Panes in the set get a distinct border colour. While the set is not empty and you are in terminal mode, every key that goes to the focused pane also goes to each pane in the set. Keys TUIOS handles itself, such as the leader key, are not copied.
+The two actions have no default key. This example binds them to <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>y</kbd> and <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Y</kbd>:
 
-The set belongs to your client. It is not shared with other clients, it does not survive a detach, and switching sessions clears it.
+```toml
+[keybindings.prefix_mode]
+toggle_multifocus_active = ["y"]
+toggle_multifocus_all = ["Y"]
+```
+
+Panes in the set get a distinct border colour. A notification shows the size of the set when you change it. With `appearance.dim_unfocused` on, the panes in the set are not dimmed. Set `appearance.dim_multifocus = true` to dim them like the other panes.
+
+While the set is not empty and you are in terminal mode, every key that goes to the focused pane also goes to each pane in the set. A paste goes to each pane in the set too. A pane gets a bracketed paste only when its program turned bracketed paste on. A paste into a scrolled pane first returns it to live output, as a typed key does. In copy mode, TUIOS drops the paste. Keys that TUIOS handles itself, such as the leader key, are not copied.
+
+Limits:
+
+- Nothing is copied in window mode.
+- The set belongs to your client. Other clients do not share it. It does not survive a detach, and a session switch clears it.
+- The set follows panes, not positions. A swap keeps the same panes in the set. A pane that closes leaves the set.
+- A popup cannot join the set.
+
+### Multi copy mode
+
+Multi copy mode is copy mode on every pane of the multifocus set at the same time. Use it to search the output of many panes at once and copy the same part from each pane. Each pane has its own cursor and its own selection. Each key moves all of them together.
+
+To start it, add two or more panes to the multifocus set and focus one of them. Then press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd>, the copy mode key. When the focused pane is not in the set, the key starts copy mode on one pane. When multifocus is on, the palette entry `Multi copy mode` also starts it, and the prefix menu shows `Multi copy (N)` on the <kbd>[</kbd> line.
+
+The dock shows `MULTI 3`, where 3 is the number of panes. After a search, it shows `MULTI 2/3`: the search found text in 2 of the 3 panes.
+
+| Key | Action |
+|-----|--------|
+| <kbd>h</kbd> <kbd>j</kbd> <kbd>k</kbd> <kbd>l</kbd>, <kbd>w</kbd> <kbd>b</kbd> <kbd>e</kbd>, <kbd>g</kbd> <kbd>G</kbd> and the other [copy mode](/docs/keybindings#copy-mode) motions | Move the cursor in every pane |
+| <kbd>/</kbd> or <kbd>?</kbd>, then text, then <kbd>Enter</kbd> | Search every pane. Each pane goes to its own match |
+| <kbd>n</kbd> / <kbd>N</kbd> | Go to the next or previous match in each pane |
+| <kbd>v</kbd> / <kbd>V</kbd> | Start a character or line selection in every pane that has a match |
+| <kbd>Esc</kbd> | End the selection. A second <kbd>Esc</kbd>, or <kbd>q</kbd>, leaves copy mode in every pane |
+| <kbd>y</kbd> | Copy the selection of each pane to the clipboard, as one block |
+| <kbd>Y</kbd> | Save the selection of each pane to a file |
+| <kbd>Tab</kbd> | Change the format: plain, markdown, json |
+| <kbd>Shift</kbd>+<kbd>Up</kbd> / <kbd>Shift</kbd>+<kbd>Down</kbd> | Scroll every pane one line |
+
+A pane where the search finds no text loses the multifocus border colour. With a theme, the pane is also dimmed. It keeps its cursor. It takes no motions or selections until a later search finds text in it. <kbd>Ctrl</kbd>+<kbd>L</kbd> clears the search.
+
+<kbd>y</kbd> copies only the selected text of each pane. A pane without a selection adds nothing. The panes are in window order.
+
+| Format | What it writes |
+|--------|----------------|
+| `plain` | The selected lines of each pane, one pane after the other. Each pane ends with a newline. Nothing is added. Use it when each line already names its host |
+| `markdown` | For each pane, a `## Pane N: title` heading and the lines in a fenced code block |
+| `json` | An array with one object for each pane: `{"pane": N, "window_id": "...", "title": "...", "lines": ["..."]}`. The pane number is the index that `tuios list-windows --json` shows |
+
+The format starts as `appearance.selection.multi_format` (default `plain`). <kbd>Tab</kbd> changes it until you leave multi copy mode.
+
+<kbd>Y</kbd> opens a prompt at the bottom of the focused pane. The default path is `~/tuios-copy-<date>-<time>.<ext>`, with `txt`, `md` or `json` for the format. Type or paste a path. Press <kbd>Enter</kbd> to save, or <kbd>Esc</kbd> to cancel.
+
+- A relative path starts in the directory of the focused pane, when its shell reports one. Otherwise it starts in your home directory. The line above the prompt shows the full path.
+- TUIOS does not write over a file that exists. It tells you when the folder does not exist or when the path is a folder.
+- The dock shows the path of the file it wrote. In the web client and over SSH, the file is on the machine that runs TUIOS, and the dock names that machine.
+
+A pane title can come from a remote shell. In the markdown and json formats, TUIOS removes control, bidirectional and zero-width characters from the title and cuts it to 200 characters.
+
+Limits:
+
+- Soft-wrapped lines are joined by a width estimate, as in copy mode on one pane.
+- Multi copy mode ends when focus moves to a pane that is not in it.
+- A pane that you minimize or move to another workspace leaves multi copy mode.
+- The clipboard gets the copy through OSC 52. Some terminals cut a long OSC 52 copy. Above 100 KB, the dock tells you. Use <kbd>Y</kbd> to save a large copy to a file.
 
 ## Related
 
