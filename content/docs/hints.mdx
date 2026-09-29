@@ -7,7 +7,7 @@ icon: Tags
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-Hints mode puts a short label on the useful text in the focused pane. Type a label to copy the text. It works like tmux-fingers and the kitty hints kitten.
+Hints mode puts a short label on the useful text in the focused pane. Type a label to copy the text. It works like tmux-fingers and the kitty hints kitten. Hints mode can also put labels on all panes at once. See [All panes](#all-panes).
 
 ## Use it
 
@@ -37,6 +37,33 @@ A terminal that reports Caps Lock (the Kitty keyboard protocol) lets TUIOS read 
 Hints mode keeps all input from the pane while the labels show. TUIOS drops a paste, a key release and a mouse move over the pane. A click or the mouse wheel closes hints mode first and then works as usual. Hints mode also closes when its pane closes, when focus moves to a different pane, and when you change the workspace.
 
 The copy uses the same path as a mouse copy. TUIOS writes the clipboard with OSC 52. On a local client, it also uses the system clipboard tool.
+
+## All panes
+
+The `hints_all_panes` action puts labels on all panes that the workspace shows. This includes tiled panes, floating panes and the focused pane.
+
+- TUIOS gives no label to text that you cannot see. This includes a minimized pane, a pane behind a zoomed pane, a pane off the screen, and text under a different pane.
+- Each label is different on all panes.
+- The focused pane gets the shortest labels. The panes nearest to it get the next shortest labels.
+- The same text gets the same label on all panes. A path or a `file://` URL gets one label for each pane, because each pane has its own folder.
+- A label copies the text from any pane.
+- <kbd>Shift</kbd> and a label types the text into the focused pane. The text can come from a different pane.
+- <kbd>Ctrl</kbd> and a label [opens](#open) the text from the pane that shows it. TUIOS uses that pane's folder and machine.
+- Hints mode closes when one of these panes closes, moves or changes size.
+
+The action has no default key. Run it from the command palette, or bind it:
+
+```toml
+[keybindings.prefix_mode]
+hints_all_panes = ["A"]
+```
+
+To make <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>F</kbd> put labels on all panes, set `hints.all_panes`:
+
+```toml
+[hints]
+all_panes = true
+```
 
 ## What hints mode finds
 
@@ -95,11 +122,13 @@ alphabet = "asdfghjkl"
 open = true
 # How much the text around the labels dims, in percent (10 to 90).
 dim = 60
+# Put labels on all panes on the workspace, not only on the focused pane.
+all_panes = false
 ```
 
 Your own patterns come before the built-in patterns. When a pattern does not compile, TUIOS shows a warning when it reads the config, and hints mode skips that pattern.
 
-`hints.builtins`, `hints.alphabet`, `hints.open` and `hints.dim` are also on the settings page (Selection tab) and work with `tuios set-config`. `hints.patterns` is a list, so you set it in the file.
+`hints.builtins`, `hints.alphabet`, `hints.open`, `hints.dim` and `hints.all_panes` are also on the settings page (Selection tab) and work with `tuios set-config`. `hints.patterns` is a list, so you set it in the file.
 
 ## Change the key
 
