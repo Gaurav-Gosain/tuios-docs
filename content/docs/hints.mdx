@@ -1,0 +1,120 @@
+---
+title: Hints
+description: Put a short label on each URL, path, hash, address and number in a pane, then type the label to copy, paste or open the text.
+icon: Tags
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+Hints mode puts a short label on the useful text in the focused pane. Type a label to copy the text. It works like tmux-fingers and the kitty hints kitten.
+
+## Use it
+
+1. Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>F</kbd>. The labels show and the rest of the pane dims.
+2. Type a label. TUIOS copies the text and closes hints mode.
+
+| Keys | Does |
+|------|------|
+| A label, such as <kbd>a</kbd> or <kbd>l</kbd><kbd>s</kbd> | Copy the text |
+| The label with <kbd>Shift</kbd>, such as <kbd>A</kbd> | Copy the text and type it into the pane |
+| The label with <kbd>Ctrl</kbd>, such as <kbd>Ctrl</kbd>+<kbd>A</kbd> | [Open](#open) a URL or a path |
+| <kbd>Backspace</kbd> | Remove the last letter you typed |
+| <kbd>Esc</kbd>, or the leader key | Close hints mode |
+| <kbd>q</kbd> | Close hints mode, when <kbd>q</kbd> is not a label letter |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>G</kbd> | Close hints mode, when <kbd>c</kbd> or <kbd>g</kbd> is not a label letter |
+
+The text nearest to the cursor gets the shortest label. The same text gets the same label each time it shows. A key that starts no label does nothing.
+
+When <kbd>c</kbd> or <kbd>g</kbd> is a label letter, <kbd>Ctrl</kbd>+<kbd>C</kbd> and <kbd>Ctrl</kbd>+<kbd>G</kbd> open that label. <kbd>g</kbd> is in the default letters, so <kbd>Ctrl</kbd>+<kbd>G</kbd> opens the label `g`. Use <kbd>Esc</kbd> to close. The leader key always closes hints mode.
+
+You can also open hints mode from the command palette. Search for `hints`.
+
+<Callout type="info" title="Caps Lock">
+A terminal that reports Caps Lock (the Kitty keyboard protocol) lets TUIOS read an upper case letter from Caps Lock as a plain label letter. In other terminals, turn Caps Lock off before you type a label.
+</Callout>
+
+Hints mode keeps all input from the pane while the labels show. TUIOS drops a paste, a key release and a mouse move over the pane. A click or the mouse wheel closes hints mode first and then works as usual. Hints mode also closes when its pane closes, when focus moves to a different pane, and when you change the workspace.
+
+The copy uses the same path as a mouse copy. TUIOS writes the clipboard with OSC 52. On a local client, it also uses the system clipboard tool.
+
+## What hints mode finds
+
+| Name | Examples |
+|------|----------|
+| `url` | `https://example.com/a`, `git@github.com:user/repo.git` |
+| `path` | `/etc/hosts`, `./run.sh`, `~/notes.md`, `main.go:12:5` |
+| `diff` | The file in `diff --git a/x b/x`, `--- a/x` and `modified: x` |
+| `sha` | `149c8a8f`, a full 40-character hash |
+| `ip` | `10.0.0.1`, `10.0.0.0/8`, `192.168.1.2:8080`, `fe80::1` |
+| `uuid` | `550e8400-e29b-41d4-a716-446655440000` |
+| `color` | `#1e1e2e`, `#fa0` |
+| `hex` | `0xdeadbeef` |
+| `number` | Numbers of 4 digits or more |
+| `email` | `ops@example.com` |
+| `id` | `pod/web-1`, `deployment.apps/web`, pod names, `sha256:` digests |
+
+`path` and `email` accept letters in all scripts, with accents and combining marks. The other built-in patterns use only ASCII.
+
+Hints mode reads only the text on the screen. If you scroll the pane back, it reads the lines you scrolled to. A URL that wraps onto the next row is one match. TUIOS joins two rows only when the terminal wrapped the text. A line that fills the row and then ends is not joined to the next line.
+
+## Open
+
+<kbd>Ctrl</kbd> and a label opens the text:
+
+- A URL opens in your browser. A remote client (`tuios ssh`, the web client) copies the URL, because it cannot open a browser on your machine.
+- A path or a `file://` URL opens in a new pane with `$EDITOR`. TUIOS removes a `:line:col` at the end. A relative path starts in the directory of the pane.
+- Other text is copied.
+
+TUIOS opens a file only when the file is on this machine. In these cases, it copies the path and tells you why:
+
+- The pane runs on another machine.
+- The session runs on another machine (`tuios attach` to a host).
+- The client is remote (`tuios ssh`, the web client).
+- The pane runs `ssh`, `autossh`, `mosh`, `et`, `telnet`, `tsh`, `kitten` (for example `kitten ssh`), `docker`, `kubectl` or `podman`.
+- The shell reported a folder on another machine.
+- The path is relative and a program runs in front of the shell. TUIOS knows only the folder that the shell reported.
+- The path is relative and TUIOS does not know the folder of the pane.
+
+TUIOS never gives the text to a shell. It gives the text to the opener as one argument. Only `http`, `https`, `mailto`, `ftp` and `ftps` URLs open.
+
+## Settings
+
+Put the settings in the `[hints]` table of `config.toml`:
+
+```toml
+[hints]
+# Built-in patterns: "all", "none", or names such as "url,path,sha".
+builtins = "all"
+# More patterns, as Go regular expressions. A group named "match"
+# sets the part that is copied.
+patterns = ['JIRA-\d+', 'branch: (?P<match>\S+)']
+# The letters of the labels, easiest first. Lowercase letters only.
+alphabet = "asdfghjkl"
+# Let Ctrl and a label open the text.
+open = true
+# How much the text around the labels dims, in percent (10 to 90).
+dim = 60
+```
+
+Your own patterns come before the built-in patterns. When a pattern does not compile, TUIOS shows a warning when it reads the config, and hints mode skips that pattern.
+
+`hints.builtins`, `hints.alphabet`, `hints.open` and `hints.dim` are also on the settings page (Selection tab) and work with `tuios set-config`. `hints.patterns` is a list, so you set it in the file.
+
+## Change the key
+
+The action is `hints` in `[keybindings.prefix_mode]`. To use a different key, bind it:
+
+```toml
+[keybindings.prefix_mode]
+hints = ["f"]
+```
+
+If your config already binds <kbd>F</kbd> in `[keybindings.prefix_mode]` to a different action, TUIOS keeps your binding and gives `hints` no key. `tuios keybinds doctor` tells you when this happens.
+
+## Related
+
+<Cards>
+  <Card title="Keybindings" href="/docs/keybindings#copy-mode" description="Copy mode and every default key" />
+  <Card title="Configuration" href="/docs/configuration#the-hints-table" description="The hints table and every other option" />
+</Cards>
