@@ -221,7 +221,7 @@ Every attached client has full control: it sees all output, types into every she
 
 ## Session resurrection
 
-Detaching loses nothing, because the daemon keeps running. Resurrection is what happens when the daemon itself stops: `tuios kill-server`, a crash, or a reboot. It brings back the **shape** of each session, not what was running in it.
+Detaching loses nothing, because the daemon keeps running. Resurrection is what happens when the daemon itself stops: `tuios kill-server`, a crash, or a reboot. It brings back the **shape** of each session and the history each pane showed, not what was running in it.
 
 ### When state is saved
 
@@ -236,6 +236,7 @@ When the daemon starts, it restores every saved session before it accepts connec
 - The BSP tree for each workspace and the layout mode
 - The working directory of each window
 - Session options
+- Each pane's history, above a dimmed divider. See [Pane history](#pane-history).
 
 ### What does not come back
 
@@ -244,7 +245,6 @@ Resurrection is crash recovery, not a snapshot. Your layout comes back and each 
 </Callout>
 
 - **Processes.** Every window gets a fresh shell. A `vim`, a build or an SSH connection that was running is not restarted. A coding agent's conversation can come back, though: for a pane whose agent was running and whose hook reported the conversation id, the Inbox offers to resume it (`daemon.resume_agents`). See [Resuming after a restart](/docs/agent-inbox#resuming-after-a-restart).
-- **Screen contents and scrollback.** They live only in the daemon's memory and are never written to disk.
 - **The last few seconds before a crash.** A window created just before a `SIGKILL` may be missing, and a `cd` made less than 30 seconds before it may not be recorded.
 - **Your terminal's environment.** Restored shells inherit the daemon's environment and `$SHELL`, not those of the terminal you later attach from.
 - **Working directories on Windows and the BSDs.** The daemon asks the kernel where each shell is, which works on Linux and macOS. Elsewhere, restored windows open in the shell's default directory.
@@ -253,6 +253,16 @@ A restored window prints a dimmed line so you do not mistake it for the old shel
 
 ```
 -- tuios: session restored, fresh shell in /home/you/project --
+```
+
+When the pane has saved history, the line is a divider under that history, with the time of the save:
+
+```
+$ make
+...the last lines of the build...
+$
+-- tuios: restored from Sep 30 14:02, fresh shell in /home/you/project --
+$ _
 ```
 
 The `in <dir>` part is left out when the directory is unknown. Restored shells also get `TUIOS_RESTORED=1` in their environment, so your shell profile can react.
@@ -267,8 +277,36 @@ The session is marked too. It shows a `restored` tag in `tuios ls`, the sidebar 
 | Window layout | Yes | Yes | As of the last save | As of the last save |
 | Working directories | Yes | Yes, on Linux and macOS | As of the last save, on Linux and macOS | As of the last save, on Linux and macOS |
 | Shell processes and running programs | Yes | No | No | No |
-| Screen contents and scrollback | Yes | No | No | No |
+| Screen contents and scrollback | Yes | Yes, as history above the divider | As of the pane's last save, up to 30 seconds old | Yes, as history above the divider |
 | Copy mode position, input mode | No, these are per client | No | No | No |
+
+### Pane history
+
+The daemon saves each pane's history next to the session's state, and a restore shows it again. The history is text to read. It is not replayed into the new shell, and no command in it runs again. Copy mode, search and hints reach it like any other history.
+
+- **What is saved.** The last 5000 lines of scrollback by default, and the screen. Colors, styles, wide characters and wrapped lines come back as they were.
+- **Full-screen programs.** When `vim` or `htop` was open, the shell's screen under it is saved. The program's own screen is not.
+- **Popups.** The scratch terminal's history comes back. Other popups do not come back, so their history is not saved.
+- **Other machines.** A pane that ran on another machine comes back as a shell on this machine, without history.
+- **Agents.** The resume offer still works. The resumed agent starts under the divider.
+- **When.** At a clean stop, for every pane with new output. During the session, a pane with new output is saved at most once in 30 seconds. An idle pane is not written again.
+- **Size.** Each pane's file is compressed and at most 2 MiB by default. One session's files are at most 16 MiB together. A pane that does not fit saves fewer lines.
+- **Cleanup.** A pane's file goes when the pane closes. A session's files go when the session is killed.
+
+The files are in `$XDG_STATE_HOME/tuios/sessions/scrollback/<session>/`, with mode 0600 in a directory with mode 0700.
+
+<Callout type="warn">
+The history files hold what your panes printed, which can include passwords, tokens and other secrets. Set `persist_scrollback = false` in `[daemon]` to stop saving it. The next time the daemon starts, it deletes the history it saved before.
+</Callout>
+
+```toml
+[daemon]
+persist_scrollback = true         # save each pane's history (default true)
+persist_scrollback_lines = 5000   # most history lines one pane saves (0 = 5000)
+persist_scrollback_kb = 2048      # most KiB one pane's file takes (0 = 2048)
+```
+
+The daemon reads these settings when it starts.
 
 ### Controlling it
 
