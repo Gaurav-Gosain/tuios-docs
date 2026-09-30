@@ -284,14 +284,14 @@ The session is marked too. It shows a `restored` tag in `tuios ls`, the sidebar 
 
 The daemon saves each pane's history next to the session's state, and a restore shows it again. The history is text to read. It is not replayed into the new shell, and no command in it runs again. Copy mode, search and hints reach it like any other history.
 
-- **What is saved.** The last 5000 lines of scrollback by default, and the screen. Colors, styles, wide characters and wrapped lines come back as they were.
+- **What is saved.** The last 1000 lines of scrollback by default, and the screen. Colors, styles, wide characters and wrapped lines come back as they were.
 - **Full-screen programs.** When `vim` or `htop` was open, the shell's screen under it is saved. The program's own screen is not.
 - **Popups.** The scratch terminal's history comes back. Other popups do not come back, so their history is not saved.
 - **Other machines.** A pane that ran on another machine comes back as a shell on this machine, without history.
 - **Agents.** The resume offer still works. The resumed agent starts under the divider.
 - **When.** At a clean stop, for every pane with new output. During the session, a pane with new output is saved at most once in 30 seconds. An idle pane is not written again.
 - **Size.** Each pane's file is compressed and at most 2 MiB by default. One session's files are at most 16 MiB together. A pane that does not fit saves fewer lines.
-- **Cleanup.** A pane's file goes when the pane closes. A session's files go when the session is killed.
+- **Cleanup.** A pane's file goes when the pane closes. A session's files go when the session is killed. When the daemon starts, it deletes history that has no saved session.
 
 The files are in `$XDG_STATE_HOME/tuios/sessions/scrollback/<session>/`, with mode 0600 in a directory with mode 0700.
 
@@ -302,7 +302,7 @@ The history files hold what your panes printed, which can include passwords, tok
 ```toml
 [daemon]
 persist_scrollback = true         # save each pane's history (default true)
-persist_scrollback_lines = 5000   # most history lines one pane saves (0 = 5000)
+persist_scrollback_lines = 1000   # most history lines one pane saves (0 = 1000)
 persist_scrollback_kb = 2048      # most KiB one pane's file takes (0 = 2048)
 ```
 
