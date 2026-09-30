@@ -85,6 +85,24 @@ A report that loses to a higher-ranked source still exits 0 and prints `Not appl
 
 The old shell shim in `integrations/claude-code/` of the repository now just runs `tuios agent-hook claude-code`. Settings that still point at it keep working, but alongside an installed integration every event is reported twice. `tuios doctor agents` says so.
 
+### Agents that report to herdr
+
+Some agents report their state to [herdr](https://herdr.dev), another multiplexer for coding agents, by themselves: Crush, Kiro CLI, Command Code, Muse Code and Prime Agent. TUIOS accepts the same reports, so these agents need no install step.
+
+Every pane starts with herdr's variables: `HERDR_ENV=1`, `HERDR_SOCKET_PATH` naming a socket of TUIOS's own, `HERDR_PANE_ID` naming the pane, and `HERDR_BIN_PATH` naming `tuios`. So a Crush that you start from a shell prompt reports `working`, `needs_input` on a permission prompt or a question, and `done` when its turn ends. Its session title and model show as [agent metadata](#where-it-shows). Several Crush panes report side by side, and each pane follows only its own reports.
+
+- A pane may report only about itself.
+- A report older than the last one from the same agent is dropped.
+- An agent that exits without saying so, for example after a crash, does not keep its state. When the pane is back at its shell prompt, the state clears after two seconds.
+- An agent that reports through herdr's commands, `"$HERDR_BIN_PATH" pane report-agent`, reaches TUIOS the same way.
+
+TUIOS never uses herdr's own socket. A herdr that you start inside a TUIOS pane stops with a message about nesting. To run herdr there, give herdr's variables only to panes that start a known reporter:
+
+```toml
+[agents]
+herdr_protocol = "agents"   # always (default), agents, off
+```
+
 ### Progress sequences
 
 An agent that prints OSC 9;4 progress sequences needs no wiring. Setting a progress bar maps to `working`, clearing it to `idle`, the error state to `errored`, and the warning state to `needs_input`.
@@ -229,6 +247,7 @@ Every daemon pane gets these variables, which is how a shim or an agent finds TU
 | `TUIOS_RESTORED` | `1` in a shell started again after a restore |
 | `TUIOS_PANE_GRANTS` | What the pane may do through TUIOS as it starts, such as `admin` or `read,write,fan` |
 | `TUIOS_PANE_TOKEN` | Proves `TUIOS_PANE_ID` to the daemon where the kernel cannot name the caller's pane |
+| `HERDR_ENV`, `HERDR_SOCKET_PATH`, `HERDR_PANE_ID`, `HERDR_BIN_PATH` | herdr's variables, for [agents that report to herdr](#agents-that-report-to-herdr) |
 
 A pane whose process runs on another machine has a different set. See [Remote Hosts](/docs/remote-hosts#panes-on-another-machine).
 
