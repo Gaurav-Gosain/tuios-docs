@@ -86,7 +86,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 |-------|----------|
 | [Sessions](#sessions) | `new`, `attach`, `ls`, `resurrect`, `rename-session`, `kill-session`, `kill-server`, `daemon`, `logs` |
 | [Worktrees](#worktrees) | `worktree`, `fan` |
-| [Windows and workspaces](#windows-and-workspaces) | `new-window`, `split-window`, `popup`, `focus-window`, `pip`, `move-window`, `set-window`, `set-layout`, `select-workspace`, `list-workspaces`, `set-workspace-name`, `set-session-name`, `set-session-accent` |
+| [Windows and workspaces](#windows-and-workspaces) | `new-window`, `split-window`, `popup`, `xpanes`, `focus-window`, `pip`, `move-window`, `set-window`, `set-layout`, `select-workspace`, `list-workspaces`, `set-workspace-name`, `set-session-name`, `set-session-accent` |
 | [Input and output](#input-and-output) | `send-keys`, `send-text`, `run`, `capture-pane`, `screenshot`, `wait-for`, `subscribe` |
 | [Inspection](#inspection) | `list-windows`, `get-window`, `session-info`, `list-verbs` |
 | [Tape verbs](#run-command) | `run-command` |
@@ -441,6 +441,39 @@ The size flags have no short form, because `-w` means window and `-h` means help
 file=$(tuios popup --capture-stdout -- fzf)
 tuios popup --wait -- gum confirm "Deploy?" && ./deploy.sh
 tuios popup --width 90% --height 80% -- htop
+```
+
+### xpanes
+
+Open one pane per item in a new tiled workspace, and turn multifocus on for all of them. Then the keys you type go to every pane. This is like [tmux-xpanes](https://github.com/greymd/tmux-xpanes).
+
+```bash
+tuios xpanes [flags] [items...]
+command | tuios xpanes [flags]
+```
+
+The items are the arguments. With no arguments, TUIOS reads one item from each line of stdin, when stdin is not a terminal. TUIOS ignores empty lines.
+
+- `-c, --command <cmd>`: run the command in each pane with `sh -c`. TUIOS replaces `{}` with the item, in shell quotes.
+- `-I, --replace <text>`: the text that TUIOS replaces with the item. Default `{}`.
+- `--ssh`: run `ssh` with the item in each pane. The same as `-c 'ssh {}'`.
+- `-l, --layout <name>`: `tiled`, `even-horizontal` or `even-vertical`, or `t`, `eh` and `ev`. Default `tiled`.
+- `-n, --items-per-pane <n>`: the number of items for each pane. TUIOS joins them with spaces.
+- `--no-sync`: do not turn multifocus on.
+- `--workspace <n>`: the workspace for the panes. It must be empty. Default: the first empty workspace.
+- `-s, --session <name>`: default: the session of this pane, else the most recently active.
+- `--force`: open more than 64 panes.
+- `--json`: print the result, with the window ids, as JSON.
+
+With `-c`, the pane closes when the command stops. To keep the pane, end the command with `; exec $SHELL`. Without `-c`, each pane is a shell. Each pane gets the item in `TUIOS_XPANES_ITEM` and its number, from 1, in `TUIOS_XPANES_INDEX`. The item is the name of the pane. The panes start in the folder where you run `tuios xpanes`.
+
+The layout and multifocus need a client attached to the session. The layout also needs tiling on and the `bsp` layout. When TUIOS cannot do one of them, it opens the panes and tells you what it did not do.
+
+```bash
+tuios xpanes --ssh host1 host2 host3
+printf 'a\nb\nc\n' | tuios xpanes -c 'echo {}; exec $SHELL'
+ls /var/log/*.log | tuios xpanes -l even-horizontal --no-sync -c 'tail -f {}'
+tuios xpanes -n 2 -c 'diff {}' a.txt b.txt c.txt d.txt
 ```
 
 ### focus-window
@@ -832,6 +865,8 @@ tuios run-command <command> [args...] [flags]
 | `SnapLeft`, `SnapRight`, `SnapFullscreen` | | Snap the focused window |
 | `Split` | `horizontal` or `vertical` | Split the focused window |
 | `RotateSplit`, `EqualizeSplits` | | Flip the split, or reset ratios |
+| `ArrangePanes` | `tiled`, `even-horizontal` or `even-vertical`, then `[window...]` | Lay out the panes of the workspace again. The named windows come first. Needs the `bsp` layout |
+| `SetMultifocus` | `[window...]` | Put exactly these windows in multifocus. With no window, empty the set |
 | `Screenshot` | | Save the focused window as an image |
 | `SwitchWorkspace` | `1`-`9` | Show a workspace |
 | `MoveToWorkspace` | `1`-`9` | Move the focused window there |
