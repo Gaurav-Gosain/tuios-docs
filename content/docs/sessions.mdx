@@ -152,6 +152,38 @@ With [remote hosts](/docs/remote-hosts), the switcher also lists the sessions on
 
 The session you leave keeps running. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>(</kbd> and <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>)</kbd> step to the previous and next session without opening the switcher.
 
+## Scratch session
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>g</kbd> shows a persistent session in a popup over the current layout. Press the same key again to hide the popup. The session keeps running, so the next press shows it as you left it.
+
+The session has the name `scratch`. TUIOS creates it the first time you press the key. It is an ordinary session: `tuios ls` shows it, and you can attach to it from a different terminal.
+
+The popup runs `tuios attach` on the session. Hiding the popup ends that attach, but the session does not stop. The next press opens a new popup on the workspace you are on, and focus goes to the session's pane in terminal mode.
+
+The popup belongs to the session, like every popup. Every client of that session sees it. When a different client of the session presses the key, the popup closes for all of them.
+
+If the attach fails, the popup shows the error. Press <kbd>Enter</kbd> to close it.
+
+- The key works from inside the popup. TUIOS reads <kbd>Ctrl</kbd>+<kbd>B</kbd> before the popup gets it.
+- To send the prefix key to the scratch session, press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Ctrl</kbd>+<kbd>B</kbd>.
+- The key does not open a popup from inside the scratch session itself. The dock shows a message instead.
+- The popup needs a box of 22x8 cells or more. On a smaller screen the dock shows a message.
+- The key refuses on a session on another machine, and with no daemon.
+- The session name cannot start with `-` and cannot contain `/`. The dock shows a message when the name is not valid.
+- The key closes only its own popup. A popup opened with `tuios popup --name scratch` stays open.
+- When you detach, the popup stays open. It is there when you attach again.
+
+```toml
+[scratch]
+session = "scratch" # the session the popup shows
+width = "80%"        # cells (100) or percent (80%)
+height = "80%"
+```
+
+Set these with `tuios set-config`, or on the in-app settings page (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>,</kbd>).
+
+The action is `toggle_scratch`. To use a different key, bind the action in `[keybindings.prefix_mode]` or a different section. If your config already puts `g` on another prefix action, `toggle_scratch` has no key. `tuios keybinds doctor` shows this. See [Keybindings](/docs/keybindings#prefix-commands).
+
 ## Sharing a session
 
 Several clients can attach to one session at the same time, for example two terminals on one machine, or a terminal and an SSH login.
