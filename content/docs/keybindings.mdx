@@ -592,6 +592,13 @@ The clipboard gets the selection itself in these cases:
 - The command stops with an exit code that is not 0. The dock shows the exit code and the first line of stderr.
 - The command runs for more than 10 seconds. TUIOS stops the command and the processes that it started.
 
+TUIOS waits until the command closes its stdout. `xclip` starts a process that stays open after `xclip` stops, and keeps stdout open. TUIOS then waits 1 second more. To prevent the wait, send the stdout of `xclip` to `/dev/null`. This example also puts each yank in the X primary selection:
+
+```toml
+[appearance.selection]
+copy_command = "xclip -selection primary >/dev/null"
+```
+
 | Field | Does |
 |-------|------|
 | `key` | The key in copy mode. Write it as in the other sections |
@@ -599,7 +606,7 @@ The clipboard gets the selection itself in these cases:
 | `cancel` | `false`, the default, keeps copy mode on and the cursor where it is. TUIOS clears the selection. This is tmux `copy-pipe`. `true` leaves copy mode, as <kbd>q</kbd> does. This is tmux `copy-pipe-and-cancel` |
 | `description` | The name of the entry in the dock messages. Optional |
 
-The entry takes its key from copy mode. An entry on <kbd>y</kbd> replaces the plain yank. Copy mode does not use <kbd>p</kbd> or <kbd>P</kbd>. When no text is selected, the key shows a message and runs nothing. While you type a search, the key goes into the search.
+The entry takes its key from copy mode. An entry on <kbd>y</kbd> replaces the plain yank. Copy mode does not use <kbd>p</kbd> or <kbd>P</kbd>. When an entry takes <kbd>q</kbd>, <kbd>Esc</kbd>, <kbd>v</kbd>, <kbd>V</kbd>, <kbd>/</kbd>, <kbd>?</kbd> or a digit, TUIOS shows a warning when it loads the config. When no text is selected, the key shows a message and runs nothing. While you type a search, the key goes into the search.
 
 Without `copy_command`, <kbd>y</kbd> copies the selection as it is. With `copy_command`, <kbd>y</kbd> and <kbd>c</kbd> pipe the selection through that command. A `[[keybindings.copy_pipe]]` key always uses its own command. A mouse selection that copies on release does not use `copy_command`.
 
