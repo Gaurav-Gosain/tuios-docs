@@ -102,6 +102,8 @@ tuios ls
 
 `tuios ls --json` prints the same list for scripts. When no daemon is running, `tuios ls` lists the sessions saved on disk instead, marked `saved`, and exits with status 3.
 
+A session with a label (`tuios set-session-name`) shows in the table as `name (label)`. The label is not the session's name: scripts and `-s` keep using the real name.
+
 ## Attaching and detaching
 
 | Action | How | What happens |
@@ -143,12 +145,14 @@ TUIOS cannot find a client behind tmux or mosh in a pane. These redraw the scree
 | Type | Filter sessions by name |
 | <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Ctrl</kbd>+<kbd>P</kbd> <kbd>Ctrl</kbd>+<kbd>N</kbd> | Move the selection |
 | <kbd>Enter</kbd> | Switch to the selected session. If nothing matches, create a session with the name you typed. |
-| <kbd>Ctrl</kbd>+<kbd>R</kbd> | Give the selected session a display name. Scripts keep addressing it by its real name. |
+| <kbd>Ctrl</kbd>+<kbd>R</kbd> | Rename the selected session. This changes its real name, not only a display label. |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> | Kill the selected session, after a <kbd>y</kbd>/<kbd>n</kbd> confirmation. You cannot kill the session you are on this way. |
 | <kbd>Ctrl</kbd>+<kbd>U</kbd> | Clear the filter |
 | <kbd>Esc</kbd> | Close without switching |
 
-With [remote hosts](/docs/remote-hosts), the switcher also lists the sessions on your other machines. A remote session shows as `name @ host`, and the filter matches that text. <kbd>Enter</kbd> switches to it, and back again, in either direction. The rail, the palette and session cycling switch across machines the same way. Rename and kill work only on sessions on the machine you are on.
+<kbd>Ctrl</kbd>+<kbd>R</kbd>, the rail's rename, and [`tuios rename-session`](/docs/cli-reference#rename-session) all change the session's real name in the daemon. `tuios ls`, `attach` and every client show the new name at once, and the rename clears any label set with `set-session-name`. A pane that is already running keeps the old name in `TUIOS_SESSION`, and TUIOS commands from it still reach the session, until the session closes or a new session takes that name. `attach` and `kill-session` by the old name fail and name the new one. A name that another running or saved session has is refused, and so is an empty name or one with a slash or a control character.
+
+With [remote hosts](/docs/remote-hosts), the switcher also lists the sessions on your other machines. A remote session shows as `name @ host`, and the filter matches that text. <kbd>Enter</kbd> switches to it, and back again, in either direction. The rail, the palette and session cycling switch across machines the same way. Rename and kill work only on sessions on the machine you are on. A rename on another machine reaches this one as that session closing and a new one appearing under the new name.
 
 The session you leave keeps running. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>(</kbd> and <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>)</kbd> step to the previous and next session without opening the switcher.
 

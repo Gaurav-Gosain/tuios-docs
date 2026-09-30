@@ -84,7 +84,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 
 | Group | Commands |
 |-------|----------|
-| [Sessions](#sessions) | `new`, `attach`, `ls`, `resurrect`, `kill-session`, `kill-server`, `daemon`, `logs` |
+| [Sessions](#sessions) | `new`, `attach`, `ls`, `resurrect`, `rename-session`, `kill-session`, `kill-server`, `daemon`, `logs` |
 | [Worktrees](#worktrees) | `worktree`, `fan` |
 | [Windows and workspaces](#windows-and-workspaces) | `new-window`, `split-window`, `popup`, `focus-window`, `move-window`, `set-window`, `set-layout`, `select-workspace`, `list-workspaces`, `set-workspace-name`, `set-session-name`, `set-session-accent` |
 | [Input and output](#input-and-output) | `send-keys`, `send-text`, `run`, `capture-pane`, `screenshot`, `wait-for`, `subscribe` |
@@ -205,6 +205,8 @@ The table shows name, window count, status, creation time and last activity. `--
 
 With no daemon running, `ls` lists the sessions saved on disk, marks each `saved` (`"saved": true` in JSON), and exits `3`.
 
+A session with a label, set by [`set-session-name`](#workspaces-and-labels), shows in the table as `name (label)`. The `name` field in JSON stays the real name; `display_name` carries the label.
+
 With `--all-hosts` or `--host`, the JSON is an object with a `hosts` array. Each entry has `host`, `status` and `sessions`. A host that does not answer gets a row saying so and does not fail the command.
 
 ### resurrect
@@ -217,6 +219,29 @@ tuios resurrect work          # restore it and attach
 ```
 
 The daemon restores saved sessions when it starts, so you need this only after `tuios daemon --no-restore`, or to bring back one session on demand. Each window gets a fresh shell in its saved directory. Running programs and scrollback are not restored. See [Session Resurrection](/docs/sessions#session-resurrection).
+
+### rename-session
+
+Rename a session.
+
+```bash
+tuios rename-session [session] <new-name> [flags]
+```
+
+- `-s, --session <name>`: the session to rename. Default: the session of the pane you run it in.
+
+```bash
+tuios rename-session test work   # rename another session
+tuios rename-session work        # rename the session of this pane
+```
+
+The new name is what `tuios ls`, `attach` and `-s` use, and what new panes get as `TUIOS_SESSION`. Panes that already run keep the old name, and TUIOS commands from them still reach the session. `attach` and `kill-session` with the old name fail and name the new one. The rename also clears a label set with `set-session-name`.
+
+A name that another running or saved session has is refused, and so is an empty name or one with a slash or a control character.
+
+<Callout type="warn" title="Older daemon">
+A daemon older than this command does not know it, and refuses. Run `tuios kill-server` and start TUIOS again.
+</Callout>
 
 ### kill-session
 
@@ -468,7 +493,7 @@ tuios set-layout --rotate
 | `tuios select-workspace <n>` | Show a workspace |
 | `tuios list-workspaces` | List workspaces with name, window count, and which one is showing |
 | `tuios set-workspace-name <n> [name]` | Label a workspace. No name clears it |
-| `tuios set-session-name [name]` | Set the label the rail and dock show. The session keeps its real name for `-s` and `TUIOS_SESSION`. No name clears it |
+| `tuios set-session-name [name]` | Set the label the rail and dock show. The session keeps its real name for `-s` and `TUIOS_SESSION`. No name clears it. To change the name itself, use [`rename-session`](#rename-session) |
 | `tuios set-session-accent [accent]` | Set the session's accent colour, shared by every client. No accent clears it |
 
 ```bash
