@@ -1,0 +1,70 @@
+---
+title: herdr Compatibility
+description: Use tools built for herdr, such as Collie and herdr plugins, with TUIOS through herdr's socket API.
+icon: Plug
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+[herdr](https://herdr.dev) is another multiplexer for coding agents. Tools that are built for it talk to its socket: [Collie](https://github.com/AltanS/collie)'s herdr adapter, herdr plugins, bar widgets and editor bridges. TUIOS answers herdr's socket API on a socket of its own, so these tools work with TUIOS.
+
+TUIOS follows the API of herdr **0.9.3**.
+
+## Connect a tool
+
+Set `HERDR_SOCKET_PATH` to the TUIOS herdr socket. It is the daemon socket with `.herdr` added:
+
+```bash
+export HERDR_SOCKET_PATH="$XDG_RUNTIME_DIR/tuios/tuios.sock.herdr"
+```
+
+When `XDG_RUNTIME_DIR` is not set, the socket is `/tmp/tuios-<uid>/tuios.sock.herdr`. In a TUIOS pane, `HERDR_SOCKET_PATH` is set already.
+
+To run Collie against TUIOS, start its bridge with the herdr adapter:
+
+```bash
+COLLIE_MUX=herdr HERDR_SOCKET_PATH="$XDG_RUNTIME_DIR/tuios/tuios.sock.herdr" collie start
+```
+
+herdr's own commands, such as `herdr pane list`, `herdr pane read` and `herdr api snapshot`, also work against this socket.
+
+A `ping` answers with version `0.9.3+tuios` and `server: "tuios"`, so a tool can tell that it talks to TUIOS.
+
+## How TUIOS maps onto herdr
+
+| herdr | TUIOS |
+| --- | --- |
+| workspace | session |
+| tab | workspace |
+| pane | window |
+
+A pane id has herdr's form, `w<session>:p<window>`. The ids stay the same while the session and the window exist, and a rename does not change them.
+
+A TUIOS workspace is one of a session's numbered slots. A workspace shows as a tab when it holds a window, has a name, or is the one that shows.
+
+An agent's state shows as herdr's `agent_status`: `needs_input` is `blocked`, so a tool that shows the agents that need you shows these panes. `working`, `idle` and `done` keep their names, and `errored` shows as `done`.
+
+## What a tool can do
+
+- Read everything in one call with `session.snapshot`, or with the lists.
+- Read a pane with `pane.read`.
+- Type into a pane with `pane.send_text` and `pane.send_keys`.
+- Rename, focus, split and close panes.
+- Create, rename, focus, move and close tabs.
+- Create, rename and close workspaces.
+- List, create, open and remove git worktrees.
+- Follow changes with `events.subscribe`.
+- Report an agent's own state with `pane.report_agent` and the other report methods.
+
+Other herdr methods, such as the plugin and layout methods, answer the error `unsupported`. The full table of methods is in [AGENT_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/main/docs/AGENT_STATE.md#herdr-compatibility).
+
+## Who may do what
+
+Each herdr method runs the TUIOS command that does the same work, with the same checks.
+
+- A tool that runs outside every pane has your full rights.
+- A tool that runs in a pane holds that pane's [grants](/docs/agents#what-a-pane-may-do). A read needs `read`. Typing needs `write`. A create, close, rename or focus needs `admin`.
+
+<Callout type="warn">
+A pane may not type into another pane that waits on a prompt, unless it holds `respond`. The keys would answer the prompt. `admin` does not give `respond`.
+</Callout>
