@@ -34,7 +34,7 @@ tuios set-config appearance.sidebar.position left
 |---------|---------------|
 | `sessions` | Every session, grouped by machine when you have [remote hosts](/docs/remote-hosts). Worktree sessions sit under their repository, labelled by branch. A `global` group appears once a second machine is reachable |
 | `terminals` | The panes of the current session |
-| `files` | The focused pane's directory. See [the files section](/docs/configuration#the-files-section) |
+| `files` | The focused pane's directory. The list updates when a file is added, removed or renamed. See [the files section](/docs/configuration#the-files-section) |
 | `agents` | Every pane running a coding agent, with its state. See [Agents](/docs/agents) |
 | `git` | The focused pane's repository, branch, and how far it is ahead of or behind its upstream |
 
@@ -139,14 +139,21 @@ Each row shows the pane's state glyph and its name. A row says how long it has b
 │    ctx 84% · Bash: go…
 ```
 
-On a rail 30 columns wide or narrower, a pane running an agent is listed once, in the agents section, and the terminals section keeps the panes that run no agent. Rows that have rested longer than `agent_rest_fold` (an hour by default) fold into one `+N at rest` line. <kbd>Enter</kbd> or a click on it shows them again. A row that needs you, a working agent, the focused pane and a pane with messages queued never fold.
+While a Claude Code agent has subagents at work, the second line says how many, such as `3 subagents`, on any row. An agent that hands work to subagents and ends its turn shows `done`, and the count shows that the work goes on. On a narrow line, the harness name gives way to the count. The count needs the Claude Code [integration](/docs/agents#the-agent-reports-for-itself), version 3 or later.
+
+```
+│ ○ lead
+│    claude · 3 subagents
+```
+
+On a rail 30 columns wide or narrower, a pane running an agent is listed once, in the agents section, and the terminals section keeps the panes that run no agent. Rows that have rested longer than `agent_rest_fold` (an hour by default) fold into one `+N at rest` line. <kbd>Enter</kbd> or a click on it shows them again. A row that needs you, a working agent, the focused pane, a pane with messages queued and a pane whose agent has subagents at work never fold.
 
 `[appearance.sidebar.agent_row]` picks which tokens a row shows, in what order, and how each is coloured. It is a table, so set it in `config.toml` rather than with `set-config`:
 
 ```toml
 [appearance.sidebar.agent_row]
 # the shipped list; state, host, prompt and $key are the others
-tokens = ["session", "need", "harness", "name", "elapsed", "context", "meta", "now", "message"]
+tokens = ["session", "need", "harness", "name", "elapsed", "context", "subagents", "meta", "now", "message"]
 
 [[appearance.sidebar.agent_row.elapsed.rule]]
 gt = 30

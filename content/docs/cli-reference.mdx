@@ -1109,7 +1109,7 @@ tuios list-agents --select 'harness:codex state:idle,done'
 tuios list-agents --json | jq -r '.agents[] | select(.state=="needs_input") | .window_id'
 ```
 
-The states are `needs_input`, `errored`, `done`, `idle`, `working` and `unknown`. The JSON also carries `needs_you`, `queued` (messages waiting in the pane's [queue](#queue)), `completion_seq`, `finished_unread`, the agent's `meta`, `identity` and `confidence` (how TUIOS recognised the harness), and `evidence_age_ms`. The `ID` and `NAME` columns work with `-w`. `--session` cannot be combined with `--all-hosts` or `--host`.
+The states are `needs_input`, `errored`, `done`, `idle`, `working` and `unknown`. The JSON also carries `needs_you`, `queued` (messages waiting in the pane's [queue](#queue)), `completion_seq`, `finished_unread`, the agent's `meta`, `identity` and `confidence` (how TUIOS recognised the harness), `evidence_age_ms`, and `subagents`, the number of subagents the agent has at work. The `ID` and `NAME` columns work with `-w`. `--session` cannot be combined with `--all-hosts` or `--host`.
 
 ### get-agent-state and set-agent-state
 
@@ -1133,7 +1133,7 @@ tuios set-agent-state none                  # clear it
 
 Sources are ranked in that order, highest first. A source cannot overwrite a state set by a higher-ranked source. A refused report prints why on stderr and changes nothing. The [harness integrations](#integration) report for you.
 
-`get-agent-state --json` carries `identity`, `confidence` and `evidence_age_ms`: the milliseconds since the last evidence about the state arrived, or `null` for a pane that never had a state. See [Agents](/docs/agents#reading-the-state).
+`get-agent-state --json` carries `identity`, `confidence` and `evidence_age_ms`: the milliseconds since the last evidence about the state arrived, or `null` for a pane that never had a state. It also carries `subagents`, the number of subagents the pane's agent has at work. See [Agents](/docs/agents#reading-the-state).
 
 ### set-agent-meta and set-agent-session
 
@@ -1145,7 +1145,7 @@ tuios set-agent-meta summary=               # remove one key
 tuios set-agent-meta --source statusline --clear
 ```
 
-Keys are lower-case letters, digits, `_` and `-`, and values are cut to 80 characters. `--ttl` drops the keys after that long. The metadata clears when the agent leaves the pane.
+Keys are lower-case letters, digits, `_` and `-`, and values are cut to 80 characters. `--ttl` drops the keys after that long. The metadata clears when the agent leaves the pane. tuios writes the keys `now`, `prompt` and `subagents` from the harness hooks. `set-agent-meta` refuses them, and `--clear` does not remove them.
 
 `set-agent-session <id> --harness <id>` stores a harness's conversation id on a pane without changing its state, so the conversation can be resumed later.
 
@@ -1361,7 +1361,7 @@ See [Reviewing an agent's changes](/docs/agent-inbox#reviewing-an-agents-changes
 
 ### agent-log
 
-Show what the agent in a pane has been doing: prompts, tool calls and how they ended, finished turns, and commands its shell ran, oldest first. It needs the Claude Code or Codex integration.
+Show what the agent in a pane has been doing: prompts, tool calls and how they ended, finished turns, the subagents it started and stopped, and commands its shell ran, oldest first. It needs the Claude Code or Codex integration.
 
 ```bash
 tuios agent-log -w build
