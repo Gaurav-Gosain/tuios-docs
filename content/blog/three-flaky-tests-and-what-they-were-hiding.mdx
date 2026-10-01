@@ -1,0 +1,233 @@
+---
+title: Three flaky tests, and what they were hiding
+description: Nine tests failed now and then on CI in the last days of September. Two were product bugs, and the work turned up a third. A hook that waited on itself, a broken pipe that should have been an error, and a command line the shell echoed twice.
+date: '2026-10-01'
+author: Gaurav Gosain
+---
+
+Between 29 September and 1 October, four pull requests fixed nine tests in
+tuios that failed now and then on CI and passed on a rerun:
+[#256](https://github.com/Gaurav-Gosain/tuios/pull/256),
+[#296](https://github.com/Gaurav-Gosain/tuios/pull/296),
+[#315](https://github.com/Gaurav-Gosain/tuios/pull/315) and
+[#316](https://github.com/Gaurav-Gosain/tuios/pull/316). Two of the nine were
+bugs in the product, and the work turned up a third. Those tests were right to
+fail.
+
+A flaky test invites one fix above all others: raise the timeout. It is one
+line, the build goes green, and the test now checks a little less than it did.
+None of the nine fixes did that. Each one found the event the test was really
+waiting for and waited for that instead. #256 put it in one line: "This is a
+condition wait. No timeout changed."
+
+This post is about three of the nine. Each one taught me something different.
+
+## A hook that waited on itself
+
+`TestAStateChangeAfterAnAttachReachesTheAttachingClientOnce` checks that a
+client that attaches to a session gets a state change made just after the
+attach, and gets it once. CI failed it three times, on three unrelated pull
+requests, with this pair:
+
+```
+attach_state_race_test.go:199: a state pushed just after this client attached never reached it
+attach_state_race_test.go:166: the daemon never applied the push
+```
+
+The test attaches a first client, then installs a hook that runs when a client
+gets its attach reply. The hook pushes a state change and waits for the daemon
+to apply it. Then a second client attaches and fires the hook.
+
+The test installed the hook as soon as the first client read its own attach
+reply. But the daemon's attach handler keeps running after it sends the reply.
+On a slow machine the first handler reached the hook itself. The hook then ran
+on the first client's connection goroutine. Its push queued behind the hook on
+that same goroutine, and the hook waited 5 seconds for a push that could not
+run until the hook returned. The second client's own 5 second wait ran out at
+the same moment. Two failures, one cause.
+
+I could not make it fail on my machine. 400 runs under `-race`, with
+`GOMAXPROCS=2` and 200 of them beside a full package run, gave no failures.
+The race needs a scheduler as slow as a CI runner.
+
+So I made the scheduler slow where it mattered. A 50 ms sleep before the hook
+in `handleAttach` made the old test fail 5 runs of 5, with the same two
+messages CI printed. That is the negative control: the test fails for the
+reason I think it fails, on demand.
+
+The fix asks the daemon a question on the first connection and waits for the
+answer:
+
+```go
+func waitForHandlerIdle(t *testing.T, c *TUIClient) {
+	t.Helper()
+	msg, err := NewMessage(MsgList, nil)
+	if err != nil {
+		t.Fatalf("list message: %v", err)
+	}
+	if err := c.send(msg); err != nil {
+		t.Fatalf("send list: %v", err)
+	}
+	for {
+		resp, err := c.recv()
+		if err != nil {
+			t.Fatalf("wait for the list reply: %v", err)
+		}
+		if resp.Type == MsgSessionList {
+			return
+		}
+	}
+}
+```
+
+The daemon serves one connection in order. When the list reply comes back, the
+attach handler before it has returned. The question is a barrier. With the
+same 50 ms sleep in place, the new test passed 20 runs of 20.
+
+This bug was in the test. The product delivered the push as soon as the hook
+let the goroutine go.
+
+## A broken pipe that should have been an error
+
+tuios answers herdr's socket protocol, one JSON request per connection, so
+tools built for herdr work in a tuios pane. One process may hold at most 64
+connections at once. The 65th gets an error, `rate_limited`, with "Close some
+and try again".
+
+`TestHerdrConnectionsPerCallerAreCapped` opened 64 connections, slept 300 ms,
+opened one more and expected `rate_limited`. On CI it sometimes got a broken
+pipe instead.
+
+There were two bugs here, one on each side.
+
+The test's bug was the sleep. Its 64 held connections were idle, and the
+daemon drops an idle connection after its 2 second I/O timeout. On a slow
+runner, some of the 64 were gone before the 65th arrived, and the count was
+never full. The new test holds 64 waits for output that never prints, so each
+connection stays busy. It then reads the daemon's own counter until it says
+64, and opens a new wait for any connection the daemon dropped:
+
+```go
+deadline := time.Now().Add(20 * time.Second)
+for count() < herdrConnsPerCaller {
+	if time.Now().After(deadline) {
+		t.Fatalf("the daemon counted %d of %d connections", count(), herdrConnsPerCaller)
+	}
+	for i, c := range held {
+		if !alive(c) {
+			_ = c.Close()
+			held[i] = hold()
+		}
+	}
+	time.Sleep(10 * time.Millisecond)
+}
+```
+
+The deadline here is 20 seconds, where the old test slept a fixed 300 ms. A
+passing run never waits for the deadline. It waits until the count is right.
+
+The product's bug was in the refusal. The daemon wrote `rate_limited` and
+closed the connection before it read the client's request. On a unix socket,
+closing with unread data resets the connection. And an answer sent before the
+client writes races the client's write. Either way, the client saw a broken
+pipe or a reset. The fix in `serveHerdr` carries the reason in a comment:
+
+```go
+if !d.herdrConns.take(cs.peerPID, herdrConnsPerCaller) {
+	// Read the request before the refusal. Closing a unix socket with
+	// the request still unread resets it, and an answer sent before the
+	// client writes races that write: either way the client saw a
+	// broken pipe instead of rate_limited.
+	writeHerdr(conn, herdrRequestID(conn), nil, "rate_limited", "this process has too many connections open on the herdr socket. Close some and try again")
+	return
+}
+```
+
+A real client hits this too. A tool that opened too many connections could not
+tell "slow down" from "the daemon crashed", so it had no reason to back off
+and try again. The PR's stress run: the base failed 1 run in 300 with the CI
+broken pipe, and the fix passed 600 of 600, and 100 of 100 under `-race`.
+
+The same PR found another bug in the product. `vt.grid.String` wrote a
+shared blank row while it held only the read lock on the pane. Two waits on one
+pane raced on that row, and the race detector flagged
+`TestWaitsEndWithTheirClient` in most `-race` runs. That fix is
+[194af0cf](https://github.com/Gaurav-Gosain/tuios/commit/194af0cf).
+
+## The shell echoed the command twice
+
+`TestCapturePaneReportsHistoryAndRevision` types a command into a shell and
+waits for it to finish:
+
+```
+seq 1 60; echo DONE-MARK
+```
+
+The test waited until the screen held `DONE-MARK` twice: once in the command
+line, once in the output. Then it captured the pane and checked that 60 lines
+of history had scrolled off. Under `-race` it failed 6 runs of 50, with a
+history of 0 rows.
+
+The marker was on the screen twice before `seq` had run at all.
+
+The text reached the pane's terminal before bash had started its line editor.
+The terminal's line discipline was still in canonical mode, so it echoed the
+text as it arrived. Then readline started, drew its prompt, and drew the
+pending input again after it. Two copies of the command line, and so two
+copies of `DONE-MARK`, with no output yet. `-race` slows the shell's start
+enough to make that common.
+
+The fix makes the marker impossible to echo:
+
+```diff
+-"seq 1 60; echo DONE-MARK\n"
++"seq 1 60; echo DONE''-MARK\n"
+```
+
+The shell joins `DONE''-MARK` into `DONE-MARK` when it runs `echo`. The command
+line holds `DONE''-MARK`, which does not match. The test now waits for
+`\nDONE-MARK\n`, a line that only the output can produce. After the fix it
+passed 50 of 50 runs under `-race` and 200 of 200 without.
+
+The product was fine here. As the PR says: "The product reports history
+correctly." The test was counting the wrong thing, and only a slow start
+showed it.
+
+## Three of the other six
+
+The rest were smaller. Three of them are worth a line.
+
+- A capture claimed its file name by creating an empty file, and filled it
+  later with `os.WriteFile`. A reader in between saw an empty screenshot. That
+  is a product bug: a file manager or a file watcher would see it too. Now the
+  claim is a hidden file beside the name, and `Save` writes a hidden temporary
+  file and renames it into place
+  ([3f7f2e88](https://github.com/Gaurav-Gosain/tuios/commit/3f7f2e88)). The
+  e2e test had failed 1 run in 360.
+- `TestEveryVerbExampleReachesItsHandler` used one 750 ms budget for two jobs:
+  to bound a hang, and as the time to wait on a verb that blocks on purpose.
+  Under load an ordinary verb went over it. Verbs that answer now get one
+  minute, which only bounds a hang. The new comment: "This test proves a verb
+  reaches its handler, not how fast the handler is."
+- A snooze test raced the timer that wakes overdue items. The fix calls
+  `wakeDue` directly, which does the timer's work at once. Sometimes the right
+  wait is no wait.
+
+## Breaking the fix on purpose
+
+A test that claims to cover a race has to fail when the race comes back. For a
+race that a laptop will not reproduce, I put a delay where the race needs one,
+and watch the old test fail. Then I keep the delay and watch the new test
+pass. #256 used a 50 ms delay. #296 used a 1 ms delay after the snooze loads
+and a 50 ms delay in the SSH reader.
+
+This is the rule `e2e/tui/NEGATIVE_CONTROLS.md` opens with: "A regression test
+that has never been observed to fail on broken code is not evidence." The same
+file records what the end-to-end suite cannot catch. It runs tuios as a child
+process, so `-race` on the test binary instruments only the harness.
+The grid race above was found by a unit test under `-race`, which is where a
+memory race has to be caught.
+
+Earlier posts covered the other half of this: [tests that could not
+fail](/blog/tests-that-could-not-fail), and [a flake that was a real
+bug](/blog/a-window-named-db) in the rail.
