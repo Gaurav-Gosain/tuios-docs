@@ -413,7 +413,7 @@ The settings page has an editor for this: the **Sections** row under Sidebar. Ar
 
 #### The files section
 
-The files section lists the focused pane's directory. It is read again when the shell changes directory, when the focus moves and when a client attaches. Nothing polls, so a file written by another program appears on the next read.
+The files section lists the focused pane's directory. It is read again when the shell changes directory, when the focus moves and when a client attaches. It is also read again when a file in the listed folder is added, removed or renamed, by the pane or by another program. tuios asks the system to report these changes (inotify on Linux, kqueue on macOS and the BSDs, ReadDirectoryChangesW on Windows). Nothing polls, and a change to the contents of a file does not cause a read. For a pane on another machine, the list changes only when the shell changes directory.
 
 `folder_click` decides what a click on a folder does: `navigate` opens it in the listing, `cd` sends the focused pane there, `both` does both. A `cd` is only typed into a pane that is at a shell prompt.
 
@@ -427,14 +427,14 @@ Delete uses the freedesktop.org trash in your home directory, so your desktop's 
 
 ```toml
 [appearance.sidebar.agent_row]
-tokens = ["session", "need", "harness", "name", "elapsed", "context", "meta", "now", "message"]
+tokens = ["session", "need", "harness", "name", "elapsed", "context", "subagents", "meta", "now", "message"]
 
 [[appearance.sidebar.agent_row.elapsed.rule]]
 gt = 30          # minutes in the current state
 fg = "warning"
 ```
 
-The `tokens` above are the shipped list. The other tokens are `state`, `host` and `prompt`. `need` says what a row wants from you, such as `approval` or `question`. `context` shows `ctx 84%` once the agent's context is 80% full. `now` is what a working agent is doing, such as `Bash: go test ./...`. `meta` draws the other keys the pane reported with `tuios set-agent-meta`, and `$` followed by a key, such as `$model` or `$cost`, places one key. See [Session Rail](/docs/session-rail#agent-rows).
+The `tokens` above are the shipped list. The other tokens are `state`, `host` and `prompt`. A `tokens` list you wrote keeps its own order and gets no new tokens, so add `subagents` to it to see the count. `need` says what a row wants from you, such as `approval` or `question`. `context` shows `ctx 84%` once the agent's context is 80% full. `now` is what a working agent is doing, such as `Bash: go test ./...`. `subagents` shows how many subagents a Claude Code agent has at work, such as `3 subagents`, on any row while any run. `meta` draws the other keys the pane reported with `tuios set-agent-meta`, and `$` followed by a key, such as `$model` or `$cost`, places one key. See [Session Rail](/docs/session-rail#agent-rows).
 
 Each rule has one test: `equals`, `contains`, `starts_with`, `gt` or `lt`. The first matching rule wins. A mistake in this table is a warning, not an error.
 
