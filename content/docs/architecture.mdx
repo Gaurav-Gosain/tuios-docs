@@ -160,7 +160,24 @@ Kitty graphics (`internal/app/kitty_*.go`):
 - Output is wrapped in synchronized output (mode 2026).
 - While a program has a synchronized update open, TUIOS holds its image commands, per window. They go to the host when the update ends, so a delete and the next image arrive together. A hold ends after 1 second, or when the held data is too large. A move, resize or scroll of the pane goes out at once.
 
-Sixel (`internal/app/sixel_passthrough.go`) is passed through as is. An image that does not fit inside its window is hidden, because pixel-level clipping is not implemented.
+Sixel (`internal/app/sixel_passthrough.go`, `internal/app/sixel_frame.go`):
+
+- The emulator marks each cell a sixel image covers. The image then scrolls, goes into the scrollback, and is removed by text or an erase, the same as in a sixel terminal.
+- TUIOS sends the host only the part of the image that is visible: cropped to the window, cut around popups, and not sent for a window on another workspace. When the image is cleared, scrolled away or its window closes, it leaves the host.
+- A host with Kitty graphics and no sixel gets the image as a Kitty image. A host with neither shows a dim box with the word "image".
+- A program in a window is told it can draw sixel (in its DA1 answer) only when the image will be shown. Programs such as chafa, lsix, timg and yazi then use their text output on a terminal without images. In a daemon session, the answer is yes while any attached client can show the image.
+- An SSH client's terminal is asked for its DA1 answer when the session starts.
+- Copied text has a space for each image cell.
+
+| Program | Sixel host (foot, WezTerm, xterm, mlterm, Konsole, Windows Terminal, the browser client) | Kitty host without sixel (kitty, Ghostty) | Host with neither |
+|---------|------|------|------|
+| chafa, timg | Sixel. Tested | Kitty graphics. Expected | Text. Expected |
+| lsix | Sixel. Tested | Sent as Kitty graphics. Expected | lsix does not start. Expected |
+| yazi | Sixel preview. Tested | Kitty graphics. Expected | No preview picture. Expected |
+| A sixel file, img2sixel | Sixel. Tested | Sent as Kitty graphics. Tested | A dim box. Tested |
+| viu | Text: common builds have no sixel | Kitty graphics. Expected | Text. Expected |
+
+"Tested" means the program ran in a window in front of a test terminal of that kind. The result is the same in standalone mode, daemon mode, over SSH and in the browser, because each client shows images to its own terminal.
 
 TUIOS asks the host terminal what it supports at startup instead of guessing, and waits up to 300 ms for the answer. It then gives programs the real answer: a program that asks whether it may send a file path is told no when the host cannot read files, and falls back to sending bytes. If no answer arrives in time (for example when TUIOS runs inside another multiplexer that swallows the query), graphics forwarding is turned off and programs are told so.
 
