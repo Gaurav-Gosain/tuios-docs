@@ -22,9 +22,10 @@ tuios pane now works with no setup.
 
 ## What herdr gives a pane
 
-herdr puts five variables in each pane's environment: `HERDR_ENV=1`,
-`HERDR_SOCKET_PATH`, `HERDR_PANE_ID`, `HERDR_WORKSPACE_ID` and
-`HERDR_BIN_PATH`. A program that wants to talk to herdr connects to the socket,
+herdr 0.9.3 puts six variables in each pane's environment: `HERDR_ENV=1`,
+`HERDR_SOCKET_PATH`, `HERDR_PANE_ID`, `HERDR_TAB_ID`, `HERDR_WORKSPACE_ID` and
+`HERDR_BIN_PATH`. v0.8.3 gave a tuios pane all of them except `HERDR_TAB_ID`,
+which [#328](https://github.com/Gaurav-Gosain/tuios/pull/328) added later. A program that wants to talk to herdr connects to the socket,
 writes one JSON line with an `id`, a `method` and `params`, reads one line back
 and closes the connection. One request per connection.
 
@@ -49,8 +50,8 @@ for the life of the pane, because nothing ever said otherwise.
 ## Every pane, by default
 
 #287 made `[agents] herdr_protocol` default to `always`. herdr gives every pane
-its environment, so tuios does too. This is the function the daemon calls when
-it spawns a pane, in `internal/session/manager.go`:
+its environment, so tuios does too. This is the end of `HerdrEnv`, which the
+daemon calls when it spawns a pane, in `internal/session/manager.go` on main:
 
 ```go
 if sock == "" || windowID == "" || mode == config.HerdrProtocolOff {
@@ -61,6 +62,9 @@ if mode != config.HerdrProtocolAlways && !guestenv.SpeaksHerdrProtocol(command) 
 }
 env := []string{"HERDR_ENV=1", "HERDR_SOCKET_PATH=" + sock, "HERDR_PANE_ID=" + herdrPaneID(sessionID, windowID)}
 if sessionID != "" {
+	if workspace > 0 {
+		env = append(env, "HERDR_TAB_ID="+herdrTabID(sessionID, workspace))
+	}
 	env = append(env, "HERDR_WORKSPACE_ID="+herdrWorkspaceID(sessionID))
 }
 if p := m.herdrBin.Load(); p != nil && *p != "" {
@@ -75,11 +79,13 @@ new default, a real herdr started in a tuios pane stops with its nesting
 message. `herdr_protocol = "agents"` goes back to the old scope, and herdr's
 own `experimental.allow_nested` also works.
 
-`HERDR_BIN_PATH` names the tuios binary itself. herdr's guide tells agent
-authors to report with `"$HERDR_BIN_PATH" pane report-agent`, so tuios has
-hidden commands that take herdr's arguments: `pane report-agent`,
+herdr's guide tells agent authors to report with `"$HERDR_BIN_PATH" pane
+report-agent`. In v0.8.3, `HERDR_BIN_PATH` names the tuios binary itself, and
+tuios has hidden commands that take herdr's arguments: `pane report-agent`,
 `report-agent-session`, `release-agent`, `report-metadata` and
-`notification show`.
+`notification show`. Since #328, which is not in a release yet,
+`HERDR_BIN_PATH` names a `herdr` link to tuios, and tuios answers herdr's
+whole command line.
 
 The socket is never herdr's. It sits beside the daemon's socket, at
 `<daemon socket>.herdr`, with mode 0700. A pane never inherits an outer
@@ -122,7 +128,7 @@ becomes `done`, and an `idle` from anywhere else, Crush's first report
 included, stays `idle`.
 
 `blocked` needed a kind. The Inbox groups a waiting agent by what it waits
-for, an approval or a question. A Crush pull request,
+for, an approval or a question. A Crush pull request that is still open,
 [charmbracelet/crush#3541](https://github.com/charmbracelet/crush/pull/3541),
 sends a message with every block. A permission request starts with
 `Permission`. A question sends the question.
@@ -139,8 +145,8 @@ func herdrBlockedKind(harness, msg string) string {
 }
 ```
 
-An empty message is an approval because Crush releases before #3541 report
-`blocked` only for a permission request, and send no message.
+An empty message is an approval because Crush without #3541 reports
+`blocked` only for a permission request, and sends no message.
 
 ## A report speaks only for its own pane
 
@@ -172,9 +178,11 @@ them like this:
 | tab | workspace | `<ws>:t<workspace number>` |
 | pane | window | `<ws>:p` and 12 hex digits of the window id |
 
-The PR lists 40 methods that answer, beside the report methods. 57 more of herdr's methods answer
-`unsupported` in herdr's own error shape: `pane.zoom`, `pane.resize`, the
-`layout.*` and `plugin.*` families and others. A method herdr does not have
+#301 answered 40 methods, beside the report methods. 57 more of herdr's
+methods answered `unsupported` in herdr's own error shape, such as
+`pane.resize`, `pane.move` and the `layout.*` and `plugin.*` families. #328
+later answered 8 of those, `pane.zoom` among them. On main, 48 methods answer
+and 49 are `unsupported`. A method herdr does not have
 answers `invalid_request`, as herdr does. `ping` answers with herdr's version
 plus `+tuios` and `server: "tuios"`, so a client can tell which one it reached.
 
@@ -192,7 +200,7 @@ with no grants could learn whether a branch existed. `events.subscribe` looked
 up pane ids before it checked the caller. Waits outlived a closed client. All
 three were fixed before the merge.
 
-Two more came from Collie's real traffic. herdr 0.9.3 writes `send_text` raw,
+One more came from Collie's real traffic. herdr 0.9.3 writes `send_text` raw,
 so a multi-line reply from Collie ran in the shell line by line. tuios sends it
 as a paste ([51897a7c](https://github.com/Gaurav-Gosain/tuios/commit/51897a7c)).
 `agent.prompt` had the same problem and now types through the same path as
@@ -230,5 +238,6 @@ test is where it showed up.
 - Scratch terminals are not herdr panes.
 - A real herdr does not start in a tuios pane under the default setting.
 
-The details, and the full table of methods, are on the [herdr
-compatibility](/docs/herdr-compatibility) page.
+The details are on the [herdr compatibility](/docs/herdr-compatibility)
+page. The full table of methods is in
+[AGENT_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/main/docs/AGENT_STATE.md#herdr-compatibility).

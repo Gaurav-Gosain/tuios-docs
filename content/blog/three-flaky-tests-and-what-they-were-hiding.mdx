@@ -14,13 +14,13 @@ tuios that failed now and then on CI and passed on a rerun:
 bugs in the product, and the work turned up a third. Those tests were right to
 fail.
 
-A flaky test invites one fix above all others: raise the timeout. It is one
+The easy fix for a flaky test is to raise the timeout. It is one
 line, the build goes green, and the test now checks a little less than it did.
 None of the nine fixes did that. Each one found the event the test was really
 waiting for and waited for that instead. #256 put it in one line: "This is a
 condition wait. No timeout changed."
 
-This post is about three of the nine. Each one taught me something different.
+This post is about three of the nine.
 
 ## A hook that waited on itself
 
@@ -163,17 +163,17 @@ waits for it to finish:
 seq 1 60; echo DONE-MARK
 ```
 
-The test waited until the screen held `DONE-MARK` twice: once in the command
-line, once in the output. Then it captured the pane and checked that 60 lines
-of history had scrolled off. Under `-race` it failed 6 runs of 50, with a
+The test waited until the pane's text held `DONE-MARK` twice, once in the
+command line and once in the output. Then it captured the pane and checked
+that at least 30 of the 60 rows had scrolled into history. Under `-race` it failed 6 runs of 50, with a
 history of 0 rows.
 
 The marker was on the screen twice before `seq` had run at all.
 
-The text reached the pane's terminal before bash had started its line editor.
-The terminal's line discipline was still in canonical mode, so it echoed the
-text as it arrived. Then readline started, drew its prompt, and drew the
-pending input again after it. Two copies of the command line, and so two
+The text reached the pane's terminal before the shell had started its line
+editor. The terminal still had echo on, so it echoed the text as it arrived.
+Then the shell's line editor started, drew its prompt, and drew the pending
+input again after it. Two copies of the command line, and so two
 copies of `DONE-MARK`, with no output yet. `-race` slows the shell's start
 enough to make that common.
 
@@ -210,8 +210,7 @@ The rest were smaller. Three of them are worth a line.
   minute, which only bounds a hang. The new comment: "This test proves a verb
   reaches its handler, not how fast the handler is."
 - A snooze test raced the timer that wakes overdue items. The fix calls
-  `wakeDue` directly, which does the timer's work at once. Sometimes the right
-  wait is no wait.
+  `wakeDue` directly, which does the timer's work at once.
 
 ## Breaking the fix on purpose
 
@@ -230,4 +229,4 @@ memory race has to be caught.
 
 Earlier posts covered the other half of this: [tests that could not
 fail](/blog/tests-that-could-not-fail), and [a flake that was a real
-bug](/blog/a-window-named-db) in the rail.
+bug](/blog/a-window-named-db) in how `-w` finds a window.
