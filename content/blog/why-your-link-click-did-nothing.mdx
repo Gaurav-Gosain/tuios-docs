@@ -1,0 +1,243 @@
+---
+title: Why your link click did nothing
+description: The hover label in tuios said shift+click to open a link, and in most terminals shift+click never reached tuios. The fix moved the click to ctrl, sent every link to the outer terminal as OSC 8, and then got the Mac wrong once before it got it right.
+date: '2026-10-05'
+author: Gaurav Gosain
+---
+
+Hover a link in a tuios pane and a label appears under the pointer. It shows
+where the link goes, and before [#418](https://github.com/Gaurav-Gosain/tuios/pull/418)
+it ended with `shift+click to open`.
+In most terminals, shift+click did nothing at all.
+
+The click never arrived. This post is about who a click belongs to, the frame
+that hid every link from the outer terminal, and a label I changed for the Mac
+on a theory and changed back after a test.
+
+## Who owns a click
+
+tuios reads the mouse. It asks the outer terminal for mouse reports, and the
+terminal then sends each click to tuios as an escape sequence instead of
+using it itself. That is how you drag a divider or click a pane to focus it.
+
+Every terminal keeps one way out of this. In xterm, shift is the bypass
+modifier: a shift+click goes to the terminal, not to the program, so you can
+still select text while a program tracks the mouse. Most terminals copied
+that rule. The commit that fixed the gesture,
+[b281f0bb](https://github.com/Gaurav-Gosain/tuios/commit/b281f0bb), puts it in
+one line: "Shift is the xterm bypass modifier, so most terminals never pass
+shift+click on while a program reports the mouse."
+
+So tuios had picked the one modifier that the outer terminal takes for itself.
+The comment above the old code even gave the reason it was chosen:
+
+```go
+// Shift is the terminal's own "this click is mine, not the program's"
+// modifier, which xterm has meant by it for decades, so it is the one
+// modifier a user already expects to reach past a program that is tracking
+// the mouse.
+```
+
+That reasoning is right about what shift means, and wrong about where the
+click goes. "Mine" means the terminal's. The table of terminals in the
+configuration docs now lists eight. In seven of them, shift+click never
+reaches tuios.
+
+## Ctrl+click, on release
+
+Ctrl+click reaches tuios in all eight. The catch is that ctrl+drag already
+had a job: it moves a pane. A press cannot tell which one the user means. The
+release can.
+
+On a ctrl press over a link, tuios notes the link and waits. If the pointer
+moves past the drag threshold, it is a drag and the pane moves. If it does
+not, the release opens the link:
+
+```go
+if o.CtrlDragPending {
+	o.CtrlDragPending = false
+	// The press was on a link and nothing moved far enough to be a
+	// drag, so this was a ctrl+click on the link.
+	if url := o.CtrlClickLink; url != "" {
+		o.CtrlClickLink = ""
+		if o.CtrlDragIndex >= 0 && o.CtrlDragIndex < len(o.Windows) {
+			o.FocusWindowFromClick(o.CtrlDragIndex, o.DragStartX, o.DragStartY)
+		}
+		return o, o.OpenLink(url)
+	}
+	return o, nil
+}
+```
+
+Shift+click still works in the terminals that pass it on. A new setting,
+`appearance.link_click`, picks the gestures: `both` (the default), `ctrl`,
+`shift` or `off`.
+
+The same commit reports a failed open. tuios watches the opener's exit for 3
+seconds. If the
+opener fails, tuios shows a message and puts the URL on the clipboard. Under
+`ssh`, tuios does not start the system opener, because it would open the
+browser on the remote machine. On a Linux machine with no display there is no
+desktop to open it on. In both cases tuios copies the URL instead.
+
+## The frame hid every link
+
+The click was half of it. The other half was in the frame.
+
+tuios draws each pane into its own frame, so the outer terminal sees tuios's
+output and never the program's. A program can mark a link with OSC 8, an
+escape sequence that says "these cells are a link to this address". `ls
+--hyperlink`, compilers and agent CLIs do it, and the text on screen is often
+not the address. Most terminals can open an OSC 8 link on their own, with a
+click of their own.
+
+They could not open one in a focused tuios pane, because that pane's frame
+dropped the OSC 8 marks.
+[073e0b08](https://github.com/Gaurav-Gosain/tuios/commit/073e0b08): "A focused
+pane dropped OSC 8 from the frame, so the outer terminal's own link handling
+never saw a labelled link's target."
+
+Now the cell loop that draws a focused pane writes every link as OSC 8:
+
+- A link the program marked keeps the program's own address and its `id=`
+  parameter. The `id=` is how OSC 8 says that two runs of cells are one link.
+- A bare URL that tuios finds in plain text gets OSC 8 too, with an `id=` of
+  tuios's own. A URL that wraps onto the next row is then one link to the
+  outer terminal, not two halves.
+
+The id of a bare URL is a hash of the pane, the address and the cell where it
+starts:
+
+```go
+func bareLinkID(windowID, url string, at linkCellRef) string {
+	h := fnv.New64a()
+	h.Write([]byte(windowID))
+	h.Write([]byte{0})
+	h.Write([]byte(url))
+	h.Write([]byte{0, byte(at.X), byte(at.X >> 8), byte(at.Y), byte(at.Y >> 8)})
+	return "tuios-" + strconv.FormatUint(h.Sum64(), 36)
+}
+```
+
+The position is in the hash so that two copies of the same address on screen
+stay two links.
+
+Finding bare URLs in every frame could be expensive, so the cell loop does
+not look for them on every line. It watches for `://` as it reads the cells.
+Only a line that holds one is read as text and drawn again with its links.
+`BenchmarkRenderTerminalReal/focused`, at 207x55, went from about 347 us to
+343 us, with allocations unchanged.
+
+## Three smaller bugs on the way
+
+Three more fixes went in with it.
+
+**A URL cut by the edge of the pane.** A long bare URL wraps over several
+rows. tuios read it from the rows on screen only. Scroll back to the head of a
+long URL and click it, and tuios opened the address cut at the pane's last row.
+Click the tail of a URL whose head had scrolled into the history, and it was
+not a link at all.
+[6f1f1ab8](https://github.com/Gaurav-Gosain/tuios/commit/6f1f1ab8) follows the
+wrapped line past both edges, through the screen and the history, up to 16
+rows each way. Only the underline stops at the edge.
+
+**An empty URI that kept its id.** A program closes an OSC 8 link with an
+empty address. tuios's emulator cleared the address and kept the parameters,
+so the next link inherited the old `id=`.
+[f7916166](https://github.com/Gaurav-Gosain/tuios/commit/f7916166) adds a
+conformance case for it:
+
+```go
+{
+	// An empty URI closes the link whatever parameters come with it.
+	name: "an empty URI with parameters closes the link",
+	cols: 10,
+	in:   "\x1b]8;id=n1;" + url + "\x07a\x1b]8;id=n1;\x07b",
+	want: "ab",
+	cells: []cellWant{
+		{x: 0, y: 0, content: "a", link: ptr(url)},
+		{x: 1, y: 0, content: "b", link: ptr(""), linkParams: ptr("")},
+	},
+},
+```
+
+**Two detectors that disagreed.** [Hints mode](/docs/hints) and the pointer
+each had their own way to find a URL. The hints one ran to the next space, so
+a markdown badge was one long hint, and `/p` in `</p>` was a path.
+[35b6345d](https://github.com/Gaurav-Gosain/tuios/commit/35b6345d) gives both
+one detector. A URL now stops at a space, a quote, a backtick or an angle
+bracket. A `)` or `]` that the URL did not open ends it, so a Wikipedia URL
+keeps its brackets and a badge splits at the right place.
+
+## The tests
+
+The end-to-end tests are in `e2e/tui/link_open_test.go`. They start a real
+tuios with `appearance.link_opener` set to a script that appends its argument
+to a file. A link that opened is a line in that file. A link that tuios
+refused is no line. The file is the test's artifact.
+
+The pane prints a fixture where every label differs from its target, so a
+test that opened the visible text would fail. The test then sends clicks the
+way the outer terminal reports them, in SGR with the modifier bits set:
+
+```go
+col, row := mustFind(t, term, "click here")
+mouseClick(t, term, col+3, row, tuitest.MouseLeft, tuitest.ModCtrl)
+waitOpened(t, record, []string{linkTarget}, "ctrl+click on an OSC 8 label")
+```
+
+After the clicks, the test reads the bytes tuios sent to the outer terminal
+and checks for an OSC 8 sequence for each of four links: the labelled one,
+the `id=` one, a bare URL and a wrapped bare URL.
+
+Each fix has a negative control in `e2e/tui/NEGATIVE_CONTROLS.md`: cut one
+call site, build, run the test, and watch it fail for the right reason. On
+the tree before the change, the first click fails with "the opener was
+started with [], want [https://example.com/real-target]". With the OSC 8
+transition cut from the cell loop, all four OSC 8 checks fail. With
+`javascript` added to the schemes the opener may get, the record holds the
+script address.
+
+One row in that file is not a control. `TestLinkOpensFromARehydratedPane`
+passes on both builds, because a daemon snapshot always carried OSC 8
+targets. The file lists it as "guard, not a control", which is the honest
+name for a test that has never failed.
+
+## Then I got the Mac wrong
+
+All of that went in with #418. The same day I merged
+[#420](https://github.com/Gaurav-Gosain/tuios/pull/420)
+([d9c34874](https://github.com/Gaurav-Gosain/tuios/commit/d9c34874)), which
+changed the label on a Mac to name cmd+click. Its reasoning:
+
+> macOS reads ctrl+click as a right click, and Terminal.app and iTerm2 open
+> their own menu instead of passing it on. Every link reaches the outer
+> terminal as OSC 8, so cmd+click opens it there.
+
+Each step sounds right. The frame does carry every link as OSC 8 now, and
+cmd+click is how a Mac terminal opens a link. I did not test it on a Mac.
+
+[#426](https://github.com/Gaurav-Gosain/tuios/pull/426) records the test that followed, on macOS 27, in Ghostty, kitty, WezTerm
+and Terminal.app.
+Ctrl+click opened the link through tuios in all four. Cmd+click opened it in
+none of them. None of the four opens an OSC 8 link on cmd+click while the
+program reports the mouse, and tuios is such a program. The label sent
+Mac users to the one gesture that does nothing.
+
+#426, open as I write this, removes the Mac case. The label names ctrl+click on every platform, or
+the gesture `link_click` sets. The configuration docs say that ctrl+click
+works on macOS and cmd+click does not.
+
+## What the suite could not see
+
+The end-to-end suite could not have caught #420. It sends mouse reports to
+tuios the way a terminal does, and cmd is not part of the mouse protocol. A
+cmd+click never reaches tuios, so its fate is decided inside the outer
+terminal, on a machine the suite does not run. The only test for that is a
+person with a Mac and four terminals.
+
+The first bug and the last one have the same shape. Both times I reasoned
+about what a modifier means and did not check where the click goes. Shift
+means "the terminal's", and so the terminal kept it. Cmd means "open a link"
+on a Mac, but not while a program reports the mouse. The click that works is
+the one the outer terminal hands over, and you find it by clicking.

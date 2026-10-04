@@ -1,0 +1,226 @@
+---
+title: A wait that made the pane 197 times slower
+description: An agent that waits for output with tuios wait-for made a flooding pane three times slower. I fixed how often the wait looked. On the libghostty-vt backend the same test still said 197 times, because each look read the history one cell at a time.
+date: '2026-10-05'
+author: Gaurav Gosain
+---
+
+`tuios wait-for window-output` blocks until a pane prints something that
+matches a pattern. Agents use it to wait for a build or a test run without a
+loop of `capture-pane` and `sleep`. The daemon does the watching.
+
+The wait is supposed to be free for the pane it watches. It was not. With a
+waiter pending, `seq 1 500000` ran more than three times slower. After I fixed
+that, the same test on the libghostty-vt backend said 197.6 times slower. This
+post is about both numbers, and why the first fix could not touch the second.
+
+## One capture per read
+
+A wait for output has to look at the pane's text. It captures the pane, the
+history and the screen as plain text, and runs the pattern over it. It must
+hold the pane's emulator lock while it reads, so the emulator cannot change
+the text halfway through.
+
+The question is when to look. The daemon raises an output event each time it
+reads from the pane's PTY, and the waiter looked on every event. On a pane
+that floods, that is thousands of looks a second, and each one read the whole history under the lock.
+The emulator writes under the same lock. So the waiter and the emulator took
+turns, and the flood waited.
+
+## The test
+
+The budget is a test in `internal/session`, `TestWaitForOutputDoesNotSlowFlood`.
+It runs a real daemon with a real shell, and times the same flood with and
+without a waiter:
+
+1. Fill the history with `seq 1 20000`. A full history is what makes one
+   capture expensive.
+2. Time `seq 1 500000` twice and keep the faster run.
+3. Start a waiter on its own connection, with a pattern that never matches.
+4. Time the flood twice more, and compare.
+
+Step 2 is the positive half. The run without the waiter is the control the
+run with it is measured against, in the same fixture, on the same machine.
+
+The clock stops at an awkward place. The shell finishing tells you nothing
+about the emulator, because the daemon's read loop queues several megabytes
+ahead of it. The waiter slows the emulator, not the shell. So the flood ends
+when the shell has touched a marker file and the emulator has applied every
+byte the PTY gave it:
+
+```go
+func caughtUp(p *PTY) bool {
+	p.outputMu.Lock()
+	read := p.outputSeq
+	p.outputMu.Unlock()
+	p.terminalMu.RLock()
+	applied := p.vtSeq
+	p.terminalMu.RUnlock()
+	return applied >= read
+}
+```
+
+The test fails if the flood with the waiter takes more than one and a half
+times as long, plus 100 ms of room for a shared machine.
+
+## Look less often
+
+[f7ea5e40](https://github.com/Gaurav-Gosain/tuios/commit/f7ea5e40) caps the
+looks. A waiter captures at most once every 50 ms. An event inside that gap
+does not capture. It arms one deferred check at the end of the gap, and more
+events in the same gap arm nothing more:
+
+```go
+case <-sub.ch:
+	if deferred != nil {
+		continue
+	}
+	if wait := waitOutputMinGap - time.Since(lastCheck); wait > 0 {
+		gapTimer.Reset(wait)
+		deferred = gapTimer.C
+		continue
+	}
+	if matches() {
+		return waitMatched(/* ... */), nil
+	}
+case <-deferred:
+	deferred = nil
+	if pty.currentCaptureState() == checked {
+		continue
+	}
+	if matches() {
+		return waitMatched(/* ... */), nil
+	}
+```
+
+The deferred check is what keeps this correct. Output that arrives in the
+gap, and then nothing after it, is still checked at the end of the gap. So
+the last output of a burst is always seen. When the deferred check fires, it
+first asks whether the pane changed since the last capture. If not, it
+skips the capture.
+
+The gap is measured from the end of the last capture, not its start. On a
+pane whose capture is slow, that still leaves the lock alone between looks.
+
+The numbers, from the commit: with a waiter, the flood was 3.27 to 3.57 times
+slower before, and 0.92 to 0.98 times after. The negative control cut the
+coalescing, so every event captures again. The test failed 3 of 3 runs, at
+3.37, 3.27 and 3.57 times.
+
+## The same test on the other backend
+
+tuios has two terminal emulators. The pure Go one is the default. The other
+is libghostty-vt, Ghostty's terminal core as a library, built in with
+`-tags ghostty`. A plain `go test ./...` compiles neither the ghostty backend
+nor its tests.
+
+With `-tags ghostty`, `TestWaitForOutputDoesNotSlowFlood` said 197.6 times.
+
+The coalescing was in. The waiter looked at most once every 50 ms. But on
+this backend, one look took about 200 ms for a full 10,000-line history at 80
+columns, and all of it under the lock.
+
+The pure Go emulator had stopped paying that cost in September. Its plain
+capture used to decode every history line into cells and walk the cells back
+to text. `docs/perf.md` records the fix: `Emulator.AppendScrollbackText`
+writes the text straight from the packed history, and one capture of a full
+ring at 80 columns went from 29.9 ms to 1.25 ms. The same entry ends the
+paragraph with: "the ghostty backend keeps the line by line loop." That loop
+read the history through the library one cell at a time, with one `GridRef`
+per cell.
+
+So the 50 ms gap fixed how often the waiter looked, and on the ghostty
+backend each look took longer than the gap. In the words of
+[23936fa8](https://github.com/Gaurav-Gosain/tuios/commit/23936fa8): "On a
+flooding pane the lock was held most of the time."
+
+## Ask the library for text
+
+libghostty-vt has a formatter that writes a selection as plain text in one
+call. 23936fa8 gives the ghostty backend its own `AppendScrollbackText`,
+which selects the whole history and asks for it:
+
+```go
+sel := &gh.Selection{Start: *start, End: *end}
+text, err := src.SelectionFormatString(gh.WithSelection(sel), gh.WithSelectionTrim(true), gh.WithSelectionUnwrap(false))
+```
+
+It would be a two-line fix if the formatter's text were the same as the old
+text. It is not, in two places.
+
+**Trailing spaces.** The formatter trims every trailing space. The capture
+it replaces goes through `uv.Line.String`, which keeps a trailing space that
+has a style or a link. A red cell with a space in it is text, to a capture.
+So a row that may end in such a space is still read cell by cell. To find
+those rows, the backend asks the formatter for the same history a second
+time, as VT, and scans it: a row that prints a space while an SGR attribute
+is set, after its last other character, is marked. A row the library says
+holds a hyperlink is marked too. The scan is conservative. Any SGR but a
+plain reset counts as set.
+
+**Blank rows at the end.** The formatter leaves out blank rows at the end of
+the history. Those are read back one by one, and each must be blank. If one
+is not, the formatter's lines are not the rows, and the whole history is read
+line by line as before.
+
+That last rule is the general one. If the formatter's text does not line up
+with the rows, the code falls back to the old loop. A change in the library's
+output can make a capture slow again. It cannot shift a line.
+
+The commit's claim is that the output is the same as before, byte for byte.
+`TestGhosttyScrollbackTextMatchesTheLines` holds it to that. It writes 3000
+lines in ten shapes: a red line that ends in spaces, wide characters, a blank
+line, a line longer than the screen, a tab and an accent, an OSC 8 link that
+ends in spaces, a background carried onto the next row, a reversed space
+before plain text, a coloured directory name, and a plain line. Then 30 blank
+lines. It reads every line the old way and compares each with the new text.
+It also fails if the formatter path was not used at all, which would let the
+slow loop pass the test without anyone noticing.
+
+Both checks have negative controls in the commit. With the styled-row check
+cut, this test and `TestPlainCaptureMatchesLineByLine` fail. With the
+hyperlink check cut, this test fails.
+
+`TestWaitForOutputDoesNotSlowFlood` with `-tags ghostty`: 197.6 times before,
+1.15 times after.
+
+## The other readers that went cell by cell
+
+The wait was the loudest reader of the history. It was not the only one.
+
+`CopyScrollback` lets a reader copy history lines under the lock and decode
+them after it. The history save and the packed snapshot use it. On
+the ghostty backend there was no cheap copy, so it read every line one cell
+at a time under the lock. For 1000 rows of 200 columns that cost about 50 ms
+and 40 MB. `TestHistoryCaptureBudget` allows 4 MB.
+
+[8c77ef57](https://github.com/Gaurav-Gosain/tuios/commit/8c77ef57) has the
+library write a snapshot of the terminal under the lock instead, about 1 ms
+and 0.4 MB for that history, and copies the palette with it. The copy decodes
+the snapshot and reads its lines on first use, after the lock is released.
+`TestHistoryCaptureBudget` with `-tags ghostty` went from 38.4 MB to 2.4 MB.
+`TestGhosttyScrollbackCopyMatchesTheLiveRead` compares the copy with a live
+read on both screens, and fails when the copied palette loses an OSC 4
+colour.
+
+The render loop had the same problem in a smaller form. The
+[link work](/blog/why-your-link-click-did-nothing) the same day made the cell
+loop ask the emulator whether each row soft-wraps. On the ghostty backend
+each answer costs about five allocations, and a focused 207x55 frame went
+from 380 allocations to 648. `TestRenderTerminalAllocationsDoNotScaleWithCells`
+allows 600, and it failed.
+[c9801f0e](https://github.com/Gaurav-Gosain/tuios/commit/c9801f0e) asks only
+on a line that has a URL to find. The frame came back to 389.
+
+## What I take from it
+
+The fix for the wait was right, and it was measured. It was measured on one
+backend. The first number, 3.27 times, was the cost of looking too often. The
+second, 197.6 times, was the cost of one look on a backend that an earlier
+fix had left out on purpose, with a line in `docs/perf.md` that said so.
+
+The two numbers came from the same test. Nothing about the test changed
+between them, only the build tag. A budget test that runs on one backend is a
+budget for one backend. The ghostty-vt workflow runs every package whose tests
+link `internal/vt` with `-tags ghostty`, `internal/session` among them. This
+is the kind of bug it is there for.

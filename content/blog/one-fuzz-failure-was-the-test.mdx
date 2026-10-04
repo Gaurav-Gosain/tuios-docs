@@ -1,0 +1,222 @@
+---
+title: One fuzz failure was the test, one was the emulator
+description: Two fuzz targets failed in tuios on the same evening. The kitty graphics target had an oracle that an allocator change left behind, and my first fix made it too lenient. FuzzModel found a real bug, a cut-off UTF-8 rune that ate the escape after it.
+date: '2026-10-05'
+author: Gaurav Gosain
+---
+
+Two fuzz targets failed in tuios with inputs worth keeping, and the fixes went
+in on the same evening. One failure was in the test. The other was in the
+terminal emulator. The one in the test took two commits, because the first
+fix made the test pass for the wrong reason.
+
+## The kitty graphics boundary
+
+Every pane's program can draw images with the kitty graphics protocol. They
+all land on one outer terminal, which has one namespace of image ids. So
+tuios translates. Each image a pane sends gets a host id that tuios
+allocates, and the pane never sees it.
+
+`FuzzKittyPassthrough` drives several panes' programs with random kitty
+commands and reads what reaches the host. Before the target was written, its
+header listed the ways the passthrough could fail. The third one is the
+subject here:
+
+> A command one pane's guest sent names a host image id tuios never allocated
+> for that pane: the guest's own id forwarded untranslated, or another pane's
+> host id, so pane A overwrites or deletes pane B's image.
+
+To check that, the target keeps its own map from host id to the pane that
+owns it. It is an oracle: a second, simpler account of what the allocator
+should have done. Its first rule was simple. The allocator counts ids up from
+a counter, so the ids counted out during a step belong to the pane that took
+the step.
+
+## The allocator changed under it
+
+On 30 September,
+[833b01f3](https://github.com/Gaurav-Gosain/tuios/commit/833b01f3) changed
+the allocator. Some programs draw images as placeholder cells, and a
+placeholder cell names its image with a colour. A 256-colour host keeps only
+an id that fits in a 256-colour index. Counting ids only upward would use
+that range up. So when a pane closes, its host ids below 256 go back to a
+free list, and the next allocation takes the lowest free one:
+
+```go
+func (kp *KittyPassthrough) allocateHostID() uint32 {
+	// A freed id below lowHostIDs is used again before a new one is counted
+	// out, lowest first.
+	if len(kp.freeLowIDs) > 0 {
+		id := uint32(lowHostIDs)
+		for free := range kp.freeLowIDs {
+			id = min(id, free)
+		}
+		delete(kp.freeLowIDs, id)
+		return id
+	}
+	id := kp.nextHostID
+	kp.nextHostID++
+	// ...
+}
+```
+
+The oracle was not updated. It still treated only ids from the counter as
+new. When a closed pane's id came off the free list and went to another pane,
+the oracle still had the closed pane as its owner, and it reported a command
+from the new pane that named another pane's id.
+
+The nightly fuzz job found three inputs that did this. The allocator was
+right. The host had already been told to delete the closed pane's image.
+
+## The first fix let too much through
+
+[ee8853c5](https://github.com/Gaurav-Gosain/tuios/commit/ee8853c5) taught the
+oracle the free list. A close gives up the ids it freed. An id that leaves
+the free list during a step belongs to that step's pane. The three inputs
+went into `testdata/fuzz/FuzzKittyPassthrough`, where every run of the
+ordinary suite replays them. With the old oracle they fail. The commit also
+checked the other side: an allocator that hands out a live pane's id still
+fails the target.
+
+That control covers one way the allocator can go wrong. It misses another.
+A close released ownership of every id it freed, whether or not the host had
+been told to delete the image. An allocator that freed an id without sending
+the delete could then hand that id to another pane, while the host still
+held the closed pane's image under it. The oracle would see a freed id leave the free list, give it to the new
+pane, and pass.
+
+[d813a5f1](https://github.com/Gaurav-Gosain/tuios/commit/d813a5f1) closes
+that. A freed id changes owner only after the host got a `d=I` delete for it,
+the delete that frees the image data:
+
+```go
+// A freed id stops being the pane's only once the host has
+// been told to delete it. An id freed without that delete
+// keeps its owner, so handing it to another pane fails.
+for id := range freeIDs() {
+	if deleted[uint64(id)] {
+		delete(owner, uint64(id))
+	}
+}
+```
+
+The negative control is the one the first fix lacked. With the `d=I` line
+removed from `releaseHostID`, the three kept inputs fail.
+
+The lesson is narrow. When a test fails and the
+product is right, the fix to the test is new code with its own ways to be
+wrong. A fix that makes the failure go away has shown one thing: that the
+test no longer says no to this input. Whether it still says no to the bug it
+exists for needs its own broken build.
+
+## A rune with a byte missing
+
+The other failure was real.
+
+`FuzzModel` drives the whole window manager through random actions and
+checks rules after each one. One rule is that nothing paints over a pane's
+own cells. To check it, the oracle writes a marker into each pane, after
+clearing it with `\x1b[H\x1b[2J`, and looks for the marker in the frame.
+
+In the failing script, a pane's program had just written two bytes,
+`\xe4\xb8`. Those are the first two bytes of a three-byte UTF-8 rune, and the
+third never came. The next bytes were the oracle's clear. The marker showed
+up three cells to the right of where it belonged.
+
+The decoder took any byte as the next byte of a rune. So it took the ESC of
+`\x1b[H` as the third byte. The ESC was gone, the rest of the sequence
+printed as text, and the cursor never went home.
+
+UTF-8 says which bytes can continue a rune: only bytes of the form
+`10xxxxxx`. An ESC is not one. Neither is a letter, a carriage return, or the
+first byte of another rune.
+[0822626d](https://github.com/Gaurav-Gosain/tuios/commit/0822626d) makes the
+parser check:
+
+```go
+func (p *seqParser) advanceUtf8(b byte) parser.Action {
+	if b&0xc0 != 0x80 {
+		// Only a continuation byte can extend a rune. Anything else ends it
+		// unfinished, and the byte is read again from the ground state: an
+		// ESC that arrives after a truncated rune still starts a sequence,
+		// rather than being taken as the rune's last byte and leaving the
+		// rest of the sequence to print as text.
+		p.abortRune()
+		return p.advance(b)
+	}
+	// ...
+}
+```
+
+`abortRune` prints one U+FFFD for the cut-off rune, which is what Unicode
+recommends for a maximal invalid subpart, and goes back to the ground state.
+The emulator then flushes the grapheme the way it does after a complete
+rune. The commit's aim for that part is that a read boundary between the two
+bytes draws the same screen.
+
+## Four cases and a script
+
+The conformance corpus in `internal/vt` gets four cases. Each one is an input
+and the screen it must produce:
+
+```go
+{
+	name:   "a truncated rune does not swallow the escape after it",
+	in:     "a\xe4\xb8\x1b[5Gb",
+	cursor: "5,0",
+	want:   "a�  b",
+},
+{
+	name:   "a truncated rune does not swallow the character after it",
+	in:     "a\xe4b",
+	cursor: "3,0",
+	want:   "a�b",
+},
+{
+	name:   "a truncated rune does not swallow a control after it",
+	in:     "a\xe4\rb",
+	cursor: "1,0",
+	want:   "b�",
+},
+{
+	name:   "a lead byte after a truncated rune starts the next rune",
+	in:     "a\xe4\xe4\xb8\xadb",
+	cursor: "5,0",
+	want:   "a�中b",
+},
+```
+
+The first is the fuzz finding in its smallest form. Before the fix, the ESC
+of `\x1b[5G` went into the rune and `[5G` printed. After it, `\x1b[5G` moves the
+cursor to the fifth column and `b` lands there. The last case is the one a careless fix gets
+wrong: the byte that ends the cut-off rune is itself the start of a new one,
+so it must be read again, not dropped. `\xe4\xb8\xad` is 中.
+
+The fuzz script is kept too. `FuzzModel` prints a failing run as a script a
+person can read, and the repo keeps those under
+`internal/app/testdata/fuzz-repros/`, where the ordinary suite replays them.
+This one is four lines:
+
+```
+# seed 0. A guest writes the first two bytes of a three-byte rune. The VT
+# decoder took the ESC of the next sequence as the third byte, so the rest of
+# that sequence printed as text and pushed the marker right.
+guest "\xe4\xb8"
+```
+
+## Two kinds of failure
+
+A fuzz failure has two possible culprits, and only one of them is the
+product. The kitty failure was the oracle, left behind by a change to the
+code it models. The UTF-8 failure was the emulator, wrong in a way a person
+sees on screen: the rest of an escape sequence printed as text.
+
+Both ended the same way: a kept input that fails on the old code, and a
+negative control that shows the check still bites. The kitty one needed a
+second commit to get there.
+
+[An earlier post](/blog/the-fuzzer-that-found-nothing) was about a fuzzer
+that ran 590,000 times and found nothing, because it checked that the screen
+was well formed and not that it was right. The rule that caught the rune
+asks a plain question with a known answer: is the marker where the pane put
+it?
