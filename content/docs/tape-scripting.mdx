@@ -28,9 +28,15 @@ Enter
 |---------|--------------|
 | `tuios tape play <file>` | Starts a standalone TUIOS and plays the tape in it |
 | `tuios tape validate <file>` | Parses the tape and lists its commands, without running anything |
-| `tuios tape exec <file>` | Plays the tape in a running session that has a client attached |
+| `tuios tape exec <file>` | Plays the tape in a running session that has a client attached, and waits for it to end |
 
 `tuios tape list`, `show`, `delete` and `dir` manage recorded tapes. See [Tape Recording](/docs/tape-recording#managing-recordings).
+
+All three run the tape the same way:
+
+- Commands run one at a time. Each command waits for animations to finish, and for the pane the command before it asked for.
+- `Wait`, `WaitUntilRegex` and `WaitFor` hold playback.
+- The first command that fails stops the tape. The rest of the tape does not run. TUIOS shows the line and the reason, and the progress indicator says `FAILED`.
 
 ### tape play
 
@@ -41,11 +47,9 @@ tuios tape play demo.tape
 `play` starts its own TUIOS, not attached to a daemon session, and runs the tape in it. It reads your config file, and `--theme` and `--show-keys` work as they do for `tuios`.
 
 - Animations start off, so playback is the same on every machine. A tape can turn them back on with `EnableAnimations`.
-- Playback runs one command at a time and waits for running animations to finish before the next one.
 - <kbd>Ctrl</kbd>+<kbd>P</kbd> pauses and resumes playback.
 - A progress indicator shows the current command and the total.
-- A command that fails shows an error notification, and playback continues with the next line.
-- TUIOS stays open when the tape ends. Quit it as usual, with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>q</kbd>.
+- TUIOS stays open when the tape ends. Quit it as usual, with <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>q</kbd>. If the tape failed, `tape play` then exits with an error that names the line.
 
 ### tape validate
 
@@ -53,34 +57,31 @@ tuios tape play demo.tape
 tuios tape validate demo.tape
 ```
 
-Prints each parsed command, or the parse errors with line numbers. It exits non-zero if the tape does not parse. A tape that validates can still fail at run time, for example `LoadLayout` with a name that does not exist.
+Prints each parsed command, or the errors with their line and column:
+
+```
+✗ demo.tape: line 4, column 7: Split: "diagonal" is not one of horizontal, vertical, h, v
+```
+
+It exits non-zero if the tape does not parse. It checks every argument: a word left over after a command, an action name that does not exist, and a pattern that is not a regular expression are all errors. A tape that validates can still fail at run time, for example `LoadLayout` with a name that does not exist.
 
 ### tape exec
 
 ```bash
-tuios tape exec demo.tape             # the most recently active session
-tuios tape exec -s work demo.tape     # a named session
+tuios tape exec demo.tape                 # the most recently active session
+tuios tape exec -s work demo.tape         # a named session
+tuios tape exec --timeout 1h long.tape    # wait longer than 30 minutes
 ```
 
-`exec` sends the tape to the daemon, which hands it to the TUI client attached to that session. The client runs it and shows its progress on screen. The command returns when the tape has finished.
+`exec` sends the tape to the daemon, which hands it to the TUI client attached to that session. The client plays it and shows its progress on screen. The command returns when the tape ends:
+
+- It exits 0 and prints `Tape finished` when every command ran.
+- It exits non-zero when the tape has an error or a command fails. The message gives the file, line and column, also for a line in a file the tape includes with `Source`.
+- It gives up after `--timeout`, 30 minutes by default. The tape may still be playing then.
 
 <Callout type="warn" title="exec needs an attached client">
 A detached session has no renderer to run a tape. `tuios tape exec` against one fails with `tape scripts need an attached client`. For a detached session, use the control commands directly. See [Scripting a detached session](#scripting-a-detached-session).
 </Callout>
-
-`exec` differs from `play` in three ways:
-
-- **`Wait` and `WaitUntilRegex` are skipped** without a warning. Only `Sleep` pauses an `exec` run.
-- **It does not wait for a new pane.** In a daemon session, `NewWindow` and `SmartSplit` ask the daemon for a pane, and the pane arrives a moment later. Put a `Sleep` after them, or the next `Type` goes to the old pane.
-- **Commands run 50 ms apart**, with no wait for animations.
-
-| | `tape play` | `tape exec` |
-|---|---|---|
-| Needs a running session | No | Yes, with a client attached |
-| Runs in | A new standalone TUIOS | The attached client |
-| `Sleep` | Yes | Yes |
-| `Wait`, `WaitUntilRegex` | Yes | Skipped |
-| Waits for a new pane before typing | Yes | No |
 
 ### Scripting a detached session
 
@@ -100,7 +101,15 @@ tuios kill-session ci
 
 `wait-for` exits non-zero on timeout, so the script fails if the tests never print the marker. See [Sessions](/docs/sessions) and the [Control Protocol](/docs/control-protocol) for the full set of commands.
 
-A single tape command can also be sent with `tuios run-command`. It takes a few commands a tape cannot, such as `Split horizontal`, `SetTheme` and `ShowNotification`. Run `tuios run-command --list` to see them.
+A single tape command can also be sent with `tuios run-command`, and so can any keybinding action by its name:
+
+```bash
+tuios run-command -s work Split horizontal
+tuios run-command -s work toggle_spotlight
+tuios run-command -s work Press "ctrl+b ?"
+```
+
+Run `tuios run-command --list` for the commands, and `tuios keybinds list` for the action names. An action and `Press` need a client attached.
 
 ## Syntax
 
@@ -114,6 +123,12 @@ NewWindow  # comments can follow a command
 ```
 
 Keywords are not case-sensitive: `NewWindow`, `newwindow` and `NEWWINDOW` are the same command. Arguments keep their case.
+
+### Arguments
+
+An argument is a quoted string, a word, a number or a duration. A word can hold dots and dashes, so `appearance.border_style`, `lib.tape` and `even-horizontal` are each one word. Quote an argument that has spaces.
+
+Every command checks its arguments. A missing argument, a value the command does not take, and a word left over at the end of the line are errors that `tape validate` reports.
 
 ### Strings
 
@@ -145,11 +160,18 @@ Backspace 10
 Enter 2
 ```
 
-Counts work on `Enter`, `Space`, `Tab`, `Backspace`, `Delete`, `Escape`, `Up`, `Down`, `Left`, `Right`, `Home` and `End`. Other commands parse a trailing number but do not repeat. `ToggleTiling 3` toggles once, and `NewWindow 3` opens one window named `3`.
+Counts work on `Enter`, `Space`, `Tab`, `Backspace`, `Delete`, `Escape`, `Up`, `Down`, `Left`, `Right`, `Home` and `End`. Other commands do not take a count: `ToggleTiling 3` is an error.
 
 ### The @ delay
 
-The parser accepts a delay between a command and its count, as in `Down@100ms 3` or `Type@50ms "text"`. The delay is stored and never used: `Down@100ms 3` sends three Down keys at once. Use `Sleep` lines for pacing. `Sleep@200ms` is a parse error.
+An `@` and a duration after `Type` or a key command set the pause between the keys it sends:
+
+```bash
+Type@50ms "hello"   # one character every 50 ms
+Down@100ms 3        # three Down keys, 100 ms apart
+```
+
+Other commands do not take an `@` delay. Use a `Sleep` line between them.
 
 ## Commands
 
@@ -160,50 +182,46 @@ The parser accepts a delay between a command and its count, as in `Down@100ms 3`
 | `WindowManagementMode` | Switch to window management mode |
 | `TerminalMode` | Switch to terminal mode |
 
-Key commands such as `Type` and `Enter` write to the focused pane in either mode. A mode command changes what TUIOS shows and how it treats the keys you press. Recorded tapes include them so the replay ends in the same state.
+`Type`, `Run` and the key commands write to the focused pane in either mode. A mode command changes what TUIOS shows and how it treats the keys you press. Recorded tapes include them so the replay ends in the same state.
 
 ### Windows
 
 | Command | Effect |
 |---------|--------|
-| `NewWindow` | Open a window |
-| `CloseWindow` | Close the focused window |
+| `NewWindow ["name"]` | Open a window, with a name if you give one |
+| `CloseWindow ["name"]` | Close the focused window, or every window with that name |
 | `NextWindow`, `PrevWindow` | Move focus |
-| `FocusWindow <id>` | Focus a window by name or ID. The argument is a bare word or number, not a quoted string |
-| `RenameWindow "name"` | Name the focused window |
-| `MinimizeWindow` | Minimize the focused window |
-| `RestoreWindow` | Restore the focused window, if it is minimized |
+| `FocusWindow <name>` | Focus a window by name or ID. `Focus` is the same command |
+| `RenameWindow "name"` | Name the focused window. `RenameWindow "old" "new"` renames another one |
+| `MinimizeWindow ["name"]` | Minimize the focused or the named window |
+| `RestoreWindow ["name"]` | Restore the focused or the named window, if it is minimized |
 
 ```bash
-NewWindow
-RenameWindow "server"
-Type "npm run dev"
-Enter
+NewWindow "server"
+Run "npm run dev"
 ```
 
-`NewWindow "name"`, `CloseWindow "name"`, `MinimizeWindow "name"` and `RestoreWindow "name"` validate, but the tape parser drops the string. The command acts on the focused window, and `NewWindow "name"` opens an unnamed window. Use `RenameWindow` after `NewWindow`, or `tuios run-command NewWindow "name"`.
-
-Minimizing moves focus to another window, so a bare `RestoreWindow` right after `MinimizeWindow` does not bring the minimized one back.
+Minimizing moves focus to another window, so a bare `RestoreWindow` right after `MinimizeWindow` does not bring the minimized one back. Name the window, or use `Action restore_all`.
 
 ### Tiling and layout
 
 | Command | Effect |
 |---------|--------|
 | `EnableTiling`, `DisableTiling`, `ToggleTiling` | Turn tiling on or off |
-| `SmartSplit` | Split the focused pane and open a new pane in the space. TUIOS picks the direction. Needs tiling on |
-| `RotateSplit` | Rotate the direction of the focused split. Needs tiling on |
-| `EqualizeSplits` | Reset every split to an even ratio. Needs tiling on |
+| `Split horizontal`, `Split vertical` | Split the focused pane. `h` and `v` also work. Needs tiling on |
+| `SmartSplit` | Split the focused pane. TUIOS picks the direction. Needs tiling on |
+| `Preselect left` | Put the next split on that side: `left`, `right`, `up` or `down` |
+| `RotateSplit` | Rotate the direction of the focused split |
+| `EqualizeSplits` | Reset every split to an even ratio |
+| `ArrangePanes tiled` | Lay the panes out again: `tiled`, `even-horizontal` or `even-vertical`, then optional window names |
+| `FocusDirection left` | Focus the pane on that side |
 | `ToggleZoom` | Zoom the focused pane, or unzoom it |
 | `SnapLeft`, `SnapRight` | Floating: snap the focused window to half the screen. Tiled: focus the neighbour on that side |
-| `SnapFullscreen` | Floating only. Currently snaps to the top-left quarter, not the full screen |
-| `SaveLayout "name"` | Save the current layout under a name |
-| `LoadLayout "name"` | Apply a saved layout |
+| `SnapFullscreen` | Floating only. Snap the focused window to the full screen |
+| `SetMultifocus [names...]` | Make the multifocus set exactly these windows. No names clears it |
+| `SaveLayout "name"`, `LoadLayout "name"` | Save the current layout under a name, or apply a saved one |
 
-See [BSP Tiling](/docs/bsp-tiling) for how splits work, and `tuios layout list` for saved layouts.
-
-<Callout type="warn" title="Split does not work in a tape">
-`Split horizontal` validates, but the parser drops the direction, so it always fails at run time with `Split needs horizontal or vertical`. Use `SmartSplit` in a tape, or `tuios run-command Split horizontal` from the shell.
-</Callout>
+The master-stack layout has its own commands: `SetMasterPosition left` (`left`, `right`, `top`, `bottom` or `center`), `SetMasterCount 2`, `CycleMasterPosition`, `AddMaster`, `RemoveMaster`, `SwapWithMaster` and `FocusMaster`. See [Layout Modes](/docs/layout-modes).
 
 ### Workspaces
 
@@ -215,94 +233,140 @@ See [BSP Tiling](/docs/bsp-tiling) for how splits work, and `tuios layout list` 
 
 `n` runs from 1 to the number of workspaces, 9 by default.
 
+### Any action
+
+`Action <name>` runs a keybinding action by the name your config binds a key to. It does what the key does, so every feature with a key is scriptable:
+
+```bash
+Action toggle_scratch      # the scratch pane
+Action toggle_spotlight    # spotlight
+Action prefix_inbox        # the Inbox
+Action hints               # link and path hints
+Action restore_all         # restore every minimized window
+Action command:build       # a [[keybindings.command]] entry named build
+```
+
+Run `tuios keybinds list` for the names. A name that is not an action is an error in `tape validate`. A few keys answer only inside their own view: the Inbox and mail keys, and the rail's agent keys. `Action` refuses those and says so. Open the view and use `Press`.
+
 ### Keys and text
 
 | Command | Sends |
 |---------|-------|
-| `Type "text"` | The text, all at once |
-| `Enter`, `Space`, `Tab`, `Backspace`, `Delete`, `Escape` | That key |
-| `Up`, `Down`, `Left`, `Right`, `Home`, `End` | That key |
-| `Ctrl+c`, `Alt+x`, `Ctrl+Alt+t`, `Shift+Left`, `Ctrl+Enter`, `Ctrl+Space` | A key with modifiers |
+| `Type "text"` | The text, to the focused pane |
+| `Run "command"` | The command line and Enter, to the focused pane |
+| `Enter`, `Space`, `Tab`, `Backspace`, `Delete`, `Escape` | That key, to the focused pane |
+| `Up`, `Down`, `Left`, `Right`, `Home`, `End` | That key, to the focused pane |
+| `Ctrl+c`, `Alt+x`, `Shift+Tab`, `Ctrl+Backspace` | A key with modifiers, to the focused pane |
+| `Press "keys"` | Keys to TUIOS itself, as if you pressed them |
 
-These all write bytes to the focused pane. They do not go through TUIOS keybindings: `Ctrl+b` sends byte `0x02` to the pane and does not start the TUIOS prefix. The one exception is `Alt+1` to `Alt+9`, which switch workspace.
+The first five rows write bytes to the focused pane. They do not go through TUIOS keybindings: `Ctrl+b` sends byte `0x02` to the pane and does not start the TUIOS prefix. The one exception is `Alt+1` to `Alt+9`, which switch workspace.
 
-After a modifier, the parser accepts a letter or word, a number, an arrow key, `Home`, `End`, `Enter` or `Space`. `Tab`, `Escape`, `Backspace` and `Delete` are not accepted, so `Shift+Tab` and `Ctrl+Backspace` are parse errors (`expected key after modifier, got Tab`). To send one of those, use `tuios send-keys "shift+tab"` while the pane is in terminal mode.
-
-### Timing
-
-| Command | Effect |
-|---------|--------|
-| `Sleep <duration>` | Pause |
-| `Wait <duration>` | Same as `Sleep`. A duration is required |
-| `WaitUntilRegex "pattern" [ms]` | Pause until the focused pane's screen matches the regular expression |
+`Press` sends keys through the TUIOS key handling instead. The leader opens the prefix, copy mode gets its motions, and an open dialog gets its keys. Separate keys with spaces or commas:
 
 ```bash
-Type "make build"
-Enter
-WaitUntilRegex "BUILD (OK|FAILED)" 60000
+Press "ctrl+b ?"        # open the key help
+Press "esc"             # close it
+Press "ctrl+b ["        # enter copy mode
+Press "k k k v"         # move up three lines and start a selection
 ```
 
-`WaitUntilRegex` checks the visible screen of the focused pane. The timeout is in milliseconds and defaults to 5000. On timeout it shows a warning and playback continues, so it does not stop a failing tape. Both `Wait` and `WaitUntilRegex` are skipped by `tuios tape exec`.
-
-### Animations and other commands
+### Waiting and checking
 
 | Command | Effect |
 |---------|--------|
+| `WaitFor <condition> [timeout]` | Hold playback until the condition holds. Fail the tape at the timeout, 10 seconds by default |
+| `Expect <condition>` | Fail the tape if the condition does not hold now |
+| `Sleep <duration>` | Pause. `Wait <duration>` is the same |
+| `WaitUntilRegex "pattern" [ms]` | The older text wait. It shows a warning at the timeout and does not stop the tape |
+
+The conditions:
+
+| Condition | Holds when |
+|-----------|------------|
+| `text "pattern" [in "pane"]` | The pane's screen matches the regular expression |
+| `pane "name"` | A pane with this name or ID exists |
+| `gone "name"` | No pane has this name or ID |
+| `focus "name"` | The focused pane has this name or ID |
+| `panes <n>` | The current workspace has `n` panes |
+| `agent "state" [in "pane"]` | The pane's agent reports this state, such as `working`, `needs_input` or `done` |
+| `workspace <n>` | Workspace `n` is on screen |
+| `mode terminal`, `mode window` | TUIOS is in this mode |
+
+Without `in`, `text` and `agent` read the focused pane. The timeout is a duration, as in `WaitFor text "ready" 30s`.
+
+```bash
+Run "make build"
+WaitFor text "BUILD (OK|FAILED)" 2m
+Expect text "BUILD OK"
+
+Split vertical
+WaitFor panes 2
+```
+
+Prefer `WaitFor` to `Sleep`. A sleep that is long enough on your machine is too short on a slow one. A wait holds exactly as long as it needs.
+
+<Callout title="Match the output, not the command">
+The command you type is on the screen too. `Run "echo ready"` followed by `WaitFor text "ready"` matches the typed line at once. Wait for something only the output has, such as `Run "echo ready-$((40+2))"` and `WaitFor text "ready-42"`.
+</Callout>
+
+### Including another tape
+
+`Source "file.tape"` runs the commands of another tape at that point. The path is relative to the tape that names it. A tape can include a tape that includes another, up to 16 deep. A file that includes itself is an error. Errors in an included file name that file and its line.
+
+`Source` works in `tape play`, `tape validate`, `tape exec` and the tape manager. It does not work in a project tape.
+
+### Settings and appearance
+
+| Command | Effect |
+|---------|--------|
+| `Set <path> <value>` | Change a setting, like `tuios set-config`. `SetConfig` is the same |
+| `SetTheme <name>` | Change the color theme |
+| `SetBorderStyle <style>` | Change the window border style |
+| `SetDockbarPosition <position>` | `top`, `bottom` or `hidden` |
+| `Notify "message" [type]` | Show a notification: `info`, `success`, `warning` or `error`. `ShowNotification` is the same |
 | `EnableAnimations`, `DisableAnimations`, `ToggleAnimations` | Turn animations on or off |
 | `CommandPalette` | Open the command palette |
 | `Screenshot` | Save the focused pane as an image, like `tuios screenshot` |
 
-### Parsed but ignored
-
-These keywords parse and validate, and then do nothing:
-
-| Command | Note |
-|---------|------|
-| `Set <key> <value>` | No effect. To change a setting, use `tuios set-config` |
-| `Output <file>` | No effect |
-| `Source <file>` | Does not include another tape |
-| `Focus <id>` | No effect. Use `FocusWindow` |
+`Output` is an error: TUIOS does not render a tape to a file. Use `Screenshot`.
 
 ## Examples
 
-### Three panes
+### Two panes, checked
 
 ```bash
 DisableAnimations
 EnableTiling
 
-NewWindow
 RenameWindow "editor"
-Type "nvim ."
-Enter
+Run "echo ready-$((20+22))"
+WaitFor text "ready-42" 15s
 
-SmartSplit
+Split vertical
+WaitFor panes 2
 RenameWindow "server"
-Type "npm run dev"
-Enter
-WaitUntilRegex "ready" 30000
+Run "npm run dev"
+WaitFor text "listening on" in "server" 60s
 
-SmartSplit
-RenameWindow "tests"
-Type "npm test -- --watch"
-Enter
-
+Action equalize_splits
 FocusWindow editor
+Expect focus "editor"
 ```
+
+The [examples folder](https://github.com/Gaurav-Gosain/tuios/tree/main/examples) has more, and `actions_and_waits.tape` uses every command above.
 
 ### Two workspaces
 
 ```bash
 NewWindow
-Type "cd ~/project"
-Enter
+Run "cd ~/project"
 
 SwitchWorkspace 2
-NewWindow
-Type "htop"
-Enter
+NewWindow "monitor"
+Run "htop"
 
 SwitchWorkspace 1
+Expect workspace 1
 ```
 
 ## Project tapes

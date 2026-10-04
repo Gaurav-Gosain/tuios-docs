@@ -921,7 +921,7 @@ These are kebab-case protocol verbs. They are a different set from the PascalCas
 
 ## run-command
 
-Run one tape command in a session. Tape commands use PascalCase names.
+Run one tape command in a session, or any keybinding action by its name. Tape commands use PascalCase names. Actions use the snake_case names that `tuios keybinds list` prints.
 
 ```bash
 tuios run-command <command> [args...] [flags]
@@ -954,8 +954,11 @@ tuios run-command <command> [args...] [flags]
 | `SetTheme` | `<theme>` | Change the theme |
 | `ShowNotification` | `<message> [info\|success\|warning\|error]` | Show a notification |
 | `ListWindows`, `GetWindow`, `GetSessionInfo` | | Same data as `list-windows`, `get-window` and `session-info` |
+| `<action>` | | Run a keybinding action, such as `toggle_spotlight` or `command:build`. `Action <action>` is the same |
+| `Press` | `<keys>` | Press keys through TUIOS, as you would: the leader, prefixes, copy mode and dialogs get them |
+| `Run` | `<command line>` | Type the line into the focused window and press Enter |
 
-Some commands need an attached client, such as `SetDockbarPosition`. On a detached session they fail with a message saying so.
+Some commands need an attached client, such as `SetDockbarPosition`, every action and `Press`. On a detached session they fail with a message saying so.
 
 <Callout type="warn" title="CloseWindow with a name closes every match">
 Two windows titled `zsh` are both closed. Pass no name to close only the focused window.
@@ -1606,7 +1609,7 @@ Run and manage [tape scripts](/docs/tape-scripting).
 | Command | What it does |
 |---------|--------------|
 | `tuios tape play <file.tape>` | Start a TUI and play the tape in it. <kbd>Ctrl</kbd>+<kbd>P</kbd> pauses. Takes the [interface flags](#interface-flags) |
-| `tuios tape exec <file.tape> [-s <session>]` | Run the tape against a running session, with no new TUI |
+| `tuios tape exec <file.tape> [-s <session>] [--timeout <d>]` | Play the tape in a running session, with no new TUI, and wait for it to end |
 | `tuios tape validate <file.tape>` | Check the syntax without running it |
 | `tuios tape list` | List saved recordings |
 | `tuios tape show <name>` | Print a recording |
@@ -1615,7 +1618,7 @@ Run and manage [tape scripts](/docs/tape-scripting).
 
 #### tape exec
 
-`tape exec` sends each command of the file to a running daemon session. See [tape exec](/docs/tape-scripting#tape-exec). For one command, use [`run-command`](#run-command).
+`tape exec` sends the tape to a running daemon session, whose attached client plays it. The command returns when the tape ends. It exits non-zero with the file, line and column when a command fails. `--timeout` sets how long it waits, 30 minutes by default. See [tape exec](/docs/tape-scripting#tape-exec). For one command, use [`run-command`](#run-command).
 
 ### layout
 

@@ -78,10 +78,10 @@ DisableAnimations
 EnableTiling
 WindowManagementMode
 NewWindow
-Sleep 1.204113s
+Sleep 1.204s
 TerminalMode
 Type "ls -la"
-Sleep 612.40875ms
+Sleep 612ms
 Enter
 
 # Re-enable animations
@@ -94,7 +94,7 @@ Every recording has the same frame:
 - `DisableAnimations` at the start and `EnableAnimations` at the end, so playback does not depend on your animation setting.
 - The state at the moment you started: `SwitchWorkspace` if you were not on workspace 1, then `EnableTiling` or `DisableTiling`, then the mode.
 
-Between actions, a pause longer than 100 ms becomes a `Sleep` with the exact measured time. Round the values by hand if you want a tidier file.
+Between actions, a pause longer than 100 ms becomes a `Sleep`, rounded to the millisecond.
 
 Printable keys you type into a pane are joined into one `Type` command. The text is written out when the next non-text key, action, mode switch or workspace switch happens, or when you stop recording.
 
@@ -104,29 +104,20 @@ Printable keys you type into a pane are joined into one `Type` command. The text
 |----------|----|
 | New, close, next and previous window | `NewWindow`, `CloseWindow`, `NextWindow`, `PrevWindow` |
 | Minimize | `MinimizeWindow` |
-| Restore all minimized | `RestoreWindow` |
 | Toggle tiling | `ToggleTiling` |
-| Snap left, right, fullscreen | `SnapLeft`, `SnapRight`, `SnapFullscreen` |
-| Select window by number | `FocusWindow <n>` |
+| Every other action you run with a key | `Action <name>`, such as `Action toggle_zoom` or `Action prefix_split_vertical` |
 | Workspace switch | `SwitchWorkspace <n>` |
 | Mode switch | `TerminalMode`, `WindowManagementMode` |
 | Text typed into a pane | `Type "..."` |
 | Special keys and key combinations sent to a pane | `Enter`, `Tab`, `Up`, `ctrl+c` and so on |
 
+An `Action` line does what the key did, so splits, zoom, snaps, layouts, the scratch pane and the rest replay the same way. See [Any action](/docs/tape-scripting#any-action).
+
 Not recorded:
 
 - Mouse actions: clicks, drags and resizes.
-- Splits, zoom and other BSP actions. A session built from splits replays as if you never split.
-- Renames, and moving a window to another workspace.
-- Copy mode, overlays and anything else not in the table above.
-
-Some recorded commands do not replay the way you performed them:
-
-- `RestoreWindow` restores only the focused window, not every minimized one.
-- `FocusWindow <n>` looks for a window named or with the ID `n`, not the window at position `n`, so it usually does nothing.
-- `SnapFullscreen` snaps to the top-left quarter.
-
-Fix these by hand after recording. `SmartSplit`, `RenameWindow "name"` and `FocusWindow <name>` all work on playback. See [Tape Scripting](/docs/tape-scripting#commands) for every command.
+- Keys you type into a dialog or an overlay. An action that opens a dialog, such as `rename_window`, replays as the open dialog. Replace it with `RenameWindow "name"` by hand.
+- The keys that only open a prefix, and the tape keys themselves.
 
 ## Managing recordings
 
@@ -154,8 +145,9 @@ A recording is a normal tape, so you can:
 
 - add comments,
 - replace the exact `Sleep` values with round ones,
-- add `WaitUntilRegex` so playback waits for real output,
-- add the splits and renames the recorder missed,
+- add `WaitFor` so playback waits for real output,
+- add `Expect` lines that check the result,
+- replace an opened rename dialog with `RenameWindow "name"`,
 - delete mistakes.
 
 For example, a recording that starts a dev server can wait for it before opening a second pane:
@@ -166,17 +158,14 @@ NewWindow
 RenameWindow "server"
 Type "npm start"
 Enter
-WaitUntilRegex "listening on" 15000
+WaitFor text "listening on" 15s
 
 SmartSplit
+WaitFor panes 2
 RenameWindow "shell"
 ```
 
-Run `tuios tape validate` on the file after editing.
-
-<Callout type="warn">
-`Wait` and `WaitUntilRegex` only work under `tuios tape play`. `tuios tape exec` skips them, so a tape meant for both should pace itself with `Sleep`.
-</Callout>
+Run `tuios tape validate` on the file after editing. `tuios tape play` and `tuios tape exec` both honour the waits.
 
 ## Tips
 
