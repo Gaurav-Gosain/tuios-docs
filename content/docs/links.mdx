@@ -1,0 +1,126 @@
+---
+title: Links
+description: Open a link in a pane with Ctrl+click, choose the click and the opener, and see which terminals pass the click to TUIOS.
+icon: Link
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+<kbd>Ctrl</kbd>+click on a link in a pane opens it. This works on every platform, macOS included.
+
+TUIOS finds two kinds of link:
+
+- An **OSC 8 link** is a link that a program marked, such as `ls --hyperlink`, `gcc`, `delta`, `gh` or an agent CLI. Its text and its target can be different.
+- A **bare URL** is plain text that starts with `http://`, `https://`, `ftp://`, `ftps://`, `file://`, `ssh://` or `git://`.
+
+## Open a link
+
+| Gesture | Does |
+|---------|------|
+| Hover a link | Underline it and show its target in a label under the pointer |
+| <kbd>Ctrl</kbd>+click | Open the link |
+| <kbd>Shift</kbd>+click | Also open the link. Most terminals keep this click for their own selection, so it often does not reach TUIOS |
+| <kbd>Ctrl</kbd>+drag | Move the pane, as before. A link opens only when the pointer does not move |
+
+The label shows the real target, also when the text on the screen is different. After a click, the dock names the host, for example `Opening github.com.`
+
+A URL that wraps onto the next row is one link. A URL whose start or end is off the screen also opens whole: TUIOS reads the rest of it from the scrollback or from the rows under the view.
+
+[Hints mode](/docs/hints) opens links from the keyboard. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>F</kbd>, then <kbd>Ctrl</kbd> and a label, opens that URL. Hints mode and the pointer use the same URL detector, so they find the same links.
+
+## Where a URL ends
+
+- A URL ends at a space, a quote, a backtick or an angle bracket.
+- A `)` or a `]` ends the URL when the URL did not open it. A pair that the URL opens stays in it, as in `https://en.wikipedia.org/wiki/Go_(language)`.
+- TUIOS removes `.,;:!?` from the end.
+
+So the markdown badge `[![x](https://a.example/b.svg)](https://a.example/c)` gives two URLs.
+
+## Settings
+
+```toml
+[appearance]
+links = "all"          # off, marked (OSC 8 only), all
+link_click = "both"    # both, ctrl, shift, off
+link_opener = ""       # for example "firefox --new-tab" or "open -a Safari %s"
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `links` | `"all"` | The links TUIOS finds. `marked` finds only OSC 8 links. `off` finds none |
+| `link_click` | `"both"` | The click that opens a link. `both` is <kbd>Ctrl</kbd>+click and <kbd>Shift</kbd>+click. `off` turns the click off |
+| `link_opener` | `""` | The command that opens a web link. TUIOS puts the URL where `%s` is, or at the end |
+
+All three work with `tuios set-config` and are on the settings page.
+
+If `link_opener` is empty, TUIOS uses `$BROWSER`, then the system opener:
+
+| System | Opener |
+|--------|--------|
+| macOS | `open` |
+| Windows | `rundll32` |
+| WSL | `wslview` |
+| Other systems | `xdg-open` |
+
+TUIOS runs no shell. It gives the URL to the opener as one argument.
+
+## When the link does not open
+
+TUIOS watches the opener for 3 seconds. If the opener fails in that time, the dock shows "The link did not open. The address is on your clipboard." The log (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>l</kbd>) keeps what the opener wrote to stderr.
+
+If TUIOS cannot start the opener, the dock names the command and TUIOS copies the URL. If `link_opener` does not parse, the dock tells you to change it.
+
+## Which machine opens the link
+
+- A local client opens the link on your machine.
+- Under `ssh`, TUIOS does not use the system opener, because it would open the browser on the remote machine. TUIOS puts the URL on your clipboard. Set `$BROWSER` or `link_opener` to a command that forwards the URL, if you have one.
+- A remote client (`tuios ssh`, the web client) puts the URL on your clipboard.
+- A Linux machine with no `DISPLAY` and no `WAYLAND_DISPLAY` has no desktop. TUIOS puts the URL on your clipboard.
+
+In all these cases, TUIOS also sends each link to your terminal as OSC 8. Use the link click of your terminal to open it on your machine.
+
+## OSC 8 to your terminal
+
+TUIOS draws each pane into its own frame, so your terminal sees the output of TUIOS and not the output of the program. TUIOS writes every link in the focused pane as OSC 8:
+
+- An OSC 8 link keeps its URI and its `id=`.
+- A bare URL gets an `id=` from TUIOS, so a URL that wraps to the next row is one link.
+
+Your terminal can then show and open the real target. In a pane that is not focused, TUIOS writes the OSC 8 links of the program, and your terminal finds the bare URLs itself.
+
+## Safety
+
+- Only `http`, `https`, `mailto`, `ftp` and `ftps` links go to the opener. TUIOS copies other links, such as `javascript:`, `data:` or the scheme of an application.
+- A `file://` link opens in an editor pane only when the file is on this machine. A folder opens in the rail's files section. A `file://` link with the name of another host does not open.
+- TUIOS refuses an address with control characters or spaces.
+- TUIOS does not ask before it opens a link. The hover label and the scheme list protect you instead.
+
+## Terminals
+
+A terminal sends a click to TUIOS only when the terminal does not use the click itself. Most terminals keep <kbd>Shift</kbd>+click for their own selection when a program reads the mouse. That is why <kbd>Ctrl</kbd>+click is the main click.
+
+| Terminal | <kbd>Shift</kbd>+click gets to TUIOS | <kbd>Ctrl</kbd>+click gets to TUIOS | The terminal opens OSC 8 links |
+|---|---|---|---|
+| kitty | No. kitty opens the URL under the pointer | Yes | Yes, with <kbd>Shift</kbd>+click or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+click |
+| Ghostty | No. Ghostty extends its selection | Yes. On a link, Ghostty opens it | Yes |
+| WezTerm | No. <kbd>Shift</kbd> bypasses mouse reporting | Yes | Yes |
+| Alacritty | No. Alacritty opens a hinted URL | Yes | Yes, with <kbd>Shift</kbd>+click |
+| foot | No. <kbd>Shift</kbd> bypasses mouse reporting | Yes | Yes, in URL mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>) |
+| iTerm2 | Yes | Yes | Yes |
+| Windows Terminal | No. <kbd>Shift</kbd> bypasses mouse mode | Yes | Yes, with <kbd>Ctrl</kbd>+click when it gets the click |
+| xterm | No. <kbd>Shift</kbd> bypasses mouse reporting | Yes | No |
+
+On macOS, <kbd>Ctrl</kbd>+click opens a link in Ghostty, kitty, WezTerm and Terminal.app. <kbd>Cmd</kbd>+click does not open a link in any of them while TUIOS reads the mouse.
+
+<Callout type="info" title="Shift+click in Ghostty">
+A program can ask Ghostty for <kbd>Shift</kbd>+click with `XTSHIFTESCAPE`, or you can set `mouse-shift-capture = true`. TUIOS does not ask, because that takes <kbd>Shift</kbd> selection away from you.
+</Callout>
+
+## Related
+
+<Cards>
+  <Card title="Hints" href="/docs/hints" description="Open, copy or paste a URL from the keyboard" />
+  <Card title="Configuration" href="/docs/configuration#mouse-and-input" description="The links, link_click and link_opener options" />
+  <Card title="Keybindings" href="/docs/keybindings#mouse" description="Every mouse gesture" />
+</Cards>

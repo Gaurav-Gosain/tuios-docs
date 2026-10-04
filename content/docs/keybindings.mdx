@@ -74,7 +74,7 @@ Section `[keybindings.restore_minimized]` restores one minimized window by posit
 |-----|--------|
 | <kbd>Shift</kbd>+<kbd>1</kbd> to <kbd>Shift</kbd>+<kbd>9</kbd> (also <kbd>!</kbd> to <kbd>(</kbd>) | `restore_minimized_1` to `restore_minimized_9` |
 
-Section `[keybindings.system]` has one binding: <kbd>b</kbd> is `toggle_spotlight`, which lights one part of the screen and dims the rest. See the `[spotlight]` options in [Configuration](/docs/configuration#the-spotlight-table).
+Section `[keybindings.system]` has one binding: <kbd>B</kbd> is `toggle_spotlight`, which lights one part of the screen and dims the rest. See [Spotlight](#spotlight).
 
 ### Workspaces
 
@@ -134,6 +134,27 @@ In the [scrolling layout](/docs/layout-modes#scrolling), left and right move bet
 
 If your config already binds <kbd>j</kbd> or <kbd>k</kbd> in a window mode section, TUIOS keeps your binding and gives `focus_down` or `focus_up` no key. `tuios keybinds doctor` tells you when this happens.
 
+### Neovim pane navigation
+
+The optional [tuios-nvim-navigator](https://github.com/Tim4c/tuios-nvim-navigator) plugin lets the terminal-mode focus keys move through Neovim splits first. At the edge of a split, TUIOS moves to the next pane. The feature is off by default. Turn it on:
+
+```toml
+[appearance]
+nvim_navigation = true
+```
+
+The plugin tells TUIOS when it is active, so the same keys keep their normal TUIOS action in shells and other programs. By default, both projects use <kbd>Alt</kbd>+<kbd>←</kbd>, <kbd>Alt</kbd>+<kbd>↓</kbd>, <kbd>Alt</kbd>+<kbd>↑</kbd> and <kbd>Alt</kbd>+<kbd>→</kbd>. If you change the keys on one side, change the other to match `terminal_focus_left`, `terminal_focus_down`, `terminal_focus_up` and `terminal_focus_right`.
+
+The plugin sends private OSC 7777 messages. TUIOS reads them and never shows them in the pane:
+
+```text
+OSC 7777 ; tuios-nvim-navigator ; state ; active BEL
+OSC 7777 ; tuios-nvim-navigator ; state ; inactive BEL
+OSC 7777 ; tuios-nvim-navigator ; focus ; <direction> BEL
+```
+
+`<direction>` is `left`, `down`, `up` or `right`. Another Neovim integration can send the same messages. TUIOS accepts a focus request only from the focused pane in terminal mode, and only just after it sent the matching focus key to that pane. Window mode always keeps the focus keys for TUIOS.
+
 ### BSP splits
 
 Also in `[keybindings.layout]`. See [BSP Tiling](/docs/bsp-tiling).
@@ -143,7 +164,7 @@ Also in `[keybindings.layout]`. See [BSP Tiling](/docs/bsp-tiling).
 | <kbd>-</kbd> | `split_horizontal` | Split the focused pane top and bottom |
 | <kbd>&#124;</kbd>, <kbd>&#92;</kbd> | `split_vertical` | Split the focused pane left and right |
 | <kbd>R</kbd> | `rotate_split` | Flip the split direction |
-| <kbd>=</kbd> | `equalize_splits` | Reset every split ratio |
+| <kbd>=</kbd> | `equalize_splits` | Make every split equal. In master-stack, also put the master back at `master_ratio` |
 | <kbd>Alt</kbd>+<kbd>h</kbd> / <kbd>j</kbd> / <kbd>k</kbd> / <kbd>l</kbd> | `preselect_left`, `preselect_down`, `preselect_up`, `preselect_right` | Choose where the next window opens |
 
 The preselect keys use <kbd>Option</kbd> on macOS. The prefix menu has its own copies of the four split actions, and rebinding one set does not change the other.
@@ -186,6 +207,8 @@ Readline, fish and zsh use <kbd>Alt</kbd>+<kbd>←</kbd> and <kbd>Alt</kbd>+<kbd
 </Callout>
 
 Plain <kbd>Ctrl</kbd>+<kbd>V</kbd> is not bound. It reaches the pane, so vim's visual block mode works.
+
+<kbd>Shift</kbd>+<kbd>↑</kbd> and <kbd>Shift</kbd>+<kbd>↓</kbd> scroll the pane into its history only when the program is on the main screen and did not turn on a mouse mode. In other panes, TUIOS sends the keys to the program, so nvim, less and htop get them. In copy mode the keys scroll. This is the same rule as for the mouse wheel, and the same rule as in kitty.
 
 ### Paste an image
 
@@ -249,7 +272,7 @@ Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, then the key. Section: `[keybindings.prefix_
 | <kbd>-</kbd> | `prefix_split_horizontal` | Split top and bottom |
 | <kbd>&#124;</kbd>, <kbd>&#92;</kbd> | `prefix_split_vertical` | Split left and right |
 | <kbd>R</kbd> | `prefix_rotate_split` | Flip the split direction |
-| <kbd>=</kbd> | `prefix_equalize_splits` | Reset every split ratio |
+| <kbd>=</kbd> | `prefix_equalize_splits` | Make every split equal. In master-stack, also put the master back at `master_ratio` |
 | <kbd>[</kbd> | `prefix_selection` | Enter [copy mode](#copy-mode) |
 | <kbd>F</kbd> | `hints` | Label the text on the pane to copy it. See [Hints](/docs/hints) |
 | none | `hints_all_panes` | Label the text on every pane of the workspace. See [All panes](/docs/hints#all-panes) |
@@ -260,12 +283,14 @@ Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, then the key. Section: `[keybindings.prefix_
 | <kbd>,</kbd> | `prefix_settings` | Open the settings page |
 | <kbd>k</kbd> | `prefix_keybinds` | Open the keybind manager |
 | <kbd>b</kbd> | `prefix_toggle_sidebar` | Show or hide the session rail |
+| <kbd>B</kbd> | `prefix_toggle_spotlight` | Turn the [spotlight](#spotlight) on or off |
 | <kbd>V</kbd> | `paste_image` | Paste the clipboard image as a file path. See [Paste an image](#paste-an-image) |
 | <kbd>g</kbd> | `toggle_scratch` | Show or hide the [scratch terminal](/docs/sessions#scratch-terminal) |
 | <kbd>e</kbd> | `prefix_explore` | Move the keyboard to the rail, or back |
 | <kbd>S</kbd> | `prefix_session_switcher` | Open the session switcher |
 | <kbd>W</kbd> | `prefix_workspace_switcher` | Open the workspace switcher |
 | <kbd>j</kbd> | `prefix_jump_notif` | Jump to the pane of the newest message |
+| <kbd>N</kbd> | `prefix_last_message` | Show the last message in full. See [Messages](#messages) |
 | <kbd>i</kbd> | `prefix_inbox` | Open the [Inbox](/docs/agent-inbox) |
 | <kbd>o</kbd> | `prefix_next_attention` | Go to the oldest Inbox item that needs you. <kbd>o</kbd> again goes to the next |
 | <kbd>O</kbd> | `prefix_next_finished` | Go to the newest finished turn nobody has seen. <kbd>O</kbd> again goes to the next older one |
@@ -414,6 +439,7 @@ When the cursor is on a row in the files section, section `[keybindings.sidebar_
 | <kbd>y</kbd> | `file_copy` | Copy |
 | <kbd>x</kbd> | `file_cut` | Cut |
 | <kbd>p</kbd> | `file_paste` | Paste into this folder |
+| <kbd>Y</kbd> | `file_copy_path` | Copy the absolute path of the file or folder. A folder's context menu has a **Copy path** row too |
 
 See [The files section](/docs/configuration#the-files-section).
 
@@ -531,6 +557,48 @@ The settings page (<kbd>,</kbd> in window mode, or <kbd>Ctrl</kbd>+<kbd>B</kbd> 
 | <kbd>Esc</kbd>, <kbd>q</kbd> | Close |
 
 A row whose value differs from its default has a dot after its name, including the hand-drawn rows such as the theme and shared borders, which have no reset. See [The in-app settings page](/docs/configuration#the-in-app-settings-page) for the search.
+
+The key hints at the foot of a panel stay on one row. When they do not fit, they get shorter in steps. First, `ctrl+` becomes `^`, `alt+` becomes `M-` and `shift+` becomes `S-`. Then the least important hints go, one whole hint at a time. The way out, such as `esc`, stays. Only when the most important hints still do not fit do their labels go, from the last hint back. A hint is never cut in the middle of a word.
+
+### Mode keys in the dock
+
+Copy mode, multi copy mode and hints mode show their keys at the right end of the dock while the mode is open. The keys follow the rule for panel footers, so a narrow screen shows fewer keys and never part of one. The main action and the way out always show. In hints mode, <kbd>?</kbd> shows all of its keys in the help. A message that arrives while a mode is open shows in place of the keys until the message goes. The dock component is `copy-help`.
+
+## Messages
+
+A message shows at the right end of the dock. A message that is too long for the dock stops after its last whole word, with `…` and `more`. A word with no space in it, such as a long path, is cut where the room ends.
+
+- Put the pointer on a message to hold it. A key press, the terminal losing focus, or 60 seconds ends the hold.
+- Put the pointer on a long message to see its first lines above the dock.
+- Click a long message to read all of it in the message view. A click on a pane's request to set the clipboard allows it.
+- Click a short message from a pane to go to that pane.
+
+| Keys | Where | Does |
+|------|-------|------|
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>N</kbd> | Anywhere | Show the last message from a pane, or the last message too long for the dock, also after it left the dock |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>j</kbd> | Anywhere | Go to the pane of the newest message |
+| <kbd>j</kbd> <kbd>k</kbd>, <kbd>↑</kbd> <kbd>↓</kbd>, wheel | Message view | Scroll one line |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd> <kbd>Ctrl</kbd>+<kbd>U</kbd>, <kbd>Space</kbd>, <kbd>PgDn</kbd> <kbd>PgUp</kbd> | Message view | Scroll half a page |
+| <kbd>g</kbd> <kbd>G</kbd>, <kbd>Home</kbd> <kbd>End</kbd> | Message view | Go to the first or last line |
+| <kbd>y</kbd> | Message view | Copy the message |
+| <kbd>Enter</kbd> | Message view | Go to the pane the message came from |
+| <kbd>Esc</kbd>, <kbd>q</kbd> | Message view | Close the message view |
+
+The log viewer (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>l</kbd>) lists every message the dock showed, and every warning and error. The entry under the cursor shows wrapped under the list. Press <kbd>Enter</kbd>, or click an entry, to read it in the message view. <kbd>E</kbd> copies the errors and <kbd>A</kbd> copies the whole log.
+
+## Spotlight
+
+<kbd>B</kbd> in window mode turns the spotlight on and off. The spotlight dims the screen outside a circle around the pointer. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>B</kbd> turns it on and off in any mode. The key was <kbd>b</kbd> in earlier versions.
+
+While the spotlight is on, the dock shows a Spotlight chip with the key that turns it off:
+
+| Where | Turn off the spotlight |
+|-------|------------------------|
+| Window mode | <kbd>Esc</kbd> |
+| Terminal mode | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>B</kbd> |
+| Any mode | Click the Spotlight chip in the dock |
+
+In terminal mode <kbd>Esc</kbd> goes to the program in the pane, so vim and other programs get it. An open dialog, menu or popup closes before <kbd>Esc</kbd> turns the spotlight off. The actions are `toggle_spotlight` and `prefix_toggle_spotlight`. `[spotlight]` sets the size and the dimming. See [Themes](/docs/themes#spotlight).
 
 ## Close every pane on a workspace
 
@@ -666,11 +734,14 @@ The command runs on the machine that runs the TUIOS client, the same machine as 
 | Click a dock item | Restore a minimized window |
 | Wheel up | Enter copy mode and scroll, when the program is not using the mouse |
 | Drag the right border | Scroll with the scrollbar |
-| <kbd>Shift</kbd> + click a link | Open it. `appearance.links` decides what counts as a link |
+| Hover a link | Show where it goes. The label shows the real target, also when the text on the screen is different |
+| <kbd>Ctrl</kbd> + click a link | Open it. <kbd>Shift</kbd>+click also opens it, but most terminals keep it for their own selection. See [Links](/docs/links) |
 
 In floating mode, drop a window on a screen edge to snap it: the left or right edge for a half, a corner for a quarter, the top center for the full screen.
 
 In copy mode, a click moves the cursor and a drag selects. Dragging past the top or bottom of the pane scrolls.
+
+<kbd>Ctrl</kbd>+drag still moves the pane. A link opens only when the pointer does not move. `appearance.link_click` sets which click opens a link.
 
 ## Command keys
 

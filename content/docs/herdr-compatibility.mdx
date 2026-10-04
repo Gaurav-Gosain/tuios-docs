@@ -55,8 +55,34 @@ An agent's state shows as herdr's `agent_status`: `needs_input` is `blocked`, so
 - List, create, open and remove git worktrees.
 - Follow changes with `events.subscribe`.
 - Report an agent's own state with `pane.report_agent` and the other report methods.
+- Start an agent in a pane with `agent.start`, and wait for its state with `agent.wait`.
+
+`agent.start` types the agent's command only into a pane that is at its shell prompt with no agent in it. Any other pane answers `agent_pane_busy`, and nothing is typed. That includes a pane whose foreground program TUIOS cannot read.
 
 Other herdr methods, such as the plugin and layout methods, answer the error `unsupported`. The full table of methods is in [AGENT_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/main/docs/AGENT_STATE.md#herdr-compatibility).
+
+## herdr's command line
+
+Plugins and tools built for herdr run herdr's CLI through `$HERDR_BIN_PATH`. In a TUIOS pane, that variable names a link called `herdr` that runs TUIOS. It answers `pane`, `tab`, `workspace`, `agent` (except `attach`), `worktree`, `notification show` and `api snapshot`, prints herdr's JSON and uses herdr's exit codes.
+
+```bash
+"$HERDR_BIN_PATH" pane split --pane "$HERDR_PANE_ID" --direction right --focus
+"$HERDR_BIN_PATH" notification show "Build done" --body "All tests pass"
+```
+
+`herdr agent start` returns when the agent is at rest (`idle` or `done`), as in herdr. The link is not on `PATH`, so a real herdr on your `PATH` still runs as herdr.
+
+## Crush permission prompts
+
+Crush reports its state over herdr's protocol. When Crush shows its "Permission Required" dialog, TUIOS reads the dialog from the screen:
+
+- The pane goes to `needs_input`, and the Inbox lists it under Approvals.
+- The message names the tool and what it acts on, such as `approve bash: touch hello.txt`. When the dialog does not show the whole call, the message ends with `(not all shown)`.
+- In the Inbox, `a` allows, `A` allows for the rest of the Crush session, and `d` denies. TUIOS presses Crush's own keys: `a`, `s` and `d`. `tuios respond` answers it too.
+- The risk rules read the message. A call that matches a rule, or a message that ends with `(not all shown)`, takes a second press.
+- TUIOS answers only when it sees a Crush process in the pane.
+
+Crush v0.97.1 and earlier can report `working` while the dialog is still up. TUIOS then reads the screen, and the pane stays on `needs_input` until the dialog closes.
 
 ## Who may do what
 

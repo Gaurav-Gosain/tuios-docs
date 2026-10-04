@@ -43,7 +43,7 @@ tuios worktree ls
 tuios worktree ls --repo api
 ```
 
-Each row shows the session, repository, branch, the agent state inside it, and how many uncommitted changes it holds. A row marked `gone` is a session whose worktree directory was removed. The session is kept, so what the agent printed can still be read.
+Each row shows the session, repository, branch, the agent state inside it, how many uncommitted changes it holds, and its pull request and checks once [`tuios ship pr`](/docs/ship) opened one. A row marked `gone` is a session whose worktree directory was removed. The session is kept, so what the agent printed can still be read.
 
 ```bash
 tuios worktree diff api-feat-retry
@@ -65,6 +65,8 @@ This runs `git worktree remove` and kills the session. A worktree with uncommitt
 | `--stash` | Move the changes into the repository's stash as `tuios: <branch>`, then remove |
 | `--force` | Discard the changes. The only option that throws work away |
 | `--keep-session` | Remove the worktree and leave the session running |
+
+Removing a worktree also deletes the [checkpoints](/docs/checkpoints) taken in it.
 
 <Callout type="info" title="Branches are never deleted">
 Every commit made in a worktree stays in the repository. TUIOS never deletes a branch and never runs `git worktree prune`.
@@ -148,6 +150,14 @@ tuios fan keep api-fan-add-retry-backoff-http-2 --stash
 
 The session you name is untouched. Each sibling is removed the way `worktree rm` removes it. A sibling with uncommitted changes is left in place unless you pass `--stash` or `--force`.
 
+To land the kept attempt too, add `--merge`:
+
+```bash
+tuios fan keep api-fan-add-retry-backoff-http-2 --merge --squash
+```
+
+`--merge` first merges the kept attempt's branch into its base in the main checkout, as [`tuios ship merge`](/docs/ship#merge) does. `--squash`, `--ff-only` and `--into` choose how. When the merge conflicts or is refused, it is undone and no sibling is removed. Uncommitted changes in the kept worktree are not merged, so commit them first with `tuios ship commit`.
+
 ## Work from another machine
 
 `worktree new --host` and `fan --host` run on a machine from the [`[hosts]` table](/docs/remote-hosts), and so does `start-agent -s HOST:SESSION`. The repository is the one the current directory is in, found on the host by its origin URL under the host's `repos_root`, and `--clone` clones it there when the host has none. The agent must be installed on that machine.
@@ -174,6 +184,8 @@ See [Control Protocol](/docs/control-protocol) and `tuios list-verbs fan`.
 ## Related
 
 <Cards>
+  <Card title="Ship" href="/docs/ship" description="Commit, merge, push and open a pull request from a worktree" />
+  <Card title="Checkpoints" href="/docs/checkpoints" description="Read and undo what one turn changed" />
   <Card title="Agents" href="/docs/agents" description="The agent state each worktree session reports" />
   <Card title="Agent Messaging" href="/docs/agent-messaging" description="Let the agents talk to each other" />
   <Card title="Session Rail" href="/docs/session-rail" description="Worktree sessions grouped under their repository" />

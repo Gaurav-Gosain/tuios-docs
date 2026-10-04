@@ -1,0 +1,105 @@
+---
+title: Checkpoints
+description: TUIOS saves an agent's work tree at the end of each turn, so you can read what one turn changed and undo it.
+icon: History
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+When an agent in a git work tree finishes a turn, the daemon saves the work tree as a checkpoint. You can list the checkpoints of a pane, read what one turn changed, and put the files back as an earlier turn left them.
+
+```bash
+tuios checkpoint list -w build            # one row per saved turn
+tuios checkpoint diff -w build 2          # what turn 2 changed
+tuios checkpoint restore -w build 1       # put the files back as turn 1 left them
+```
+
+```
+Checkpoints of api-feat-retry, pane 00d333ce, in /home/u/.local/share/tuios/worktrees/api/feat-retry: 3
+N  TURN  STATE  TAKEN     COMMIT   LABEL
+1  1     done   14:02:56  a6752d3  Add a retry to the client
+2  2     done   14:09:58  992c80e  Make the backoff configurable
+3  4     done   14:12:08  3de15e5  safety: before restoring checkpoint 1
+```
+
+## When a checkpoint is taken
+
+The daemon takes a checkpoint when a pane goes from `working` to `done`, `idle` or `needs_input`, or to `unknown` at the end of a counted turn. The pane's directory must be in a git work tree. A turn that changed no file since the last checkpoint gets no checkpoint.
+
+Checkpoints need the agent state. A pane that never reports or shows `working` gets none. See [How TUIOS learns the state](/docs/agents#how-tuios-learns-the-state).
+
+## What a checkpoint holds
+
+- Tracked files as they are on disk, and untracked files that git does not ignore. Ignored files are not in it.
+- An untracked file larger than `max_untracked_mb` (50 MB by default) is left out. `tuios checkpoint list` names the files left out, and a restore does not change them.
+- The checkpoint is a commit under `refs/tuios/checkpoints/<window id>/<n>`. Its parent is `HEAD` at that time.
+- Its label is the turn's prompt, or the line the turn ended with, or the state's message.
+
+The daemon writes the commit through a temporary index. Your index, `HEAD`, your branch and the stash do not change. Git does not push `refs/tuios`, because no default refspec names it.
+
+## Reading one
+
+`tuios checkpoint diff N` compares checkpoint N with the pane's checkpoint before it. The first checkpoint compares with `HEAD` at the time it was taken. Without N it shows the newest.
+
+```bash
+tuios checkpoint diff -w build 2 --stat
+tuios checkpoint diff -w build 2 --path api/retry.go --context 5
+```
+
+```
+Checkpoint 2 of api-feat-retry, pane 00d333ce, against checkpoint 1: 2 files, +2 -1
+M  a.txt  +1 -1
+M  b.txt  +1 -0
+```
+
+The diff stops at the same limits as a [review](/docs/agent-inbox#reviewing-an-agents-changes).
+
+## Restoring one
+
+```bash
+tuios checkpoint restore -w build 1
+```
+
+```
+Restored checkpoint 1 in api-feat-retry, pane 00d333ce: 2 files written, 0 removed.
+Checkpoint 3 holds the work tree as it was before. To undo, run: tuios checkpoint restore -s api-feat-retry -w 00d333ce 3
+```
+
+- A restore first saves the work tree as a `safety` checkpoint. To undo the restore, restore that checkpoint.
+- The daemon then writes the files that differ, and removes the files that checkpoint N does not have.
+- It does not touch ignored files, the index or `HEAD`. `git status` shows the restored files as changes.
+- A restore stops while the agent is `working` or `needs_input`, because the agent would write over the files. Wait for the turn to end, or add `--force`.
+- A restore that would write over an ignored or new file stops before it changes a file, and names the file. No checkpoint holds that file, so the restore would lose it. Move the file out of the way, then restore again.
+- Submodules are skipped.
+
+## Limits
+
+- The git commands run off the daemon's event path, one at a time, with a limit of 30 seconds each. On a work tree of 50,000 files, a checkpoint takes about 100 ms.
+- Each pane keeps the newest 50 checkpoints.
+- Removing a worktree with `tuios worktree rm` or `tuios fan keep` deletes the checkpoints taken in it.
+- Checkpoints of a pane on another machine are not available here. Attach to that machine to use them.
+
+## Configuration
+
+```toml
+[agents.checkpoints]
+enabled = true          # false takes no checkpoints
+keep = 50               # checkpoints per pane, 1 to 1000
+max_untracked_mb = 50   # a larger untracked file is left out. A negative value sets no limit
+```
+
+The daemon reads the table when it starts, and again when the file changes. See [Configuration](/docs/configuration).
+
+## From a pane
+
+`tuios checkpoint list` and `tuios checkpoint diff` need the `read` grant. `tuios checkpoint restore` needs `write`, and works only on a pane that holds no grant the caller does not hold. See [What a pane may do](/docs/agents#what-a-pane-may-do).
+
+The verbs are `list-checkpoints`, `checkpoint-diff` and `restore-checkpoint`. `--json` on each command gives the result as JSON. A missing checkpoint fails with `no_checkpoint`, and the hint lists the ones the pane has.
+
+## Related
+
+<Cards>
+  <Card title="Ship" href="/docs/ship" description="Commit, merge, push and open a pull request" />
+  <Card title="Inbox and Review" href="/docs/agent-inbox#reviewing-an-agents-changes" description="Read what an agent changed and send it notes" />
+  <Card title="Worktrees" href="/docs/worktrees" description="One agent per git worktree" />
+</Cards>

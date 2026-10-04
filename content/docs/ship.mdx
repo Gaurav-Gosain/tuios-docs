@@ -1,0 +1,146 @@
+---
+title: Ship
+description: Take an agent's work from its worktree to a merged change. Commit it, merge it, push it and open a pull request, with your own git identity.
+icon: GitMerge
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+When the work in an agent's [worktree](/docs/worktrees) is good, `tuios ship` takes it to a merged change. You do not need to go to the worktree's directory.
+
+```bash
+tuios ship commit -s api-feat-retry -m 'Add a retry to the client'
+tuios ship merge -s api-feat-retry          # into the base, in the main checkout
+tuios ship pr -s api-feat-retry --draft     # push, then open a pull request with gh
+tuios ship status -s api-feat-retry         # the pull request and its checks
+tuios fan keep api-fan-retry-2 --merge      # keep one attempt, merge it, remove the others
+```
+
+`-s` names the session and `-w` the pane. From inside a pane, a command that names no pane is about that pane. A pane on another machine is refused.
+
+## Commit
+
+```bash
+tuios ship commit -s api-feat-retry -m 'Add a retry to the client'
+```
+
+```
+Committed 55cb537 on feat/retry: Add a retry to the client
+```
+
+- `ship commit` stages every change in the pane's work tree, untracked files included and ignored files not, and commits it on the worktree's branch.
+- git runs in the daemon with your environment. Your name, email, signing setup and hooks make the commit. TUIOS sets no identity and adds nothing to the message.
+- Without `-m`, the message is the pane's last prompt, or the line its last turn ended with.
+- When a hook or the signing program refuses the commit, the index goes back to what it was.
+- A commit stops while the agent is `working` or `needs_input`. Wait for the turn to end, or add `--force`.
+- A clean work tree fails with `nothing_to_commit`.
+
+## Merge
+
+```bash
+tuios ship merge -s api-feat-retry
+tuios ship merge -s api-feat-retry --squash -m 'Add a retry to the client'
+```
+
+```
+Merged feat/retry into main in /src/api: fast-forward, 1 commit, now at 55cb537.
+```
+
+The branch merges into the base the worktree was made from, in the main checkout. `--into` names another branch.
+
+- The main checkout must have that branch checked out, and no uncommitted change to a tracked file. If not, nothing is merged and the command fails with `checkout_dirty` and lists the files.
+- When the merge conflicts, TUIOS undoes it with `git reset --merge` and lists the files (`merge_conflict`). The main checkout is then as it was. Rebase the branch in the worktree, resolve the conflicts there, and merge again.
+- `--squash` makes one commit. `--ff-only` refuses a branch that cannot be fast-forwarded.
+- Uncommitted changes in the worktree are not merged. The command says how many there are.
+- Nothing is forced.
+
+## Push and pull request
+
+```bash
+tuios ship push -s api-feat-retry
+tuios ship pr -s api-feat-retry --draft
+tuios ship pr -s api-feat-retry --base main --title 'Add a retry' --body 'Retries with backoff.'
+```
+
+```
+tuios ship will:
+  push feat/retry at 55cb537 to origin (github.com/acme/api.git)
+  open a draft pull request into main with gh, title: from the commits
+Push and open the pull request? [y/N]
+```
+
+A push and a pull request send work off this machine, so each one asks first.
+
+- The command shows what it will send: the branch, its commit, the remote's address, the commits and the pull request. At a terminal it asks `[y/N]`. Elsewhere it needs `--yes`.
+- The answer is bound to that commit. TUIOS pushes the commit you were shown, even when the branch moves on while the question waits.
+- The address shows the host and path the remote pushes to. Credentials, the query and the fragment are removed.
+- A push is never forced.
+- `--remote` names the remote. The default is the one the branch follows, else the only one, else `origin`.
+- `ship pr` pushes, then runs your own `gh pr create`. Without `--title`, gh fills the title and body from the commits. `--body` needs `--title`. When the branch has an open pull request already, the push updates it.
+- TUIOS holds no GitHub token. Without gh, or when gh is not logged in, the command stops with `gh_unavailable` before anything is pushed. Run `gh auth login`.
+
+### When an agent asks to push
+
+A push or a pull request from a process inside a pane also needs your yes in the [Inbox](/docs/agent-inbox). The same applies to a connection limited with `restrict-connection`, such as `tuios mcp`.
+
+The question shows on the client that shows the pane, and waits under Questions:
+
+```
+Questions
+    6s  #8  api-feat-retry/claude  Push feat/retry (55cb537) to origin (github.com/acme/api.git)?  (1 allow, 2 deny; answer in the Inbox)
+```
+
+- The command waits for your answer, 2 minutes by default (`--wait`).
+- When the wait ends first, the command fails with `not_ready` and the question stays. `--request <id>` waits for the same question again.
+- A deny fails the command with `forbidden`.
+- Over a link from another machine, a push is refused.
+
+<Callout type="info" title="Only you can allow it">
+An agent can ask to push. It cannot answer its own question: only a person at an attached client can.
+</Callout>
+
+## The pull request on the rail
+
+`ship pr` and `ship status --refresh` record the pull request on the worktree's session.
+
+```bash
+tuios ship status -s api-feat-retry
+```
+
+```
+feat/retry: PR #7 open pending
+https://github.com/acme/api/pull/7
+Checks: 0 passed, 0 failed, 1 pending.
+```
+
+- The agent rows of that session show the `pr` token: `PR #12 open pending`, `PR #12 open pass`, `PR #12 open fail` or `PR #12 merged`. It is red for failing checks, amber for pending ones, and green for passing ones and a merge. See [Session Rail](/docs/session-rail#agent-rows).
+- `tuios worktree ls` shows it in a PR column. `tuios worktree ls --json` carries it as `pr`, and `tuios ls --json` carries it under each session's `worktree`.
+- While a client is attached and a recorded pull request is open, the daemon reads it again with `gh pr view` once a minute, one gh call at a time. A merged or closed pull request is not read again. With no open pull request, no client or no gh, nothing is read.
+
+## Keep one attempt of a fan and merge it
+
+```bash
+tuios fan keep api-fan-retry-2 --merge
+tuios fan keep api-fan-retry-2 --merge --squash
+```
+
+`--merge` first merges the kept attempt into its base, the way `ship merge` does. `--squash`, `--ff-only` and `--into` choose how. When the merge conflicts or is refused, it is undone and no other attempt is removed. See [Comparing and keeping one](/docs/worktrees#comparing-and-keeping-one).
+
+## From a pane
+
+| Command | Needs |
+|---------|-------|
+| `ship commit`, `ship merge` | `write`, on a pane that holds no grant the caller does not hold |
+| `ship push`, `ship pr` | `write`, and your yes in the Inbox |
+| `ship status` | `read` |
+
+The verbs are `ship-commit`, `ship-merge`, `ship-push`, `ship-pr` and `ship-status`. `--json` on each command gives the result as JSON. A failure carries `code`, and for a conflict or a dirty checkout, `files`. See [What a pane may do](/docs/agents#what-a-pane-may-do) and [Control Protocol](/docs/control-protocol).
+
+## Related
+
+<Cards>
+  <Card title="Worktrees" href="/docs/worktrees" description="One agent per worktree, and one prompt across several" />
+  <Card title="Checkpoints" href="/docs/checkpoints" description="Undo one turn of an agent's work" />
+  <Card title="Inbox and Review" href="/docs/agent-inbox" description="Review the change and answer the push question" />
+</Cards>

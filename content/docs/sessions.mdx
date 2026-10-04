@@ -232,7 +232,7 @@ The action is `toggle_pip`. If your config puts <kbd>p</kbd> on a different wind
 Several clients can attach to one session at the same time, for example two terminals on one machine, or a terminal and an SSH login.
 
 - Every client sees the same windows, workspaces and output, and changes made in one show up in the others.
-- The session is drawn at the size of the smallest attached client.
+- The session has one size for all of its clients. `daemon.window_size` selects the client that sets it. See [Session size with more than one client](#session-size-with-more-than-one-client).
 - Each client keeps its own input mode and copy mode position, so one person entering terminal mode does not change what another is doing.
 - Focus is shared. The newest focus change wins, from any client or from a command such as `tuios focus-window`.
 - Each change to the tiling tree goes to the daemon, which applies it and gives it a number. Two clients that change one layout at the same time end on the same layout.
@@ -247,8 +247,48 @@ tuios attach pairing
 ```
 
 <Callout type="warn">
-Every attached client has full control: it sees all output, types into every shell and can close windows. There are no read-only clients. Local clients are limited to your own user by the socket's permissions. SSH clients are limited by `tuios ssh` authentication, and browser clients by the `tuios-web` password. See [Who can connect](/docs/web#who-can-connect).
+Every attached client has full control: it sees all output, types into every shell and can close windows. The one exception is `tuios-web --read-only`, which ignores all input from browsers. Local clients are limited to your own user by the socket's permissions. SSH clients are limited by `tuios ssh` authentication, and browser clients by the `tuios-web` password. See [Who can connect](/docs/web#who-can-connect).
 </Callout>
+
+### Session size with more than one client
+
+A pane has one size, so a session has one size for all of its clients. `window_size` in `[daemon]` selects the client that sets it. The values are those of the tmux `window-size` option.
+
+| Value | The session uses |
+|-------|------------------|
+| `smallest` | The smallest client. This is the default. Every client shows the full session. A larger client shows empty space around it |
+| `largest` | The largest client |
+| `latest` | The client that last had input |
+
+```toml
+[daemon]
+window_size = "latest"
+```
+
+For `latest`, input is a key, a paste, a click, a drag or a turn of the mouse wheel. A resize, a focus change and a reply that your terminal sends by itself are not input. So a phone that only attaches does not take the session from the person who types on a laptop. A client keeps the session for 1 second after its last input, so two people who type at the same time do not resize the session on each key. When the latest client detaches, the session goes to the client with the most recent input.
+
+A client that is smaller than the session shows the part around the cursor of the focused pane, as tmux does. In copy mode it follows the copy-mode cursor. An agent CLI hides its cursor in its input box, so you see the input box. A mark at the right end of the line above the dock shows the size of the session, with arrows that point to the parts you cannot see. The rail and the dock stay at the edges of your screen.
+
+To change the value for one session while it runs:
+
+```bash
+tuios set-config daemon.window_size latest -s mysession
+tuios session-info -s mysession --json   # window_size, session_width, session_height
+```
+
+Under the tmux shim, `tmux set -g window-size latest` does the same.
+
+A client that cannot send input, such as `tuios-web --read-only`, does not set the size under `largest` or `latest`. Under `smallest` it counts like every other client. A tool that uses only the verb socket, such as Collie, does not change the size. A client from a version of TUIOS before `window_size` makes the session use `smallest` while it is attached.
+
+### The rail with more than one client
+
+The rail is part of the session. When you show or hide it on one client, every client of the session shows or hides it. The panes then take the new space on every client.
+
+A new session takes the rail setting of the first client that attaches, from `appearance.sidebar.enabled`. A later client with a different setting uses the session's value. When you toggle the rail, TUIOS also keeps the new value in your config for the next new session. A reload of the config file does not change the rail of a session that is running.
+
+The width of the rail stays per client. A client too narrow to show the rail does not change it for the session. When the clients use different widths, the panes use the space next to the widest rail. A client with a narrower rail shows the difference as empty space.
+
+A client from an older version of TUIOS keeps its rail to itself. A new client attached to an older daemon also keeps its rail to itself.
 
 ## Session resurrection
 
@@ -309,6 +349,7 @@ The session is marked too. It shows a `restored` tag in `tuios ls`, the sidebar 
 | Working directories | Yes | Yes, on Linux and macOS | As of the last save, on Linux and macOS | As of the last save, on Linux and macOS |
 | Shell processes and running programs | Yes | No | No | No |
 | Screen contents and scrollback | Yes | Yes, as history above the divider | As of the pane's last save, up to 30 seconds old | Yes, as history above the divider |
+| Rail shown or hidden | Yes | Yes | As of the last save | As of the last save |
 | Copy mode position, input mode | No, these are per client | No | No | No |
 
 ### Pane history
@@ -504,6 +545,10 @@ tuios               # starts a fresh daemon
 <Callout type="warn">
 This does not give you a clean slate. `kill-server` saves every session on the way out, and the next daemon restores them. To start a daemon with no sessions, run `tuios daemon --no-restore`.
 </Callout>
+
+### Which `TERM` a pane gets
+
+A pane gets the `TERM` of the client that made the session, if the machine that runs the pane has a terminfo entry for it. If it has none, the pane gets `xterm-256color`, so `clear`, `tput` and curses programs still work. To keep your terminal's own `TERM`, install its terminfo entry on that machine, for example with `infocmp -x xterm-kitty | ssh HOST tic -x -`.
 
 ### "Session not found"
 

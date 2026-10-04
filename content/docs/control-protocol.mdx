@@ -88,7 +88,7 @@ A caller whose version is outside the accepted range gets `protocol_mismatch`. N
 
 ## Verbs
 
-The daemon currently implements 97 verbs, some of them only for one daemon to call on another. `tuios list-verbs` always reflects the binary you are talking to.
+The daemon currently implements 115 verbs, some of them only for one daemon to call on another. `tuios list-verbs` always reflects the binary you are talking to.
 
 ### Discovery
 
@@ -102,9 +102,11 @@ The daemon currently implements 97 verbs, some of them only for one daemon to ca
 | Verb | Purpose |
 |------|---------|
 | `list-sessions` | List every session the daemon holds. |
+| `list-clients` | List every connection to the daemon: its client id, the process id the kernel reports, and the session it is attached to. See [Clients](#clients). |
 | `new-session` | Create a session, detached, with its first window. Optional `name`, `width`, `height` (default 80x24), `window`, `window_name`, `cwd` and `command`. |
 | `session-info` | Details about one session. |
 | `kill-session` | End a session and every window in it. |
+| `rename-session` | Rename a session. Panes that already run still reach it by the old name. |
 | `set-session-name` | Set a display name. The session keeps its real name for addressing. |
 | `set-session-accent` | Set or clear a session's accent colour. |
 
@@ -112,7 +114,7 @@ The daemon currently implements 97 verbs, some of them only for one daemon to ca
 
 | Verb | Purpose |
 |------|---------|
-| `list-windows` | List a session's windows with ID, index, name, workspace, size, focus and agent state. |
+| `list-windows` | List a session's windows with ID, index, name, workspace, size, focus and agent state. A window whose process runs on this machine also has `pid` and `tty`. A zoomed window has `zoomed: true`. |
 | `get-window` | Describe one window. |
 | `new-window` | Create a window. Optional `name`, `workspace`, `cwd`, `focus`, `command` (an argv run instead of a shell), `host` (run it on another machine) and `grants`. |
 | `close-window` | Close a window. |
@@ -124,12 +126,13 @@ The daemon currently implements 97 verbs, some of them only for one daemon to ca
 | `resize` | Resize a window's PTY to `width` by `height`. |
 | `popup` | Run a command in a floating window that closes when the command exits. Needs an attached client. |
 | `screenshot` | Render a window to a `png`, `svg`, `ansi`, `html` or `txt` file. |
+| `pip` | Pin a pane as the attached client's picture-in-picture view. Needs an attached client. |
 
 ### Workspaces and layout
 
 | Verb | Purpose |
 |------|---------|
-| `list-workspaces` | List workspaces with their names, window counts and which one is showing. |
+| `list-workspaces` | List workspaces with their names, window counts and which one is showing. `focus_history` lists a workspace's windows, the most recently focused first. |
 | `select-workspace` | Show a workspace. |
 | `set-workspace-name` | Name a workspace. It keeps its number for addressing. |
 | `set-workspace-order` | Set the order workspaces are displayed in. |
@@ -143,6 +146,7 @@ The daemon currently implements 97 verbs, some of them only for one daemon to ca
 | `send-text` | Write text to a window's PTY exactly as given. A trailing `\n` presses Enter. |
 | `paste-image` | Write an image to a file on the machine where a window's process runs, and return the path. Only the person's attached client can call it. |
 | `send-keys` | Send key names such as `"ctrl+b,n"`. Keys are split on spaces and commas, so use `send-text` for ordinary text. |
+| `list-keys` | List the key names, modifiers and other tokens `send-keys` takes. A name that is not in the list is refused. |
 | `capture-pane` | Read a window's contents. See [Capturing windows](#capturing-windows). |
 | `run` | Type one command line at a pane's shell prompt, wait for it to finish, and return its exit code and output. Needs a shell that sends OSC 133 marks. |
 
@@ -152,6 +156,7 @@ The daemon currently implements 97 verbs, some of them only for one daemon to ca
 |------|---------|
 | `list-options` | Every settable option path with its type, default, accepted values and description. |
 | `get-option` | Read the value in effect, and whether it comes from the session or the defaults. |
+| `apply-config` | Apply `config.toml` now, including changes that give panes or linked machines more. Only the person may call it. |
 | `set-option` | Set an option by path, for example `appearance.dockbar_position`. The path and value are checked first. An attached client applies it live. |
 | `list-themes` | List the themes, built-in and imported. Name one to get its colours and their contrast. |
 | `list-glyphs` | List the glyph sets, and describe one. |
@@ -203,6 +208,9 @@ The daemon currently implements 97 verbs, some of them only for one daemon to ca
 | `review-diff` | Read what the agent in a pane changed against its base. |
 | `review-note` | Add, edit, remove, list or clear review notes on a pane's changes. |
 | `send-review` | Send a pane's unsent review notes to its agent, through the queue. |
+| `list-checkpoints` | List a pane's checkpoints: its git work tree, saved each time its agent finished a turn that changed a file. |
+| `checkpoint-diff` | Read what one turn changed. Nothing in the repository changes. |
+| `restore-checkpoint` | Put a pane's work tree back to a checkpoint, after a safety checkpoint. Refused while the agent works, unless `force`. |
 
 The verbs that act as the person need the nonce a client receives when it attaches, and refuse a caller inside a pane even when it has a copy.
 
@@ -219,8 +227,15 @@ The verbs that act as the person need the nonce a client receives when it attach
 | `fan` | Start one prompt in several agents, each in its own worktree and session. |
 | `compare-fan` | Compare the attempts of a fan: changes against the base and the last check. |
 | `verify-fan` | Run one check in every attempt of a fan. |
-| `keep-fan` | Keep one attempt of a fan and remove the others. |
+| `keep-fan` | Keep one attempt of a fan and remove the others. With `merge`, first merge its branch into its base, as `ship-merge` does. |
 | `bundle-worktree` | Read a worktree session's work out in chunks, for `tuios worktree pull`. |
+| `ship-commit` | Commit every change in a pane's work tree on its branch, with your own git identity, signing and hooks. |
+| `ship-merge` | Merge a worktree's branch into its base in the main checkout. A conflict is undone and fails with `merge_conflict`. |
+| `ship-push` | Push a pane's branch and set its upstream. Never forced. |
+| `ship-pr` | Push a pane's branch and open a pull request with your own `gh` login. |
+| `ship-status` | Read the pull request of a pane's branch and its checks. `refresh` asks `gh` now. |
+
+`ship-push` and `ship-pr` send nothing on the first call. They answer `confirm_required`: the hint's `available` lists what would be sent, and `confirm` carries a token. Call again with that token. A caller inside a pane or on a restricted connection also needs the person's `allow` in the Inbox, and the call waits for it (`wait`, default 120000 ms). See [Ship](/docs/ship) and [Checkpoints](/docs/checkpoints).
 
 ### Other machines
 
@@ -231,7 +246,9 @@ The verbs that act as the person need the nonce a client receives when it attach
 | `list-host-agents` | List agent windows here and on every configured host. |
 | `open-host-connection` | Turn this connection into a connection to the daemon on a host. |
 
-More verbs, `open-pane`, `pane-agent`, `pane-cwd`, `resize-pane`, `read-dir`, `close-pane`, `pane-calls`, `paste-pane-image` and `link-peer`, are what one daemon calls on another to run a window's process on a different machine. You do not normally call them yourself.
+More verbs, `open-pane`, `pane-agent`, `pane-cwd`, `resize-pane`, `read-dir`, `wait-dir`, `close-pane`, `pane-calls`, `paste-pane-image` and `link-peer`, are what one daemon calls on another to run a window's process on a different machine. You do not normally call them yourself.
+
+With `[agents] enabled = false`, every agent verb fails with `agents_disabled`, and so do the agent conditions of `wait-for`. See [Turn off agent features](/docs/agents-off).
 
 ### Events and waiting
 
@@ -240,6 +257,26 @@ More verbs, `open-pane`, `pane-agent`, `pane-cwd`, `resize-pane`, `read-dir`, `c
 | `subscribe` | Turn this connection into a stream of events. |
 | `unsubscribe` | Stop this connection's event stream. |
 | `wait-for` | Block until a condition matches, or fail with `timeout`. |
+
+## Clients
+
+`list-clients` takes no params:
+
+```json
+{"verb": "list-clients"}
+```
+
+```json
+{"result": {"type": "client_list", "clients": [
+  {"client_id": "client-1790941960197517900", "pid": 4242, "session": "work"}
+]}}
+```
+
+- `session` is empty while the connection is not attached.
+- `pid` is `0` on Windows and the BSDs.
+- For an SSH or web client, `pid` is the local server process, not the remote SSH process or the browser.
+
+The `client-session-changed` event follows the same connections. It carries `client_id`, `pid`, `session` and `attached`. `attached` is `true` when a client enters a session and `false` when it leaves, a disconnect while attached included. A session rename sends one event with the new name and `attached: true` for each client in the session.
 
 ## Capturing windows
 
@@ -295,7 +332,7 @@ Filter with `session`, `window` and `types`. Leave `types` out to receive everyt
 
 The acknowledgement carries `seq`, the last event number when the stream went live, and `boot_id`, a random id for this daemon start. Every event carries both. To resume after a disconnect, subscribe with `after_seq` and the `boot_id` it came with: the daemon replays the events it still holds after that seq, then carries on live. When it cannot replay everything you missed, a `gap` event comes first and names the reason (`evicted`, `boot_changed`, `not_retained` or `overflow`). Output events are never replayed. After a gap, read the current state again with `list-windows` or `list-agents`.
 
-The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `host-changed` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
+The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `client-session-changed`, `host-changed` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
 
 Events fire the same way whether a change came from a verb or from a person using the TUI. Window geometry changes do not produce events.
 
@@ -342,13 +379,20 @@ Codes are stable, so it is safe to branch on them.
 | `not_human` | Only the person at an attached client may make this call. |
 | `prompt_changed` | `respond` pressed nothing: the prompt is gone, is not the one `prompt_id` names, or was already answered. |
 | `risk_unacknowledged` | An allow of a risky approval did not name exactly the risk rules it matched. |
-| `confirm_required` | A write by selector carried no `confirm` token, or one for a different set of panes. Nothing was sent. |
+| `confirm_required` | A write by selector, a `ship-push` or a `ship-pr` carried no `confirm` token, or one for something other than what would be sent now. Nothing was sent. |
 | `queue_full` | The pane's queue holds as many messages as `[agents.queue] max` allows. |
 | `not_resumable` | No conversation the pane can resume was recorded. |
 | `no_shell_integration` | The pane's shell sends no OSC 133 marks, so `run` cannot tell where a command ends. |
 | `not_at_prompt` | `run` typed nothing because a command is running in the pane. |
 | `not_repo` | No git repository is under the pane, so there is nothing to review. |
 | `no_notes` | `send-review` found no unsent notes. |
+| `no_checkpoint` | The pane has no checkpoint by that number, or none at all. The hint lists the numbers it has. |
+| `nothing_to_commit` | `ship-commit` found no change, or `ship-push` or `ship-pr` found a branch with no commit. |
+| `merge_conflict` | `ship-merge` stopped on conflicts and undid the merge. The hint lists the files. |
+| `checkout_dirty` | `ship-merge` refused: the main checkout has uncommitted changes, a merge or rebase in progress, or another branch checked out. |
+| `no_remote` | `ship-push` or `ship-pr` found no remote to push to. |
+| `gh_unavailable` | The `gh` CLI is not installed or not logged in. |
+| `agents_disabled` | The verb is an agent feature, and `[agents] enabled = false` turned those off. |
 | `internal` | An unexpected failure inside the daemon. |
 
 ## Examples

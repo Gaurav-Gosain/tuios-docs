@@ -38,8 +38,9 @@ Two things live outside the file: custom themes in `~/.config/tuios/themes/` and
 | [`[appearance]`](#appearance) | Theme, backgrounds, borders, windows, mouse, tiling, dock. Sub-tables `scrollbar`, `selection` and `sidebar` |
 | [`[notifications]`](#notifications) | How long messages stay up, and agent alerts |
 | [`[keybindings]`](#keybindings) | The leader key and 23 sections of bindings |
-| [`[daemon]`](#the-daemon-table) | Daemon log level, agent detection and resuming agents |
+| [`[daemon]`](#the-daemon-table) | Daemon log level, agent detection, resuming agents, saved history and the size of a shared session |
 | [`[startup]`](#the-startup-table) | How a new session starts |
+| [`[launcher]`](#the-launcher-table) | How the app launcher starts a graphical program |
 | [`[tape]`](#the-tape-table) | Project tapes |
 | [`[debug]`](#the-debug-table) | The keycast overlay |
 | [`[screenshot]`](#the-screenshot-table) | Capture format, frame and fonts |
@@ -51,7 +52,8 @@ Two things live outside the file: custom themes in `~/.config/tuios/themes/` and
 | [`[dock]`](#the-dock-table) | Which components the bar draws, and your own |
 | [`[hosts]`](#the-hosts-table) | Other machines this daemon links to, and what each may do here |
 | [`[tailscale]`](#the-tailscale-table) | Which tailnet machines `tuios hosts add` offers |
-| [`[agents]`](#the-agents-table) | Approvals from the Inbox, risk rules, what a pane may do, the away recap and the queue |
+| [`[agents]`](#the-agents-table) | The switch for agent features, approvals from the Inbox, risk rules, what a pane may do, the away recap, the queue and checkpoints |
+| [`[notify]`](#the-notify-table) | Push notifications to your phone for Inbox items |
 | [`[hooks]`](#hooks) | Shell commands run on events |
 
 ## Applying changes
@@ -71,7 +73,7 @@ Most of the file applies live. These parts do not:
 | `scrollback_lines` | Panes opened afterwards |
 | Custom theme files | See [Custom themes](#custom-themes) |
 
-The daemon also follows the file for `[hosts]`, `[agents]` and `preferred_shell`. Removing a host closes its link at once. A change that gives panes or other machines more waits for `tuios config apply`. This covers a new host, a wider `[agents.permissions]` and a wider link policy. See [Changes that wait](/docs/agents#changes-that-wait).
+The daemon also follows the file for `[hosts]`, `[agents]`, `[notify]` and `preferred_shell`. Removing a host closes its link at once. A change that gives panes or other machines more waits for `tuios config apply`. This covers a new host, a wider `[agents.permissions]` and a wider link policy. See [Changes that wait](/docs/agents#changes-that-wait).
 
 ### Changing a setting at runtime
 
@@ -149,7 +151,7 @@ All keys below go under `[appearance]`.
 | `panel_padding` | `2` | 1 to 6 | Columns of padding inside overlay panels |
 | `motion` | `"full"` | `none`, `basic`, `full` | How much moves. `basic` animates window slides, zoom and the copy sweep. `full` adds the fade of a dialog opening (truecolor only), the shimmer on a working agent's row and the confetti. `none` moves nothing |
 | `modal_dim` | `30` | 0 to 90 | Dim the screen behind a dialog, in percent. `0` turns it off. At 16 colours the text goes faint instead |
-| `max_fps` | `0` | 0, or 10 to 120 | Frame rate cap. `0` means 60 |
+| `max_fps` | `0` | 0, 10 to 240, or `"auto"` | The highest frame rate TUIOS draws at. `0` means 60. See [below](#max_fps) |
 | `wrap_lists` | `true` | bool | Moving past the end of a list wraps to the other end |
 
 `animations_enabled`, the key `motion` replaces, is still read from older files: `false` reads as `motion = "none"`, and `true` changes nothing. Where both are set, `motion` wins.
@@ -159,6 +161,31 @@ All keys below go under `[appearance]`.
 Values: `rounded` (default), `normal`, `thick`, `double`, `block`, `outer-half-block`, `inner-half-block`, `ascii`, `hidden`, `glyphs`.
 
 `glyphs` uses the border of the active [glyph set](#glyph-sets). `hidden` also hides the window buttons and the scrollbar, because both are drawn on the border.
+
+#### max_fps
+
+`max_fps` is the highest frame rate TUIOS draws at. Your terminal and your monitor can show fewer frames. A value above what they can show does not make TUIOS smoother.
+
+```toml
+[appearance]
+max_fps = 144       # a number from 10 to 240
+# max_fps = "auto"  # the refresh rate of your display
+# max_fps = 0       # 60, the default
+```
+
+| Value | Frame rate |
+|-------|------------|
+| `0` | 60. This is the default |
+| `10` to `240` | That number. A value outside the range moves to the nearest end |
+| `"auto"` | The refresh rate of your display, from 10 to 240. If TUIOS cannot find the rate, it uses 60 |
+
+The settings page offers Auto, 30, 60, 90, 120, 144, 165 and 240. With Auto selected, the row shows the rate in use, for example `Auto (144)`. A change applies at once, with no restart.
+
+- **What you see.** TUIOS sends a frame to your terminal, and the terminal draws it on its own schedule. kitty and Ghostty draw at most once for each refresh of the monitor, so a 60 Hz monitor shows at most 60 frames a second. Over SSH, the network and the remote terminal set the limit too.
+- **What it costs.** TUIOS draws only when something on the screen changes. The terminal library under it still wakes at `max_fps` while TUIOS is idle. An idle TUIOS at 240 wakes about three times as often as at 60.
+- **How auto finds the rate.** TUIOS looks once in the background when it starts, and again when the config file reloads. Until the answer arrives, it draws at 60. On Wayland it asks `hyprctl` on Hyprland, `niri` on niri and `wlr-randr` on other wlroots compositors. On X11, or on another compositor, it asks `xrandr --current`. On macOS it asks `system_profiler SPDisplaysDataType`. On Windows it does not look, and uses 60.
+- **Several displays.** A terminal window cannot tell which display it is on, so auto uses the highest rate among them.
+- **Remote clients.** Over SSH, in `tuios-web` and in the SSH server, auto uses 60, because the displays on the machine are not the ones you see.
 
 ### Backgrounds
 
@@ -239,18 +266,15 @@ Any other `{...}` produces a validation warning and is drawn as written.
 | `right_click_opens_menu` | `false` | bool | In terminal mode, a plain right-click opens the pane menu |
 | `copy_on_select` | `true` | bool | Copy a mouse selection when you release the button |
 | `word_characters` | `"@-./_~?&=%+#"` | string | Punctuation that counts as part of a word on double-click |
-| `links` | `"all"` | `all`, `marked`, `off` | Which links <kbd>Shift</kbd>+click opens. See [below](#links) |
+| `links` | `"all"` | `all`, `marked`, `off` | The links TUIOS finds. `marked` finds only OSC 8 links. See [Links](/docs/links) |
+| `link_click` | `"both"` | `both`, `ctrl`, `shift`, `off` | The click that opens a link. `both` is <kbd>Ctrl</kbd>+click and <kbd>Shift</kbd>+click |
+| `link_opener` | `""` | a command | The command that opens a web link. TUIOS puts the URL where `%s` is, or at the end. Empty uses `$BROWSER`, then the system opener |
+| `nvim_navigation` | `false` | bool | Let the terminal-mode focus keys move through Neovim splits first. See [Neovim pane navigation](/docs/keybindings#neovim-pane-navigation) |
 | `kitty_placeholders` | `"auto"` | `auto`, `on`, `off` | Draw images placed with kitty Unicode placeholders |
 
-#### links
+#### Links
 
-<kbd>Shift</kbd>+click on a link opens it. Shift is the terminal's "this click is mine" modifier, so it works even when the program in the pane uses the mouse.
-
-- `marked` finds only OSC 8 hyperlinks, where the program says a run of cells is a link.
-- `all` (default) also finds plain `http`, `https` and `file` URLs in the text.
-- `off` finds none.
-
-Only `http`, `https`, `mailto`, `ftp` and `ftps` links go to your desktop's opener. Any other scheme is copied to the clipboard instead, with a notification. A `file://` link opens a file in a new pane running your editor, and a directory in the rail's files section. A remote client cannot open links, so it copies the address.
+<kbd>Ctrl</kbd>+click on a link opens it. <kbd>Ctrl</kbd>+drag still moves the pane: a link opens only when the pointer does not move. Only `http`, `https`, `mailto`, `ftp` and `ftps` links go to the opener. TUIOS copies other links. Under `ssh`, on a remote client, or on a machine with no desktop, TUIOS copies the URL, and your terminal can still open the link from the OSC 8 that TUIOS writes. If the opener fails, the dock says so and TUIOS copies the URL. See [Links](/docs/links) for the opener, the safety rules and a table of terminals.
 
 ### Scrolling
 
@@ -264,9 +288,12 @@ Only `http`, `https`, `mailto`, `ftp` and `ftps` links go to your desktop's open
 | Key | Default | Values | What it does |
 |-----|---------|--------|--------------|
 | `tiling_scheme` | `"spiral"` | `spiral`, `longest_side`, `alternate`, `smart_split` | BSP scheme a workspace starts with the first time it is tiled. A workspace already tiled keeps its own scheme. See [BSP tiling](/docs/bsp-tiling#how-new-windows-are-placed) |
-| `master_ratio` | `50` | 30 to 70 | Master pane width in the master-stack layout, in percent |
+| `master_ratio` | `50` | 10 to 90 | The share of the screen the master panes take in the master-stack layout, in percent |
+| `master_position` | `"left"` | `left`, `right`, `top`, `bottom`, `center` | The side the master panes take. With `center`, the stack panes go to the right and the left in turn |
+| `master_count` | `1` | 1 to 9 | How many panes are master panes |
+| `master_grid` | `true` | bool | With one master on the left, show four or more panes as a grid |
 | `scroll_column_width` | `55` | 20 to 100 | Column width in the scrolling layout, in percent |
-| `scroll_column_max` | `90` | 20 to 100 | Widest a scrolling column may be set to |
+| `scroll_column_max` | `90` | 20 to 100 | Widest a scrolling column may be set to. `100` lets a column fill the screen |
 | `niri_scroll_cells` | `8` | 1 to 200 | Cells the scrolling layout moves per wheel event |
 | `niri_reverse_scroll` | `false` | bool | Reverse the wheel in the scrolling layout |
 | `niri_click_reveals` | `true` | bool | Clicking a partly hidden column brings it fully on screen |
@@ -276,7 +303,7 @@ Only `http`, `https`, `mailto`, `ftp` and `ftps` links go to your desktop's open
 | `zoom_animation` | `true` | bool | Slide a pane into and out of zoom |
 | `zoom_follows_focus` | `true` | bool | Moving focus while zoomed zooms the pane you move to |
 
-The layout a new session starts in is `startup.layout`. See [The startup table](#the-startup-table).
+The layout a new session starts in is `startup.layout`. See [The startup table](#the-startup-table). Each workspace starts with the master-stack options, and the layout keys change the workspace on screen. See [Master-stack](/docs/layout-modes#master-stack).
 
 ### Dock
 
@@ -358,7 +385,7 @@ osc52_write = "focused"
 
 - When the focused pane copies text with a line break or a control character, the dock shows one line for that pane. A one-line copy shows nothing.
 - Each pane keeps one clipboard ask. A click copies only the text that the dock shows. If the text changes first, click the new message.
-- In each mode, the pane keeps its own copy. The program reads it back with an OSC 52 query.
+- A pane that runs without the daemon keeps its own copy of the text. The program reads it back with an OSC 52 query. A pane under the daemon keeps no copy, so an OSC 52 query there always gets an empty answer.
 - TUIOS drops a clipboard reply that answers no read request of TUIOS.
 
 Pastes, notifications, OSC 66 text and link addresses lose their control characters. A paste into a pane keeps its tabs and line breaks. Text that holds `ESC[201~` cannot end a bracketed paste early.
@@ -397,7 +424,7 @@ sections = "sessions:25,terminals,files:25,agents:34"
 ```
 
 - Separate sections with commas. Add `:N` for a share in percent.
-- The section names are `sessions`, `terminals`, `files`, `agents` and `git`. Leave a name out to hide that section.
+- The section names are `sessions`, `terminals`, `files`, `agents`, `git` and `custom`. Leave a name out to hide that section. See [The custom section](#the-custom-section).
 - A share is a ceiling, not a reservation. A section only takes the lines its rows fill. A section with no share takes what the others leave.
 - `spacer` draws nothing and takes lines. It is the only name you can repeat. A spacer with a share keeps that share. A spacer with no share takes the lines nothing else wants, which pushes what follows to the bottom.
 
@@ -421,20 +448,50 @@ The file keys are in `[keybindings.sidebar_files]` and work while the rail has t
 
 Delete uses the freedesktop.org trash in your home directory, so your desktop's trash shows the file and can restore it. <kbd>D</kbd> deletes permanently. Set `file_delete = "permanent"` to make <kbd>d</kbd> permanent too. The per-volume trash is not implemented.
 
+<kbd>Y</kbd> copies the absolute path of the selected file or folder. A folder's context menu has a **Copy path** row that does the same.
+
+On Windows, a shell under MSYS2 or Cygwin reports its folder as `/c/work`. TUIOS reads that as `C:\work`, by the rules of `cygpath`, so the files section lists the right folder.
+
+#### The custom section
+
+The `custom` section shows the output of a command you write. Place `custom` in `sections` and describe it in `[appearance.sidebar.custom]`:
+
+```toml
+[appearance.sidebar]
+sections = "sessions:25,terminals,custom:35,agents:30"
+
+[appearance.sidebar.custom]
+title   = "Brief"
+command = "agent-brief render"
+refresh = "event:window-focused,agent-state"
+```
+
+| Key | What it does |
+|-----|--------------|
+| `title` | The section's heading. Defaults to `Custom` |
+| `command` | Run with `sh -c`. Every line of stdout is a row |
+| `refresh` | `once` (the default), a duration such as `"30s"` (one second at least), or `event:TYPE[,TYPE...]` with the dock's event types. `push` is refused |
+
+The command follows the rules of a [dock component](#custom-components). It runs in the client, under a three second timeout, with bounded output. SGR colour stays, and every other control sequence is removed. A command that fails, times out or prints nothing leaves the title over an empty section. Five failures in a row stop it until the config reloads or you run `tuios refresh-dock rail/custom`. `tuios list-dock-components` lists it as `rail/custom`. Rows are cut to the rail's width and to the section's lines, with `… +N` for the rows below.
+
+Each run gets the client's environment and these variables: `TUIOS_SESSION`, `TUIOS_SOCKET`, `TUIOS_RAIL_SECTION` (`custom`), `TUIOS_RAIL_WIDTH`, `TUIOS_RAIL_HEIGHT`, `TUIOS_ACTIVE_PANE_ID` and `TUIOS_ACTIVE_PANE_CWD`. An event that arrives during a run causes one more run after it, so a quick focus change never leaves the old pane's rows on screen. The command does not run while the rail is hidden or folded.
+
+`sections` works with `tuios set-config`. `[appearance.sidebar.custom]` is read from the file only, so a program in a pane cannot change the command.
+
 #### Agent rows
 
 `[appearance.sidebar.agent_row]` chooses which tokens an agent row shows and styles each one, with optional rules that match on the token's value:
 
 ```toml
 [appearance.sidebar.agent_row]
-tokens = ["session", "need", "harness", "name", "elapsed", "context", "subagents", "meta", "now", "message"]
+tokens = ["session", "need", "harness", "name", "elapsed", "context", "subagents", "pr", "meta", "now", "message"]
 
 [[appearance.sidebar.agent_row.elapsed.rule]]
 gt = 30          # minutes in the current state
 fg = "warning"
 ```
 
-The `tokens` above are the shipped list. The other tokens are `state`, `host` and `prompt`. A `tokens` list you wrote keeps its own order and gets no new tokens, so add `subagents` to it to see the count. `need` says what a row wants from you, such as `approval` or `question`. `context` shows `ctx 84%` once the agent's context is 80% full. `now` is what a working agent is doing, such as `Bash: go test ./...`. `subagents` shows how many subagents a Claude Code agent has at work, such as `3 subagents`, on any row while any run. `meta` draws the other keys the pane reported with `tuios set-agent-meta`, and `$` followed by a key, such as `$model` or `$cost`, places one key. See [Session Rail](/docs/session-rail#agent-rows).
+The `tokens` above are the shipped list. The other tokens are `state`, `host` and `prompt`. A `tokens` list you wrote keeps its own order and gets no new tokens, so add `subagents` or `pr` to it to see them. `need` says what a row wants from you, such as `approval` or `question`. `context` shows `ctx 84%` once the agent's context is 80% full. `now` is what a working agent is doing, such as `Bash: go test ./...`. `subagents` shows how many subagents a Claude Code agent has at work, such as `3 subagents`, on any row while any run. `pr` shows the pull request of the session's worktree branch and its checks, such as `PR #12 open pass`. `meta` draws the other keys the pane reported with `tuios set-agent-meta`, and `$` followed by a key, such as `$model` or `$cost`, places one key. See [Session Rail](/docs/session-rail#agent-rows).
 
 Each rule has one test: `equals`, `contains`, `starts_with`, `gt` or `lt`. The first matching rule wins. A mistake in this table is a warning, not an error.
 
@@ -693,7 +750,10 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 | `persist_scrollback` | `true` | Save each pane's history with its session, and show it above a divider after a daemon restart or a reboot. The files can hold secrets. `false` stops this, and the daemon deletes the saved history when it next starts. See [Pane history](/docs/sessions#pane-history) |
 | `persist_scrollback_lines` | `0` | Most history lines one pane saves. `0` means 1000 |
 | `persist_scrollback_kb` | `0` | Most KiB one pane's saved history takes on disk, compressed. `0` means 2048 |
+| `window_size` | `"smallest"` | The size of a session that has more than one client: `smallest`, `largest` or `latest` (the client that last had input). The names are those of the tmux `window-size` option. See [Session size](/docs/sessions#session-size-with-more-than-one-client) |
 | `respond_from_shell` | `false` | Let `tuios respond`, run from a shell outside every pane, answer an agent's prompt. A caller inside a pane is refused either way. Not settable with `set-config` |
+
+To change `window_size` for one session while it runs, use `tuios set-config daemon.window_size latest -s NAME`. That value is not saved to the file. A change in the file applies when the daemon starts again.
 
 `tuios set-config daemon.log_level messages` changes the level of a running daemon at once. `verbose` and `trace` also log pane content, window titles and paths. `tuios logs` reads the log.
 
@@ -718,6 +778,19 @@ In the same way, v0.8.0 changed eight appearance defaults: the rail is on, on th
 </Callout>
 
 A session keeps its own layout once it is running. Attaching never rearranges a session to match your config.
+
+## The launcher table
+
+The app launcher starts a desktop entry in a new pane. A graphical program opens its own window, so its pane stays empty. Set `launcher.gui_command` to start such an entry with another command. The launcher adds the entry's argv to that command. Entries with `Terminal=true` and programs from `$PATH` still open in a pane.
+
+```toml
+[launcher]
+gui_command = "tuios-wayland launch --"   # or "niri msg action spawn --"
+```
+
+<Callout type="warn" title="Use a command that runs an argv">
+Do not use a command that joins its arguments into a shell line, such as `swaymsg exec --` or `hyprctl dispatch exec`. With such a command, the text of a desktop entry becomes shell code. Any installed package can write a desktop entry.
+</Callout>
 
 ## The tape table
 
@@ -834,7 +907,7 @@ The old `session` key is no longer used. TUIOS ignores it, and the config warnin
 
 ## The spotlight table
 
-`[spotlight]` lights one part of the screen and dims the rest, for screen sharing. <kbd>b</kbd> in window mode toggles it.
+`[spotlight]` lights one part of the screen and dims the rest, for screen sharing. <kbd>B</kbd> in window mode, or <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>B</kbd> in any mode, turns it on and off. While it is on, <kbd>Esc</kbd> in window mode or a click on the Spotlight chip in the dock turns it off. See [Spotlight](/docs/keybindings#spotlight).
 
 | Key | Default | Values | What it does |
 |-----|---------|--------|--------------|
@@ -868,7 +941,7 @@ on-click = "tuios new-window log -- git log --oneline -20"
 
 These lists are the default. A missing list uses the default. An empty list (`left = []`) draws nothing on that side.
 
-The built-in components are `mode`, `workspaces`, `trail`, `tape`, `windows`, `notifications`, `copy-help`, `cpu`, `ram`, `clock` and `session-controls`. Listing one lets it draw. It still needs its own condition, so `cpu` still needs `show_cpu`.
+The built-in components are `mode`, `workspaces`, `trail`, `tape`, `windows`, `notifications`, `copy-help`, `cpu`, `ram`, `clock` and `session-controls`. Listing one lets it draw. It still needs its own condition, so `cpu` still needs `show_cpu`. `copy-help` shows the keys of copy mode, multi copy mode and hints mode while the mode is open. See [Mode keys in the dock](/docs/keybindings#mode-keys-in-the-dock).
 
 `[dock.clock]` takes `format`, a Go time layout. A layout without seconds refreshes once a minute.
 
@@ -886,6 +959,8 @@ The built-in components are `mode`, `workspaces`, `trail`, `tape`, `windows`, `n
 With `push`, the command keeps running and each line it prints replaces the cell. With `event:`, the command runs again when the daemon reports one of those [hook events](/docs/hooks).
 
 A component whose command fails is hidden. `tuios list-dock-components` shows what each component last did and why a cell is missing. `tuios refresh-dock [name]` runs a component again now.
+
+A command runs in the client, with a three second timeout. TUIOS reads at most 64 KiB of its output and stops the command when it prints more. SGR colour stays. TUIOS removes other control sequences, C1 controls, bidirectional and invisible characters, and bytes that are not UTF-8. Wide characters and emoji stay.
 
 ## The hosts table
 
@@ -963,7 +1038,7 @@ allow = ["list", "mail"]
 | `mail` | Send and read agent mail, and use the stash |
 | `open` | Start sessions, windows, worktrees, fans and agents |
 | `write` | Type into panes, close and move windows, set options and names, report agent state, attach, and pull a worktree's work |
-| `respond` | Answer for you: prompts, held approvals, `ask-human` questions, dismissing Inbox items and passing on held mail |
+| `respond` | Answer for you: prompts, held approvals, `ask-human` questions, dismissing Inbox items and passing on held mail. Also type, from a pane on the other machine, into a pane here that waits on a prompt. The person at the other machine, outside every pane, needs only `write` for that |
 
 With no table, a machine may `list`, `mail`, `open` and `write`. `respond` is opt-in. An `allow` that is set replaces that list, and `allow = []` allows nothing. Anything not allowed is refused with `forbidden`.
 
@@ -1032,7 +1107,18 @@ build = "admin"
 
 ## The agents table
 
-`[agents]` sets how TUIOS treats the coding agents in its panes. It is outside `list-options`, and `set-config` cannot change it, so a program in a pane cannot loosen it. The daemon reads it at start and again whenever the file changes. See [Inbox and Review](/docs/agent-inbox) for what each part does.
+`[agents]` sets how TUIOS treats the coding agents in its panes. Except for `enabled`, it is outside `list-options`, and `set-config` cannot change it, so a program in a pane cannot loosen it. The daemon reads it at start and again whenever the file changes. See [Inbox and Review](/docs/agent-inbox) for what each part does.
+
+### Turn off agent features
+
+```toml
+[agents]
+enabled = false
+```
+
+`enabled` (default `true`) is the one switch for every agent feature. With it off, TUIOS is only a multiplexer: no agent detection, no agents section on the rail, no Inbox, mail, approvals or agent alerts, and agent commands stop with a message. The change applies at once. It is the first row of the settings page, "Agent features", and `tuios set-config agents.enabled false` from a shell outside TUIOS also sets it. A process in a pane cannot change it. See [Turn Off Agent Features](/docs/agents-off).
+
+### The other agent tables
 
 ```toml
 [agents.approvals]
@@ -1060,6 +1146,11 @@ test_patterns = ["go test", "pytest"]
 
 [agents.queue]
 max = 8                                 # at most 64
+
+[agents.checkpoints]
+enabled = true
+keep = 50                               # at most 1000
+max_untracked_mb = 50                   # a negative value means no limit
 ```
 
 | Key | Default | What it does |
@@ -1076,10 +1167,38 @@ max = 8                                 # at most 64
 | `recap.away` | `"10m"` | How long you must have been away from a pane for the dock to show its recap |
 | `recap.test_patterns` | built in | Commands that count as a test run in the recap, such as `go test` and `npm test` |
 | `queue.max` | `8` | Messages one pane's [queue](/docs/agent-inbox#replying-and-the-queue) holds |
+| `checkpoints.enabled` | `true` | Save the git work tree of an agent's pane each time the agent finishes a turn that changed a file. See [Checkpoints](/docs/checkpoints) |
+| `checkpoints.keep` | `50` | How many checkpoints one pane keeps, at most 1000 |
+| `checkpoints.max_untracked_mb` | `50` | Leave an untracked file larger than this many megabytes out of a checkpoint. `tuios checkpoint list` names the files left out, and a restore does not change them |
 
 After turning on `approvals.enabled`, run `tuios integration install` for that harness again, so its hook is the version that waits. The grants are `read`, `write`, `fan`, `respond` and `admin`. See [What a pane may do](/docs/agents#what-a-pane-may-do).
 
 A change to `[agents.permissions]` that gives panes less applies at once. A change that gives more, such as `strict` to `open`, waits. Run `tuios config apply` from a terminal outside TUIOS, or restart the daemon. See [Changes that wait](/docs/agents#changes-that-wait).
+
+## The notify table
+
+`[notify]` sends a push notification when the Inbox gets an item that waits for you. The daemon sends it, so it works when no client is attached. The providers are ntfy, Pushover and a webhook.
+
+```toml
+[notify]
+web_url = "https://term.example.com/"   # tuios-web, for a link to the item
+
+[notify.ntfy]
+url = "https://ntfy.sh/a-long-random-topic"
+token_file = "~/.config/tuios/ntfy-token"   # optional
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `enabled` | `true` | `false` turns every notification off. Nothing is sent without a provider |
+| `web_url` | `""` | The address of `tuios-web`. Each notification links to `web_url/inbox?item=ID` |
+| `content` | `"summary"` | `summary` sends the kind, the pane name and the line the Inbox shows. `title` sends only the kind and the session |
+| `quiet_active_seconds` | `120` | Hold a notification while you typed at an attached client in this many seconds. `0` sends at once |
+| `cooldown_seconds` | `60` | The shortest time between two notifications for the same pane and kind |
+| `max_per_hour` | `30` | The most notifications in one hour. `0` sets no limit |
+| `allow_http_redirects` | `false` | Let a provider redirect to a plain `http` address |
+
+`[notify.triggers]` selects the Inbox kinds: `approval`, `plan`, `question` and `ask` are on by default, `mail`, `errored` and `finished` are off. Like `[hosts]`, `[notify]` is not in `list-options`, and `tuios set-config` cannot change it. A new address or a new source for a secret waits for `tuios config apply` from a terminal outside TUIOS. `tuios notify test` sends a test notification through each provider. See [Push Notifications](/docs/push-notifications) for the providers and the secrets.
 
 ## Hooks
 

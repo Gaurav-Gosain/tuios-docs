@@ -1,0 +1,160 @@
+---
+title: Push Notifications
+description: Get an Inbox item on your phone through ntfy, Pushover or a webhook, and open the Inbox on it from the notification.
+icon: BellRing
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+The `[notify]` table sends a push notification when the [Inbox](/docs/agent-inbox) gets an item that waits for you. The daemon sends it, so it works when no client is attached. The link in the notification opens the Inbox on that item in [tuios-web](/docs/web).
+
+## Setting up
+
+Add one provider or more to `config.toml`. Each provider gets every notification.
+
+```toml
+[notify]
+web_url = "https://term.example.com/"   # tuios-web, for a link to the item
+
+[notify.ntfy]
+url = "https://ntfy.sh/a-long-random-topic"
+```
+
+Then apply it and try it:
+
+```bash
+tuios config apply      # from a terminal outside TUIOS
+tuios notify test
+```
+
+```
+ntfy (ntfy.sh): sent.
+pushover (api.pushover.net): sent.
+webhook (hooks.example.com): failed. The server answered 401 Unauthorized. Check the token.
+```
+
+`tuios notify test` sends a test notification through each provider and prints one line per provider. It exits `1` when a provider fails. `--json` prints `provider`, `host`, `ok` and `error` for each one. The command sends from its own process, not from the daemon, so it reads a `token_env` variable from your shell. The daemon reads it from its own environment.
+
+## When a notification is sent
+
+- An item sends a notification when its kind is on in `[notify.triggers]`. By default, the kinds that wait for you are on: `approval`, `plan`, `question` and `ask` (a question from `tuios ask-human`). The kinds that only report are off: `mail`, `errored` and `finished`.
+- While you typed into a pane at an attached client in the last `quiet_active_seconds`, the notification waits. When you stay away that long and the item is still open, TUIOS sends it.
+- Each item sends one notification at most. A repeated state report, or a new line on the same item, sends nothing.
+- `cooldown_seconds` is the shortest time between two notifications for the same pane and kind. `max_per_hour` limits all notifications together.
+- An item from a linked host sends nothing here. That host sends its own.
+
+## The full table
+
+```toml
+[notify]
+enabled = true
+web_url = "https://term.example.com/"
+content = "summary"                     # or "title"
+quiet_active_seconds = 120
+cooldown_seconds = 60
+max_per_hour = 30
+allow_http_redirects = false
+
+[notify.triggers]
+approval = true
+plan = true
+question = true
+ask = true
+mail = false
+errored = false
+finished = false
+
+[notify.ntfy]
+url = "https://ntfy.sh/a-long-random-topic"
+token_file = "~/.config/tuios/ntfy-token"   # optional
+priority = 4                                # optional, 1 to 5
+
+[notify.pushover]
+user_env = "PUSHOVER_USER"
+token_file = "~/.config/tuios/pushover-token"
+
+[notify.webhook]
+url = "https://hooks.example.com/tuios"
+token_env = "TUIOS_HOOK_TOKEN"              # optional, sent as a bearer token
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `enabled` | `true` | `false` turns every notification off. Nothing is sent without a provider |
+| `web_url` | empty | The address of tuios-web. Each notification links to `web_url/inbox?item=ID` |
+| `content` | `summary` | `summary` sends the kind, the pane name and the line the Inbox shows. `title` sends only the kind and the session |
+| `quiet_active_seconds` | `120` | Holds a notification while you are active at a client. `0` sends at once |
+| `cooldown_seconds` | `60` | The shortest time between two notifications for the same pane and kind |
+| `max_per_hour` | `30` | The most notifications in one hour. `0` sets no limit |
+| `allow_http_redirects` | `false` | Lets a provider redirect to a plain `http` address |
+
+## Providers
+
+- **ntfy**: `url` is the topic address. `priority` is 1 to 5. When it is unset, an item that waits for you gets 4 and other items get 3. The link goes in the `Click` header.
+- **Pushover**: your user key and an application token. `url` replaces the Pushover API address, for a relay.
+- **Webhook**: TUIOS sends a JSON `POST` to `url`. A token goes in an `Authorization: Bearer` header.
+
+The webhook body has these fields: `event` (`tuios.inbox`), `kind`, `title`, `body`, `link`, `urgent`, `item_id`, `session`, `window`, `harness`, and `test` for a test notification. At `content = "title"` the body is empty.
+
+```json
+{"event":"tuios.inbox","kind":"ask","title":"Question for you: ask-human","body":"Deploy to staging?\nSession main.","link":"https://term.example.com/inbox?item=10","urgent":true,"item_id":"10","session":"main"}
+```
+
+## Secrets
+
+Give each token in one of three ways. TUIOS uses the first one that is set.
+
+| Key | Source |
+|-----|--------|
+| `token` | The value, in `config.toml` |
+| `token_env` | An environment variable of the daemon. The daemon keeps the environment of the shell that started it |
+| `token_file` | A file that only you can read (mode 600 or 400) |
+
+Pushover reads the user key from `user`, `user_env` or `user_file` in the same way. TUIOS reads the value each time it sends, so a new token in the file applies at once.
+
+TUIOS never writes a token to its logs or its output. On a public ntfy server the topic address is a secret too, so the logs and `tuios notify test` show only the host.
+
+## How a notification is sent
+
+TUIOS sends each notification itself and needs no other program, such as curl.
+
+- It uses `HTTPS_PROXY`, `NO_PROXY` and the system certificates.
+- Each send waits at most 10 seconds.
+- It follows at most 3 redirects. A redirect to a plain `http` address is refused, unless you set `allow_http_redirects`.
+- A redirect to another host is always refused, for every provider, because the message and its token would go there. Set `url` to the address the server redirects to.
+
+## Applying a change
+
+The daemon reads `[notify]` when it starts, and again when the file changes.
+
+- A change that turns notifications off, or changes the triggers, applies at once.
+- A new address, or a new source for a secret, waits for `tuios config apply` from a terminal outside TUIOS, or a daemon restart. The daemon log says so.
+
+<Callout type="info" title="Why a new address waits">
+A program in a pane can write `config.toml`. The wait stops it from sending your Inbox to another address. Like `[hosts]`, `[notify]` is not in `tuios list-options`, and `tuios set-config` cannot change it.
+</Callout>
+
+## Opening the Inbox from a notification
+
+When `web_url` is the address of tuios-web, the link in a notification is `web_url/inbox?item=ID`. tuios-web answers it with a cookie that names the item, and sends the browser to the page. When the page connects, the Inbox opens with the cursor on that item. Answer it there as at any other client.
+
+- The link needs the same password as the page.
+- The cookie holds only the item number. It expires after 60 seconds.
+- An item that closed before you open the link leaves the cursor on the first item.
+- Behind a reverse proxy, set `web_url` to the address with the proxy's path. The link sends the browser back to that path.
+- With `--no-auth` and TLS, a browser can connect over WebTransport. Some browsers do not send the cookie there. Then the Inbox does not open by itself.
+
+See [Web Terminal](/docs/web).
+
+## Your own message
+
+For a message of your own, use a hook. The daemon runs `after-agent-state` with nobody attached too. See [Hooks](/docs/hooks).
+
+## Related
+
+<Cards>
+  <Card title="Inbox and Review" href="/docs/agent-inbox" description="The items a notification is about" />
+  <Card title="Web Terminal" href="/docs/web" description="tuios-web, where the link opens" />
+  <Card title="Agents" href="/docs/agents#alerts" description="Alerts in the terminal you are using" />
+</Cards>

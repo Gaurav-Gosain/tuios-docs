@@ -14,7 +14,7 @@ Tiling is a switch: on or off. When it is on, the panes follow one of three layo
 | Mode | What it does |
 |------|--------------|
 | BSP | A tree of splits. Any number of panes, each resizable on its own. The default. See [BSP Tiling](/docs/bsp-tiling). |
-| Master-stack | Fixed arrangements by pane count, with one master pane on the left. |
+| Master-stack | One or more master panes on one side, and the other panes in a stack beside them. |
 | Scrolling | Niri-style columns on a strip wider than the screen. The screen scrolls instead of every pane shrinking. |
 | Floating | Tiling off. Panes can overlap, and you move, snap and resize them. |
 
@@ -62,20 +62,41 @@ It needs an attached client.
 
 ## Master-stack
 
-The arrangement depends on how many panes the workspace has:
+The master-stack layout puts the first panes of a workspace in a master area and the other panes in a stack beside it. The master area is for the pane you work in most, such as an editor. The layout is close to dwm's tile layout and Hyprland's master layout.
 
-| Panes | Arrangement |
-|-------|-------------|
-| 1 | Full screen |
-| 2 | Side by side, or stacked when the screen is taller than it is wide as drawn |
-| 3 | A master pane on the left, two panes stacked on the right |
-| 4 or more | A grid: two columns up to six panes, three columns beyond. A short last row shares its width |
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `appearance.master_position` | `left` | The side the masters take: `left`, `right`, `top`, `bottom` or `center` |
+| `appearance.master_count` | `1` | How many panes are masters (1 to 9). The masters share the master area in equal parts |
+| `appearance.master_ratio` | `50` | The share of the screen the master area takes, as a percent (10 to 90) |
+| `appearance.master_grid` | `true` | With one master on the left, show four or more panes as an equal grid. `false` keeps the master and the stack at every pane count |
 
-`appearance.master_ratio` is the master pane's share of the screen, as a percent from 30 to 70 (default `50`). <kbd>&lt;</kbd> and <kbd>&gt;</kbd> in window management mode move it for the workspace you are on. A workspace nobody has changed starts at the configured value.
+With `center`, the first stack pane goes to the right, the next to the left, and so on. With only one stack pane, the master goes to the left. Two panes on a screen that is taller than it is wide stack one above the other.
 
-<Callout type="warn" title="Percentage resizes do not stick in master-stack">
-Master-stack recomputes every rectangle from `master_ratio` each time it retiles. A resize to a percentage (below) is dropped on the next retile. BSP keeps the split ratio, so the resize survives there.
-</Callout>
+Each workspace starts with these options. The keys below change the workspace on screen, and the workspace keeps the change. In a daemon session every attached client shows the same layout.
+
+| Key | Action | What it does |
+|-----|--------|--------------|
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>o</kbd> | `cycle_master_position` | Move the masters to the next side |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>Enter</kbd> | `swap_with_master` | Swap the focused pane with the master. On the master, swap with the first stack pane |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>m</kbd> | `focus_master` | Focus the master |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>i</kbd> | `add_master` | Make one more pane a master |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>L</kbd> <kbd>d</kbd> | `remove_master` | Make one pane fewer a master |
+| <kbd>&lt;</kbd> / <kbd>&gt;</kbd> (window mode) | `resize_master_shrink`, `resize_master_grow` | Narrow or widen the master area |
+| <kbd>=</kbd> (window mode), <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd> | `equalize_splits`, `prefix_equalize_splits` | Put the master back at `master_ratio` and give every other pane an equal share |
+
+```bash
+tuios set-layout --master-position center
+tuios set-layout --masters 2
+```
+
+### How a resize is kept
+
+A resize goes into the workspace's splits: the master ratio, and the share of every other pane. That covers each master, each stack pane, and each row and pane of the grid. The keyboard resizes, the [percentage resizes](#gaps-and-sizing) and a mouse drag on a divider all do this, so the resize survives a retile. A terminal resize is a retile too. When a pane opens or closes, the part of the layout it changes goes back to equal shares.
+
+With the master in the center, a resize moves one divider, and the next retile puts the master back in the middle at its new width. The splits are session state, so every client attached to the session lays the workspace out the same way.
+
+In every layout, a workspace keeps its splits when the session's size changes while the workspace is off screen. When you switch back, the panes fit the new size.
 
 ## Scrolling
 
@@ -105,13 +126,14 @@ These have palette entries and no default key. The action names can be bound in 
 
 | Palette entry | Action | What it does |
 |---------------|--------|--------------|
-| `Scroll: cycle column width` | `scroll_cycle_width` | Cycle the focused column through 33%, 50%, 55%, 67% and 90% of the screen |
+| `Scroll: cycle column width` | `scroll_cycle_width` | Cycle the focused column through 33%, 50%, 55%, 67% and 90% of the screen, and 100% when `scroll_column_max` is `100` |
+| `Scroll: maximize column width` | `scroll_maximize` | Widen the focused column to `scroll_column_max`, the widest the strip gives it |
 | `Scroll: move window into the column below` | `scroll_consume` | Pull the pane from the next column into the focused one, stacked below |
 | `Scroll: move window out to its own column` | `scroll_expel` | Move the focused pane out of its column into a new column to the right. Focus follows it, so expel undoes a consume |
 | none | `scroll_focus_left`, `scroll_focus_right` | Focus the column to the left or right |
 | none | `scroll_move_left`, `scroll_move_right` | Move the focused column left or right |
 
-A column's width is a share of the screen until you resize it with <kbd>&lt;</kbd> or <kbd>&gt;</kbd>, which pins it to a cell count. Cycling the width unpins it again.
+A column's width is a share of the screen until you resize it with <kbd>&lt;</kbd> or <kbd>&gt;</kbd>, which pins it to a cell count. Each press changes the width by four cells, from 20 cells up to `scroll_column_max`. Cycling the width unpins it again.
 
 ### Settings
 

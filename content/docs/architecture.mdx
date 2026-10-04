@@ -51,6 +51,10 @@ TUIOS is a Go program built on Bubble Tea v2 and its Model-View-Update pattern. 
 | `internal/tape` | Tape scripts: lexer, parser, executor, player, recorder |
 | `internal/guestenv` | The environment variables exported to shells in windows |
 | `internal/release` | Finding and verifying releases for `tuios update` |
+| `internal/tmuxcompat`, `internal/herdrcli`, `internal/shimlink` | The [tmux shim](/docs/tmux-shim), herdr's command line, and the `tmux` and `herdr` links that run TUIOS under those names |
+| `internal/pushnotify` | Inbox notifications to a phone through ntfy, Pushover or a webhook |
+| `internal/ghpr` | Reading and opening pull requests through your own `gh` CLI, for `tuios ship` |
+| `internal/refreshrate` | Finding the display's refresh rate, for `appearance.max_fps = "auto"` |
 | `internal/pool`, `internal/perf`, `internal/ui`, `internal/sound` | Buffer pools, latency measurement, animation easing, sound cues |
 | `internal/fuzz`, `internal/testutil` | Grammar-based fuzz input, and a fake shell for deterministic tests |
 | `pkg/tuios` | Embed TUIOS in another Bubble Tea program. See [Library](/docs/library). |
@@ -91,7 +95,7 @@ graph LR
 Where to look in `internal/session`:
 
 - `daemon.go`, `daemon_handlers.go`: the accept loop and per-message handling. `manager.go` owns the session table.
-- `protocol.go`, `codec.go`: length-prefixed frames with gob payloads, the binary protocol the client speaks.
+- `protocol.go`, `codec.go`: length-prefixed frames with gob payloads, the binary protocol the client speaks. A request the client waits for carries a request id in the frame header, and the daemon puts the same id on its answer, errors included. So a late or unexpected reply never answers the wrong request. The ids are used only when both sides support them, so an older client or daemon still works.
 - `wire_bounds.go`, `wire_gobscan.go`: the limits on what either side decodes. Any frame is at most 16 MB. A state update or a command result, the two payloads that can nest (a layout tree, a result's data), is held to 1 MB (768 KB on 32-bit builds) before it is decoded, and every payload is scanned first and refused if it nests past 1024 levels or defines more than 1024 types. After decoding, a layout deeper than 256 splits or larger than 16383 nodes is refused, and a pane's title and name are cut to 256 bytes. A frame over its size limit is skipped unread, so the connection stays in step. The same limits apply to a linked peer daemon.
 - `verb_protocol.go`, `verb_handlers.go`, `verb_subscribe.go` and the other `verb_*.go` files: the [JSON control protocol](/docs/control-protocol). The daemon tells a JSON client from a binary one by its first byte.
 - `daemon_stream.go`: the output stream clients subscribe to, so a client draws without owning a PTY.
@@ -121,6 +125,19 @@ The emulator sits behind the `vt.Terminal` interface, and exactly one implementa
 A differential test suite feeds the same bytes to both and compares screens, cursor, scrollback, modes and wire snapshots. `tuios --version` names the backend a binary was built with.
 
 The emulator handles CSI, OSC, ESC and DCS sequences, the alternate screen, scrollback (10,000 lines by default, `appearance.scrollback_lines`), cursor shapes, the kitty keyboard protocol, synchronized output (mode 2026), grapheme clustering (mode 2027, on by default in both backends, so a ZWJ emoji or a flag takes the two columns the host terminal draws it in), colour scheme reports (mode 2031), OSC 4, 10 to 12 and 52, OSC 133 shell integration zones, and cell size reports (CSI 14t, 16t, 18t).
+
+Programs in a pane ask the terminal what it is and what it supports. Both backends give the same answers:
+
+- **XTVERSION** (`CSI > q`) answers `tuios` and its version. **DA3** answers a unit id of zero.
+- **DA1** lists only what the emulator implements: `62;22`, or `62;4;22` when the attached clients can show sixel.
+- **DECRQM** reports a mode as set or reset only when the emulator implements it. An unknown mode is reported as not recognised. Mode 2027 is reported as permanently set.
+- **XTGETTCAP** answers from a fixed table, for example `TN` is `xterm-256color` and `RGB` is present.
+- **DECRQSS** answers for the pen (SGR) and the cursor shape (DECSCUSR).
+- **OSC 4, 10, 11, 12 and 52** replies end the same way the query ended, with BEL or ST. A query with several items gets an answer for each.
+- **modifyOtherKeys** (`XTMODKEYS`, `CSI > 4 ; n m`) is supported at levels 1 and 2, and `XTQMODKEYS` (`CSI ? 4 m`) reports the level. A pane with kitty keyboard flags uses those instead. The level survives a reattach.
+- **Mouse reports** use the X10, UTF-8 (1005), urxvt (1015) and SGR (1006) encodings. A click past column 223 is not reported in the X10 form, because that form cannot carry it.
+- The main and the alternate screen each have their own kitty keyboard stack.
+- Under the daemon, an OSC 52 read gets an empty answer, because a daemon pane keeps no clipboard copy.
 
 ### Rendering (`internal/app/os_render.go`, `render_*.go`)
 
@@ -162,6 +179,8 @@ Kitty graphics (`internal/app/kitty_*.go`):
 
 Sixel (`internal/app/sixel_passthrough.go`) is passed through as is. An image that does not fit inside its window is hidden, because pixel-level clipping is not implemented.
 
+Under the daemon, the daemon answers a program's kitty graphics query (`a=q`) itself. It answers only when an attached client's terminal shows kitty graphics. Otherwise the query gets no answer, as from a terminal without kitty graphics, so a program such as yazi, icat or timg uses its text fallback. With no client attached, the last answer stands.
+
 TUIOS asks the host terminal what it supports at startup instead of guessing, and waits up to 300 ms for the answer. It then gives programs the real answer: a program that asks whether it may send a file path is told no when the host cannot read files, and falls back to sending bytes. If no answer arrives in time (for example when TUIOS runs inside another multiplexer that swallows the query), graphics forwarding is turned off and programs are told so.
 
 Host terminals known to work include Kitty, Ghostty, WezTerm, Foot, Contour and iTerm2 (partly). Support is detected, not looked up, so an unlisted terminal works if it answers the probe. The browser client supports a smaller set; see [Web Terminal](/docs/web#graphics-in-the-browser).
@@ -179,7 +198,8 @@ These environment variables override detection. Set each to `1` or `0`:
 
 Rendering is event-driven. PTY output wakes the model through a `PTYDataMsg`; there is no fixed-rate loop for terminal content. A separate maintenance tick drives animations, the which-key panel, dock stats and tape playback, and it stops doing work when nothing needs it. An idle session costs close to no CPU.
 
-- `appearance.max_fps` caps the frame rate. It defaults to 60 and is clamped to 10 to 120, the ceiling Bubble Tea itself enforces. The settings page offers 30, 60, 90, 120 and `unlimited`, which means 120.
+- `appearance.max_fps` caps the frame rate. `0`, the default, means 60. A number from 10 to 240 sets the rate, and `"auto"` uses the refresh rate of your display. See [Configuration](/docs/configuration).
+- After 500 ms without a frame, the frame ticker slows down. A key, a mouse event or new output wakes it at once.
 - Each window paces its redraws by what a frame actually costs, at most one every 8 ms. A window more than 4 MiB behind on output drops to a catch-up rate, so a flooding window cannot starve input.
 - Windows that are off screen or minimized are not rendered.
 - `internal/app/stylecache.go` caches cell styles and their ANSI escapes, keyed by a hash of colours and attributes. It holds 512 entries and drops about half when full. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>c</kbd> shows its hit rate.

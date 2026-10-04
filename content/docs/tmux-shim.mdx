@@ -1,0 +1,258 @@
+---
+title: tmux Shim
+description: Run tools that drive tmux, such as Claude Code agent teams and fzf --tmux, inside TUIOS. Their panes open as TUIOS panes.
+icon: Columns2
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+Some tools drive tmux to open panes for their own workers. Claude Code agent teams is the main one: it opens one tmux pane per teammate, starts the teammate in it, and closes it when the teammate is done. Inside TUIOS there is no tmux, so those teammates cannot get panes.
+
+`tuios tmux-shim` runs one command with a `tmux` that answers in the TUIOS session you ran it from. Each teammate then opens as a TUIOS pane: on the rail, in the Inbox, with its agent state, beside the pane that started it.
+
+The shim is off until you run it. It changes nothing outside the command it starts.
+
+## Turn it on
+
+In a TUIOS pane:
+
+```bash
+tuios tmux-shim -- env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude
+```
+
+Claude Code sees `TMUX`, picks its tmux backend, and opens every teammate as a pane on the same workspace, named after the teammate. The panes close when the teammates finish.
+
+- Flags after the command belong to the command: `tuios tmux-shim claude --resume` passes `--resume` to `claude`.
+- With no command, the shim starts your shell. Every `tmux` call from that shell goes to the shim.
+- `tuios tmux <tmux arguments>` asks the shim directly, from any TUIOS pane: `tuios tmux list-panes -F '#{pane_id} #{pane_title}'`.
+
+`tuios tmux-shim [--log FILE] [--log-all] [-- command [args...]]` does three things:
+
+- It puts a link named `tmux`, which points to the TUIOS binary, first on `PATH`. The link is in `tmux/bin/` beside the daemon socket.
+- It sets `TMUX` to name the shim as the tmux server, and `TMUX_PANE` to the pane you ran it in.
+- It runs the command with that environment.
+
+A `tmux` call whose `TMUX` is unset or names a real tmux server, or whose `-L` or `-S` names another server, goes to the next `tmux` on `PATH`. So a real tmux keeps working inside the command.
+
+The shim needs a TUIOS pane (`TUIOS_SESSION` and `TUIOS_PANE_ID`). It is not available on Windows.
+
+## Tools outside TUIOS
+
+A tool outside TUIOS can drive TUIOS as a tmux server, for example a phone bridge such as [Collie](https://github.com/AltanS/collie) or a script in another terminal. Make a link named `tmux` to the TUIOS binary, and give the shim's socket to `-S`:
+
+```bash
+mkdir -p ~/.local/lib/tuios-tmux
+ln -sf "$(command -v tuios)" ~/.local/lib/tuios-tmux/tmux
+~/.local/lib/tuios-tmux/tmux -S "$XDG_RUNTIME_DIR/tuios/tmux/socket" list-sessions
+```
+
+Without `XDG_RUNTIME_DIR`, the socket is `/tmp/tuios-<uid>/tmux/socket`. Do not put the link on your `PATH`: a call without `-S` and without `TMUX` goes to the real tmux. A call with `-S` that names the shim's socket always goes to the shim.
+
+For Collie, set `COLLIE_MUX=tmux`, `COLLIE_TMUX_BIN` to the link and `COLLIE_MUX_ENDPOINT_TMUX` to the socket path. Its panes show as shells, because tmux has no agent state.
+
+Outside a pane, every TUIOS session is a tmux session:
+
+- A session's id is `$N`. N comes from the TUIOS session id, so a rename does not change it.
+- A window's id is `@N`, where N is the session's number times 1000 plus the workspace number.
+- `new-session -d` starts a TUIOS session.
+- `list-clients` lists one client for each session that a TUIOS client shows.
+
+## How tmux maps onto TUIOS
+
+| tmux | TUIOS |
+|------|-------|
+| the server's one session | the TUIOS session the command runs in |
+| every session, outside a pane | every TUIOS session |
+| a window, `@N` | workspace N |
+| a pane, `%N` | a TUIOS window. N comes from the window id, so a pane keeps its id across calls |
+
+A target names a pane by `%N`, by the TUIOS window id after a `%` (or a prefix of at least four characters), or the tmux way: `session:window.pane`, `@N`, `:N.M`, a workspace name, a session name or `$N`. In a pane, nothing reaches another session. A target that names one fails with `can't find session`.
+
+## Commands
+
+| Command | What the shim does |
+|---------|--------------------|
+| `split-window` | Opens a pane on the target pane's workspace. `-d`, `-c`, `-e` and `-P -F` work. The TUIOS layout decides where the pane goes, so `-h`, `-v`, `-b`, `-f`, `-l` and `-p` change nothing |
+| `new-window` | Opens a pane on the lowest empty workspace, or the empty one `-t` names. `-n` names the workspace |
+| `send-keys` | Types into a pane. Key names (`Enter`, `C-c`, `M-x`, `Up`, `F1`, `BSpace`) become the bytes a terminal sends. `-l` types text, `-H` takes hex bytes, `-N` repeats |
+| `capture-pane -p` | Prints a pane. `-S` and `-E` take tmux line numbers, `-e` keeps the colours |
+| `display-message -p` | Prints a format for the target pane. Without `-p` it does nothing |
+| `list-panes`, `list-windows`, `list-sessions`, `list-clients` | List panes (`-s` of the session, `-a` of every session), workspaces that hold panes, sessions, and clients |
+| `has-session` | Succeeds for a session the shim serves |
+| `new-session -d` | Outside a pane, starts a TUIOS session. Refused in a pane |
+| `kill-pane`, `kill-window` | Close a pane, or every pane of a workspace |
+| `select-pane` | Focuses a pane, or with `-L -R -U -D` the target's neighbour, found from the pane positions. `-T` names the pane |
+| `last-pane` | Focuses the pane that was active before, from the workspace's focus history |
+| `select-window`, `next-window`, `previous-window`, `rename-window` | Show a workspace, or the next or previous one that holds panes, and name a workspace |
+| `break-pane` | Moves a pane to the lowest empty workspace, or the empty one `-t` names |
+| `join-pane`, `move-pane` | Move the `-s` pane to the workspace of the `-t` pane |
+| `rename-session` | Renames a session |
+| `respawn-pane -k` | Replaces the process of a pane the shim opened. See [The pane holder](#the-pane-holder) |
+| `display-popup` | Opens a TUIOS popup and returns when its command exits |
+| `run-shell`, `if-shell` | Run a shell command as you |
+| `wait-for` | Waits on a channel, signals it (`-S`), or locks (`-L`) and unlocks (`-U`) it |
+| `set-buffer`, `load-buffer`, `paste-buffer`, `show-buffer`, `save-buffer`, `list-buffers`, `delete-buffer` | Paste buffers |
+| `show-environment`, `set-environment` | The environment of the panes the shim opens |
+| `show-options`, `show-window-options` | Print the options that describe TUIOS, such as `window-size`, `base-index 1` and `history-limit` |
+| `set-option window-size` | Sets the session's `daemon.window_size` to `smallest`, `largest` or `latest` |
+| `-V` | Prints `tmux 3.4` |
+
+- `set-option` of any other option, `set-hook`, `refresh-client`, `select-layout`, `resize-pane` and `start-server` succeed and do nothing. TUIOS owns the layout, the styling and the options.
+- `swap-pane`, `kill-session`, `kill-server`, `attach-session` (outside control mode), `switch-client` and `detach-client` are refused. The shim never attaches a terminal or ends a session.
+- Every other command fails with `unknown command`. A flag that is not listed fails with `unknown flag`. The shim does not accept a flag and then ignore it.
+- `show-options history-limit` prints the session's `appearance.scrollback_lines`, or `10000` when nothing set it.
+
+### Command names and command lines
+
+A command name can be any prefix that names one command, as in tmux: `show-option` is `show-options`, and `list-pa` is `list-panes`. A prefix of more than one command fails with tmux's error:
+
+```
+ambiguous command: kill-se, could be: kill-server, kill-session
+```
+
+A line can hold several commands, separated by `;` (`tmux a \; b`).
+
+## Formats
+
+Format strings (`-F`, `display-message -p`) follow the format language of tmux 3.4:
+
+- `#{name}`, the one-letter aliases (`#D #F #H #h #I #P #S #T #W`), and the escapes `##`, `#,` and `#}`.
+- Conditionals: `#{?cond,then,else}`.
+- Comparisons: `#{==:a,b}`, `#{!=:a,b}`, `#{<:a,b}`, `#{>:a,b}`, `#{<=:a,b}`, `#{>=:a,b}`, `#{||:a,b}` and `#{&&:a,b}`.
+- Matches: `#{m:pattern,text}`, with `m/r` for a regular expression and `i` to ignore case.
+- Modifiers: `l` (literal), `b` and `d` (base and directory name), `=N`, `=-N` and `=/N/marker` (truncate), `pN` and `p-N` (pad), `n` (length), `w` (width), `q` (quote for the shell), `E` and `T` (expand again), `t` and `t/p` (time), `a` (a character), and `s/pattern/with/flags` (substitute). Join several with `;`, as in `#{=10;s/x/y/:pane_title}`.
+
+```bash
+tuios tmux list-panes -F '#{pane_id} #{?pane_active,*, } #{=20:pane_title}'
+```
+
+The loop modifiers (`S`, `W`, `P`, `L`), `N`, `C`, `c`, `e`, `q/e` and the strftime form of `t` are not supported. They expand to nothing and are logged. `#(command)` runs no command.
+
+The shim fills the session, window and pane variables tools use, among them `session_name`, `session_id`, `window_id`, `window_index`, `window_name`, `window_layout`, `window_zoomed_flag`, `pane_id`, `pane_index`, `pane_title`, `pane_current_path`, `pane_current_command`, `pane_active`, the pane size and edge variables, `pane_pid`, `pane_tty`, `history_size`, `pid`, `version` and `tuios_window_id`. `list-clients` and `list-buffers` add their own variables. A variable the shim cannot fill expands to nothing, as in tmux, and is logged. Some values come from TUIOS facts:
+
+- `pane_current_command` is the program in the pane's foreground. At a shell prompt it is the base name of `$SHELL`.
+- `pane_pid` is the process the pane started, and `pane_tty` its terminal device. A pane the shim opened runs its pane holder first, so its `pane_pid` is the holder's. A pane on another machine has neither.
+- `pid` is the daemon's process id: the daemon is the shim's tmux server.
+- `window_zoomed_flag` is `1` when a pane of the workspace is zoomed, and `window_flags` then holds `Z`.
+- `window_layout` is a tmux layout string built from the pane positions. `select-layout` with such a string changes nothing.
+- `client_tty` is empty. TUIOS does not name its clients' terminals.
+
+## Popups, shell commands and channels
+
+### display-popup
+
+`display-popup` opens a TUIOS popup on the target pane's workspace and returns when the popup's command exits. This is what `fzf --tmux` needs: fzf runs itself in the popup and reads the choice when the `tmux` call returns.
+
+- One argument is a shell command line, several are an argv, and none starts your shell.
+- `-d` sets the directory, `-w` and `-h` the size (cells, or a percentage such as `80%`), `-T` the name, and `-e` the environment.
+- The popup needs a TUIOS client attached to the session.
+- TUIOS places the popup and draws its border, so `-x`, `-y`, `-b`, `-B`, `-s` and `-S` are accepted and logged. `-C` is refused.
+
+### run-shell and if-shell
+
+`run-shell` runs a command with `/bin/sh` and prints its output. `-C` runs a tmux command line instead, `-b` returns at once, and `-d` waits that many seconds first. A command that fails prints `'command' returned N`, and the shim exits with N.
+
+`if-shell` runs its first tmux command when the shell command succeeds, or with `-F` when the format is true. It runs the second, if given, when it does not. The shim waits for the shell command even with `-b`, and logs that.
+
+The shim runs these commands itself, as you, from the process that called it. They reach nothing you could not reach by running the command yourself. Formats in the command are expanded first. A value that a program in a pane sets, such as a title, lands in the command as it is, so quote it with `#{q:...}`.
+
+### wait-for
+
+`wait-for CHANNEL` blocks until another call runs `wait-for -S CHANNEL`. A signal sent while nobody waits is kept for the next wait, as in tmux. `wait-for -L CHANNEL` takes the channel's lock and blocks while another call holds it. `wait-for -U CHANNEL` hands the lock to the next caller, or frees it.
+
+```bash
+tuios tmux wait-for build-done &      # in one shell
+tuios tmux wait-for -S build-done     # in another
+```
+
+### Paste buffers
+
+A paste buffer is a file in `tmux/buffers/` beside the daemon socket, readable only by you, so a buffer stays between calls. Without `-b`, the newest buffer is used. A new buffer without `-b` is named `buffer0000`, `buffer0001` and so on.
+
+`paste-buffer` types the buffer into the target pane:
+
+- Each line feed becomes a carriage return. `-s` sets another separator, and `-r` keeps the line feeds.
+- Control characters other than tab, line feed and carriage return are removed.
+- With `-p`, the text is wrapped in bracketed paste when the program in the pane turned it on.
+- `-d` deletes the buffer after the paste.
+
+The paste goes through `send-text`, so the daemon holds it to the caller's pane grants. `save-buffer` writes the file as you. It refuses a path in the shim's own directory.
+
+### Environment
+
+`set-environment NAME VALUE` sets a variable for the panes the shim opens in the session. `-g` sets it in every session.
+
+- `-r` removes it from new panes, and `-u` forgets it.
+- `-h` hides it from `show-environment` without `-h`.
+- `-F` expands the value as a format.
+
+The panes that `split-window`, `new-window`, `respawn-pane`, `new-session` and `display-popup` start get the global variables, then the session's, then the ones `-e` gives. `show-environment` prints `NAME=value`, `-NAME` for a removed one, or shell commands with `-s`. TUIOS copies nothing into a session's environment when a client attaches, so tmux's `update-environment` has no counterpart.
+
+## Control mode
+
+`tmux -C` and `tmux -CC` start a control client. It reads commands from standard input, one per line, and attaches to the session that `attach-session -t` names, or to the caller's session.
+
+```bash
+printf 'list-windows\n' | tuios tmux -C attach-session -t work
+```
+
+- Each command's output comes between `%begin` and `%end`, or `%error` when the command fails.
+- A command with no target acts on the attached session and its active pane.
+- `attach-session -r` or `-f read-only` makes a read-only client. It can run only commands that change nothing.
+- `attach-session -f no-output` stops the `%output` lines. `-CC` wraps the output in the DCS sequence that iTerm2 expects.
+
+The shim sends `%session-changed`, `%output`, `%window-add`, `%window-close`, `%window-renamed`, `%layout-change`, `%window-pane-changed`, `%session-window-changed`, the `%unlinked-window-*` notifications, `%sessions-changed`, `%session-renamed` and `%exit`.
+
+<Callout type="warn" title="%output carries no bytes">
+The daemon's event stream says that a pane printed, not what it printed. So a `%output %N` line carries no bytes, and a client that draws panes from `%output`, such as iTerm2 with `-CC`, shows each pane as it was when it last read it with `capture-pane`.
+</Callout>
+
+The shim does not send `%pause`, `%continue`, `%extended-output`, `%subscription-changed`, `%pane-mode-changed`, `%client-session-changed`, `%client-detached`, `%paste-buffer-changed`, `%paste-buffer-deleted`, `%message` or `%config-error`. It does not support flow control (`refresh-client -A`, `-f pause-after`) or format subscriptions (`refresh-client -B`).
+
+## The pane holder
+
+Claude Code opens each teammate's pane with `cat` as a placeholder, then replaces it with `respawn-pane -k` and the teammate's command. A TUIOS window's process cannot be swapped from outside, so every pane the shim opens runs `tuios tmux-pane`, a small holder.
+
+- The holder runs the pane's command as its child, in the terminal's foreground. So <kbd>Ctrl</kbd>+<kbd>C</kbd> reaches the command, and agent detection sees the command, not the holder.
+- On `respawn-pane`, the holder ends the child's process group (SIGHUP, then SIGKILL after two seconds) and starts the new command.
+- When the command exits, the holder exits with its status and the pane closes.
+
+`respawn-pane` works only on panes the shim opened. The pane's processes see `TMUX` and `TMUX_PANE`, so a tool that calls `tmux` from such a pane reaches the shim too.
+
+## The log
+
+Every call the shim could not fully answer is one JSON line in `$XDG_STATE_HOME/tuios/tmux-shim.log`, or the file `--log` names. `--log-all` records every call.
+
+```json
+{"time":"2026-09-23T16:19:27Z","argv":["tmux","bind-key","<2 redacted>"],"outcome":"unsupported","detail":["unknown command: bind-key"]}
+```
+
+`outcome` is `ok`, `ignored`, `partial`, `unsupported` or `error`. The log never records what was typed or run: text arguments, `VAR=value` pairs and the arguments of unknown commands are replaced with a marker. The file has mode `0600` and moves to `tmux-shim.log.1` past 1 MiB.
+
+## What it can reach
+
+The shim grants nothing. It runs as you and calls verbs the TUIOS CLI already has. In a pane, every call names the caller's own session, so a stray `-t` cannot touch another session.
+
+The daemon holds every verb the shim calls to the caller's [pane grants](/docs/agents#what-a-pane-may-do). A pane without `admin` cannot `split-window`, `new-window`, `kill-pane`, `kill-window`, `select-pane`, `select-window` or `rename-window`: they fail with `forbidden`. From such a pane, `respawn-pane` works only on the caller's own pane. `run-shell`, `if-shell`, `save-buffer` and `wait-for` do not go through the daemon. They reach only what the calling process could reach without the shim.
+
+<Callout type="warn" title="Not a sandbox">
+A process under the shim can still run the TUIOS CLI and reach what its pane's grants allow. To hold an agent to its own session, use `tuios mcp`, or give its pane fewer grants.
+</Callout>
+
+With `[agents] enabled = false`, a pane without the `respond` grant can type only into a pane it opened, or a pane whose own shell is at its prompt. So `split-window` and then `send-keys` into the new pane still work. To let every pane type into other panes, give panes `respond`:
+
+```toml
+[agents.permissions]
+grants = ["admin", "respond"]
+```
+
+See [Turn off agent features](/docs/agents-off).
+
+## Related
+
+<Cards>
+  <Card title="herdr Compatibility" href="/docs/herdr-compatibility" description="Tools built for herdr, on TUIOS" />
+  <Card title="Agents" href="/docs/agents" description="Agent state, grants and teams" />
+  <Card title="CLI Reference" href="/docs/cli-reference#tmux-shim-and-tmux" description="tmux-shim and tmux flags" />
+</Cards>

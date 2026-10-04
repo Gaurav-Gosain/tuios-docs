@@ -19,12 +19,14 @@ The rail is on by default, on the right edge, 24 columns wide.
 |-----|--------------|
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>b</kbd> | Show or hide the rail |
 | Palette: `Toggle sidebar` | The same |
-| `appearance.sidebar.enabled` | Whether it shows on every start. Default `true` |
+| `appearance.sidebar.enabled` | Whether a new session shows it. Default `true` |
 
 ```bash
 tuios set-config appearance.sidebar.enabled false
 tuios set-config appearance.sidebar.position left
 ```
+
+In a daemon session, the rail belongs to the session. When you show or hide it on one client, every client of the session shows or hides it, and the panes take the new space on every client. A new session takes the setting of the first client that attaches. When you toggle the rail, TUIOS also keeps the new value in your config for the next new session. A reload of the config file does not change the rail of a running session. The width of the rail stays per client. See [The rail with more than one client](/docs/sessions#the-rail-with-more-than-one-client).
 
 `position` is `right` (default), `left` or `hidden`. `width` is the preferred width in columns on a wide screen (default `24`). A config file that sets `enabled`, `position` or `width` keeps its value, so an install from before v0.8.0 whose file names them keeps the old rail. On a narrow screen, or after <kbd>&lt;</kbd>, the rail collapses to a one-column strip of marks. Hover the strip for a label (`tooltips`).
 
@@ -37,6 +39,7 @@ tuios set-config appearance.sidebar.position left
 | `files` | The focused pane's directory. The list updates when a file is added, removed or renamed. See [the files section](/docs/configuration#the-files-section) |
 | `agents` | Every pane running a coding agent, with its state. See [Agents](/docs/agents) |
 | `git` | The focused pane's repository, branch, and how far it is ahead of or behind its upstream |
+| `custom` | The output of a command you write, one row per line. See [The custom section](/docs/configuration#the-custom-section) |
 
 `appearance.sidebar.sections` is one string that says which sections the rail draws, in what order, and the most each may take:
 
@@ -45,7 +48,7 @@ tuios set-config appearance.sidebar.position left
 sections = "sessions:25,terminals,files:25,agents:34"
 ```
 
-A name left out is a section the rail does not draw. The percent is a ceiling, not a reservation. `spacer` is an empty block you can repeat to add a gap or push the next section to the bottom. The `git` section is not in the default layout, so add it by name:
+A name left out is a section the rail does not draw. The percent is a ceiling, not a reservation. `spacer` is an empty block you can repeat to add a gap or push the next section to the bottom. The `git` and `custom` sections are not in the default layout, so add them by name:
 
 ```toml
 [appearance.sidebar]
@@ -86,7 +89,7 @@ While the rail has the keyboard, these keys from `[keybindings.sidebar]` apply:
 | <kbd>&lt;</kbd> / <kbd>&gt;</kbd> | Collapse or expand the rail. On the divider, move the split |
 | <kbd>?</kbd> | Show the rail's keys |
 
-On a row of the files section, `[keybindings.sidebar_files]` answers first: <kbd>a</kbd> create, <kbd>r</kbd> rename, <kbd>d</kbd> delete to the trash, <kbd>D</kbd> delete permanently, <kbd>y</kbd> copy, <kbd>x</kbd> cut, <kbd>p</kbd> paste.
+On a row of the files section, `[keybindings.sidebar_files]` answers first: <kbd>a</kbd> create, <kbd>r</kbd> rename, <kbd>d</kbd> delete to the trash, <kbd>D</kbd> delete permanently, <kbd>y</kbd> copy, <kbd>x</kbd> cut, <kbd>p</kbd> paste, <kbd>Y</kbd> copy the absolute path.
 
 On an agent row, `[keybindings.sidebar_agents]` answers first:
 
@@ -112,7 +115,7 @@ The search stops after about 2.5 seconds and skips `.git`, `node_modules`, `.ven
 
 - Click a session to switch to it, or a pane to focus it.
 - Click the `+` on a section header to make a session or a terminal. The `+` beside a machine makes a session on that machine.
-- Right-click a row for its menu.
+- Right-click a row for its menu. A folder's menu has **Copy path**, which copies its absolute path.
 - Hover a row whose title is too long and it scrolls (`marquee`).
 - Click a folder in the files section to walk into it (`folder_click`).
 
@@ -153,12 +156,14 @@ On a rail 30 columns wide or narrower, a pane running an agent is listed once, i
 ```toml
 [appearance.sidebar.agent_row]
 # the shipped list; state, host, prompt and $key are the others
-tokens = ["session", "need", "harness", "name", "elapsed", "context", "subagents", "meta", "now", "message"]
+tokens = ["session", "need", "harness", "name", "elapsed", "context", "subagents", "pr", "meta", "now", "message"]
 
 [[appearance.sidebar.agent_row.elapsed.rule]]
 gt = 30
 fg = "warning"
 ```
+
+`pr` shows the pull request of the session's worktree branch and its checks, such as `PR #12 open pass`. A `tokens` list you wrote gets no new tokens, so add `subagents` or `pr` to it to see them.
 
 A rule has exactly one test (`equals`, `contains`, `starts_with`, `gt` or `lt`) and sets `fg`, `bold` or both. For `elapsed`, `gt` and `lt` compare minutes. The first matching rule wins, with at most eight per token.
 

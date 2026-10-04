@@ -1,0 +1,95 @@
+---
+title: Turn Off Agent Features
+description: One switch, agents.enabled, turns off every agent feature and keeps only the multiplexer.
+icon: PowerOff
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+If you want only the multiplexer, turn off the agent features:
+
+```toml
+[agents]
+enabled = false
+```
+
+The default is `true`. You can also change it on the settings page (<kbd>,</kbd> in window mode), where it is the first row, "Agent features". While a TUIOS client is open, you can also run this from a shell outside TUIOS:
+
+```bash
+tuios set-config agents.enabled false
+```
+
+The change applies at once, in both directions. You do not have to restart TUIOS.
+
+## What turns off
+
+**The daemon:**
+
+- It does not look for agents. It does not read the process table, pane titles, screens or agent transcripts, and it drops the OSC 9;4 progress and the agent state that programs send.
+- The stall timer does not run.
+- It runs no agent hook, such as `after-agent-state`.
+- It types no queued message, and it offers to resume no agent conversation after a restart.
+
+**The client:**
+
+- The rail shows no agents section. The other sections move up to fill the space.
+- The Inbox, agent mail, approvals and agent alerts are off. The Inbox key shows one line, "Agent features are off. Turn them on in Settings.", and does nothing else.
+- The prefix menu, the command palette, the help and the settings page do not show agent items.
+
+**Commands and verbs:**
+
+- Agent commands stop with one line: "Agent features are off. Set agents.enabled = true in the config to use this command."
+- A program that calls an agent verb gets the error code `agents_disabled`. `--json` carries the code.
+- The agent verbs cover agents and fans (`start-agent`, `fan`, `fan compare`, `fan verify`, `fan keep`, `list-agents`, `resume-agent`, `ask-agent`, the `explain-agent-*` commands), agent state and metadata, agent mail, the Inbox and approvals (`list-attention`, `peek-prompt`, `respond`, `ask-human`), the queue, and `review send`.
+- `wait-for` still works. Only its `agent-state` and `agent-message` conditions are refused.
+- `tuios mcp` started with the features off leaves the agent tools out of its tool list.
+- An agent command aimed at another machine, such as `tuios list-agents -s build:work`, follows this machine's switch.
+
+With the Inbox off, [push notifications](/docs/push-notifications) have no item to send.
+
+## What happens when you turn it off
+
+- The daemon clears the agent state of every pane, and closes every Inbox item.
+- A held approval goes back to the agent, which asks in its own pane.
+- Queued messages are dropped, so a message queued before cannot be typed later.
+
+When you turn the features on again, the daemon looks at every pane at once.
+
+## What stays
+
+- Sessions, panes, workspaces, layouts and the rest of the rail.
+- [Worktrees](/docs/worktrees): `tuios worktree new`, `ls`, `diff`, `rm` and `pull`.
+- `tuios review` and its notes. Only sending the notes to an agent is off.
+- [Ship](/docs/ship): commit, merge, push and pull request.
+- [Checkpoints](/docs/checkpoints) already saved can still be listed, read and restored. No new checkpoint is taken, because the daemon sees no agent turn end.
+- The tmux shim, hooks for other events, and `tuios notify test`.
+
+## Typing between panes is stricter
+
+A pane can answer another pane's prompt if it types into that pane. Usually TUIOS knows which pane waits on a prompt. With the features off it does not know. So a pane that does not hold the `respond` grant can type only into:
+
+- A pane that it opened, for example with `tuios new-window` or the tmux shim's `split-window`.
+- A pane whose own shell is at its prompt, with no program running.
+
+It cannot type into other panes. This includes `send-keys`, `send-text` and `run` from a script in a pane. Your own keys, and commands from a shell outside TUIOS, are not affected.
+
+To let every pane type into other panes, give panes `respond`:
+
+```toml
+[agents.permissions]
+grants = ["admin", "respond"]
+```
+
+See [What a pane may do](/docs/agents#what-a-pane-may-do).
+
+<Callout type="info" title="Only you can change the switch">
+Change it on the settings page, in `config.toml`, or with `tuios set-config` from a shell outside TUIOS. A process in a pane that tries to change it gets `forbidden`.
+</Callout>
+
+## Related
+
+<Cards>
+  <Card title="Agents" href="/docs/agents" description="What the agent features do when they are on" />
+  <Card title="Configuration" href="/docs/configuration" description="Every option in config.toml" />
+</Cards>

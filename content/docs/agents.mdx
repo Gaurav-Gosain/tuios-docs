@@ -9,6 +9,8 @@ import { Card, Cards } from 'fumadocs-ui/components/card';
 
 TUIOS keeps an agent state for every pane. When a pane runs a coding agent such as Claude Code, Codex or Gemini CLI, the state says whether it is working, waiting for you, or done. The state is drawn on the pane's title bar and in the rail, it can raise an alert, and scripts can read it and wait on it. Everything an agent waits on you for collects in the [Inbox](/docs/agent-inbox).
 
+To keep only the multiplexer, turn every agent feature off with `[agents] enabled = false`. See [Turn Off Agent Features](/docs/agents-off).
+
 **Try it live:** the [Agents track](/learn?t=agents) runs a pretend agent in your browser so you can watch its state change.
 
 ## States
@@ -64,7 +66,7 @@ tuios doctor agents                      # PATH, install state, and agent panes 
 
 The installer adds its hook entries to the harness's own settings file, keeps everything else in it, and saves the file as it was the first time as `<file>.tuios.bak`. It refuses a file it cannot parse rather than rewrite it. Each entry runs `tuios agent-hook`, which never blocks the harness for long and prints nothing a harness could read as an answer. `tuios integration uninstall <harness>` removes exactly what it wrote.
 
-Eight integrations report the pane's state: Claude Code, Codex, Gemini CLI, opencode, Kilo, Amp, Kimi Code CLI and Pi. Ten more (Copilot, Cursor Agent, Crush, Droid, Devin, Grok, Hermes, Qoder, Qwen Code and Antigravity) report only the conversation id, so the pane can be [resumed after a restart](/docs/agent-inbox#resuming-after-a-restart), and leave the state to the screen rules. The Claude Code and Codex hooks also feed the rail what the agent is doing now and the Inbox its [activity log](/docs/agent-inbox#what-the-agent-has-been-doing). The Claude Code hooks also count the subagents the agent runs, and the rail shows the count, such as `3 subagents`. This needs version 3 of the Claude Code integration. `tuios integration status` shows an older install as out of date, and `tuios integration install claude-code` updates it. `tuios integration install claude-code --statusline` also feeds the model, context use and cost from Claude Code's status line. It never replaces a status line of your own: `--then` chains to it.
+Twelve integrations report the pane's state: Claude Code, Codex, Copilot, Cursor Agent, Gemini CLI, opencode, Kilo, Amp, Kimi Code CLI, Pi, oh-my-pi and Qwen Code. Seven more (Antigravity, Crush, Devin, Droid, Grok, Hermes and Qoder) report only the conversation id, so the pane can be [resumed after a restart](/docs/agent-inbox#resuming-after-a-restart), and leave the state to the screen rules. The Claude Code and Codex hooks also feed the rail what the agent is doing now and the Inbox its [activity log](/docs/agent-inbox#what-the-agent-has-been-doing). The Claude Code hooks also count the subagents the agent runs, and the rail shows the count, such as `3 subagents`. This needs version 3 of the Claude Code integration. `tuios integration status` shows an older install as out of date, and `tuios integration install claude-code` updates it. `tuios integration install claude-code --statusline` also feeds the model, context use and cost from Claude Code's status line. It never replaces a status line of your own: `--then` chains to it.
 
 You can also report by hand, or from a script of your own:
 
@@ -96,6 +98,8 @@ Every pane starts with herdr's variables: `HERDR_ENV=1`, `HERDR_SOCKET_PATH` nam
 - An agent that exits without saying so, for example after a crash, does not keep its state. When the pane is back at its shell prompt, the state clears after two seconds.
 - An agent that reports through herdr's commands, `"$HERDR_BIN_PATH" pane report-agent`, reaches TUIOS the same way.
 
+Crush sends no detail with a permission prompt, so TUIOS also reads Crush's permission dialog from the screen. The pane goes to `needs_input` with a message such as `approve bash: touch hello.txt`, and you can answer it from the Inbox. See [Crush permission prompts](/docs/agent-inbox#crush-permission-prompts).
+
 The same socket answers herdr's socket API, so tools built for herdr work with TUIOS. See [herdr Compatibility](/docs/herdr-compatibility).
 
 TUIOS never uses herdr's own socket. A herdr that you start inside a TUIOS pane stops with a message about nesting. To run herdr there, give herdr's variables only to panes that start a known reporter:
@@ -113,7 +117,7 @@ An agent that prints OSC 9;4 progress sequences needs no wiring. Setting a progr
 
 With no report at all, the daemon checks each pane's foreground process every two seconds. If it is a known agent CLI, the pane is marked `working`. It reads the process name, its executable, and for an interpreter such as `node` or `python3`, the script it runs. It also looks behind wrappers such as `sh -c`, `timeout`, `npx`, `uvx` and `mise exec`. A directory named after an agent is never counted.
 
-TUIOS ships manifests for 22 agent CLIs, including Claude Code, Codex, Gemini CLI, Cursor Agent, Aider, OpenCode, Crush, Amp and Copilot. Add your own manifest as a TOML file in `~/.config/tuios/harnesses/` (or `$TUIOS_HARNESS_DIR`). It is picked up on the next daemon start.
+TUIOS ships manifests for 24 agent CLIs, including Claude Code, Codex, Gemini CLI, Cursor Agent, Aider, OpenCode, Crush, Amp and Copilot. Add your own manifest as a TOML file in `~/.config/tuios/harnesses/` (or `$TUIOS_HARNESS_DIR`). It is picked up on the next daemon start.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -125,6 +129,8 @@ Detection alone can say that an agent is present. It cannot say the agent is wai
 ### Screen and title rules
 
 An agent sitting on a permission prompt often prints nothing more: no output, no title, no progress. The only evidence is the text on the screen. A manifest can carry screen rules that match the bottom of the pane and report `needs_input`, and title rules that match the window title. The Codex manifest, for example, reads `Action Required` from the title.
+
+A rule with `show = "dialog"` reads a prompt drawn as a bordered box over the transcript. It matches only when one box holds all its strings, so the same words quoted in the transcript do not count. `tool_field` and `what_fields` build the message `approve <tool>: <what>` from the box's fields, the form the [risk rules](/docs/agent-inbox#risk-rules) read. The Crush manifest uses this for its permission dialog.
 
 Rules only run on a pane already attributed to a harness, and only when the pane writes, so a quiet pane costs nothing.
 
@@ -208,7 +214,7 @@ idle = false
 working = false
 ```
 
-The notification is written into the stream your terminal draws, so it reaches the terminal in front of you even when the session runs on another machine. Alerts are raised by an attached client, so a detached session tracks state without announcing it. See [Configuration](/docs/configuration#notifications) and [Hooks](/docs/hooks) for the command contract.
+The notification is written into the stream your terminal draws, so it reaches the terminal in front of you even when the session runs on another machine. Alerts are raised by an attached client, so a detached session tracks state without announcing it. To reach your phone when no client is attached, see [Push Notifications](/docs/push-notifications). See [Configuration](/docs/configuration#notifications) and [Hooks](/docs/hooks) for the command contract.
 
 ### Hear an alert
 
@@ -287,6 +293,7 @@ The daemon checks the grants on every way into a pane: the control socket, the l
 - **`send-keys` with `PREFIX`.** `send-keys` with `PREFIX` from a pane is refused. Use the TUIOS command for the action, such as `focus-window`, `new-window` or `split-window`.
 - **`send-keys` with no window.** From a pane, `send-keys` with no `-w` types into the focused pane. TUIOS does not read these keys as key bindings.
 - **Link sockets.** A process inside a pane, or a process that the daemon started, cannot connect to a link socket.
+- **Other machines.** Grants do not travel over a link. A pane on another machine that types into a pane here is held to the same prompt rule. It types into a pane that waits on a prompt only when this machine's link policy allows `respond`. See [Remote Hosts](/docs/remote-hosts).
 
 Some acts are yours alone whatever a pane holds: answering a held approval, answering an `ask-human` question, dismissing or snoozing an Inbox item, and writing a review note or queued reply that reads as yours. They need the nonce your attached client got when it attached, and the daemon refuses a caller inside a pane even with a copy of it. The Inbox also refuses an answer that `send-keys` typed. This covers the digit keys, the second press of a risky allow, question answers and the release of held mail.
 
@@ -320,7 +327,7 @@ tuios start-agent codex --name tests --prompt 'Run the tests and fix what fails.
 tuios start-agent --protocol acp 'opencode acp' --name helper
 ```
 
-`start-agent` opens a pane in the session `-s` names (creating it if needed), starts the agent, and returns once the agent shows it is at its prompt. With `--prompt`, it types the first prompt then. `--protocol acp` or `--protocol codex` runs the agent headless over the Agent Client Protocol or the Codex app-server: the pane shows the conversation as a transcript you type into, and reports the agent's state itself. To start the same prompt in several agents at once, each in its own git worktree, see [Worktrees](/docs/worktrees#fan-out-one-prompt-several-agents).
+`start-agent` opens a pane in the session `-s` names (creating it if needed), starts the agent, and returns once the agent shows it is at its prompt. With `--prompt`, it types the first prompt then. `--protocol acp` or `--protocol codex` runs the agent headless over the Agent Client Protocol or the Codex app-server: the pane shows the conversation as a transcript you type into, and reports the agent's state itself. In that pane, <kbd>Ctrl</kbd>+<kbd>C</kbd> cancels the running turn and every permission request it still waits on. <kbd>Ctrl</kbd>+<kbd>D</kbd> on an empty line quits. To start the same prompt in several agents at once, each in its own git worktree, see [Worktrees](/docs/worktrees#fan-out-one-prompt-several-agents).
 
 ## Letting an agent drive TUIOS
 
@@ -343,7 +350,12 @@ tuios --skill > ~/.claude/skills/tuios/SKILL.md
 
 Run it again after you update TUIOS.
 
-An agent can also drive TUIOS as Model Context Protocol tools. `tuios integration install claude-code --mcp` registers `tuios mcp` as a server for Claude Code, Codex, Gemini CLI or opencode. It is read-only by default and reaches only the session of the pane it runs in. `--mcp-write` adds the tools that type into panes.
+An agent can also drive TUIOS as Model Context Protocol tools. `tuios integration install claude-code --mcp` registers `tuios mcp` as a server for Claude Code, Codex, Gemini CLI or opencode.
+
+- By default the server types into no pane, and reaches only the session of the pane it runs in. Its tools list and read panes, wait for states, report the agent's own state and send and read mail.
+- `--mcp-write` adds the tools that type into panes: `send_text`, `send_keys`, `ask_agent`, `respond` and `fan`.
+- Each tool says whether it changes something. A tool that sends mail, reports state or types is not marked read-only, so a client that approves read-only tools by itself still asks before it runs one. The tools that type into panes are marked destructive.
+- The server speaks MCP protocol versions 2024-11-05 to 2025-11-25, and the stateless 2026-07-28 version.
 
 <Callout type="info">
 Everything an agent does goes through the same `tuios` commands and [control protocol](/docs/control-protocol) you can use from a shell. There is no separate agent API.
@@ -354,6 +366,9 @@ Everything an agent does goes through the same `tuios` commands and [control pro
 <Cards>
   <Card title="Agent Messaging" href="/docs/agent-messaging" description="Messages, questions and shared files between agents" />
   <Card title="Worktrees" href="/docs/worktrees" description="One agent per git worktree, and one prompt across several" />
+  <Card title="Checkpoints" href="/docs/checkpoints" description="Read and undo what one turn changed" />
+  <Card title="Ship" href="/docs/ship" description="Commit, merge, push and open a pull request" />
+  <Card title="Push Notifications" href="/docs/push-notifications" description="Inbox items on your phone" />
   <Card title="Session Rail" href="/docs/session-rail" description="The agents section and its filters" />
   <Card title="Control Protocol" href="/docs/control-protocol" description="The verbs behind every command here" />
 </Cards>

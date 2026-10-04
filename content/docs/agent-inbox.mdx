@@ -9,7 +9,7 @@ import { Card, Cards } from 'fumadocs-ui/components/card';
 
 The Inbox is one list of everything waiting for you, in every session and on every linked machine: approvals and questions an agent is blocked on, questions an agent put to you, mail, agents that errored, conversations to resume after a restart, and finished turns you have not looked at. From it you answer prompts, reply to agents and review what they changed.
 
-The daemon keeps the Inbox, so every attached client sees the same list, and `tuios list-attention` prints it from a shell.
+The daemon keeps the Inbox, so every attached client sees the same list, and `tuios list-attention` prints it from a shell. The daemon can also send an item to your phone when nobody is at a client. See [Push Notifications](/docs/push-notifications).
 
 ## Setting up
 
@@ -87,11 +87,26 @@ tuios respond -w review --prompt-id 75f8b9fadb5b5dfc approve
 tuios respond -w review choose 2
 ```
 
+### Crush permission prompts
+
+Crush draws its permission prompt as a "Permission Required" dialog. TUIOS reads the dialog from the screen:
+
+- The pane goes to `needs_input`, and the Inbox lists it under Approvals.
+- The message names the tool and what it acts on, such as `approve bash: touch hello.txt`: the command for bash, the file for edit and write, and the URL or folder for the others.
+- <kbd>Space</kbd> on the row shows the dialog. <kbd>a</kbd> allows, <kbd>A</kbd> allows for the rest of the Crush session, and <kbd>d</kbd> denies. TUIOS presses Crush's own keys for each: `a`, `s` and `d`.
+- The dialog does not always show the whole call. A long command scrolls in the dialog, and a narrow dialog shows only Crush's description of the command. Then the message ends with `(not all shown)`, and allowing it takes a second press, as for a [risky](#risk-rules) call. Read the dialog before you allow it.
+- TUIOS answers only the dialog itself. The dialog's words in Crush's chat, with no box around them, are not a prompt. When two boxes on the screen hold the dialog's words, TUIOS offers no answers.
+- TUIOS answers only when it sees a Crush process in the pane. Any program can report to the herdr socket as Crush.
+
+Crush v0.97.1 and earlier can report `working` while the dialog is still up. TUIOS then reads the screen, and the pane stays on `needs_input` until the dialog closes. If Crush stops at its dialog, for example after a crash, the pane clears when it is back at its shell.
+
+### Who may answer
+
 `respond` acts as you, so the daemon takes it only from your attached client, or from a shell outside every pane when `[daemon] respond_from_shell = true` is set in the config file. A program inside a pane is refused with `not_human`, unless you gave that pane the `respond` grant.
 
 ## Approvals the Inbox holds
 
-The peek presses keys into a prompt on the pane's screen. For Claude Code, opencode and Kilo, the Inbox can also hold a permission prompt before the harness shows it, and answer it for you. Turn it on per harness:
+The peek presses keys into a prompt on the pane's screen. For Claude Code, opencode, Kilo and Qwen Code, the Inbox can also hold a permission prompt before the harness shows it, and answer it for you. Turn it on per harness:
 
 ```toml
 [agents.approvals]
@@ -99,7 +114,7 @@ enabled = ["claude-code", "opencode"]
 hold_seconds = 120
 ```
 
-Then run `tuios integration install claude-code` again, so its hook is the version that waits.
+Then run `tuios integration install claude-code` (or `opencode`, `kilo`, `qwen`) again, so its hook is the version that waits.
 
 While a prompt is held, the harness shows nothing in its pane. The Approvals row shows the request, such as `approve Bash: go test ./...`, and the whole line is under the list:
 
@@ -230,6 +245,8 @@ When an agent finishes, read what it changed, leave notes on the lines you want 
 
 <kbd>c</kbd> adds a note on the line under the cursor and <kbd>C</kbd> one on the whole hunk. <kbd>S</kbd> sends every unsent note to the agent as one message, through the queue, so it is typed when the agent is at rest. Every key is on the [Keybindings](/docs/keybindings#the-review-overlay) page.
 
+To read or undo what one turn changed, see [Checkpoints](/docs/checkpoints). When the work is good, [ship it](/docs/ship): commit, merge, push and open a pull request. A push that an agent asks for waits for your yes under Questions.
+
 From a shell:
 
 ```bash
@@ -329,6 +346,8 @@ The Inbox's <kbd>/</kbd>, `list-agents --select`, `list-attention --select` and 
 <Cards>
   <Card title="Agents" href="/docs/agents" description="Agent state, detection, alerts and integrations" />
   <Card title="Worktrees" href="/docs/worktrees" description="Fan one prompt out to several agents, compare them and keep one" />
+  <Card title="Ship" href="/docs/ship" description="Commit, merge, push and open a pull request" />
+  <Card title="Push Notifications" href="/docs/push-notifications" description="Inbox items on your phone" />
   <Card title="Session Rail" href="/docs/session-rail#agent-rows" description="The agents section and what its rows say" />
   <Card title="Keybindings" href="/docs/keybindings#inbox-and-mailbox" description="Every Inbox, review and rail agent key" />
 </Cards>
