@@ -40,6 +40,7 @@ Two things live outside the file: custom themes in `~/.config/tuios/themes/` and
 | [`[keybindings]`](#keybindings) | The leader key and 23 sections of bindings |
 | [`[daemon]`](#the-daemon-table) | Daemon log level, agent detection, resuming agents, saved history and the size of a shared session |
 | [`[startup]`](#the-startup-table) | How a new session starts |
+| [`[workspaces]`](#the-workspaces-table) | What happens when a workspace becomes empty |
 | [`[launcher]`](#the-launcher-table) | How the app launcher starts a graphical program |
 | [`[tape]`](#the-tape-table) | Project tapes |
 | [`[debug]`](#the-debug-table) | The keycast overlay |
@@ -411,6 +412,7 @@ Pastes, notifications, OSC 66 text and link addresses lose their control charact
 | `folder_click` | `"navigate"` | `navigate`, `cd`, `both` | What a click on a folder row does |
 | `file_actions` | `true` | bool | Allow create, rename, delete, copy, cut and paste |
 | `file_delete` | `"trash"` | `trash`, `permanent` | Where <kbd>d</kbd> sends a file |
+| `editor` | `""` | a command | The terminal editor that opens a text file. Empty uses `$EDITOR`, then `$VISUAL`, then `vi`. See [The file editor](#the-file-editor) |
 
 Deprecated keys still load: `show_windows`, `show_agents` and `workspaces` in this table, and the flat `sidebar_*` keys in `[appearance]`. They are folded into the current keys when the file is read.
 
@@ -451,6 +453,22 @@ Delete uses the freedesktop.org trash in your home directory, so your desktop's 
 <kbd>Y</kbd> copies the absolute path of the selected file or folder. A folder's context menu has a **Copy path** row that does the same.
 
 On Windows, a shell under MSYS2 or Cygwin reports its folder as `/c/work`. TUIOS reads that as `C:\work`, by the rules of `cygpath`, so the files section lists the right folder.
+
+#### The file editor
+
+<kbd>Shift</kbd>+<kbd>Enter</kbd> on a text file opens it in a terminal editor. `editor` sets the command. The settings page shows it as **File editor** under Sidebar.
+
+```toml
+[appearance.sidebar]
+editor = "micro"
+```
+
+- Other terminal editors and arguments work too, such as `nano` or `vim -f`.
+- Quote a path or an argument that contains spaces. TUIOS splits the command into arguments and runs no shell.
+- TUIOS adds the full path of the file at the end.
+- When `editor` is empty, TUIOS uses `$EDITOR`, then `$VISUAL`, then `vi`.
+- File links and hints open files with the same command.
+- TUIOS reads the first 512 bytes of a file to check that it is text. It refuses binary files and special files.
 
 #### The custom section
 
@@ -778,6 +796,29 @@ In the same way, v0.8.0 changed eight appearance defaults: the rail is on, on th
 </Callout>
 
 A session keeps its own layout once it is running. Attaching never rearranges a session to match your config.
+
+## The workspaces table
+
+When the last pane on the workspace on screen closes, TUIOS shows the workspace you came from. This happens when the pane's program stops, when you close the pane, when `tuios xpanes -ss` closes it, and with `tuios close-workspace`.
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `return_when_empty` | `true` | Show the workspace you came from when the workspace on screen becomes empty. `false` keeps the empty workspace on screen |
+
+TUIOS goes back in this order:
+
+1. For a workspace that `tuios xpanes` opened, the workspace where you ran `tuios xpanes`.
+2. The workspace you showed last that still has panes. After a chain of empty workspaces, TUIOS goes back past each one.
+3. The workspace with the lowest number that has panes.
+
+When no workspace has panes, TUIOS shows the splash screen. The workspace on screen is the same for every client of the session, so every client goes back. A pane that moves to another workspace does not close, so TUIOS does not go back.
+
+```toml
+[workspaces]
+return_when_empty = false
+```
+
+The daemon reads the setting when it starts and when the file changes. `tuios set-config workspaces.return_when_empty false` changes it while TUIOS runs.
 
 ## The launcher table
 
