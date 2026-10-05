@@ -28,6 +28,7 @@ From a terminal outside TUIOS, the running daemon opens the new host with no res
 ```bash
 tuios hosts                  # every host and the state of its link
 tuios hosts test build       # dial it now and print what ssh said
+tuios hosts test build --start  # start its daemon if it does not run
 tuios hosts remove build     # drop it
 ```
 
@@ -47,7 +48,7 @@ The daemon runs ssh with `BatchMode` on, so a link never asks for a password or 
 | Status | Meaning |
 |--------|---------|
 | `up` | The link is open and the remote daemon answers |
-| `no_daemon` | The machine is up and no TUIOS daemon runs on it |
+| `no_daemon` | The machine is up and no TUIOS daemon runs on it. See [Start the daemon on a host](#start-the-daemon-on-a-host) |
 | `no_tuios` | The machine is up and the link cannot find TUIOS on it. `tuios hosts test` shows where it looked |
 | `unreachable` | The last attempt failed. The line under the table says why |
 | `reconnecting` | The link dropped and TUIOS is dialling again |
@@ -204,6 +205,28 @@ The host needs no internet: sync sends the binary over ssh. It never uses sudo. 
 The daemon on a host keeps running the old version, and its sessions keep running. The row for the host gives the command that restarts it. Add `--restart` to restart the daemons in the same run. sync lists the sessions and the programs that a restart ends, and asks first. Without a terminal, add `--yes`. The sessions come back with their layouts and new shells.
 
 See [hosts sync](/docs/cli-reference#hosts-sync) for every flag.
+
+## Start the daemon on a host
+
+A link reaches a host only when a TUIOS daemon runs there. When none runs, `tuios hosts test build` reports `no_daemon` and prints the command to run on the host:
+
+```
+build  gaurav@buildbox  no_daemon
+The host is up and no tuios daemon is running on it.
+To start the daemon, run this command on the host:
+  /home/gaurav/.local/bin/tuios start-server
+Or start it from this machine:
+  tuios hosts test build --start
+```
+
+To start it from this machine, add `--start`. It runs that command over ssh and tests the host again. `--dry-run` shows the command and changes nothing.
+
+```bash
+tuios hosts test build --start    # start the daemon on build if it does not run
+tuios hosts sync build --start    # install TUIOS on build if needed, then start it
+```
+
+`hosts test --start` does not install TUIOS. On a host with no TUIOS, use `hosts sync --start`.
 
 ## What another machine may do here
 

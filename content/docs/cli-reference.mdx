@@ -1565,7 +1565,7 @@ List the machines in the `[hosts]` table and the state of each link.
 tuios hosts [--json]
 tuios hosts add <name> <addr> [flags]
 tuios hosts remove <name>
-tuios hosts test <name>
+tuios hosts test <name> [--start] [--dry-run] [--json]
 tuios hosts tailnet [--json]
 tuios hosts sync [host...] [flags]
 ```
@@ -1577,7 +1577,7 @@ The daemon keeps one ssh link to each host.
 | `up` | The link is open and the remote daemon answers |
 | `connecting` | The first attempt has not finished |
 | `reconnecting` | The link dropped and is being dialled again |
-| `no_daemon` | The machine is up and no TUIOS daemon runs on it |
+| `no_daemon` | The machine is up and no TUIOS daemon runs on it. Run `tuios hosts test <name> --start` |
 | `no_tuios` | The machine is up and the link cannot find `tuios` on it. Run `tuios hosts test` |
 | `unreachable` | The last attempt failed. The line under the table says why |
 | `incompatible` | The remote daemon speaks a protocol this build does not serve. Upgrade one side |
@@ -1598,6 +1598,15 @@ tuios hosts add lab lab-01 --ssh-option -J --ssh-option bastion
 tuios hosts test build
 ```
 
+When the host is up and no daemon runs there, `hosts test` prints the command to run on the host, with the `tuios` binary that the link found. Add `--start` to run it from here:
+
+```bash
+tuios hosts test build --start            # start the daemon on build if it does not run
+tuios hosts test build --start --dry-run  # show what --start does, and change nothing
+```
+
+`--start` runs `start-server` over the same ssh that the link uses, then dials again and prints the new state. It does nothing when a daemon runs. On a host with no `tuios`, it starts nothing: run `tuios hosts sync <name> --start`. With `--json`, the result is the host report with `action` (`daemon started`, `would start daemon`, `none` or `start failed`), `before` and `start_command`.
+
 The daemon runs ssh with `BatchMode` on, so it never asks for a password or about a host key. Run ssh to the host once by hand to accept its key.
 
 With a host configured:
@@ -1615,6 +1624,7 @@ tuios hosts sync --dry-run          # show the plan and change nothing
 tuios hosts sync --dev              # install a build of this checkout on every host
 tuios hosts sync build lab          # only these hosts
 tuios hosts sync build --restart    # install, then restart the daemon on build
+tuios hosts sync build --start      # install if needed, then start the daemon if it does not run
 tuios hosts sync --restart --yes --json
 ```
 
@@ -1624,6 +1634,7 @@ tuios hosts sync --restart --yes --json
 | `--src <dir>` | The checkout to build. Sets `--dev` |
 | `--binary <path>` | Send this binary. A host with a different system fails |
 | `--restart` | Restart each daemon whose version is different |
+| `--start` | Start the daemon on each host where it does not run. A host with no `tuios` gets it first |
 | `-y, --yes` | Restart without a question. `--restart` needs it when there is no terminal |
 | `--dry-run` | Show the plan and change nothing |
 | `--json` | Print the result as JSON |
@@ -1639,6 +1650,8 @@ sync installs over the `tuios` that the host has, if you can write its folder. O
 <Callout type="warn" title="A restart ends the programs in the panes">
 sync does not restart a daemon unless you add `--restart`. The old daemon keeps running, and the row gives the command that restarts it. A restart saves each session and restores it with its layout and new shells. The programs in the panes end. Before a restart, sync lists the sessions and the panes with a running program, and asks you. A daemon with no sessions restarts without a question.
 </Callout>
+
+With `--start`, sync starts the daemon on each host where it does not run, after the install. The row says `daemon started`, and `daemon.started` is `true` in `--json`. With `--dry-run` the row says `would start daemon`.
 
 One host that fails does not stop the others. The command exits `1` when a host fails. `TUIOS_SSH` sets the ssh program that sync runs.
 
