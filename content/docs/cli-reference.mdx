@@ -120,10 +120,12 @@ tuios new [session-name] [flags]
 - `--ssh`: with `--host`, run ssh to the host and use its own `tuios` instead of attaching here.
 - `--global`: create a global session, which can hold panes from more than one machine.
 - `--hold`: after a failure, wait for <kbd>Enter</kbd> before exiting.
+- `--cwd <dir>`: the directory the session's windows start in. The default is the current directory. It does not work with `--host`.
 - The [interface flags](#interface-flags).
 
 ```bash
 tuios new                          # auto-generated name
+tuios new api --cwd ~/dev/api      # windows start in ~/dev/api
 tuios new work --theme dracula
 tuios new build --detach           # headless, for scripting
 tuios new --host buildbox ci -d    # on another machine
@@ -165,6 +167,35 @@ Inside a TUIOS pane, `tuios attach` refuses to attach the session that holds the
 - To attach anyway, use `--force` or set `TUIOS_ALLOW_NESTED=1`.
 
 The same refusal applies to a chain. For example, session A shows session B in a pane, and a pane of B then attaches A. See [Nested attach](/docs/sessions#nested-attach) for how TUIOS finds the pane.
+
+To move the client that shows the pane to a different session, use [`switch-session`](#switch-session).
+
+### switch-session
+
+Switch an attached client to a different session, in place. This is what the session switcher does. Nothing is nested.
+
+```bash
+tuios switch-session [HOST:]NAME [flags]
+```
+
+- `-s, --session <name>`: switch the client that shows this session.
+- `--client <id>`: switch the client with this id, from `tuios list-clients`.
+- `-c, --create`: create the session if it does not exist.
+- `--cwd <dir>`: with `--create`, the directory the new session's windows start in.
+- `--json`: print the result as JSON.
+
+The command switches one client: the client that `--client` names, else the client that shows the `-s` session, else, from a pane or a popup, the client that shows the pane's session, else the only client that is attached. With more than one client, name one.
+
+`HOST` is a machine from the `[hosts]` table. A session that `--create` makes has one window. When the session exists, `--create` and `--cwd` do nothing, and the client switches to it. When the session is not arranged yet, `[startup]` applies to it. From a pane, the command needs the `admin` grant.
+
+```bash
+tuios switch-session api                           # from a pane: show the session api
+tuios switch-session --create --cwd ~/dev/api api  # make api in ~/dev/api if it is missing
+tuios switch-session build:api                     # the session api on the host build
+tuios switch-session -s work api                   # from outside: switch the client that shows work
+```
+
+See [Sessionizer](/docs/sessions#sessionizer) for a key that opens a project.
 
 ### ls
 

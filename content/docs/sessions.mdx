@@ -57,6 +57,12 @@ tuios new work          # create a session called "work" and attach to it
 tuios attach work -c    # attach to "work", creating it if it does not exist
 ```
 
+A session's windows start in the directory where you run `tuios new`. `--cwd` names a different directory. The directory applies to the first window, and to each later window that has no pane to take a directory from.
+
+```bash
+tuios new api --cwd ~/dev/api
+```
+
 Inside TUIOS, press <kbd>N</kbd> in window management mode to create a session.
 
 The daemon starts on its own the first time you need it.
@@ -155,6 +161,35 @@ TUIOS cannot find a client behind tmux or mosh in a pane. These redraw the scree
 With [remote hosts](/docs/remote-hosts), the switcher also lists the sessions on your other machines. A remote session shows as `name @ host`, and the filter matches that text. <kbd>Enter</kbd> switches to it, and back again, in either direction. The rail, the palette and session cycling switch across machines the same way. Rename and kill work only on sessions on the machine you are on. A rename on another machine reaches this one as that session closing and a new one appearing under the new name.
 
 The session you leave keeps running. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>(</kbd> and <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>)</kbd> step to the previous and next session without opening the switcher.
+
+[`tuios switch-session`](/docs/cli-reference#switch-session) switches a client from the command line, also from a pane. When the target session is not arranged yet, `[startup]` applies to it, as on a first attach. For example, `startup.tiled = true` tiles a session that `tuios new --detach` made.
+
+### Sessionizer
+
+A sessionizer opens a project as a session. You pick a folder, and TUIOS shows its session. When the session does not exist, TUIOS makes it in that folder first.
+
+Add this command key to `config.toml`. It opens a popup with `fzf` over the folders in `~/dev`:
+
+```toml
+[[keybindings.command]]
+key = "prefix+alt+s"
+type = "popup"
+command = 'dir=$(find ~/dev -mindepth 1 -maxdepth 1 -type d | fzf) && tuios switch-session --create --cwd "$dir" "$(basename "$dir")"'
+description = "Open a project"
+```
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Alt</kbd>+<kbd>S</kbd>, pick a folder, and press <kbd>Enter</kbd>. The client switches to the session of that folder, and its windows start in the folder.
+
+- `tuios switch-session` switches the client that shows the popup. Nothing is nested.
+- `--create` makes the session when it is missing. `--cwd` sets the folder of its windows.
+- With `startup.tiled = true`, the new session is tiled.
+- To open a project on a [remote host](/docs/remote-hosts), put the host before the name: `"build:$(basename "$dir")"`. The folder is a path on that host.
+
+From a shell outside TUIOS, name the client with `-s`:
+
+```bash
+tuios switch-session -s work --create --cwd ~/dev/api api
+```
 
 ## Scratch terminal
 
