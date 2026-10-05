@@ -617,6 +617,31 @@ close_workspace = ["alt+x"]
 
 The action asks first. The dialog shows how many panes close and how many agents are in them. `Cancel` is the default row. Scratch panes stay open. `tuios close-workspace` does the same from a shell.
 
+## Split into the same ssh
+
+These actions open a pane on the machine that the focused pane is connected to with ssh:
+
+| Action | What it does |
+| --- | --- |
+| `split_ssh_horizontal` | Splits the pane top and bottom. |
+| `split_ssh_vertical` | Splits the pane left and right. |
+| `new_window_ssh` | Opens a new window. |
+
+The new pane runs ssh again, to the same host as the same user. It keeps the connection options, such as the port, the identity file and the jump host. tuios does not run the remote command again. It also removes `-N`, `-f`, `-T`, port forwards and the other options that stop a shell. `mosh` works the same way. Eternal Terminal (`et`) is not followed.
+
+When the focused pane does not run ssh, the action opens an ordinary pane. You can use the keys in every pane. Some ssh lines also get an ordinary pane. See [Configuration](/docs/configuration#lines-that-are-not-followed).
+
+The actions have no default key. The command palette has an entry for each one. To bind them, add them to a section. This example uses keys for window-management mode:
+
+```toml
+[keybindings.layout]
+split_ssh_vertical = ["alt+v"]
+split_ssh_horizontal = ["alt+s"]
+new_window_ssh = ["alt+w"]
+```
+
+To make the ordinary split and new-window keys do the same, set `appearance.new_window_follow_ssh`. To start the new pane in the remote folder, make the remote shell report its folder. See [Configuration](/docs/configuration#splits-that-follow-ssh).
+
 ## Copy mode
 
 Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> to enter copy mode. It moves a cursor through the scrollback with vim keys. These keys are fixed and are not in the config. You can add keys that pipe a yank through a command. See [Pipe a yank through a command](#pipe-a-yank-through-a-command). Put a count before a motion to repeat it: `10j`, `5w`.
