@@ -1,0 +1,78 @@
+---
+title: Finding a pane
+description: Jump to a pane by its label, or find any pane in any session by its name, folder, command or screen text.
+icon: Search
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Two keys take you to a pane without walking through the panes one by one. Pane labels number the panes on the screen, as tmux's `display-panes` does. The pane navigator lists every pane in every session, as tmux's `choose-tree` does, and searches them.
+
+## Pane labels
+
+1. Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Q</kbd>. Each pane of the workspace shows a large label with its name under it.
+2. Type a label. TUIOS focuses that pane and the labels close.
+
+| Keys | Does |
+|------|------|
+| A label, such as <kbd>3</kbd> | Focus that pane |
+| <kbd>Backspace</kbd> | Take back the last key of a two-key label |
+| <kbd>Esc</kbd>, the leader | Close the labels |
+| <kbd>q</kbd> | Close the labels, when <kbd>q</kbd> is not a label key |
+
+The labels are digits by default, in the order that `select_window_1` to `select_window_9` count the panes. So label <kbd>3</kbd> is the pane that <kbd>3</kbd> selects in window mode. A minimised pane gets no label. With more panes than keys, a label has two keys.
+
+Use other keys, such as the home row, in `config.toml`:
+
+```toml
+[panes]
+label_keys = "asdfghjkl"
+```
+
+Letters `a` to `z` and digits are allowed. The first keys go to the first panes. A key typed with <kbd>Shift</kbd> is the same key.
+
+When a pane is zoomed, the zoomed pane shows its label, and a list under it shows the labels of the panes the zoom hides. A label of a hidden pane moves the zoom to that pane. A pane that is mostly off the screen, or too small for its label, is in the same list.
+
+The labels own the keyboard while they are up. In multifocus, a label key or a paste does not reach any pane. The labels close when the layout changes (a pane opens, closes, moves or zooms) and on a click or the mouse wheel.
+
+The action is `display_panes`. Bind it to another key in `[keybindings.prefix_mode]`.
+
+## The pane navigator
+
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>/</kbd>. The navigator shows a tree of sessions, workspaces and panes on the left, and a preview of the highlighted row on the right. The sessions on your [remote hosts](/docs/remote-hosts) are in the tree too.
+
+| Keys | Does |
+|------|------|
+| <kbd>j</kbd>, <kbd>k</kbd>, arrows | Move |
+| <kbd>l</kbd>, <kbd>→</kbd> | Open a session or a workspace |
+| <kbd>h</kbd>, <kbd>←</kbd> | Close it, or go to its parent row |
+| <kbd>Space</kbd> | Open or close |
+| <kbd>Enter</kbd> | Go to the row: the session, the workspace and the pane |
+| <kbd>/</kbd> | Search |
+| <kbd>Esc</kbd>, <kbd>q</kbd> | Close the navigator |
+
+A click on a pane goes to it. A click on a session or a workspace opens or closes it.
+
+### Search
+
+Press <kbd>/</kbd> and type. The search reads each pane's name, title, folder, running command, session and workspace, and the last 40 lines of its screen. So you can find the pane where a build failed, or the server you logged in to, even when you did not name the pane. A pane that matches only by its screen text shows the matching line on its row.
+
+<kbd>Esc</kbd> stops the search and keeps the results. A second <kbd>Esc</kbd> clears the search. A paste in the search line is search text.
+
+<Callout>
+The current session's panes are read from your client, and their preview is live. The other sessions are read when the navigator opens, so their preview shows the screen as it was then. One load reads at most 150 screens and waits at most 8 seconds. A session that does not answer in time says so on its row.
+</Callout>
+
+The action is `choose_tree`.
+
+## From a script
+
+`list-windows --all` prints the same rows as the navigator:
+
+```bash
+tuios list-windows --all                      # every pane of every session
+tuios list-windows --all --all-hosts --json   # and the panes on each host
+tuios list-windows --all --text 20 --json     # with the last 20 lines of each screen
+```
+
+Each row has `session`, `workspace`, `workspace_name`, `window_id`, `name`, `title`, `command`, `cwd`, `focused` and `agent_state`. A pane on another machine also has `host` and `"untrusted": true`. `--text` reads with `capture-pane`, so the same [pane grants](/docs/agents#what-a-pane-may-do) apply: a pane that holds only `read` gets its own session, and the JSON has an `errors` entry for the rest.
