@@ -237,6 +237,8 @@ TUIOS does not read the clipboard when the client runs in a browser, when it run
 
 Keys sent to the pane are encoded the way a real terminal encodes them. When the program in the pane turns on application cursor keys (DECCKM), as zsh's line editor does, the arrows, <kbd>Home</kbd> and <kbd>End</kbd> are sent in their SS3 form (`ESC O H` for <kbd>Home</kbd>) instead of the CSI form (`ESC [ H`), so the program's bindings for them work. `tuios send-keys` follows the same rule.
 
+`tuios send-keys` also encodes a named key or a chord in the keyboard mode the program asked for. A program that asked for the kitty keyboard protocol or modifyOtherKeys gets that encoding, the same as for a key you press. Vim then reads <kbd>Ctrl</kbd>+<kbd>H</kbd> as <kbd>Ctrl</kbd>+<kbd>H</kbd>, not as <kbd>Backspace</kbd>.
+
 ## Global keys
 
 Section: `[keybindings.global]`. These keys work in window mode and terminal mode.
@@ -922,6 +924,7 @@ Inspect and change bindings from the shell:
 
 ```bash
 tuios keybinds list                       # the main tables
+tuios keybinds browse                     # search every binding in an explorer
 tuios keybinds doctor                     # conflicts, and keys taken from the pane
 tuios keybinds explain alt+left           # everything one key does
 tuios keybinds unbind close_window w      # take one key off one action
@@ -929,6 +932,8 @@ tuios keybinds free alt+left              # take a key off every action
 ```
 
 `doctor` tags each finding with its evidence: `certain` comes from TUIOS routing, `observed` from the live pane, `reference` from a list of common program defaults. `doctor` and `explain` take `--json` and `--guest <program>`.
+
+`tuios keybinds browse` opens the rows of `tuios keybinds list --json` in an explorer. Press <kbd>/</kbd> to search, and <kbd>Tab</kbd> or a click on a tab to show one scope. The detail pane shows the keys, the action, the scope and the description. <kbd>q</kbd> or <kbd>Esc</kbd> leaves it. Add a search to start with it: `tuios keybinds browse spotlight`. `tuios keybinds list` prints plain text, on a terminal too.
 
 The **keybind manager** (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>k</kbd>) shows the same analysis in four tabs: Bindings, Conflicts, Guests and Record. Record captures the next key you press. On a binding, <kbd>Ctrl</kbd>+<kbd>D</kbd> removes it and <kbd>Ctrl</kbd>+<kbd>X</kbd> takes its key off every action.
 

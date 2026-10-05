@@ -51,7 +51,7 @@ The daemon runs ssh with `BatchMode` on, so a link never asks for a password or 
 | `no_tuios` | The machine is up and the link cannot find TUIOS on it. `tuios hosts test` shows where it looked |
 | `unreachable` | The last attempt failed. The line under the table says why |
 | `reconnecting` | The link dropped and TUIOS is dialling again |
-| `incompatible` | The two sides speak different control protocol versions. Update one of them |
+| `incompatible` | The two sides speak different control protocol versions. Update one of them, or run [`tuios hosts sync`](#keeping-hosts-on-one-version) |
 | `connecting` | The first attempt has not finished |
 
 ### The hosts table
@@ -188,6 +188,22 @@ The CLI says which host answered, and `--json` adds a `host` field. A host name 
 Messages and files cross links too. Mail to a host whose link is down waits on this machine, under Waiting to send in the Inbox, and goes when the link is back. See [Agent Messaging](/docs/agent-messaging#across-machines).
 
 Agents on every linked host appear on the rail and in your [Inbox](/docs/agent-inbox), and `fan`, `worktree` and `start-agent` can run there. See [Worktrees](/docs/worktrees#work-from-another-machine).
+
+## Keeping hosts on one version
+
+`tuios hosts sync` installs the TUIOS version of this machine on each host that runs another version. A release build sends its own release. `--dev` sends a build of a checkout, and `--binary` sends a file.
+
+```bash
+tuios hosts sync --dry-run    # see what would change
+tuios hosts sync --dev        # install a build of this checkout on every host
+tuios hosts sync build lab    # only these hosts
+```
+
+The host needs no internet: sync sends the binary over ssh. It never uses sudo. It installs over the `tuios` on the host, or to `~/.local/bin/tuios` when it cannot write that folder.
+
+The daemon on a host keeps running the old version, and its sessions keep running. The row for the host gives the command that restarts it. Add `--restart` to restart the daemons in the same run. sync lists the sessions and the programs that a restart ends, and asks first. Without a terminal, add `--yes`. The sessions come back with their layouts and new shells.
+
+See [hosts sync](/docs/cli-reference#hosts-sync) for every flag.
 
 ## What another machine may do here
 

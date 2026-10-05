@@ -12,7 +12,7 @@ tuios [flags]              # start or attach to TUIOS
 tuios <command> [flags]    # run a command
 ```
 
-Every command accepts `--help`, and its output always matches your build. `tuios help <command>` does the same.
+Every command accepts `--help`, and its output always matches your build. `tuios help <command>` does the same. To search every command, run `tuios help -i`. See [help](#help).
 
 ## Conventions
 
@@ -641,6 +641,7 @@ With `-w`, the keys go to that window's program, whether or not a client is atta
 
 - Single keys: `i`, `Enter`, `Escape`, `Space`, `Tab`, `BTab`, `Backspace`, `Insert`, `Delete`, arrows (`Up` and so on), `Home`, `End`, `PageUp`, `PageDown`, `F1` to `F12`. The arrows, `Home` and `End` go in their SS3 form (`ESC O H`) when the program in the pane has turned on application cursor keys (DECCKM), as a real terminal sends them.
 - Chords: `ctrl+c`, `alt+b`, `shift+Up`. Not case sensitive. tmux's `C-c` and `M-x`, and `^C`, work too.
+- A named key or a chord goes in the keyboard mode the program in the pane asked for. TUIOS encodes it the same way as a key you press. A program that asked for the kitty keyboard protocol or modifyOtherKeys gets that encoding. For example, Vim with the kitty keyboard protocol gets `ctrl+h` as `ESC [ 104;5u`, not as Backspace. A shell gets `0x08`. Text, `--literal` and `--raw` keys are not changed.
 - An escape sequence written as `\e[A`, `\x1b[A` or `\033[A`.
 - Sequences: separate keys with a space or a comma: `"ctrl+b q"` or `"ctrl+b,q"`.
 - `PREFIX` and `$PREFIX` expand to your leader key, without `-w` and with a client attached. In bash and zsh, use single quotes so the shell does not expand `$PREFIX` first: `tuios send-keys 'PREFIX q'`.
@@ -992,6 +993,7 @@ tuios config reset    # overwrite it with the defaults
 
 ```bash
 tuios config apply    # apply config.toml to the running daemon now
+tuios config browse   # search the options and set one, in an explorer
 ```
 
 `config edit` uses `$EDITOR`, then `$VISUAL`, then the first of `vim`, `vi`, `nano` and `emacs` it finds. `config reset` asks first, and replaces the file including your keybindings.
@@ -1077,6 +1079,8 @@ tuios list-glyphs heavy
 tuios list-glyphs mine --json | jq -r '.problems[]?'
 ```
 
+`config browse [-s <session>]` opens the options you can set in an explorer. Each option shows its type, default, current value and source. These are the values that `list-options --json` and `get-config --json` print. Press <kbd>Enter</kbd> on an option to set it. The explorer sets it the same way as `set-config`, with the same refusals and errors. It needs a running daemon.
+
 See [Glyph sets](/docs/configuration#glyph-sets).
 
 ### keybinds
@@ -1087,6 +1091,7 @@ Inspect and change keybindings. Aliases: `keys`, `kb`.
 |---------|--------------|
 | `tuios keybinds list` | Print the main binding tables |
 | `tuios keybinds list-custom` | Print bindings that differ from the defaults, in 9 of the 23 sections |
+| `tuios keybinds browse [search]` | Search every binding in an explorer, with one tab for each scope |
 | `tuios keybinds doctor` | Report keys claimed twice, and keys TUIOS takes from the pane |
 | `tuios keybinds explain <key>` | Print every scope a key acts in, and which programs want it |
 | `tuios keybinds unbind <action> [key]` | Take one key, or every key, off an action and save the file |
@@ -1101,6 +1106,8 @@ tuios keybinds explain alt+left
 tuios keybinds free alt+left
 tuios keybinds unbind close_window w
 ```
+
+`keybinds browse` shows the rows of `keybinds list --json`. A search on the command line, such as `tuios keybinds browse spotlight`, starts the explorer with that search. See [Explorers](#explorers) for the keys.
 
 See [Keybindings](/docs/keybindings#customizing).
 
@@ -1560,6 +1567,7 @@ tuios hosts add <name> <addr> [flags]
 tuios hosts remove <name>
 tuios hosts test <name>
 tuios hosts tailnet [--json]
+tuios hosts sync [host...] [flags]
 ```
 
 The daemon keeps one ssh link to each host.
@@ -1597,6 +1605,42 @@ With a host configured:
 - `tuios ls --all-hosts` and `tuios list-agents --host build` list it.
 - `tuios attach --host build api` and `tuios new --host build` open sessions on it in this client, with your local theme, config and prefix. If the link drops, the client reconnects on its own for up to three minutes.
 - `tuios new-window --host build` opens a pane in a local session whose process runs on the host.
+
+#### hosts sync
+
+Install the TUIOS version of this machine on the hosts in the `[hosts]` table. With no names, sync does every host. Name hosts to sync only those.
+
+```bash
+tuios hosts sync --dry-run          # show the plan and change nothing
+tuios hosts sync --dev              # install a build of this checkout on every host
+tuios hosts sync build lab          # only these hosts
+tuios hosts sync build --restart    # install, then restart the daemon on build
+tuios hosts sync --restart --yes --json
+```
+
+| Flag | What it does |
+|------|--------------|
+| `--dev` | Build the binary from a TUIOS checkout: `--src`, or else the current folder. The version is `dev+COMMIT` |
+| `--src <dir>` | The checkout to build. Sets `--dev` |
+| `--binary <path>` | Send this binary. A host with a different system fails |
+| `--restart` | Restart each daemon whose version is different |
+| `-y, --yes` | Restart without a question. `--restart` needs it when there is no terminal |
+| `--dry-run` | Show the plan and change nothing |
+| `--json` | Print the result as JSON |
+| `--local` | Sync this machine too. The name `local` does the same |
+| `--ghostty` | Refused. The ghostty backend cannot be cross-compiled. Build it on the host with `scripts/install.sh ghostty` |
+
+First, sync reads each host over ssh: its system, the `tuios` on it, the version of that `tuios`, and its daemon. Then it installs where the version is different. It prints one row for each host: the system, the version before and after, the daemon, and what it did.
+
+A release build gets the archive of its own release for each host system. It checks the archive against the published checksums, and sends the binary over ssh. The host needs no internet. Without a release, sync builds the checkout in the current folder, or asks for `--src` or `--binary`.
+
+sync installs over the `tuios` that the host has, if you can write its folder. Otherwise it installs to `~/.local/bin/tuios`, and warns if a login shell does not find it there. sync never uses sudo. It writes the binary to a temporary file, checks it, runs it once, and moves it into place.
+
+<Callout type="warn" title="A restart ends the programs in the panes">
+sync does not restart a daemon unless you add `--restart`. The old daemon keeps running, and the row gives the command that restarts it. A restart saves each session and restores it with its layout and new shells. The programs in the panes end. Before a restart, sync lists the sessions and the panes with a running program, and asks you. A daemon with no sessions restarts without a question.
+</Callout>
+
+One host that fails does not stop the others. The command exits `1` when a host fails. `TUIOS_SSH` sets the ssh program that sync runs.
 
 See [the hosts table](/docs/configuration#the-hosts-table).
 
@@ -1732,6 +1776,34 @@ tuios completion powershell | Out-String | Invoke-Expression
 ```
 
 `--no-descriptions` leaves out the descriptions.
+
+### help
+
+Print the help of a command, or show all commands.
+
+```bash
+tuios help                # general help
+tuios help config edit    # help for one command
+tuios help --json         # every command as JSON
+tuios help -i             # search the commands in an explorer
+```
+
+- `--json`: print the command and every command under it as JSON. Each command has its path, usage line, short and long help, examples, aliases and flags.
+- `-i, --interactive`: open the same commands in an explorer. The detail pane shows the usage, help and flags of the command.
+
+### Explorers
+
+`tuios help -i`, `tuios config browse` and `tuios keybinds browse` open an explorer. All three use the same keys:
+
+| Key | Action |
+|-----|--------|
+| <kbd>/</kbd> | Search |
+| Arrow keys, <kbd>j</kbd>, <kbd>k</kbd> | Move |
+| <kbd>Tab</kbd>, or a click on a tab | Show one group |
+| <kbd>J</kbd>, <kbd>K</kbd> | Scroll the detail pane |
+| <kbd>q</kbd>, <kbd>Esc</kbd> | Leave |
+
+An explorer opens only with its own flag or command. A plain command prints plain output, on a terminal too.
 
 ## Scripting examples
 
