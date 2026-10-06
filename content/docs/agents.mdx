@@ -61,8 +61,10 @@ This is the most accurate source, and the only one that can reliably say `needs_
 tuios integration install claude-code    # or codex, gemini-cli, opencode, kilo, amp, ...
 tuios integration install --all          # every supported harness whose config directory exists
 tuios integration status                 # installed and current, per harness
-tuios doctor agents                      # PATH, install state, and agent panes missing an integration
+tuios doctor agents                      # PATH, install state, and agent panes missing an integration or out of date
 ```
+
+You can do the same from inside TUIOS. See [The Agents tab](#the-agents-tab).
 
 The installer adds its hook entries to the harness's own settings file, keeps everything else in it, and saves the file as it was the first time as `<file>.tuios.bak`. It refuses a file it cannot parse rather than rewrite it. Each entry runs `tuios agent-hook`, which never blocks the harness for long and prints nothing a harness could read as an answer. `tuios integration uninstall <harness>` removes exactly what it wrote.
 
@@ -86,6 +88,40 @@ tuios set-agent-state working -s "$TUIOS_SESSION" -w "$TUIOS_PANE_ID" --harness 
 A report that loses to a higher-ranked source still exits 0 and prints `Not applied: ...` on stderr.
 
 The old shell shim in `integrations/claude-code/` of the repository now just runs `tuios agent-hook claude-code`. Settings that still point at it keep working, but alongside an installed integration every event is reported twice. `tuios doctor agents` says so.
+
+#### The Agents tab
+
+The settings page has an Agents tab with the same report as `tuios doctor agents`. Press <kbd>Ctrl+B</kbd> <kbd>A</kbd> to open it. You can also type `Agents: settings, install and update integrations` in the command palette.
+
+Each row is one harness. It shows whether the harness is on `PATH`, and one of these states:
+
+| State | What it means |
+| --- | --- |
+| installed | The integration is installed and current. An install made with `--command` is current too, and the line under the row names the program its hooks run. |
+| out of date | An older TUIOS installed it. Update it. |
+| not installed | The integration is not installed. If the harness has not run on this machine, run it once first. |
+| no integration | TUIOS has no integration for this harness. The line under the row gives the reason. |
+| cannot read | TUIOS cannot read or parse the integration's file. The line under the row names the file. |
+
+Press <kbd>Enter</kbd> or click a row to see its actions:
+
+- **Install** writes the hook entries.
+- **Update** replaces an older install. It keeps the program the hooks already run, so an install made with `--command /path/to/tuios` keeps that path.
+- **Uninstall** removes what TUIOS wrote: the hooks, the MCP server and the status line, each only if it is there. Your own entries stay.
+
+Each action names the files it changes. Press <kbd>Enter</kbd> on the action to do it, or <kbd>Esc</kbd> to go back. The actions run the same code as `tuios integration install` and `tuios integration uninstall`. The result or the error shows in the dock. If the harness saves its settings file while TUIOS edits it, TUIOS tries once more. If the file changes again, TUIOS does not write it and asks you to try again.
+
+The tab is only there for a terminal on this machine. It is not there when [agent features are off](/docs/agents-off), or on a client that `tuios ssh` or `tuios-web` serves, because the integrations on the server are not the remote person's to change.
+
+#### The integration notice
+
+When a pane runs a harness whose integration is out of date, or not installed where it could be, the dock shows one notice for that harness. An example:
+
+> Claude Code integration is out of date. Open Settings, Agents to update it.
+
+The notice comes once per harness each time the client starts. To dismiss it for good, click the right end of the notice. It then stays away until the state or the version changes. <kbd>Esc</kbd> and a click on the text clear it for this session of the client only, so the notice comes back the next time you attach.
+
+Panes on other machines get no notice, because their harness uses that machine's integration.
 
 ### Agents that report to herdr
 
