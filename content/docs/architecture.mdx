@@ -124,7 +124,9 @@ The emulator sits behind the `vt.Terminal` interface, and exactly one implementa
 
 A differential test suite feeds the same bytes to both and compares screens, cursor, scrollback, modes and wire snapshots. `tuios --version` names the backend a binary was built with.
 
-The emulator handles CSI, OSC, ESC and DCS sequences, the alternate screen, scrollback (10,000 lines by default, `appearance.scrollback_lines`), cursor shapes, the kitty keyboard protocol, synchronized output (mode 2026), grapheme clustering (mode 2027, on by default in both backends, so a ZWJ emoji or a flag takes the two columns the host terminal draws it in), colour scheme reports (mode 2031), OSC 4, 10 to 12 and 52, OSC 133 shell integration zones, and cell size reports (CSI 14t, 16t, 18t).
+The emulator handles CSI, OSC, ESC and DCS sequences, the alternate screen, scrollback (10,000 lines by default, `appearance.scrollback_lines`), cursor shapes, the kitty keyboard protocol, synchronized output (mode 2026), grapheme clustering (mode 2027, on by default in both backends, so a ZWJ emoji or a flag takes the two columns the host terminal draws it in), colour scheme reports (mode 2031), OSC 4, 10 to 12 and 52, OSC 133 shell integration zones, cell size reports (CSI 14t, 16t, 18t), in-band resize reports with the size in pixels (mode 2048), and SGR-pixel mouse reports (mode 1016).
+
+Every pixel size a program can read comes from one cell: the kernel's window size (TIOCGWINSZ), the 2048 report, CSI 14t and 16t, and the mouse position in mode 1016. The cell is the host terminal's. Until a client reports one, such as for a pane in a detached session, the cell is 10x20 pixels, so no size is ever zero. When clients with different cells share a session, its panes take one client's cell. Under `window_size = "latest"` that is the latest client. Otherwise it is the client that attached first.
 
 Programs in a pane ask the terminal what it is and what it supports. Both backends give the same answers:
 

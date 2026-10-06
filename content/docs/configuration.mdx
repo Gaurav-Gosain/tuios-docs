@@ -239,7 +239,7 @@ While the pane background paints a colour, a program that asks the terminal for 
 | `hide_scrollbar` | `false` | bool | Hide the scrollbar on the pane border |
 | `confirm_quit` | `false` | bool | Always confirm on quit, not only when processes are running |
 | `preferred_shell` | `""` | path | Shell for new panes. Empty picks one for your platform |
-| `new_window_inherit_cwd` | `true` | bool | Start a new window in the focused pane's directory |
+| `new_window_inherit_cwd` | `true` | bool | Start a new window in the focused pane's directory. On Windows, the shell must report its folder with OSC 7 or OSC 9;9 |
 | `new_window_follow_ssh` | `false` | bool | A split or new window of a pane that runs ssh runs the same ssh. See [below](#splits-that-follow-ssh) |
 | `whichkey_enabled` | `true` | bool | Show the which-key popup after the leader key |
 | `whichkey_position` | `"bottom-right"` | `bottom-right`, `bottom-left`, `top-right`, `top-left`, `center` | Where the popup opens |
@@ -582,7 +582,7 @@ _tuios_osc7() { printf '\e]7;file://%s%s\e\\' "$HOST" "$PWD" }
 add-zsh-hook precmd _tuios_osc7
 ```
 
-To go to the folder, tuios adds `-t`, `-o RemoteCommand=none` and the command `exec sh -c 'cd "FOLDER" ...'` to ssh. This works with every login shell that can start `sh`. If the folder is gone, the new pane starts in the home folder. A folder name with a quote, `$`, a backslash or `!` is not used.
+To go to the folder, tuios adds `-t`, `-o RemoteCommand=none` and the command `exec sh -c 'cd "FOLDER" ...'` to ssh. This works with every login shell that can start `sh`. If the folder is gone, the new pane starts in the home folder. A folder name with a quote, `$`, a backslash or `!` is not used. A Windows folder, such as `C:/Users/x` or a network share `//server/share`, is not used either, because a Windows ssh server has no `sh`. The new pane then starts in the home folder.
 
 ## Glyph sets
 
