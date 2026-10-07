@@ -1,0 +1,215 @@
+---
+title: Split the Config
+description: Keep the TUIOS config in more than one file with include lists and config.d, and see which file sets each key.
+icon: Files
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+You can keep the TUIOS config in more than one file. Use this to share one config between machines and keep the settings of one machine in a separate file. A Nix or home-manager setup can also put its settings in a file that it manages.
+
+There are two ways to add files. Use one or both:
+
+- An `include` list in `config.toml`.
+- A `config.d` directory next to `config.toml`.
+
+## The include list
+
+Put an `include` list at the top of `config.toml`, before the first table:
+
+```toml
+include = ["hosts.toml", "~/.config/tuios/local.toml", "?work.toml"]
+
+[appearance]
+border_style = "thick"
+```
+
+- A relative path is relative to the file that has the `include` line.
+- `~` is your home directory.
+- A name that starts with `?` is optional. When the file is not there, TUIOS says nothing.
+- An included file can have its own `include` list.
+
+<Callout type="warn" title="Put include before the first table">
+TOML puts a key below a table header into that table. An `include` key below `[appearance]` is `appearance.include`, and it includes nothing. TUIOS shows a warning when this happens.
+</Callout>
+
+### Windows paths
+
+On Windows, write an include path with forward slashes, or put it in a single-quoted literal string. In a double-quoted TOML string, a backslash starts an escape.
+
+```toml
+include = ["C:/Users/me/tuios/local.toml", 'C:\Users\me\tuios\work.toml']
+```
+
+## The config.d directory
+
+Put `*.toml` files in a `config.d` directory next to `config.toml`. TUIOS reads them in name order, so `10-theme.toml` comes before `50-hosts.toml`. You do not need to name them in `config.toml`.
+
+## Which file wins
+
+TUIOS reads the files in this order. A later file wins over an earlier file.
+
+1. The files in the `include` list, in list order. An included file's own includes come before it.
+2. The files in `config.d`, in name order.
+3. `config.toml`.
+
+`config.toml` comes last and wins. It holds only the keys that you changed. On the first start, TUIOS writes a `config.toml` with comments and no settings. The one exception is `[startup]`: TUIOS writes `tiled = true` and `daemon = true` there, unless another file sets them. Each change from TUIOS adds or changes only the key that you changed. So an included file applies everywhere except where you set a value of your own.
+
+### How the files merge
+
+- Tables merge key by key, at every depth. `[hosts.NAME]` tables merge by name, so each file can add its own hosts.
+- For a single value, the later file wins.
+- An array of values replaces the earlier array. It does not add to it. For example, a later `new_window = ["ctrl+t"]` replaces the earlier keys of `new_window`.
+- An array of tables, such as `[[keybindings.command]]`, merges entry by entry. TUIOS never replaces it whole. A later entry matches an earlier entry by `name` when both have a name, and by `key` when they do not. A matched entry merges key by key. An entry that matches nothing goes at the end.
+
+A relative file path in an included file, such as a `[plugins] dirs` entry or a `token_file`, is relative to that file.
+
+### Remove an entry from an earlier file
+
+To remove an array entry that an earlier file sets, add an entry with the same `name` or `key` and `disabled = true`. TUIOS removes both entries.
+
+```toml
+# config.d/50-work.toml: drop the deploy command from shared.toml on this machine
+[[keybindings.command]]
+name = "deploy"
+disabled = true
+```
+
+## What is not an error
+
+TUIOS shows a warning and continues in these cases:
+
+- An include names a file that does not exist. TUIOS skips it, so one machine can include a file that only it has. With `?`, there is no warning.
+- An include makes a cycle, or a file includes itself. TUIOS reads each file one time.
+- TUIOS cannot read an optional include or a `config.d` file, such as a link that points to itself. TUIOS skips it.
+- An `include` key is below a table header.
+
+These stop the load, the same as an error in `config.toml`:
+
+- A file that exists and has a TOML error.
+- A required include that TUIOS cannot read.
+- An include that names a directory. Put a directory of files in `config.d` instead.
+
+## Find where a key comes from
+
+```bash
+tuios config files                     # every file, in merge order
+tuios config origin                    # every key and the file that sets it
+tuios config origin appearance.theme   # one key, and the keys under it
+```
+
+`tuios config files` marks a file that TUIOS cannot write as read-only. `tuios config origin` also names the earlier files that set the same key. Their values lose.
+
+```text
+$ tuios config origin appearance
+appearance.border_style  config.toml  (also set in shared.toml)
+appearance.theme         shared.toml
+```
+
+Both commands take `--json`.
+
+## Hot reload
+
+TUIOS watches every file it reads: `config.toml`, each included file, each file in `config.d`, and the `config.d` directory itself. When a file is a link, TUIOS also watches the file that the link points to. A save to any of these files applies at once. An included file that was missing applies when you make it, if its directory exists.
+
+## How TUIOS saves a change
+
+The settings page, `tuios set-config`, the keybind manager, `tuios keybinds unbind`, `tuios hosts add` and `tuios plugins` write the config. They write only the keys that you changed. They never copy the other files into `config.toml`. A save keeps the new values of a file that changed on disk while you worked.
+
+Each change goes to one file:
+
+- A key that a file sets goes to the last file that sets it.
+- A new entry in a table of entries, such as a new `[hosts.NAME]`, goes to the last writable file that has entries in that table.
+- Any other new key goes to `config.toml`.
+- A removed key is removed from each file that sets it.
+
+TUIOS changes only the lines of the key. The comments, the blank lines and the line endings of the file stay. A comment above a table stays with that table. TUIOS never writes a file again from its values. When TUIOS cannot write a change into the lines of an included file, it writes the change to `config.toml` and tells you. When it cannot remove a key that way, the save fails and the message names the file.
+
+## Read-only files
+
+TUIOS never writes a read-only file. This includes a file that Nix or home-manager links in from the store.
+
+- When a read-only file sets the key, TUIOS writes the change to `config.toml` and tells you.
+- When `config.toml` is read-only too, TUIOS writes the change to the last writable file that `config.toml` includes. That file must come after every file that sets the key. If there is no such file, the save fails and the message names the file to change.
+- TUIOS cannot remove a key from a read-only file. To remove an array entry, TUIOS writes a `disabled = true` entry to a writable file.
+
+TUIOS does not make a missing include. When `config.toml` is read-only, make the writable file yourself, and put it last in the `include` list:
+
+```bash
+touch ~/.config/tuios/local.toml
+```
+
+If TUIOS can write no file, a save fails with this message:
+
+```text
+tuios cannot write config.toml or any file it includes. Make config.toml writable, or include a writable file
+```
+
+## Clean up an old config.toml
+
+An older TUIOS wrote every key into `config.toml`. That file wins over every other file, so it hides them. Run `tuios config prune` to remove the keys that have their default value.
+
+```bash
+tuios config prune --dry-run   # show the keys, change nothing
+tuios config prune             # list the keys, ask, then change the file
+tuios config prune --yes       # do not ask
+```
+
+The command lists the keys that another file sets, because their value changes after the prune. A run with no terminal needs `--yes`. The `[startup]` keys stay. The comments and the `include` list stay.
+
+`tuios config reset` writes the first-start `config.toml` again. It keeps your `include` list and lists the other files that still apply.
+
+## Example: a dotfiles layout
+
+One shared file in a dotfiles repository, one file per machine, and a `config.toml` that TUIOS owns:
+
+```text
+~/.config/tuios/
+├── config.toml          # written by TUIOS: only your local changes
+├── shared.toml          # link to ~/dotfiles/tuios/shared.toml
+└── config.d/
+    └── 50-hosts.toml    # the hosts of this machine, not in the repository
+```
+
+```toml
+# config.toml
+include = ["shared.toml", "?work.toml"]
+```
+
+```toml
+# shared.toml
+[appearance]
+theme = "nord"
+border_style = "rounded"
+
+[keybindings]
+leader_key = "ctrl+a"
+```
+
+```toml
+# config.d/50-hosts.toml
+[hosts.build]
+addr = "build.lan"
+```
+
+`work.toml` is optional, so a machine without it gets no warning. A new host from `tuios hosts add` goes to `50-hosts.toml`, because that is the last writable file with `[hosts]` entries.
+
+### Nix and home-manager
+
+There are two setups:
+
+- **TUIOS owns `config.toml`.** Let Nix write an included file, such as `nix.toml`, and put `include = ["nix.toml"]` in `config.toml`. A change in the app goes to `config.toml` and wins over the Nix value.
+- **Nix owns `config.toml`.** Let Nix write `config.toml` with `include = ["local.toml"]` as the last entry. Make `local.toml` yourself, as a normal file. A change in the app goes to `local.toml`.
+
+<Callout type="info">
+In the second setup, `config.toml` comes after `local.toml` and wins. A key that the Nix `config.toml` sets cannot change from the app, and the save fails. Put the settings that you change in the app in an included file, not in `config.toml`.
+</Callout>
+
+## Related
+
+<Cards>
+  <Card title="Configuration" href="/docs/configuration" description="Every table and option in config.toml" />
+  <Card title="CLI Reference" href="/docs/cli-reference#config" description="tuios config files, origin and prune" />
+  <Card title="Remote Hosts" href="/docs/remote-hosts" description="The [hosts] table" />
+</Cards>

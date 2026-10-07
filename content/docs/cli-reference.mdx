@@ -1031,7 +1031,17 @@ tuios config apply    # apply config.toml to the running daemon now
 tuios config browse   # search the options and set one, in an explorer
 ```
 
-`config edit` uses `$EDITOR`, then `$VISUAL`, then the first of `vim`, `vi`, `nano` and `emacs` it finds. `config reset` asks first, and replaces the file including your keybindings.
+```bash
+tuios config files              # list the files the config is read from, in merge order
+tuios config origin [key]       # show which file sets each key
+tuios config prune [--dry-run]  # remove the keys of config.toml that have their default value
+```
+
+`config edit` uses `$EDITOR`, then `$VISUAL`, then the first of `vim`, `vi`, `nano` and `emacs` it finds. `config reset` asks first. It writes the first-start `config.toml` again: comments, `[startup]` and no other setting. It keeps the `include` list and lists the other files that still apply.
+
+`config files` lists the included files, the `config.d` files and `config.toml`, from lowest to highest precedence. It marks a read-only file. `config origin` names the file that sets each key, and the earlier files that set it too. Give a key to show that key and the keys under it. Both take `--json`.
+
+`config prune` removes the keys of `config.toml` that have their default value. It lists the keys that another file sets, and asks before it changes the file. `--dry-run` changes nothing. `--yes` skips the question, and a run with no terminal needs it. The `[startup]` keys, the comments and the `include` list stay. See [Split the Config](/docs/config-files).
 
 `config apply` applies changes to `config.toml` that give panes or other machines more. The daemon applies a change that gives less at once. A change that gives more waits for `config apply` or a daemon restart. This covers `[agents.permissions]`, `[hosts]` and link policies. Run `config apply` from a terminal outside TUIOS. It is refused from inside a pane. It prints each change that it applied. See [Changes that wait](/docs/agents#changes-that-wait).
 

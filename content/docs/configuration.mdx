@@ -7,7 +7,7 @@ icon: Settings
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 
-TUIOS reads one TOML file, `~/.config/tuios/config.toml`. If `XDG_CONFIG_HOME` is set, the file is `$XDG_CONFIG_HOME/tuios/config.toml`. TUIOS writes a commented default file on first run.
+TUIOS reads `~/.config/tuios/config.toml`. If `XDG_CONFIG_HOME` is set, the file is `$XDG_CONFIG_HOME/tuios/config.toml`. On the first run, TUIOS writes a `config.toml` with comments and no settings, except `[startup]`.
 
 ```bash
 tuios config path     # print the path
@@ -16,6 +16,8 @@ tuios config reset    # overwrite it with the defaults, after asking
 ```
 
 Write only what you want to change. Missing keys and missing tables take their defaults.
+
+`config.toml` can include other files, and TUIOS also reads the `*.toml` files in `~/.config/tuios/config.d/`. `config.toml` wins over all of them. See [Split the Config](/docs/config-files).
 
 ```toml
 [appearance]
@@ -89,7 +91,7 @@ tuios config browse                      # search the options and set one, in an
 
 `tuios config browse` shows each option with its type, default, current value and source. Press <kbd>/</kbd> to search. Press <kbd>Enter</kbd> on an option to set it the same way as `set-config`. <kbd>q</kbd> or <kbd>Esc</kbd> leaves it. It needs a running daemon. See [Explorers](/docs/cli-reference#explorers).
 
-`set-config` changes a running session and does not write the file. A path the registry does not know is refused. An `[appearance]` option also answers to its bare name, so `border_style` and `appearance.border_style` are the same path. `set-config` cannot reach `[keybindings]`, `[hooks]`, `[hosts]`, `[tailscale]`, `[agents]` or the `[dock]` lists, because those are maps and lists rather than single values. For `[agents]` this is also a safeguard: a program in a pane cannot loosen it through TUIOS. `dock.clock.format` is the one `[dock]` key it can set.
+`set-config` changes a running session. With a client attached, the client applies the value and writes it to the config. With no client attached, the daemon keeps the value for this session and does not write the file. A path the registry does not know is refused. An `[appearance]` option also answers to its bare name, so `border_style` and `appearance.border_style` are the same path. `set-config` cannot reach `[keybindings]`, `[hooks]`, `[hosts]`, `[tailscale]`, `[agents]` or the `[dock]` lists, because those are maps and lists rather than single values. For `[agents]` this is also a safeguard: a program in a pane cannot loosen it through TUIOS. `dock.clock.format` is the one `[dock]` key it can set.
 
 ### The in-app settings page
 
@@ -105,8 +107,8 @@ The page reopens on the tab, row and search you left it on. <kbd>1</kbd> to <kbd
 
 <kbd>/</kbd>, or any letter the page does not use, searches every tab. It ranks each row by its name, its config key, its value and its description, and each result names its tab. In the results, <kbd>←</kbd>, <kbd>→</kbd> and <kbd>Enter</kbd> change the row where it is, <kbd>Tab</kbd> goes to the row on its own tab, and <kbd>Esc</kbd> clears the search. The command palette reaches the same rows by name (`settings: pane background`), and `tuios list-options --search` runs the same search from a shell.
 
-<Callout type="warn" title="The settings page rewrites the whole file">
-Each change is saved by writing the full config to `config.toml`. Your comments, key order and formatting are replaced by the generated header and every option with its value. `tuios keybinds unbind` and `tuios keybinds free` write the file the same way. Keep a copy in version control if you edit the file by hand.
+<Callout type="info" title="A save changes only the key">
+The settings page writes only the key that you changed. Your comments, blank lines and key order stay. When the config has more than one file, the change goes to the file that sets the key. See [How TUIOS saves a change](/docs/config-files#how-tuios-saves-a-change).
 </Callout>
 
 ### Command-line flags
@@ -1386,14 +1388,15 @@ A file saved with an error while TUIOS runs is not applied, and the error is sho
 
 ## Troubleshooting
 
-**The file is not loading.** Run `tuios config path` to confirm which file TUIOS reads, then `tuios keybinds list` to see parse errors.
+**The file is not loading.** Run `tuios config path` to confirm which file TUIOS reads, then `tuios keybinds list` to see parse errors. Run `tuios config files` to see every file that TUIOS reads.
 
 **A setting changed nothing.**
 
 1. Check the [table of what applies live](#applying-changes). A saved keybinding works at the next key press.
 2. Check that the file parsed. Look for an error notification, or run `tuios keybinds list`.
 3. Check whether a command-line flag is overriding it.
-4. For a hook, check the event name spelling with `tuios list-hooks`.
+4. Check whether a later file sets the key. Run `tuios config origin <key>`. An old `config.toml` that sets every key hides the other files. Run `tuios config prune` to remove its default values. See [Split the Config](/docs/config-files#clean-up-an-old-configtoml).
+5. For a hook, check the event name spelling with `tuios list-hooks`.
 
 **A key does nothing.** Run `tuios keybinds explain <key>` to see every place it is bound, and `tuios keybinds doctor` for conflicts.
 
@@ -1442,6 +1445,7 @@ max_fps = 120
 ## Related
 
 <Cards>
+  <Card title="Split the Config" href="/docs/config-files" description="Include files, config.d and read-only setups" />
   <Card title="Keybindings" href="/docs/keybindings" description="Every default key, by section" />
   <Card title="Hooks" href="/docs/hooks" description="Run shell commands on TUIOS events" />
   <Card title="CLI Reference" href="/docs/cli-reference" description="Every command and flag" />
