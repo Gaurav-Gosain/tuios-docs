@@ -319,6 +319,8 @@ Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, then the key. Section: `[keybindings.prefix_
 
 In terminal mode, pressing the leader twice sends one literal <kbd>Ctrl</kbd>+<kbd>B</kbd> to the pane.
 
+The which-key popup that opens after the leader shows the keys of your config. A key that you rebind shows in its new place. An action that you unbind has no row. A row for a range of keys, such as `1-9`, shows only the keys that are bound. For example, if you unbind the key for workspace 5, the row shows `1-4/6-9`. Set `appearance.whichkey_enabled = false` to turn the popup off.
+
 After a command worth repeating, such as an arrow, <kbd>o</kbd> or <kbd>O</kbd>, the prefix stays armed for 500 ms. <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>←</kbd> <kbd>←</kbd> <kbd>←</kbd> moves three panes. Change this with `appearance.prefix_repeat_time`. `0` turns it off.
 
 ### Scratch terminal
@@ -647,7 +649,7 @@ To make the ordinary split and new-window keys do the same, set `appearance.new_
 
 ## Copy mode
 
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> to enter copy mode. It moves a cursor through the scrollback with vim keys. These keys are fixed and are not in the config. You can add keys that pipe a yank through a command. See [Pipe a yank through a command](#pipe-a-yank-through-a-command). Put a count before a motion to repeat it: `10j`, `5w`.
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> to enter copy mode. It moves a cursor through the scrollback with vim keys. These keys are fixed and are not in the config, except <kbd>Home</kbd> and <kbd>End</kbd>. You can add keys that pipe a yank through a command. See [Pipe a yank through a command](#pipe-a-yank-through-a-command). Put a count before a motion to repeat it: `10j`, `5w`.
 
 The copy cursor starts on the terminal cursor, which is usually the prompt line. tmux does the same. To start on the middle row, set `appearance.selection.copy_entry` to `center`.
 
@@ -659,6 +661,7 @@ When the focused pane is in the [multifocus](/docs/layout-modes#typing-into-seve
 | <kbd>w</kbd> <kbd>b</kbd> <kbd>e</kbd> | Next word, previous word, end of word |
 | <kbd>W</kbd> <kbd>B</kbd> <kbd>E</kbd> | The same, for space-separated words |
 | <kbd>0</kbd> <kbd>^</kbd> <kbd>$</kbd> | Line start, first non-blank, line end |
+| <kbd>Home</kbd> <kbd>End</kbd> | Line start, line end. You can rebind these two. See [Line start and line end](#line-start-and-line-end) |
 | <kbd>H</kbd> <kbd>M</kbd> <kbd>L</kbd> | Top, middle and bottom of the screen |
 | <kbd>g</kbd><kbd>g</kbd>, <kbd>G</kbd> | Top of the scrollback, bottom (live output) |
 | `{n}G` | Go to line `n` |
@@ -680,6 +683,27 @@ When the focused pane is in the [multifocus](/docs/layout-modes#typing-into-seve
 | <kbd>q</kbd>, <kbd>Esc</kbd> | Leave copy mode |
 
 The scrollback browser (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>s</kbd>) is a different tool. It lists past commands by their prompt marks, for shells that emit OSC 133.
+
+### Line start and line end
+
+<kbd>Home</kbd> moves the copy cursor to the start of the line, as <kbd>0</kbd> does. <kbd>End</kbd> moves it to the end of the line, as <kbd>$</kbd> does. Both keys also move the end of a <kbd>v</kbd> or <kbd>V</kbd> selection. The help lists them next to <kbd>0</kbd> <kbd>^</kbd> <kbd>$</kbd>.
+
+| Action | Default key |
+| --- | --- |
+| `copy_mode_line_start` | <kbd>Home</kbd> |
+| `copy_mode_line_end` | <kbd>End</kbd> |
+
+The keys are in the `copy_mode` section. They work only in copy mode. In the search prompt, they do not move the cursor. <kbd>0</kbd> and <kbd>$</kbd> are fixed keys, and you cannot rebind them.
+
+Do not bind a key here that copy mode already uses, such as <kbd>y</kbd> or <kbd>v</kbd>, or a key of a `[[keybindings.copy_pipe]]` entry. `tuios keybinds doctor` and the config check warn about such a key. A copy pipe key runs the pipe, and the binding does not run. A key that copy mode uses loses its copy mode action.
+
+<kbd>Ctrl</kbd>+<kbd>A</kbd> and <kbd>Ctrl</kbd>+<kbd>E</kbd> are not defaults. <kbd>Ctrl</kbd>+<kbd>A</kbd> is a common leader key, and <kbd>Ctrl</kbd>+<kbd>E</kbd> scrolls one line in tmux copy mode. To use them, add them to the section:
+
+```toml
+[keybindings.copy_mode]
+copy_mode_line_start = ["home", "ctrl+a"]
+copy_mode_line_end = ["end", "ctrl+e"]
+```
 
 ### Search
 

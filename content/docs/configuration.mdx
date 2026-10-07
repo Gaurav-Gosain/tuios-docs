@@ -305,6 +305,7 @@ Any other `{...}` produces a validation warning and is drawn as written.
 | `niri_hover_reveals` | `true` | bool | With `focus_follows_mouse`, hovering does the same |
 | `zoom_size` | `95` | 50 to 100 | Share of the screen a zoomed pane takes, in percent. Below 100 the layout stays visible at the edges. `100` is fullscreen |
 | `zoom_max_width` | `0` | cells | Width cap for a zoomed pane. `0` means no cap |
+| `zoom_borderless` | `false` | bool | Show a zoomed pane on the whole pane region, with no border and no title bar. The pane's program gets the full size. With it on, `zoom_size` and `zoom_max_width` have no effect |
 | `zoom_animation` | `true` | bool | Slide a pane into and out of zoom |
 | `zoom_follows_focus` | `true` | bool | Moving focus while zoomed zooms the pane you move to |
 
@@ -321,6 +322,9 @@ The layout a new session starts in is `startup.layout`. See [The startup table](
 | `dock_workspace_tooltip` | `true` | bool | Show a truncated workspace name in full on hover |
 | `dock_pill_caps` | `true` | bool | Rounded caps on every dock pill: the mode chip, the workspace pills and the minimized windows. `false` draws flat pills |
 | `dock_compact` | `false` | bool | Draw the dock as one row with no rule. The panes get one more row |
+| `dock_mode_icon_window` | unset | text, `""` or `default` | Icon in the mode pill in window mode. Unset or `default` uses the icon of the glyph set. An empty value shows no icon |
+| `dock_mode_icon_terminal` | unset | text, `""` or `default` | Icon in the mode pill in terminal mode |
+| `dock_mode_icon_tiling` | unset | text, `""` or `default` | Icon in the mode pill while tiling is on |
 | `show_clock` | `false` | bool | Show the clock |
 | `clock_format` | `"15:04:05"` | Go time layout | Clock format, for example `15:04` or `Mon 3:04PM` |
 | `show_cpu` | `false` | bool | Show a CPU graph |
@@ -330,6 +334,17 @@ The layout a new session starts in is `startup.layout`. See [The startup table](
 `dock_workspace_label_max` stops one long workspace name from pushing the other tabs off the dock. Set it to `0` to show the whole name. The workspace strip then scrolls. A dock with no room for one full tab still shows the current tab, cut to fit.
 
 `dock_compact` works with the dock at the top and at the bottom. It has no effect when `dockbar_position` is `hidden`. The change applies at once. A compact dock does not show the rule that tells how long a dock message stays. When clients with different docks share a session, the panes keep the largest dock height. A client with a compact dock shows a blank row in that case.
+
+The mode pill icons can be any text up to 8 cells wide. A wide character, such as `終`, counts as two cells. The dock does not accept control characters. For an icon that it does not accept, the dock shows the default icon and the config check shows a warning. The pill adds one space on each side of the icon. If an icon is empty and the mode has no other text, the dock shows no pill in that mode. While tiling is on, the pill also shows the next split direction, `V` or `H`.
+
+```toml
+[appearance]
+dock_mode_icon_window = "WM"
+dock_mode_icon_terminal = ">_"
+dock_mode_icon_tiling = ""
+```
+
+To remove the whole mode pill, remove `"mode"` from the `left` list in the `[dock]` table. You can also set the icons on the settings page, in the Dock section, or with `tuios set-config appearance.dock_mode_icon_window WM`. The change applies at once.
 
 To reorder the dock or add your own cells, see [The dock table](#the-dock-table).
 
@@ -415,6 +430,7 @@ Pastes, notifications, OSC 66 text and link addresses lose their control charact
 | `sections` | `"sessions:25,terminals,files:25,agents:34"` | layout string | Which sections to draw, in what order. See [below](#sections) |
 | `show_glyphs` | `true` | bool | Agent-state glyph on each row |
 | `show_counts` | `true` | bool | Window count on each session row |
+| `show_numbers` | `false` | bool | Switch number (the one `switch_session_N` opens) before each local session name, for sessions 1 to 9 |
 | `marquee` | `true` | bool | Scroll a hovered row's long title |
 | `tooltips` | `true` | bool | Label the collapsed strip on hover |
 | `file_icons` | `true` | bool | A Nerd Font icon per file type in the files section |
