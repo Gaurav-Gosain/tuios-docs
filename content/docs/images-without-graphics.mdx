@@ -1,0 +1,178 @@
+---
+title: Images Without Graphics
+description: How TUIOS shows sixel images as block characters on kmscon, the Linux console and other terminals without graphics.
+icon: Image
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A program in a pane can draw a picture with sixel. Your terminal shows the real picture when it supports sixel or kitty graphics. Some terminals support neither: kmscon, the Linux console, Alacritty, Terminal.app and many SSH clients. On these terminals, TUIOS draws the picture with Unicode block characters. Before this, TUIOS showed a box with "image" in it.
+
+## What you see
+
+Each cell of the picture becomes one block character with two colours: a foreground and a background. The character shows the shape of the light and dark parts of the cell.
+
+![One picture drawn with octants, sextants, quadrants and half blocks in 24-bit colour, with octants at 256 colours, and with half blocks at 16 colours](/shots/image-glyphs-glyph-sets.png)
+
+The picture is part of the pane, like text:
+
+- It moves with the pane and scrolls into the scrollback.
+- Popups and other panes cover it.
+- The modal shade, the spotlight and `dim_unfocused` shade it like text.
+- It goes away when the program clears or writes over its cells.
+
+A terminal with sixel or kitty graphics always gets the real picture. It never gets block characters. If you attach later from a terminal with graphics, you see the same image as a real picture.
+
+## The setting
+
+`appearance.image_symbols` sets the characters.
+
+```toml
+[appearance]
+image_symbols = "auto"    # the default
+# image_symbols = "octant"
+# image_symbols = "off"   # show a box instead of the picture
+```
+
+| Value | Characters | Detail in one cell |
+| --- | --- | --- |
+| `"auto"` | Chosen from `TERM`. See the next table. | |
+| `"octant"` | Octants, Unicode 16 (U+1CD00 and on) | 2 by 4 |
+| `"sextant"` | Sextants, Unicode 13 (U+1FB00 and on) | 2 by 3 |
+| `"quadrant"` | Quadrants (▖ ▗ ▘ ▝ and others) | 2 by 2 |
+| `"half"` | Half blocks (▀ ▄) | 1 by 2 |
+| `"off"` | None. TUIOS shows the box. | |
+
+A finer set shows more detail, but your font must have the characters. A terminal cannot tell TUIOS which characters its font has. So `auto` reads `TERM`. Over SSH, TUIOS reads the `TERM` that the SSH client sends.
+
+| `TERM` | `auto` uses | Why |
+| --- | --- | --- |
+| `kmscon` | Octants | kmscon draws with its built-in Unifont, which has the octants. |
+| `linux` | Half blocks | The Linux console uses fonts of 256 or 512 characters. These fonts have the CP437 block characters and nothing finer. |
+| Anything else | Quadrants | Quadrants are in the Basic Multilingual Plane. Every font with block characters has them. |
+
+If your font has octants, set `"octant"` for the best picture. You can also change the setting on the settings page. The change applies on the next frame. An image that arrived while the setting was `off` keeps the box.
+
+![auto with TERM=kmscon, TERM=linux and TERM=xterm-256color](/shots/image-glyphs-auto.png)
+
+## Colours
+
+TUIOS uses the colours your terminal shows.
+
+- **24-bit colour.** Each cell gets the two colours that fit the picture best.
+- **256 colours.** TUIOS mixes palette colours in a dither pattern.
+- **16 colours**, for example the Linux console. TUIOS always uses half blocks, whatever the setting says. It mixes the 16 colours in a dither pattern. It uses only the 8 dark colours as a background, because the Linux console uses bright backgrounds for blink. If a picture keeps too little of its shape in 16 colours, TUIOS shows the box instead.
+- **No colour.** With `NO_COLOR` set, or when the output is not a terminal, TUIOS shows the box. It tells programs that sixel does not work.
+
+## Turn it off
+
+Set `image_symbols = "off"`:
+
+```toml
+[appearance]
+image_symbols = "off"
+```
+
+TUIOS then shows the box for a sixel image. It also tells programs that sixel does not work, so programs use their own text output again.
+
+## What programs do now
+
+<Callout title="Changed behaviour">
+chafa, timg and yazi now send sixel on terminals without graphics. TUIOS draws the sixel as block characters.
+</Callout>
+
+With block characters on, TUIOS tells the program in the pane that sixel works (attribute 4 in the DA1 answer). Programs that choose between sixel and their own text output then send sixel. Examples are chafa, timg, lsix and yazi. Before this change, these programs used their own text output.
+
+![chafa in a pane: on the left, sixel drawn as octants by TUIOS. On the right, chafa's own text output with image_symbols set to off](/shots/image-glyphs-chafa.png)
+
+TUIOS does not draw kitty graphics images as block characters yet. On a terminal without graphics, a program that only uses kitty graphics uses its own text output.
+
+In daemon mode, the client tells the daemon that it draws block characters. An older daemon ignores this and tells programs that sixel does not work.
+
+## Drawing budget
+
+TUIOS draws only the part of a picture that is on screen. It draws the rest of the picture when that part comes into view. The characters count toward the pane's 16 MiB image budget.
+
+Each pane has a drawing budget: a quarter of the time, with bursts of up to 100 ms. All panes also share one budget for the parts that come into view. A pane that sends pictures faster than this, for example a video played as sixel, shows the box for the pictures past the budget. When the budget comes back, TUIOS draws the part on screen.
+
+## How TUIOS makes the characters
+
+TUIOS splits each cell into sub-cells: 2 by 4 for octants, 2 by 3 for sextants, 2 by 2 for quadrants and 1 by 2 for half blocks. Each sub-cell gets the average colour of the pixels under it, taken in linear light. TUIOS then tries every split of the sub-cells into two groups and keeps the split that loses the least colour in OKLab. That is 128 splits for an octant. The character is the shape of the foreground group. A transparent sub-cell keeps the pane's own background.
+
+At 256 colours, TUIOS dithers the sub-cells with a 4x4 Bayer matrix and picks from the xterm palette (entries 16 to 255). A gradient between two palette entries shows as a pattern of both.
+
+At 16 colours, TUIOS dithers each half block to the 16 ANSI colours and sends the colour index, so the terminal paints its own palette. TUIOS chooses the colours against the default VGA palette of the Linux console. A cell whose two colours are both bright gets the one that loses least as its nearest dark colour.
+
+TUIOS measures how much shape a 16-colour picture keeps. The measure is the correlation between the lightness of the picture and the lightness of the cells. Both are averaged over blocks of 2 by 2 cells, so a dither pattern counts as the shade it makes. Below 0.5, TUIOS shows the box.
+
+TUIOS measured ten pictures, each at full contrast and at 30, 15, 8 and 4 per cent contrast, at 60 by 20 cells:
+
+| | Lowest | Typical |
+| --- | --- | --- |
+| Half blocks, 16 colours, dithered | 0.62 (fine contour lines, full contrast) | 0.85 to 0.99 |
+| The same without the dither | 0.23 (contour lines, 4 per cent) | 0.3 to 0.5 at 8 and 4 per cent |
+| Half blocks, 24-bit colour | 0.96 | 0.99 to 1.00 |
+| Random noise, any mode | 0.51 to 0.53 | |
+
+Without the dither, a picture with low contrast becomes flat bands. With the dither, no measured picture fell under 0.5. So the box is a safety net.
+
+### Speed
+
+- **Quality.** The mean error per colour channel is 4.6 to 5.0 out of 255 in 24-bit colour, and 25.9 at 256 colours. On cells with an edge, octants leave 16.4 against 32 for a flat colour.
+- **Drawing.** An image of 80 by 24 cells takes 2.2 ms with half blocks, 2.5 ms with quadrants, 3.3 ms with sextants and 6.5 ms with octants. With the dither, it takes 3.5 to 9.6 ms.
+- **Text frames.** A frame with no image takes no new path. Its time and allocations do not change.
+- **A frame with an image.** A frame over an image of 60 by 16 cells takes about 3.5 ms with the box, 3.7 ms with quadrants and 3.9 ms with octants.
+
+## Why block characters: kmscon
+
+kmscon is the KMS/DRM console. TUIOS runs well on it, but kmscon draws neither sixel nor kitty graphics. Block characters were the one option that TUIOS could ship.
+
+### What kmscon supports
+
+- **No image protocol.** kmscon has no sixel, no kitty graphics and no iTerm2 images. The open request is [kmscon/kmscon#138](https://github.com/kmscon/kmscon/issues/138). A maintainer said there that libtsm "only supports a table of cells". Sixel or kitty images need a rewrite of most of libtsm and a large part of the renderer. [#301](https://github.com/kmscon/kmscon/issues/301) says the same.
+- **Where the project is.** The maintained repository is [kmscon/kmscon](https://github.com/kmscon/kmscon), with libtsm at kmscon/libtsm. Aetf/kmscon points there. The latest release is kmscon 10.0.4 with libtsm 4.8.0 (2026-09-25).
+- **No sixel work upstream.** No branch, pull request or issue in kmscon or libtsm adds image storage to the cell grid.
+- **Renderers.** Two are left: bbulk (software, drm2d) and gltex (OpenGL ES, drm3d, `--hwaccel`). The mouse pointer recently got a `draw_pointer` hook in both, and a hardware cursor plane. An image layer needs the same kind of hook, and image storage for each cell in libtsm.
+- **Characters.** kmscon draws every character from its font engine (freetype, pango, psf, unifont, 8x16). It does not draw block elements itself. Its built-in Unifont covers U+1FB00 to U+1FBFF and U+1CD00 to U+1CDFF. Code points past U+FFFF work since early 2026. So `--font-engine=unifont` draws sextants and octants.
+- **Colour.** kmscon 10 sets `TERM=kmscon` and `COLORTERM=truecolor`. The terminfo entry says 256 colours. TUIOS reads `COLORTERM` and draws in 24-bit colour.
+
+### How other console programs draw pixels
+
+| Program | How it draws | Works beside kmscon? |
+| --- | --- | --- |
+| fbi, fim, fbv | Write to `/dev/fbN`. fbi needs the real VT, not a pty. | No. See the next section. |
+| fbcon, simpledrm | The kernel's own console and its DRM fbdev emulation. | Not while kmscon is DRM master. |
+| mpv `--vo=drm` | Takes DRM master and shows its own buffers. `--drm-draw-plane` picks a plane. | Only after kmscon releases master. `kmscon-launch-gui` does this, and keyboard input then breaks ([#406](https://github.com/kmscon/kmscon/issues/406)). In a terminal, use mpv `--vo=tct` (text) or `--vo=sixel`. |
+| w3m-img | `w3mimgdisplay` has an fb backend on `/dev/fb0` (`$FRAMEBUFFER`). | No. The same as fbi. |
+| chafa | Characters when the terminal has no graphics: half, quadrant, sextant, octant (since 1.16), braille and more. | Yes. It is the model for what TUIOS does. |
+| yaft | A framebuffer terminal with experimental sixel. It draws into `/dev/fb0` itself. | It replaces kmscon. It does not run beside it. |
+
+### Can a second process draw while kmscon holds DRM master?
+
+No. In Linux 6.17, `SETCRTC`, `SETPLANE`, `PAGE_FLIP`, `DIRTYFB`, `ATOMIC` and `CREATE_LEASE` all need DRM master. `CREATE_DUMB` and `ADDFB2` do not. So a second process can make a buffer, but it cannot put the buffer on screen.
+
+The fbdev emulation returns `-EBUSY` while another master exists. So a write to `/dev/fb0` goes into a buffer that is not on screen. kmscon still has an fbdev backend (`no-drm`). There it owns the framebuffer and paints its cells over anything written beside it. A DRM lease can work, but only the master can create one, and kmscon has no lease support.
+
+### The options
+
+| Option | Without root or DRM master? | Cost | Result |
+| --- | --- | --- | --- |
+| Draw to `/dev/fb0` or a DRM plane at cell positions, and draw again after each flip | No | Needs master, a lease that kmscon does not give, or kmscon in the background. With the fbdev backend it races the kmscon paints. Device access from a multiplexer is a security boundary of its own. | Not practical. |
+| Sixel or kitty graphics in kmscon | Yes, after it merges | Image storage for each cell in libtsm, a draw hook in bbulk and gltex, and scroll and erase rules. Months of work. The maintainers will not do it themselves. | The correct long-term fix. TUIOS cannot ship it. |
+| TUIOS draws images as Unicode block characters | Yes | A font with the characters. Two colours for each cell. | **Built.** Works on kmscon, plain SSH clients and any terminal without graphics. |
+| TUIOS as its own DRM console | No | Seat management (logind or seatd), VT switching, input, font rendering and a renderer: a second kmscon. | Too large for the gain. |
+
+Real pixels on kmscon need sixel or kitty graphics in kmscon itself. That work starts with a libtsm design for image cells, proposed on [#138](https://github.com/kmscon/kmscon/issues/138).
+
+### Try it on kmscon
+
+kmscon needs a free VT and DRM master. On a machine where VT 6 is free:
+
+```sh
+sudo kmscon --vt=6 --switchvt --font-engine=unifont
+# log in, then
+tuios
+chafa -s 60x20 picture.png    # in a pane
+```
+
+`sudo systemctl start kmsconvt@tty6.service` does the same through systemd. It reads its options from `/etc/kmscon/kmscon.conf`. Set `font-engine=unifont` there.
