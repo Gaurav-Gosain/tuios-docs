@@ -45,6 +45,7 @@ Several sources can report on a pane. From most to least trusted:
 | Source | What it is |
 |--------|------------|
 | `report` | The agent reports for itself with `tuios set-agent-state` |
+| `program` | The program printed an OSC 7501 report. See [Program Status](/docs/program-status) |
 | `transcript` | The daemon reads the record file the agent's harness writes |
 | `osc` | An escape sequence the agent printed: OSC 9;4 progress, or its window title |
 | `screen` | A rule matched text on the pane's screen |
@@ -147,9 +148,17 @@ TUIOS never uses herdr's own socket. A herdr that you start inside a TUIOS pane 
 herdr_protocol = "agents"   # always (default), agents, off
 ```
 
+### Program status
+
+Any program can report its own state with one escape sequence, OSC 7501, or with `tuios status`. The report can say what the program waits for: an approval, an answer or a login. See [Program Status](/docs/program-status).
+
+```sh
+tuios status blocked --kind permission --app deploy --msg 'Approve deploy to production?'
+```
+
 ### Progress sequences
 
-An agent that prints OSC 9;4 progress sequences needs no wiring. Setting a progress bar maps to `working`, clearing it to `idle`, the error state to `errored`, and the warning state to `needs_input`.
+An agent that prints OSC 9;4 progress sequences needs no wiring. Setting a progress bar maps to `working`, clearing it to `idle`, the error state to `errored`, and the warning state to `needs_input`. After a pane sends an OSC 7501 report, TUIOS stops reading OSC 9;4 as the pane's state until the next full reset.
 
 ### Process detection
 
@@ -407,6 +416,7 @@ Everything an agent does goes through the same `tuios` commands and [control pro
   <Card title="Checkpoints" href="/docs/checkpoints" description="Read and undo what one turn changed" />
   <Card title="Ship" href="/docs/ship" description="Commit, merge, push and open a pull request" />
   <Card title="Push Notifications" href="/docs/push-notifications" description="Inbox items on your phone" />
+  <Card title="Program Status" href="/docs/program-status" description="Report the state of any program with OSC 7501" />
   <Card title="Session Rail" href="/docs/session-rail" description="The agents section and its filters" />
   <Card title="Control Protocol" href="/docs/control-protocol" description="The verbs behind every command here" />
 </Cards>

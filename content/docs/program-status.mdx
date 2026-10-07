@@ -1,0 +1,166 @@
+---
+title: Program Status
+description: Let any program in a pane report what it does with one escape sequence, OSC 7501, and see it in the rail and the Inbox.
+icon: Activity
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+Any program in a pane can say what it does: a build, a deploy script, a package manager or a coding agent. The program writes one escape sequence. TUIOS shows the state in the [rail](/docs/session-rail#agent-rows), the [Inbox](/docs/agent-inbox) and the pane's title bar. The program needs no hook, no socket and no plugin.
+
+The sequence is the Program Status Protocol, OSC 7501, revision 0.2. Read the [specification](https://www.superlogical.com/rex/docs/build/program-status) for the full grammar.
+
+## What a program sends
+
+A report is one OSC sequence. It holds `key=value` pairs, separated by `:`, and ends with ST (`ESC \`) or BEL.
+
+```sh
+printf '\e]7501;state=working:app=build:progress=40:msg=Q29tcGlsaW5n\e\\'
+```
+
+| Key | What it holds |
+| --- | --- |
+| `state` | `idle`, `working`, `done`, `blocked`, `error` or `clear`. Every report must have it |
+| `kind` | What a blocked program waits for: `permission`, `question` or `auth` |
+| `progress` | A number from 0 to 100, with `working` or `blocked` |
+| `app` | The program's name, such as `cargo` or `terraform` |
+| `title` | A short label, in base64 |
+| `msg` | One line that says what the program does or waits for, in base64 |
+| `id` | The record to address, such as `build` or `build/test`. Without it, the report goes to the root record |
+
+Each report replaces its record. A key that a report does not send is gone from the record. Send `app` and `title` in every report that must keep them.
+
+## Report from a script
+
+`tuios status` writes the sequence and does the base64. It needs no daemon, so a script can use it in any terminal.
+
+```sh
+tuios status working --app build --msg 'Compiling' --progress 40
+tuios status blocked --kind permission --app deploy --msg 'Approve deploy to production?'
+tuios status done --app build --msg 'Built 12 crates'
+tuios status error --app build --msg 'Linker failed'
+tuios status --clear
+```
+
+The command writes to the controlling terminal (`/dev/tty`). The report stays correct when the script's output goes to a file or a pipe. `--stdout` writes to standard output instead. `tuios status` refuses a report that a terminal must discard, and says why.
+
+### A shell function
+
+A script that cannot call `tuios` can use this function:
+
+```sh
+status() {
+  printf '\e]7501;state=%s:msg=%s\e\\' "$1" "$(printf '%s' "$2" | base64 | tr -d '\n')"
+}
+
+status working "Syncing photos"
+rsync -a ~/Photos backup:/photos && status done "Photos synced" || status error "rsync failed"
+```
+
+A program that exits right after its work must report `done` or `error` first. That record then stays for you to find.
+
+## The states
+
+TUIOS turns the most urgent record of the pane into the pane's [agent state](/docs/agents#states):
+
+| OSC 7501 state | Agent state | `blocked_by` |
+| --- | --- | --- |
+| `idle` | `idle` | |
+| `working` | `working` | |
+| `done` | `done`, finished and unread | |
+| `blocked`, `kind=permission` | `needs_input` | `approval` |
+| `blocked`, `kind=question` | `needs_input` | `question` |
+| `blocked`, `kind=auth` | `needs_input` | `auth` |
+| `blocked`, no kind | `needs_input` | empty |
+| `error` | `errored` | |
+| `clear` | Removes the record | |
+
+`state=clear` with an `id` removes that record and every record under it. Without an `id`, it removes every record of the pane.
+
+### More than one record
+
+A program can keep one record for each of its parts. The `id` is a path: `build/test` is under `build`, and `build` is under the root record.
+
+- The pane shows the most urgent record. `blocked` comes first, then `error`, `done`, `working` and `idle`.
+- A record without `app` takes the `app` of its nearest parent.
+- A pane holds at most 256 records. A new record past that removes the record that changed least recently.
+
+## What TUIOS shows
+
+- **The rail.** The agent row shows the `app` as the agent's name and the progress beside it, such as `build · 40%`. The second line shows the title and the message. The `progress` token of `[appearance.sidebar.agent_row]` sets where the progress goes.
+- **The Inbox.** A `blocked` record opens an approval or a question item. An `error` record opens an error item, and a `done` record opens a finished item. The item names the pane by its title and its id, such as `build [3f2a9c1e]`. The detail of the item lists every record of the pane. For `kind=auth` the Inbox gives no answer. Type the login in the pane.
+- **Notifications.** A record raises the same alerts, hooks and [push notifications](/docs/push-notifications) as any other agent state. A pane whose state comes from OSC 7501 sends a notification, a bell, a sound or a client hook at most once in 30 seconds.
+- **Scripts.** `tuios get-agent-state` and `tuios list-agents` report `source: "program"` and the records as `program_status`.
+
+A harness hook in the same pane wins. When a hook reports, the records still show, but the pane's state is the hook's. When the last record ends, TUIOS clears the state and looks at the pane again.
+
+## How long a record stays
+
+There is no heartbeat. A program does not have to send its state again.
+
+| Event | `working`, `blocked`, `idle` | `done`, `error` |
+| --- | --- | --- |
+| The shell starts a prompt (OSC 133 A) | Removed | Kept |
+| The foreground program that reported exits | Removed, in 2 seconds or less | Kept |
+| A background job, or the pane's own process, exits | Kept | Kept |
+| You type in the pane | Kept | Removed |
+| A full reset (RIS) | Removed | Removed |
+
+A shell without OSC 133 marks does not tell TUIOS when a prompt starts. TUIOS then records the foreground process group with each report. When no process is left in that group, the program has exited and its records go.
+
+A program that reports and exits at once, such as `tuios status working` typed at a prompt, can be gone before TUIOS reads the foreground. Its record then stays until the next prompt mark, the next report or a clear. A shell with OSC 133 marks does not have this gap.
+
+Keys from `tuios send-text` or `tuios send-keys` do not count as your typing. Keys from an attached client do.
+
+## Check for support
+
+A program sends `OSC 7501 ; ? ST`. A terminal that reads the protocol answers with the same sequence. TUIOS answers from the pane's emulator, with the terminator that the query used.
+
+Send a primary device attributes query (`CSI c`) after the question. If that answer comes first, the terminal does not read the protocol.
+
+TUIOS sends back only this fixed answer. A program cannot read the records.
+
+## Limits
+
+A report that breaks a limit is discarded. TUIOS applies nothing from it.
+
+| Item | Limit |
+| --- | --- |
+| The whole sequence | 4096 bytes |
+| A key | 16 bytes |
+| `msg` | 2048 bytes decoded |
+| `title` | 192 bytes decoded |
+| `app` | 32 bytes |
+| `id` | 128 bytes, 8 levels, 32 bytes for each level |
+| Records in one pane | 256 |
+
+- A `msg` or `title` that does not decode, is not UTF-8, or holds a control character discards the report.
+- A report without `state`, or with an unknown state, is ignored. So is a report with a bad `id`.
+- A `kind` with a state other than `blocked` is ignored. So is a `progress` outside 0 to 100.
+- TUIOS shows markup as text and removes invisible format characters before it shows a message.
+- `app` is only a label. TUIOS does not look it up as a harness.
+
+## TUIOS in a terminal that reads OSC 7501
+
+TUIOS is a program too. In a terminal that reads the protocol, TUIOS reports the agent states of its panes to that terminal. Each pane has one record, with the id `<session>/<pane>`. A client asks its terminal `OSC 7501 ; ?` at start, and reports only when the terminal answers. When a client detaches, it clears its records.
+
+To turn this off:
+
+```toml
+[agents]
+host_program_status = "off"   # "auto" is the default
+```
+
+<Callout type="info">
+TUIOS reads OSC 7501 itself on both terminal backends, the pure Go one and libghostty-vt.
+</Callout>
+
+## Related
+
+<Cards>
+  <Card title="Agents" href="/docs/agents" description="Agent states, sources and alerts" />
+  <Card title="Inbox and Review" href="/docs/agent-inbox" description="The items a blocked or finished record opens" />
+  <Card title="Session Rail" href="/docs/session-rail#agent-rows" description="What an agent row shows" />
+  <Card title="Push Notifications" href="/docs/push-notifications" description="Inbox items on your phone" />
+</Cards>
