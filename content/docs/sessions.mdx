@@ -325,6 +325,47 @@ The width of the rail stays per client. A client too narrow to show the rail doe
 
 A client from an older version of TUIOS keeps its rail to itself. A new client attached to an older daemon also keeps its rail to itself.
 
+### Detaching other clients
+
+To take a session for yourself, attach with `-d`. Each other client of the session detaches as you attach, as with `tmux attach -d`.
+
+```bash
+tuios attach -d work
+```
+
+The session continues to run. Each detached client exits with status 0 and shows this message:
+
+```
+Another client attached to this session.
+Detached from session 'work'.
+```
+
+To detach clients without an attach, use `tuios detach-client`:
+
+```bash
+tuios detach-client -s work               # detach every client of work
+tuios detach-client -s work --all-other   # keep the client used last in work
+tuios detach-client --client client-1790941960197517900
+```
+
+`tuios list-clients` shows the client ids. With no flags, the command detaches the client used last in the session of the pane you run it in. Outside a pane, it detaches the client used last in the only session with a client. From a pane, the command needs the `admin` grant. See [detach-client](/docs/cli-reference#detach-client).
+
+### One client for each session
+
+Set `single_client` to keep one client for each session. Then each attach is `tuios attach -d`, and the newest attach wins.
+
+```toml
+[daemon]
+single_client = true
+```
+
+Two kinds of attach never detach other clients:
+
+- A view-only client, such as `tuios-web --read-only`.
+- The attach that TUIOS makes by itself to get a session back after a host link drops.
+
+A change in the config file applies to the next attach.
+
 ## Session resurrection
 
 Detaching loses nothing, because the daemon keeps running. Resurrection is what happens when the daemon itself stops: `tuios kill-server`, a crash, or a reboot. It brings back the **shape** of each session and the history each pane showed, not what was running in it.
@@ -605,4 +646,5 @@ tuios new fresh
   <Card title="CLI Reference" href="/docs/cli-reference" description="Every command and flag" />
   <Card title="Keybindings" href="/docs/keybindings" description="Keyboard shortcuts" />
   <Card title="Hooks" href="/docs/hooks" description="Run commands on session and window events" />
+  <Card title="SSH Agent" href="/docs/ssh-agent" description="Let panes use the ssh agent of the client you use" />
 </Cards>

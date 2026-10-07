@@ -84,7 +84,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 
 | Group | Commands |
 |-------|----------|
-| [Sessions](#sessions) | `new`, `attach`, `ls`, `list-clients`, `resurrect`, `rename-session`, `kill-session`, `kill-server`, `daemon`, `logs` |
+| [Sessions](#sessions) | `new`, `attach`, `ls`, `list-clients`, `detach-client`, `ssh-agent-path`, `resurrect`, `rename-session`, `kill-session`, `kill-server`, `daemon`, `logs` |
 | [Worktrees](#worktrees) | `worktree`, `fan`, `ship` |
 | [Windows and workspaces](#windows-and-workspaces) | `new-window`, `split-window`, `popup`, `xpanes`, `close-workspace`, `focus-window`, `pip`, `move-window`, `set-window`, `set-layout`, `select-workspace`, `list-workspaces`, `set-workspace-name`, `set-session-name`, `set-session-accent` |
 | [Input and output](#input-and-output) | `send-keys`, `send-text`, `run`, `capture-pane`, `screenshot`, `wait-for`, `subscribe` |
@@ -146,17 +146,23 @@ tuios attach [session-name] [flags]
 - `--ssh`: with `--host`, run ssh to the host and use its own `tuios`. Press the prefix twice to send it to the remote client.
 - `--hold`: after a failure, wait for <kbd>Enter</kbd> before exiting.
 - `--force`: attach from inside a pane of the same session. See [Attach from inside a pane](#attach-from-inside-a-pane).
+- `-d, --detach-others`: detach every other client of the session, as `tmux attach -d` does.
 - The [interface flags](#interface-flags).
 
 ```bash
 tuios attach                  # the session you used last
 tuios attach work -c          # attach, or create it
+tuios attach -d work          # attach, and detach the other clients of work
 tuios attach --host build api # the session api on the machine build
 ```
 
 With no name, `attach` opens the session you last typed or clicked in. Windows that agents or scripts open, and keys that `send-keys` or a tape sends, do not count. The choice is saved with the session, so it holds across a daemon restart. If the daemon is not running, it starts, restores the sessions saved on disk, and opens one of them. With nothing saved, it opens a new session. A name that matches no session is an error unless you pass `-c`.
 
 `SIGINT` or `SIGTERM` ends a client even when its terminal stopped reading, for example after a killed SSH connection. The client asks for a normal quit first. If the quit does not finish within 3 seconds, the client exits. A second signal makes it exit at once. A forced exit puts the terminal mode back, tries to reset the screen, and exits with `128` plus the signal number. If the screen stays wrong, run `reset`. The session keeps running in the daemon. `tuios new`, `tuios --standalone` and `tape play` do the same.
+
+With `-d`, each other client of the session detaches as this client attaches. The session continues to run. Each detached client exits with status 0 and prints "Another client attached to this session." To do this on every attach, set `single_client = true` in `[daemon]`. See [One client for each session](/docs/sessions#one-client-for-each-session).
+
+With `ssh_agent = "follow"` in `[daemon]`, `attach` points the ssh agent link of the session at the `SSH_AUTH_SOCK` of this client. See [SSH Agent](/docs/ssh-agent).
 
 #### Attach from inside a pane
 
@@ -262,6 +268,59 @@ tuios list-clients [--json]
 - For an SSH or web client, `pid` is the local server process, not the remote SSH process or the browser.
 
 To follow changes, run `tuios subscribe --types client-session-changed`. Each event carries `client_id`, `pid`, `session` and `attached`. `attached` is `true` when a client enters a session and `false` when it leaves or disconnects. A session rename sends one event with the new name for each client in the session.
+
+### detach-client
+
+Detach attached clients from their sessions, as `tmux detach-client` does. The sessions continue to run. Each detached client exits with status 0 and prints "The tuios detach-client command detached this client."
+
+```bash
+tuios detach-client [--client ID | --session NAME] [--all-other] [--json]
+```
+
+- `--client <id>`: detach the client with this id, from `tuios list-clients`.
+- `-s, --session <name>`: detach every client of this session.
+- `-a, --all-other`: keep one client and detach every other client of its session.
+- `--json`: print the ids of the detached clients.
+
+The command detaches the first of these that applies:
+
+1. The client that `--client` names.
+2. Every client of the session that `-s` names.
+3. From a pane, the client used last in the session of the pane.
+4. The client used last in the only session with a client.
+
+With `--all-other`, the command keeps the client that `--client` names, or the client used last in the session. It detaches every other client of that session.
+
+From a pane, the command needs the `admin` grant. See [pane-grants](#pane-grants-and-set-pane-grants).
+
+```bash
+tuios detach-client --client client-1790941960197517900
+tuios detach-client -s work               # detach every client of work
+tuios detach-client -s work --all-other   # keep the client used last in work
+```
+
+```json
+{"detached":["client-1790941960197517900"]}
+```
+
+### ssh-agent-path
+
+Print the ssh agent link of a session. With `ssh_agent = "follow"` in `[daemon]`, the link points at the agent socket of the client that attached to the session or used it last. New panes get `SSH_AUTH_SOCK` set to the link.
+
+```bash
+tuios ssh-agent-path [-s NAME] [--json]
+```
+
+- `-s, --session <name>`: the session whose link to print. In a pane, the default is the session of the pane. Outside a pane, `-s` is required.
+- `--json`: print JSON, with `follow` and the socket that the link points at (`target`).
+
+Without `--json`, the command fails when `ssh_agent` is not `"follow"`. A shell that started before you set the option keeps its old `SSH_AUTH_SOCK`. Add this line to your shell rc:
+
+```bash
+p=$(tuios ssh-agent-path 2>/dev/null) && export SSH_AUTH_SOCK="$p"
+```
+
+See [SSH Agent](/docs/ssh-agent).
 
 ### resurrect
 

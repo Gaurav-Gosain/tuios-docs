@@ -105,6 +105,8 @@ The daemon currently implements 115 verbs, some of them only for one daemon to c
 | `list-clients` | List every connection to the daemon: its client id, the process id the kernel reports, and the session it is attached to. See [Clients](#clients). |
 | `new-session` | Create a session, detached, with its first window. Optional `name`, `width`, `height` (default 80x24), `window`, `window_name`, `cwd` and `command`. `cwd` is also where later windows with no pane to take a directory from start. |
 | `switch-session` | Switch an attached client to another session, in place. `name`, and optional `host`, `create`, `cwd` (with `create`), `session` (the session the client shows) and `client` (a client id). A pane needs `admin`. |
+| `detach-client` | Detach attached clients. The session continues to run. Optional `client`, `session` and `all_other`. A pane needs `admin`. See [Clients](#clients). |
+| `ssh-agent-path` | The ssh agent link of a session, with `follow` and the socket it points at (`target`). `session`. See [SSH Agent](/docs/ssh-agent). |
 | `session-info` | Details about one session. |
 | `kill-session` | End a session and every window in it. |
 | `rename-session` | Rename a session. Panes that already run still reach it by the old name. |
@@ -278,6 +280,25 @@ With `[agents] enabled = false`, every agent verb fails with `agents_disabled`, 
 - For an SSH or web client, `pid` is the local server process, not the remote SSH process or the browser.
 
 The `client-session-changed` event follows the same connections. It carries `client_id`, `pid`, `session` and `attached`. `attached` is `true` when a client enters a session and `false` when it leaves, a disconnect while attached included. A session rename sends one event with the new name and `attached: true` for each client in the session.
+
+### Detaching clients
+
+`detach-client` detaches clients, as tmux `detach-client` does. The sessions continue to run.
+
+- `client` names one client from `list-clients`.
+- `session` names a session. Every client of it detaches.
+- Give one of the two, or neither. With neither, the verb acts on the client used last in the session of the caller's pane, else in the only session with a client.
+- `all_other` keeps the named client, or the client used last, and detaches every other client of its session.
+
+```json
+{"verb": "detach-client", "params": {"session": "work", "all_other": true}}
+```
+
+```json
+{"result": {"type": "clients_detached", "detached": ["client-1790941960197517900"]}}
+```
+
+Each detached client exits with status 0. An attach with `detach_others` set (`tuios attach -d`), or any attach while `[daemon] single_client` is on, detaches the other clients of the session in the same way. An unknown `client` fails with `invalid_params`. A pane needs the `admin` grant. Over a link the verb needs `write`.
 
 ## Capturing windows
 

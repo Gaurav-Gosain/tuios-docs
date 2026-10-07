@@ -88,6 +88,7 @@ A target names a pane by `%N`, by the TUIOS window id after a `%` (or a prefix o
 | `break-pane` | Moves a pane to the lowest empty workspace, or the empty one `-t` names |
 | `join-pane`, `move-pane` | Move the `-s` pane to the workspace of the `-t` pane |
 | `rename-session` | Renames a session |
+| `detach-client` | Detaches TUIOS clients. The session continues to run. See [detach-client](#detach-client) |
 | `respawn-pane -k` | Replaces the process of a pane the shim opened. See [The pane holder](#the-pane-holder) |
 | `display-popup` | Opens a TUIOS popup and returns when its command exits |
 | `run-shell`, `if-shell` | Run a shell command as you |
@@ -99,9 +100,29 @@ A target names a pane by `%N`, by the TUIOS window id after a `%` (or a prefix o
 | `-V` | Prints `tmux 3.4` |
 
 - `set-option` of any other option, `set-hook`, `refresh-client`, `select-layout`, `resize-pane` and `start-server` succeed and do nothing. TUIOS owns the layout, the styling and the options.
-- `swap-pane`, `kill-session`, `kill-server`, `attach-session` (outside control mode), `switch-client` and `detach-client` are refused. The shim never attaches a terminal or ends a session.
+- `swap-pane`, `kill-session`, `kill-server`, `attach-session` (outside control mode) and `switch-client` are refused. The shim never attaches a terminal or ends a session.
 - Every other command fails with `unknown command`. A flag that is not listed fails with `unknown flag`. The shim does not accept a flag and then ignore it.
 - `show-options history-limit` prints the session's `appearance.scrollback_lines`, or `10000` when nothing set it.
+
+### detach-client
+
+`detach-client` detaches TUIOS clients, as in tmux 3.7c. The session continues to run, and each detached client exits with a message. `list-clients` names one client for each session, `tuios-SESSION`.
+
+- `-s SESSION` detaches every client of that session. `-s` wins: the shim ignores `-a` and `-t` with it, as tmux 3.7c does.
+- `-t tuios-SESSION` detaches every client of that session.
+- With neither, the client used last in the caller's session detaches.
+- `-a` keeps the client used last in the session and detaches the others. In tmux, `-a` acts on every client of the server. In the shim, `-a` acts on one session only: the session of `-t`, else the caller's session.
+- `-P` and `-E` fail with `unknown flag`.
+
+A session out of the shim's reach is not found. From a pane, the command needs the `admin` grant.
+
+<Callout type="warn" title="A tool can detach you">
+Under `[agents.permissions]` mode `open`, the default, every pane holds `admin`. A tool in a pane can then detach your client through the shim, as a tool under tmux can. To prevent this, give the pane fewer grants or use mode `strict`.
+</Callout>
+
+In control mode, `detach-client` with no flags ends the control client, as in tmux. With flags, it detaches TUIOS clients as above. A read-only control client cannot detach TUIOS clients.
+
+`attach-session -d` in control mode attaches the control client and detaches no TUIOS client. A control client is not a TUIOS client. To detach the other clients when you attach, use `tuios attach -d`.
 
 ### Command names and command lines
 

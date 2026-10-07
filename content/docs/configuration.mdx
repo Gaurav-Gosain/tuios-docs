@@ -859,7 +859,11 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 | `persist_scrollback_lines` | `0` | Most history lines one pane saves. `0` means 1000 |
 | `persist_scrollback_kb` | `0` | Most KiB one pane's saved history takes on disk, compressed. `0` means 2048 |
 | `window_size` | `"smallest"` | The size of a session that has more than one client: `smallest`, `largest` or `latest` (the client that last had input). The names are those of the tmux `window-size` option. See [Session size](/docs/sessions#session-size-with-more-than-one-client) |
+| `single_client` | `false` | Keep one client for each session. Each attach detaches the other clients of the session, as `tuios attach -d` does. See [One client for each session](/docs/sessions#one-client-for-each-session) |
+| `ssh_agent` | `"off"` | `"follow"` gives each session a stable link to the ssh agent of the client used last. New panes get `SSH_AUTH_SOCK` set to the link. See [SSH Agent](/docs/ssh-agent) |
 | `respond_from_shell` | `false` | Let `tuios respond`, run from a shell outside every pane, answer an agent's prompt. A caller inside a pane is refused either way. Not settable with `set-config` |
+
+A change to `single_client` or `ssh_agent` in the file applies to the next attach.
 
 To change `window_size` for one session while it runs, use `tuios set-config daemon.window_size latest -s NAME`. That value is not saved to the file. A change in the file applies when the daemon starts again.
 
@@ -1145,7 +1149,7 @@ connect_timeout = 5
 | `addr` | required | Anything ssh accepts, including an `ssh_config` alias. A host with no `addr`, or with one that starts with `-`, is ignored and logged |
 | `connect_timeout` | `10` | Seconds one dial may take before the host counts as unreachable |
 | `command` | `""` | The `tuios` binary on the host. Empty means the link finds it on the `PATH`, at the usual install paths, or through a login shell |
-| `ssh_options` | `[]` | Extra ssh arguments, placed before the address. Only safe options are accepted. See [Rules for ssh_options](#rules-for-ssh_options) |
+| `ssh_options` | `[]` | Extra ssh arguments, placed before the address. Only safe options are accepted. See [Rules for ssh_options](#rules-for-ssh_options). `-A` forwards your ssh agent to the host. See [SSH Agent](/docs/ssh-agent#remote-hosts) |
 | `repos_root` | `""` | Where the host keeps its checkouts, as the host reads it, such as `~/src`. `fan --host`, `worktree new --host` and `start-agent` look for a repository there by its origin URL |
 
 You can also manage the table from the shell. These commands edit the file:
