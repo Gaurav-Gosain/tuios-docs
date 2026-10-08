@@ -161,7 +161,23 @@ try {
   } catch {
     // Already gone.
   }
-  if (server.exitCode === null) await exited;
+  // A process group that ignores SIGTERM would otherwise hold the job until
+  // its own time limit. Give it 10 s, then kill it.
+  if (server.exitCode === null) {
+    let timer;
+    const timedOut = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(true), 10_000);
+    });
+    if (await Promise.race([exited.then(() => false), timedOut])) {
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+      await exited;
+    }
+    clearTimeout(timer);
+  }
 }
 
 if (failures.length > 0) {
