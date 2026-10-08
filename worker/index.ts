@@ -17,7 +17,8 @@
  * www.tuios.dev) gets a 301 to the same path on https://tuios.dev. See
  * redirect.ts. Then a page that moved gets a 301 to its new path (see
  * moved.ts), and a release clip is served from the MEDIA bucket (see
- * media.ts).
+ * media.ts). A page request for its first bytes, which Next's link prefetch
+ * sends, gets a 206 with just those bytes (see range.ts).
  */
 
 import { mediaKey, serveMedia } from "./media";
@@ -29,6 +30,7 @@ import {
   preferredType,
   quality,
 } from "./negotiate";
+import { answerPrefixRange } from "./range";
 import { hostRedirect } from "./redirect";
 
 // MEDIA is optional: until the R2 bucket is bound, a clip path falls through
@@ -95,7 +97,8 @@ export default {
         res.headers.set("Link", existing ? `${existing}, ${link}` : link);
       }
     }
-    return res;
+    // Next's link prefetch asks for the first 64 bytes. See range.ts.
+    return answerPrefixRange(request, res);
   },
 };
 
