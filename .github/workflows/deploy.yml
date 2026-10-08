@@ -57,7 +57,21 @@ jobs:
           ref: ${{ steps.tuios.outputs.ref }}
           path: .tuios
 
+      # The engine is a function of the tuios commit: build.sh, the Go version
+      # (go.mod names an exact release) and sip's webterm bundle (go.sum pins
+      # the sip version) all come from that checkout. A deploy with an
+      # unchanged pin restores the last build and skips Go, uv and build.sh.
+      # learn-engine.mjs is not part of the key because it runs on every
+      # deploy, on the restored build too.
+      - name: Restore the /learn engine build
+        id: learn
+        uses: actions/cache@v6
+        with:
+          path: .learn-build
+          key: learn-engine-v1-${{ runner.os }}-${{ steps.tuios.outputs.ref }}-${{ hashFiles('.tuios/go.mod', '.tuios/go.sum', '.tuios/cmd/tuios-wasm/**') }}
+
       - name: Setup Go
+        if: steps.learn.outputs.cache-hit != 'true'
         uses: actions/setup-go@v7
         with:
           go-version-file: .tuios/go.mod
@@ -72,6 +86,7 @@ jobs:
       # nothing and it warned that the cache would never be invalidated. The
       # script that calls uvx stands in for a lock file.
       - name: Setup uv
+        if: steps.learn.outputs.cache-hit != 'true'
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           cache-dependency-glob: .tuios/cmd/tuios-wasm/build.sh
@@ -79,11 +94,14 @@ jobs:
       # build.sh finds bubbletea, creack/pty and sip in the module cache with
       # go list -m, which does not download them. It needs brotli too.
       - name: Build the tuios engine for /learn
+        if: steps.learn.outputs.cache-hit != 'true'
         run: |
           command -v brotli >/dev/null || sudo apt-get install -y brotli
           (cd .tuios && go mod download)
           .tuios/cmd/tuios-wasm/build.sh "$PWD/.learn-build"
-          bun scripts/learn-engine.mjs .learn-build
+
+      - name: Copy the engine into public/learn
+        run: bun scripts/learn-engine.mjs .learn-build
 
       # next build warned on every run that it found no build cache.
       - name: Cache the Next.js build
