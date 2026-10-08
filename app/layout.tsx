@@ -51,6 +51,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           search={{
             options: {
               type: "static",
+              // A name with .json is served as application/json, which the
+              // edge compresses (9 MB raw, about 1 MB with brotli).
+              api: "/api/search.json",
             },
           }}
         >
