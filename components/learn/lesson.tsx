@@ -44,7 +44,11 @@ import { TillyControls, TillyGuide, usePrefs } from "./tilly";
 /** How many rows the keys learned list shows. */
 const SHELF_ROWS = 5;
 
-/** Events this soon after a step starts belong to the step before it. */
+/**
+ * Events this soon after a step starts belong to the step before it, unless
+ * the reader presses a key first: a key starts a new update, so it and what
+ * follows it are the reader's.
+ */
 const SETTLE_MS = 150;
 
 type Phase = "booting" | "running" | "finished";
@@ -88,6 +92,8 @@ export function Lesson({
   const tuiosRef = useRef<TuiosInstance | null>(null);
   const phaseRef = useRef<Phase>("booting");
   const settleUntil = useRef(0);
+  // True while a step's setup runs. Its keys are the page's, not the reader's.
+  const settingUp = useRef(false);
   const busy = useRef(false);
   const skipping = useRef(false);
   const alive = useRef(true);
@@ -125,6 +131,9 @@ export function Lesson({
       const t = tuiosRef.current;
       const step = track.steps[index];
       if (!t || !step || !alive.current) return;
+      // A quick reader can finish a step before it is started. Its setup
+      // would then run on top of the next step.
+      if (lessonRef.current.index !== index) return;
       settleUntil.current = performance.now() + SETTLE_MS;
       lessonRef.current = {
         ...lessonRef.current,
@@ -143,7 +152,9 @@ export function Lesson({
       } else {
         focusTerminal();
       }
+      settingUp.current = true;
       await runSetup(t, step.setup, () => !alive.current);
+      settingUp.current = false;
       // A setup can take a moment. Its own events are not the reader's.
       settleUntil.current = performance.now() + SETTLE_MS;
     },
@@ -202,6 +213,7 @@ export function Lesson({
     (event: TuiosEvent) => {
       if (event.state) setTstate(event.state);
       if (phaseRef.current !== "running") return;
+      if (event.type === "key" && !settingUp.current) settleUntil.current = 0;
       if (performance.now() < settleUntil.current) return;
       if (event.type === "mode") {
         playSound(
