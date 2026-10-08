@@ -1,0 +1,260 @@
+---
+title: The daemon sent a client an older state after a newer one
+description: A flaky tuios test turned out to be the daemon delivering session state out of order. The first fix ordered by the state Version, and the review found the one kind of change that never moves the Version. The second fix counts every change.
+date: '2026-10-08'
+author: Gaurav Gosain
+---
+
+Several clients can attach to one tuios session at once. The daemon holds
+the session's state, things like the workspace on screen and the layout, and
+it sends each client a fresh copy whenever that state changes. A client
+adopts the state it reads last.
+
+That last sentence is the whole bug. If the daemon ever sends a client an
+older state after a newer one, the client goes back in time and stays there.
+This post is about two PRs that fixed three ways it could happen,
+[#561](https://github.com/Gaurav-Gosain/tuios/pull/561) and
+[#565](https://github.com/Gaurav-Gosain/tuios/pull/565), and a first fix
+that was right about one kind of change and blind to another.
+
+## A flaky test that was right
+
+`TestTreeOpsOffWhileAnOlderClientIsAttached` failed now and then on CI, on
+two unrelated PRs, [#557](https://github.com/Gaurav-Gosain/tuios/pull/557)
+and [#558](https://github.com/Gaurav-Gosain/tuios/pull/558), with this:
+
+```
+tree ops came back on at Version 2, not after they went off at 3
+```
+
+Some background. Newer clients can send layout tree operations, an older
+client cannot. When an older client attaches, the daemon turns tree ops off
+for the session, so nobody sends something the older client would not
+understand. That is a state change, and it bumps the state's `Version`, here
+from 2 to 3.
+
+The test attaches a current client and an older one, and checks that the
+current client ends up with tree ops off. On CI it sometimes read "off" at
+Version 3, and then "on" at Version 2, and kept the second.
+
+## The attach repair
+
+A client that is in the middle of attaching is not yet on the list of clients
+that get broadcasts. If the state changes in that gap, the client would miss
+the change. So `handleAttach` has a repair: after the attach reply, if the
+client missed a broadcast, send it the current state directly. Before the
+fix it was this:
+
+```go
+if missed {
+	if msg, err := NewMessage(MsgStateSync, &StateSyncPayload{
+		State:       session.GetState(),
+		TriggerType: "update",
+	}); err == nil {
+		d.queueBroadcast(cs, msg, "attach state repair")
+	}
+}
+```
+
+The comment above it said the repair "is queued behind the broadcasts already
+on their way to this client, so it cannot overtake them either". That was
+true. It just covered one direction. The repair could not overtake an older
+broadcast, but nothing stopped a newer broadcast from overtaking the repair.
+
+`GetState()` takes a snapshot. `queueBroadcast` queues it. Between those two
+lines, another client could attach, turn tree ops off, and publish Version 3.
+The current client got Version 3 from that broadcast, then its own repair,
+still holding the Version 2 snapshot from a moment earlier.
+
+In this test the current client always takes the repair path. Its hello
+offers no scratch workspaces, so its own attach turns them off while it is
+not yet in the broadcast set. So the repair ran every time, and the only
+question was whether the older client's attach landed in that window.
+
+This was a daemon bug, not a test bug. A real client reading those two states
+would put its tree ops back on, next to a client that cannot handle them.
+
+## Making the window wide on purpose
+
+To get a failure rate, I loaded the machine. The runs in #561 all used `nice -n 19 taskset -c 0-7`, with eight niced busy
+loops on cores 0 to 7, under `-race`, 500 runs each:
+
+| Build | GOMAXPROCS=1 | GOMAXPROCS=4 |
+| --- | --- | --- |
+| main, original test | 0 of 500 failed | 15 of 500 failed, the CI message |
+| fix, original test | 0 of 500 | 0 of 500 |
+| fix, new test | 0 of 500 | 0 of 500 |
+
+3% is a real failure rate, but not one I want a regression test to depend
+on. So the new test stops relying on the scheduler. There is a test hook,
+`stateResendSnapshotTaken`, that runs between the snapshot and the delivery,
+and the test uses it to land the older client's attach exactly inside the
+repair. A reader on the current client fails as soon as any state arrives
+behind a newer one. With the old repair, it fails 50 of 50.
+
+## The first fix: order by Version
+
+The repair now goes through `Session.resendState`, which takes the snapshot
+and then checks it against what was already delivered, under `pushMu`, the
+lock `publishState` holds for every broadcast:
+
+- an older snapshot is taken again,
+- a newer one goes to every client through the state sink, and its own late
+  publish is dropped as stale,
+- an equal one goes to the repairing client alone.
+
+The snapshot itself stays outside `pushMu`, as in `publishState`, because
+filling in the live facts takes the pane locks. The lock order stays
+`pushMu`, then the clients lock, then the connection lock.
+
+The PR description had a "not fixed here" note at the end:
+
+> the peer forward of a client push in `handleUpdateState` also snapshots and
+> broadcasts outside `pushMu`, so it can in principle reach a peer behind a
+> newer daemon-side publish. Client pushes do not advance Version, so the
+> effect there is smaller. I left it for a separate change.
+
+I wrote that line as a footnote. The review read it as the next bug.
+
+## A change that never moves the Version
+
+Clients change state too. When you switch workspace, your client pushes the
+new state to the daemon, which merges it and forwards it to the other
+clients. A client push keeps the `Version` where it was. Only the daemon's
+own changes bump it.
+
+That breaks the first fix. `resendState` decides "older, newer or equal" by
+comparing Version. Two states with different content can have the same
+Version, if a client push happened between them.
+
+In the review's repro, client B attaches and needs a repair, and B's repair
+takes its snapshot with the session on workspace 1. Then a peer push moves the
+session to workspace 7. The forward of that push runs outside `pushMu` and
+checks nothing, so it reaches B. Then B's repair checks its snapshot, sees the same
+Version as what was delivered, and sends it to B alone. B reads workspace 7,
+then workspace 1, and ends on 1. B's next push then moves the session back to
+workspace 1 for everyone.
+
+Two clients pushing at the same moment had the same race in a different
+shape: the older forward could reach the peers last.
+
+## Counting every change
+
+[#565](https://github.com/Gaurav-Gosain/tuios/pull/565) stops using Version
+for ordering. The session now counts every change in
+`noteStateChangeLocked`, client pushes included. Each snapshot carries that
+count in an unexported field, `changeSeq`, so nothing changes on the wire or
+on disk. `publishState`, `resendState` and a new `Session.deliverPush` order
+their deliveries by that count, under `pushMu`, and a snapshot no newer than
+what was delivered is dropped.
+
+That is [37279a33](https://github.com/Gaurav-Gosain/tuios/commit/37279a33).
+Its two tests land the second change inside the first through a hook, and
+each fails 50 of 50 without the fix.
+
+## The reply went around the queue
+
+The same PR found a third form of the bug, in the reply to the client that
+pushed.
+
+A push can be built before a change the daemon made on its own. The daemon
+then reconciles it, and since what is canonical now is not what the client
+pushed, it replies to that client with the merged state. Every other state goes
+through the client's broadcast queue, in order. The reply was written
+straight to the socket. So an older state already sitting in the queue, like
+a peer's forward, reached the client after the reply, and the client adopted
+the older one.
+
+[ed4118a4](https://github.com/Gaurav-Gosain/tuios/commit/ed4118a4) sends the
+reply through `deliverPush` too, through the queue, checked against the
+count. And at first, a reply that was no newer than what was delivered got
+dropped, like any other stale snapshot. The thinking was that the client
+already had a state at least as new on its way.
+
+## The reply must never be dropped
+
+That last rule was wrong, and
+[5762990b](https://github.com/Gaurav-Gosain/tuios/commit/5762990b) is the
+fix.
+
+A client syncs after every keystroke and every click, so almost every push
+says what the last one said. The daemon suppresses a forward when its content
+matches the last thing it forwarded, using a fingerprint. A suppressed forward sends nothing,
+but it still counts as delivered. So if a peer's no-op push landed between
+the reply's snapshot and its delivery, the delivered count moved past the
+reply, the reply looked stale and got dropped, and nothing that counted the
+push reached the pushing client until the next change. A client whose push
+was reconciled drops every state built before its push, so the reply is the
+exact state it is waiting for.
+
+There were two ways to fix it. One was to stop counting a suppressed forward
+as delivered. The commit explains why not: an older forward with different
+content could then go out after the suppressed one and move the peers back.
+The other was to never drop the reply, and that is what went in:
+
+```go
+s.pushMu.Lock()
+for snap.changeSeq < s.deliveredSeq && sends.toSender != nil {
+	// Taken again outside pushMu, which is never held across the pane
+	// locks. The peers have a newer state on its way, so the new
+	// snapshot is for the sender alone.
+	s.pushMu.Unlock()
+	snap = s.GetState()
+	sends = prepare(snap, false)
+	s.pushMu.Lock()
+}
+defer s.pushMu.Unlock()
+if snap.changeSeq <= s.deliveredSeq {
+	if sends.toSender != nil {
+		sends.toSender()
+	}
+	return
+}
+```
+
+An older reply is taken again, the same way `resendState` does it. A reply at
+the delivered count goes to the sender alone, behind what is already queued
+to it. The forward to the peers is still dropped when it is no newer. The
+messages are encoded before `pushMu` is taken, so the lock is held only long
+enough to queue them.
+
+## The tests
+
+Each test in `internal/session/state_push_order_test.go` lands the second
+change inside the first through a hook, so none of them depends on timing:
+
+| Test | Without the fix | With the fix |
+| --- | --- | --- |
+| `TestAttachRepairDoesNotFollowAPeerPush` | fails 50 of 50 | passes 50 of 50 under `-race` |
+| `TestConcurrentPushesForwardInOrder` | fails 50 of 50 | passes 50 of 50 under `-race` |
+| `TestReconcileReplyDoesNotOvertakeAQueuedState` | fails 50 of 50 | passes 50 of 50 under `-race` |
+| `TestReconcileReplySurvivesASuppressedForward` | fails 50 of 50 | passes 50 of 50 under `-race` |
+
+The fourth one is interesting. With the whole change removed, it passes,
+because main never checked the reply at all. It only fails against the
+intermediate version that dropped a stale reply. So it guards against my own
+first attempt, which is exactly where I want a test.
+
+One more control kept the counter but cut the check from `deliverPush`, and
+the first two tests failed 50 of 50. And because old and new clients have to
+share a session, `TestMixedVersionsReshapeOneTree` ran this daemon with a
+v0.8.5 client on either side: 0 of 15 rounds differed.
+
+#565 notes that clients from v0.8.0 on drop a state with a lower
+`SnapshotSeq`, so they mostly hid this. Older clients and raw socket clients
+did not.
+
+## What I take from it
+
+The first fix ordered by the field that looked like an order. `Version` goes
+up when the daemon changes the state, and I treated it as "how new is this
+state". It is not that. It is how many times the daemon changed the state,
+and clients change it too. The PR even said so, in the note I left at the
+end, and I still filed it as a smaller effect instead of a hole in the
+ordering I had just built.
+
+The other thing is that every one of these was a delivery that skipped the
+line. The repair took its snapshot outside the lock, the forward ran outside
+it, and the reply went around the queue. Now all three go through the same
+check under the same lock. These went out in
+[v0.9.0](https://github.com/Gaurav-Gosain/tuios/releases/tag/v0.9.0).
