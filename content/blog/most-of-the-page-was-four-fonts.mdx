@@ -1,0 +1,206 @@
+---
+title: Most of the page was four fonts
+description: A first visit to a sip page moved 11.7 MB. Most of it was four TTF files that nobody had compressed. WOFF2 and gzip took it to 4.4 MB, and dropping a fallback that no browser could reach took the binary from 30.1 MB to 24.6 MB.
+date: '2026-10-08'
+author: Gaurav Gosain
+---
+
+[sip](https://github.com/Gaurav-Gosain/sip) serves a terminal program in a
+browser, and `tuios-web` is built on it. A first visit to a sip page
+downloaded 11,674,245 bytes, which is a lot for a page whose job is to show a
+terminal.
+
+This post is about where those bytes were, the two PRs that took the page to
+4.4 MB, and the fallback I kept for safety that turned out to be unreachable.
+
+## How I measured
+
+Every number for the page in this post is the same measurement: a cold load
+in Chromium with the network log on and the cache off, counted until the
+terminal connected. `data:` URLs are not counted. The binary sizes are the
+`sip` binary built from each commit.
+
+| | page, total | page, JavaScript |
+| --- | --- | --- |
+| main, before sip#9 | 11,674,245 B | 2,015,355 B |
+| after sip#9 | 10,689,384 B | 1,030,489 B |
+| after sip#10 | 4,373,397 B | 283,066 B |
+
+## The renderer nobody asked for
+
+The first megabyte came off almost by accident.
+[sip#9](https://github.com/Gaurav-Gosain/sip/pull/9) moves sip onto
+[webterm](https://github.com/Gaurav-Gosain/webterm)'s browser client, and
+the webterm side of that work
+([webterm#2](https://github.com/Gaurav-Gosain/webterm/pull/2)) found that the
+standalone bundle inlined `import('vtgl')`. vtgl is my WebGL renderer, and it
+brings a HarfBuzz wasm build and an Arabic font with it. That was about
+915 KB in every page, and the default renderer never runs any of it.
+
+So vtgl became its own file, `static/webterm-vtgl.js`, and the page loads it
+only when the renderer setting asks for vtgl. `static/webterm.js` went from
+1,810,734 bytes to 928,358, and the cold load went from 11.7 MB to 10.7 MB.
+The PR has a browser test that a default page never requests the vtgl file.
+
+That left about 9.6 MB, and nearly all of it was fonts.
+
+## Four TTF files, nothing compressed
+
+sip bundles JetBrains Mono Nerd Font in four faces: regular, bold, italic and
+bold italic. The terminal waits for them, so every first visit downloads all
+four. Each one was a TTF of about 2.4 MB, and sip served everything
+uncompressed.
+
+There are two separate fixes in there, and
+[faf0de5](https://github.com/Gaurav-Gosain/sip/commit/faf0de5) does both.
+
+**WOFF2.** WOFF2 is a font container with compression built into the format.
+Converting a TTF to WOFF2 changes the container, not the font, so every
+glyph and every feature is kept. Each face went from about 2.4 MB to about
+1.0 MB. `scripts/fonts-woff2.sh` writes the copies, and since a review fix it
+keeps the source timestamp, so running it twice gives the same bytes.
+
+**Gzip.** sip's own `.js`, `.css`, `.html`, `.json` and `.svg` files are now
+gzipped for any browser that accepts it. Each file is compressed once per
+process, since the files are embedded in the binary and never change:
+
+```go
+func gzippedAsset(name string) ([]byte, string, bool) {
+	v, _ := embeddedGzip.LoadOrStore(name, &gzipEntry{})
+	e := v.(*gzipEntry)
+	e.once.Do(func() {
+		data, err := staticFiles.ReadFile("static/" + name)
+		// ...
+		zw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+		// ...
+		e.body = buf.Bytes()
+		tag := contentETag(data)
+		e.etag = tag[:len(tag)-1] + `-gzip"`
+		e.ok = true
+	})
+	return e.body, e.etag, e.ok
+}
+```
+
+The gzip body gets its own ETag, because it is a different representation of
+the file and RFC 9110 says the tags have to differ. The response sends
+`Vary: Accept-Encoding`. The fonts are left alone, since WOFF2 is compressed
+already, and so are files a deployment overrides through `StaticFS`, because
+those are read from disk on every request and can change.
+
+`webterm.js` goes over the wire as 254,281 bytes, down from 928,358.
+
+I went with gzip and not brotli because Go has no brotli in the standard
+library. Brotli would have saved about 60 KB more on `webterm.js`, and it
+needs a new dependency. That did not seem worth it.
+
+The cold load after this commit: 4,372,955 bytes.
+
+## A budget the page cannot sneak past
+
+A page weight that nobody checks drifts back up, so the commit adds a budget
+to `go test`. `TestColdLoadBudget` fetches what a first visit fetches, with
+`Accept-Encoding: gzip`, adds up the bodies and fails over 4.7 MB. With the
+gzip turned off it measured 5,133,088 bytes and failed, which is the negative
+half: the test can see the thing it is there for.
+
+The first version listed the files by hand:
+
+```go
+page := []string{
+	"/",
+	"/static/xterm.css", "/static/webterm.css", "/static/terminal.css",
+	"/static/webterm.js", "/static/terminal.js",
+	"/static/fonts/JetBrainsMonoNerdFontMono-Regular.woff2",
+	// ...
+}
+```
+
+The review pointed out the hole in that. A new script tag in the page would
+add weight, and a hand-written list would never count it. So the version that
+merged, in [e3da311](https://github.com/Gaurav-Gosain/sip/commit/e3da311),
+reads the list from the page itself. It renders `/`, pulls out every file the
+page names, and pulls the fonts out of `terminal.css`:
+
+```go
+for _, m := range pageRef.FindAllStringSubmatch(index.Body.String(), -1) {
+	add("/" + m[1])
+}
+// ...
+for _, m := range cssFont.FindAllStringSubmatch(string(css), -1) {
+	add("/static/" + m[1])
+	fonts++
+}
+if fonts < 4 || !seen["/static/webterm.js"] || !seen["/static/terminal.js"] {
+	t.Fatalf("the page names too little to measure: %v", paths)
+}
+```
+
+The last check is there so a broken regexp cannot make the page look tiny. If
+the test finds fewer than four fonts, or loses either of the two big scripts,
+it fails instead of measuring. It measures 4,371,288 bytes against the 4.7 MB
+budget.
+
+## The fallback no browser could reach
+
+Here is the part I got wrong. faf0de5 kept the TTF files. The stylesheet named
+the WOFF2 first and the TTF second, so a browser without WOFF2 support would
+still get a font. It felt like the careful thing to do. The commit message
+even says what it cost:
+
+> The binary grows by 4.1 MB, because the TTFs stay embedded as the
+> fallback.
+
+So the page got smaller and the binary got bigger, and I was fine with that
+trade for about half an hour: e3da311 landed 28 minutes later.
+
+The review asked which browser would ever use that fallback. The answer is
+none. `webterm.js` uses `?.` and `??`, optional chaining and nullish
+coalescing. A browser that cannot parse those cannot run the terminal at all,
+and every browser that can parse them also reads WOFF2. The fallback was 9.6
+MB of embedded TTF waiting for a browser that would have failed long before it
+asked for a font.
+
+e3da311 removed them. The source TTFs moved to `fonts/`, outside the embed,
+where `scripts/fonts-woff2.sh` reads them. `static/` now has only the WOFF2
+files, and new tests check that no TTF is embedded, that every source font
+has its WOFF2, and that the page names no TTF. The `sip` binary went from
+30,104,936 bytes on main to 24,567,218.
+
+| `sip` binary | bytes |
+| --- | --- |
+| main | 30,104,936 |
+| faf0de5, WOFF2 plus the TTF fallback | 4.1 MB more than main |
+| e3da311, WOFF2 only | 24,567,218 |
+
+## Two smaller finds on the way
+
+While the review was in that code, it found two more things, and both are in
+e3da311.
+
+`/static/index.html` answered with the page template, without the deployment
+settings, the Content-Security-Policy or the frame headers that `/` sends. It
+now answers 404. The page is `/`.
+
+`acceptsGzip` compared names and weights too literally. `Accept-Encoding`
+coding names and the `q` parameter are case-insensitive (RFC 9110, section
+12.5.3), so `gzip;Q=0` means "no gzip", and so does `gzip; q=0.000`. Both now
+refuse gzip. A `*` counts when gzip is not named.
+
+## What I take from it
+
+The fonts were the easy part. Once the page was measured, 9.6 MB of 10.7 MB
+was in four files, and the fix was a format every current browser reads plus
+the compression Go already ships.
+
+The fallback is the one I keep thinking about. Keeping it felt careful, but I
+never checked whether any browser could reach it, and the binary paid 4.1 MB
+for a code path the page's own JavaScript made impossible. The budget test had
+the same gap in a smaller form, a list of what I thought the page loaded, and
+the review fixed both in one commit.
+
+Both PRs, [sip#9](https://github.com/Gaurav-Gosain/sip/pull/9) and
+[sip#10](https://github.com/Gaurav-Gosain/sip/pull/10), are merged on sip's
+main branch. One thing to know if you deploy sip: the `/static/fonts/*.ttf`
+URLs are gone, and the fonts are served as WOFF2 only. `tuios-web` gets all
+of this with its next sip bump.
