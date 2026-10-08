@@ -1,0 +1,267 @@
+---
+title: The Option key meant two things, and tuios only knew one
+description: On macOS, tuios read a composed • as opt+8 and switched workspaces, and on French AZERTY Option and the 1 key moved a window to workspace 7. Both came from tables that assumed a US keyboard. The fix took four commits, and two of them undid choices the first one made.
+date: '2026-10-08'
+author: Gaurav Gosain
+---
+
+Two bug reports landed on the same day, about five hours apart, from two people on two different
+Mac setups, and they turned out to be the same mistake. tuios read keys
+through US tables even when the key event said otherwise.
+
+- [#566](https://github.com/Gaurav-Gosain/tuios/issues/566), from
+  @dominionthedev: in WezTerm, with the right Option key set to compose
+  characters, right Option and 8 should type `•`. tuios switched to
+  workspace 8 instead.
+- [#575](https://github.com/Gaurav-Gosain/tuios/issues/575), from
+  @florian-guily: on a French AZERTY keyboard, Option and the 1 key moved the
+  window to workspace 7.
+
+Both reports were excellent. #566 came with the exact WezTerm config to
+reproduce it, and #575 linked the lines in `keynormalizer.go` and
+`registry.go` that caused it, which saved me a lot of digging. The fix is
+[#578](https://github.com/Gaurav-Gosain/tuios/pull/578).
+
+## What Option sends on a Mac
+
+On macOS, Option is a compose key by default. On a US layout, Option and 3
+types `£`, and Option and 8 types `•`. A terminal can be told to
+send Option as Alt instead, which on the wire usually means an ESC in front
+of the key, and iTerm2 calls that setting "Esc+". Terminal.app and iTerm2
+both ship with Option on "Normal", which composes.
+
+tuios binds workspaces to `opt+1` to `opt+9` on macOS. With a stock terminal,
+pressing Option and 3 never sends anything that looks like `opt+3`. It sends
+`£`. So tuios has a table of the characters Option composes on a US layout,
+and reads them back as the chord. Without it, workspace keys would just not
+work for most Mac users.
+
+The table cannot tell a chord from a character you meant to type. That is
+#566 exactly. The reporter had set up WezTerm with the left Option sending
+Alt and the right Option composing:
+
+```lua
+config.send_composed_key_when_left_alt_is_pressed = false
+config.send_composed_key_when_right_alt_is_pressed = true
+```
+
+Left Option and 8 sent ESC 8, which is opt+8, which is right. Right Option
+and 8 sent `•` as plain text, and the table turned that into opt+8 too.
+
+## AZERTY and the shifted digits
+
+#575 was the other table. On a US keyboard `&` is Shift and 7, so tuios
+treated `alt+&` as another spelling of `alt+shift+7`. A terminal that sends
+`&` when you press Option, Shift and 7 still matches a binding written as
+`opt+shift+7`, the default for `move_and_follow_7`.
+
+On a French AZERTY keyboard the number row types `& é " ' ( § è ! ç à`
+without Shift, and the digits with Shift. So Option and the 1 key is `alt+&`,
+and the US alias read it as `alt+shift+7`. From the issue:
+
+> With the default config, pressing Option + the "1" key (`opt+&`) moves the
+> window to workspace 7 instead of doing anything with workspace 1. Same for
+> `opt+(` (5 key), which moves to workspace 9, and `opt+!` (8 key), which
+> moves to workspace 1.
+
+It got worse when the reporter tried to work around it. The aliases lived in
+the same table as real bindings, and inside a section the first action in
+name order wins. So a user binding `switch_workspace_1 = ['opt+&']` lost to
+the alias from `move_and_follow_7`, because `move` sorts before `switch`.
+And `tuios keybinds explain opt+&` said `switch_workspace_1`, while the key
+actually ran `move_and_follow_7`. The tool that is there to explain a
+confusing binding was confused by the same thing.
+
+## Tiers
+
+The core of the fix, in
+[3aed18ee](https://github.com/Gaurav-Gosain/tuios/commit/3aed18ee), is that a
+guess about the keyboard should never compete with a binding someone wrote.
+
+The registry now keeps the guesses in tiers of their own. The US
+shifted-digit aliases go in one (`USLayoutKey`), and the chords of US Option
+characters go in another (`OptionGlyphKey`). The letter aliases, which hold
+on every layout, stay where they were. A plain binding always wins over a
+tier key, so `opt+&` on AZERTY now does what the config says.
+
+The input side asks the tiers last, and only when they can apply. Every
+binding lookup goes through `bindingKeys`, which lists the spellings a key
+may be bound as, most literal first:
+
+```go
+mods := msg.Mod &^ lockMods
+if config.KeyFitsUSLayout(msg.Code, msg.ShiftedCode, base, mods&tea.ModShift != 0) {
+	for _, k := range keys[:plain] {
+		keys = append(keys, config.USLayoutKey(k))
+	}
+}
+for _, chord := range composedChords(msg, base) {
+	if chord != key {
+		keys = append(keys, config.OptionGlyphKey(chord))
+	}
+}
+```
+
+`KeyFitsUSLayout` is where the Kitty keyboard protocol earns its keep. A
+terminal that speaks it can report the base-layout key, which key on a US
+keyboard sits in the same place, and the shifted key, what Shift gives on
+this layout. When the report contradicts a US layout, the US tier is not
+asked at all. A new `shiftedKey` also spells a chord with the shifted key, so
+AZERTY Option, Shift and the 1 key, which types `1`, reads as `alt+1` and
+switches to workspace 1 with the default config.
+
+For a terminal that reports no layout, like iTerm2 with Esc+ and no Kitty
+protocol, there is nothing to read. That gets a setting:
+
+```toml
+[keybindings]
+keyboard_layout = "other"   # default is "us"
+```
+
+And for #566 there is a second one, `option_glyphs`. With `"type"`, a composed
+character that arrives as text, with no Alt and no ESC, goes to the pane.
+
+`keybinds explain` now lists the bindings a key runs through a US alias, and
+says how to turn the aliases off.
+
+## The default I reversed
+
+3aed18ee made `"type"` the default. A composed character went to the pane
+unless you opted back in to the old reading. It fixed #566 for everyone,
+with no config.
+
+It also would have broken workspace keys for nearly every Mac user on a stock
+terminal, because that composed `£` is the only way their opt+3 ever reaches
+tuios. [68eaab4a](https://github.com/Gaurav-Gosain/tuios/commit/68eaab4a)
+landed about half an hour later and turned it back:
+
+> Terminal.app and iTerm2 ship with Option composing, so most Mac users
+> reach opt+N only through the composed character. Typing it into the pane
+> by default would silently break their workspace keys.
+
+So the default is `option_glyphs = "bind"`, the behaviour those users
+already had, and `"type"` is the opt-in for someone who composes on purpose.
+The commit added an e2e test that a default config still switches workspaces
+on the composed character, so the default cannot flip again quietly.
+
+## Three things the review found
+
+The review of #578 found three more bugs, all fixed in
+[3010514a](https://github.com/Gaurav-Gosain/tuios/commit/3010514a).
+
+**The leader.** You can spell the leader key with Option, for example
+`leader_key = "opt+1"`. On main, that leader fired on `¡`, the character
+Option and 1 composes. The first version of the PR moved the Option
+characters into their own tier, and `isLeaderKey` never looked there, so the
+leader stopped firing. Now `isLeaderKey` tries the chord from `composedChords`
+under the same rules the binding tables follow.
+
+**The Kitty form.** WezTerm sends a composed character as bare text. Ghostty
+and kitty, under the Kitty protocol, send the composed character with the Alt
+bit set. `option_glyphs = "type"` only covered the bare form, so a composed `°`
+sent under the Kitty protocol still moved the pane to workspace 8. Both forms now look in the
+Option-glyph tier.
+
+**The base key.** This one had two halves. First, a composed-looking
+character with a base-layout key and no Alt bit was typed without Option. On
+AZERTY, `ç` is the 9 key. The US table says Option and c composes `ç`, so
+tuios read a plain AZERTY `ç` as an Option chord and moved the pane to
+workspace 4. Now no Alt bit plus a base key means no chord:
+
+```go
+if base != 0 {
+	if mods&tea.ModAlt == 0 {
+		return nil
+	}
+	return []string{tea.Key{Code: base, Mod: mods}.Keystroke()}
+}
+```
+
+With the Alt bit, the base key names the chord, which is more reliable than
+the US table.
+
+Second, `bindingKeys` tried the shifted key before the base-layout key.
+Bubble Tea fills in the shifted key from the base key when the report leaves
+it empty, so a composed `°` with base key 8, pressed with Option and Shift,
+read as `alt+8` instead of `alt+shift+8`. The base key now goes first.
+
+The three review tests fail on the previous head of the branch, run in macOS
+mode:
+
+| Test | Where it failed before the review fixes |
+| --- | --- |
+| `TestOptionLeaderFiresOnTheComposedCharacter` | `¡` never opens the prefix menu |
+| `TestKittyComposedCharacterFollowsOptionGlyphs` | the Kitty `°` moves the pane to workspace 8 under `"type"` |
+| `TestAzertyCedillaIsNotOptionC` | AZERTY ç with base-layout key 9 moves the pane to workspace 4 |
+
+One more fix went in with them. The first commit had `internal/input` read the
+platform from `OSTYPE`, so the e2e suite could run the macOS key paths on
+Linux. That also meant an exported `OSTYPE` could change how a real session
+reads keys. 3010514a goes back to `runtime.GOOS`, and the suite asks for the
+macOS paths with `TUIOS_E2E_PLATFORM=darwin` instead.
+
+## Testing keyboards I do not have
+
+I only have a US layout. So the nine e2e tests in
+`e2e/tui/option_layout_keys_test.go` do not press keys. They send the exact
+bytes each terminal writes:
+
+- WezTerm's `•` and `¡`, with `option_glyphs = "type"`,
+- a stock Terminal.app `£`, and an `opt+1` leader on `¡`, with the default
+  config,
+- the Kitty composed `°`, with and without its base key,
+- AZERTY `ç` with base key 9,
+- iTerm2 Esc+: `ESC 3`, `ESC #`, `ESC &` and `ESC é`,
+- the Kitty reports `CSI 38::49;3u`, `CSI 38:49:49;4u` and `CSI 38;3u`.
+
+Every step that checks a key does nothing has a positive step in the same
+session, a key that does something, so a session that ignores all input
+cannot pass. The tests check the workspace through the daemon.
+
+Twelve negative controls each cut one piece of wiring, rebuilt the binary
+and ran the named test. All twelve failed where expected. A few of them:
+
+| Control: what was cut | Where it failed |
+| --- | --- |
+| `bindingKeys` asks for a composed chord as a plain key | the shell never prints `x2•¡y` |
+| `expandInto` claims a US alias as a plain key | ESC & moves the pane to workspace 7, want workspace 2 |
+| `bindingKeys` drops the `shiftedKey` spelling | AZERTY Option, Shift and the 1 key leaves the session on workspace 3, want 1 |
+| `isLeaderKey` drops the `composedChords` loop | `¡` with `leader_key = "opt+1"` never opens the prefix menu |
+
+Against a build of main, the four AZERTY and alias tests fail as expected.
+The tests that need the macOS key paths cannot be judged on main, because
+main does not read `TUIOS_E2E_PLATFORM`, so the controls are the evidence
+for those.
+
+The config fuzzer got new seeds too: the AZERTY number row with Option, the
+US Option characters, and both new settings. `FuzzNormalizeKey` now checks
+that a US alias is never a plain spelling, and that `NormalizeKey` never
+returns a tier key.
+
+## What is still open
+
+The AZERTY defaults are not perfect. `opt+1` to `opt+9` work with Option,
+Shift and the number key. The default `opt+shift+N` for moving a window
+cannot be typed on AZERTY at all, because Shift already gives the digit. I
+did not change the defaults, because tuios cannot detect the layout. The
+keybindings docs have a recipe that moves those bindings to the unshifted
+keys.
+
+The review overlay's `[ ] { }` keys, point 2 of #575, are still hardcoded.
+That is [#585](https://github.com/Gaurav-Gosain/tuios/issues/585).
+
+## What I take from it
+
+Both tables were added for a good reason. Without the Option table, workspace
+keys do not work in a stock Mac terminal. Without the shifted-digit aliases,
+`opt+shift+7` does not match a terminal that sends `&`. The mistake was
+letting them sit next to real bindings with the same weight, even though they
+were guesses about a keyboard tuios could not see. Once the guesses had their
+own tier, most of the bugs reduced to asking the guess only when nothing
+better was known.
+
+The setup both reporters landed on is a nice one, and it is in the docs now:
+one Option key sends Alt for tuios, and the other one composes for typing.
+The fix is merged and goes out in the next release. If you are on AZERTY or
+another non-US layout and something still gets swallowed, please open an
+issue, because I can only test your keyboard by faking its bytes :)
