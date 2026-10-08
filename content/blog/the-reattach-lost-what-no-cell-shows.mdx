@@ -153,7 +153,7 @@ alternate screen with mode 1049 saves the cursor, and leaving it restores the
 cursor the way DECRC does, character sets included. xterm and libghostty both
 do that. The pure emulator only switched screens back, so the alternate
 screen's character sets stayed in force after a full-screen program quit.
-[6af85a90](https://github.com/Gaurav-Gosain/tuios/commit/6af85a90) made 1049
+[2243defe](https://github.com/Gaurav-Gosain/tuios/commit/2243defe) made 1049
 restore the cursor.
 
 The review of #580 found what that broke. Both screens shared one slot for the
@@ -161,7 +161,7 @@ character sets that DECSC saves. Before, nothing read that slot on the way out
 of the alternate screen, so sharing it did not matter. Now 1049 did read it,
 and a program that saved its cursor on the alternate screen handed its
 character sets to the shell. The commit that fixed it,
-[5d7b4173](https://github.com/Gaurav-Gosain/tuios/commit/5d7b4173), has a
+[fd8d3c3d](https://github.com/Gaurav-Gosain/tuios/commit/fd8d3c3d), has a
 one-line repro:
 
 ```
@@ -179,13 +179,14 @@ originally narrowed a wider client and left a taller one alone, on the theory
 that extra rows change nowhere a line wraps. That is true for wrapping and
 false for scrolling: a line feed on the client's last row moved the cursor
 down, where the daemon, one row shorter, scrolled.
-[2ba3b7de](https://github.com/Gaurav-Gosain/tuios/commit/2ba3b7de) sizes the
+[873702fa](https://github.com/Gaurav-Gosain/tuios/commit/873702fa) sizes the
 client to the snapshot in both directions.
 
 ## Controls
 
-#580 cut one call site at a time and ran both builds, and all 19 controls were
-caught. A few of them:
+#580 cut one call site at a time and ran both builds. `e2e/tui/NEGATIVE_CONTROLS.md`
+lists 18 of these controls for the fix and 10 more for the review fixes, and
+every one of them was caught. A few of them:
 
 | Cut | Result |
 | --- | --- |
