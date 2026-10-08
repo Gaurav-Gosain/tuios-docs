@@ -57,6 +57,13 @@ jobs:
           ref: ${{ steps.tuios.outputs.ref }}
           path: .tuios
 
+      # learn/TUIOS_REF may name a branch or a tag, which can move. The cache
+      # key uses the commit the checkout resolved, so a moved ref never
+      # restores an old build.
+      - name: Resolve the tuios commit
+        id: tuios_commit
+        run: echo "sha=$(git -C .tuios rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       # The engine is a function of the tuios commit: build.sh, the Go version
       # (go.mod names an exact release) and sip's webterm bundle (go.sum pins
       # the sip version) all come from that checkout. A deploy with an
@@ -68,7 +75,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .learn-build
-          key: learn-engine-v1-${{ runner.os }}-${{ steps.tuios.outputs.ref }}-${{ hashFiles('.tuios/go.mod', '.tuios/go.sum', '.tuios/cmd/tuios-wasm/**') }}
+          key: learn-engine-v1-${{ runner.os }}-${{ steps.tuios_commit.outputs.sha }}-${{ hashFiles('.tuios/go.mod', '.tuios/go.sum', '.tuios/cmd/tuios-wasm/**') }}
 
       - name: Setup Go
         if: steps.learn.outputs.cache-hit != 'true'
