@@ -1,0 +1,113 @@
+---
+title: Paste buffers
+description: Keep your recent yanks, paste one again with Ctrl+B ], choose one from a list, and use the same buffers from the CLI and the tmux shim.
+icon: ClipboardPaste
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+TUIOS keeps your recent yanks as paste buffers, as tmux does. A yank in [copy mode](/docs/keybindings#copy-mode) adds a buffer. A mouse selection that you copy also adds a buffer. The yank also goes to the clipboard, as before.
+
+## Paste a buffer
+
+| Key | Action | Does |
+|-----|--------|------|
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>]</kbd> | `paste_buffer` | Paste the newest buffer into the focused pane |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>#</kbd> | `choose_buffer` | Show the buffers, newest first, to choose one |
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>]</kbd> takes the newest of your own buffers: text that you copied, or set yourself. A buffer from a program in a pane without `admin` is never your newest. So no such program can set what the key pastes.
+
+The paste goes to the pane that had the focus when you pressed the key. This is also true when the focus moves before the text arrives.
+
+## The buffer list
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>#</kbd> shows the buffers, newest first. Each row shows the name, the text and the size of a buffer.
+
+| Key | Does |
+|-----|------|
+| <kbd>Enter</kbd>, click | Paste the buffer |
+| <kbd>d</kbd> | Delete the buffer |
+| <kbd>Esc</kbd>, <kbd>q</kbd> | Close the list |
+
+A buffer that a program in a pane set shows "from pane" and the name of that pane. You did not copy that text, so read it before you paste it.
+
+## How a paste arrives
+
+- Each line feed becomes a carriage return, as in tmux.
+- TUIOS removes control characters other than tab, line feed and carriage return. So a buffer cannot end a bracketed paste early.
+- The text goes in the bracketed paste marks when the program in the pane turned them on, as a clipboard paste does.
+
+## Use the tmux keys
+
+tmux shows the list on <kbd>=</kbd>. In TUIOS, <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>=</kbd> makes the splits equal. So the list is on <kbd>#</kbd>, the tmux key for `list-buffers`. To use the tmux keys, move the splits key and give <kbd>=</kbd> to the list:
+
+```toml
+[keybindings.prefix_mode]
+prefix_equalize_splits = ["E"]
+choose_buffer = ["="]
+```
+
+## Where the buffers are
+
+The daemon keeps the buffers. Every client and every session on the machine shares them. A client with no daemon keeps its own. The buffers are in memory only. They go when the daemon stops.
+
+The rules are the tmux rules:
+
+- A yank makes a buffer that TUIOS names `buffer0`, `buffer1` and so on.
+- `limit` counts only these buffers. Past `limit`, the oldest of them goes.
+- A buffer that you name with `set-buffer -b` stays until you delete it, or until the buffers pass `max_kb`.
+- Past `max_kb`, the oldest unnamed buffer goes first, then the oldest named one.
+- A yank larger than `max_kb` does not become a buffer. It still goes to the clipboard.
+
+```toml
+[paste_buffers]
+limit = 20     # how many unnamed buffers to keep. 0 keeps none.
+max_kb = 16384 # most KiB all buffers hold together, at most 262144. 0 uses 16384.
+```
+
+With `limit = 0`, a yank goes only to the clipboard. The daemon reads the settings when it starts and when the file changes. A smaller limit removes the oldest buffers at once. See [The paste_buffers table](/docs/configuration#the-paste_buffers-table).
+
+## From the command line
+
+The commands `list-buffers`, `show-buffer`, `set-buffer`, `delete-buffer` and `paste-buffer` read and change the same buffers. See [Paste buffers](/docs/cli-reference#paste-buffers) in the CLI reference.
+
+```bash
+# What can be pasted again
+tuios list-buffers
+
+# Keep a command, and paste it into the ops pane later
+tuios set-buffer -b deploy 'kubectl rollout restart deploy/api'
+tuios paste-buffer -b deploy -w ops
+
+# Store the output of a command
+git log -1 --format=%H | tuios set-buffer
+```
+
+Under the [tmux shim](/docs/tmux-shim#paste-buffers), `tmux paste-buffer` and the other buffer commands use the same buffers. So `tmux paste-buffer` pastes your last yank.
+
+## Who owns a buffer
+
+A buffer is yours or one pane's.
+
+- Your yanks are yours.
+- What you set from outside every pane, or from a pane that holds `admin`, is yours.
+- What a pane without `admin` sets is that pane's own.
+
+A buffer can hold a secret that you copied. So a pane without `admin` sees and pastes only its own buffers. It does not see your buffers or the buffers of another pane, in its session or in a different session. It cannot change or replace a buffer that you set. It cannot make a named buffer, so a name that you keep a command under stays yours.
+
+From inside a pane, reading the buffers needs the `read` grant. Changing them needs `write`. Pasting needs both. See [What a pane may do](/docs/agents#what-a-pane-may-do).
+
+Large requests to the daemon take memory from a budget. A big `set-buffer`, a `stash put` and an image paste are such requests. You have a budget of your own, outside every pane or in a pane that holds `admin`. A pane without `admin` shares a different budget, so it cannot use up yours.
+
+<Callout type="info" title="What a pane can still learn">
+The automatic buffer numbers come from one counter for everybody. A gap between two of a pane's own buffer numbers tells the pane that other buffers were made in between, such as your yanks. The pane learns how often you copy. It does not learn what you copy. TUIOS accepts this as a low risk.
+</Callout>
+
+## Related
+
+<Cards>
+  <Card title="Keybindings" href="/docs/keybindings#copy-mode" description="Copy mode and the yank keys" />
+  <Card title="CLI Reference" href="/docs/cli-reference#paste-buffers" description="The buffer commands and their flags" />
+  <Card title="tmux shim" href="/docs/tmux-shim#paste-buffers" description="tmux buffer commands under TUIOS" />
+</Cards>

@@ -88,6 +88,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 | [Worktrees](#worktrees) | `worktree`, `fan`, `ship` |
 | [Windows and workspaces](#windows-and-workspaces) | `new-window`, `split-window`, `popup`, `xpanes`, `close-workspace`, `focus-window`, `pip`, `move-window`, `set-window`, `set-layout`, `select-workspace`, `list-workspaces`, `set-workspace-name`, `set-session-name`, `set-session-accent` |
 | [Input and output](#input-and-output) | `send-keys`, `send-text`, `run`, `capture-pane`, `screenshot`, `wait-for`, `subscribe` |
+| [Paste buffers](#paste-buffers) | `list-buffers`, `show-buffer`, `set-buffer`, `delete-buffer`, `paste-buffer` |
 | [Inspection](#inspection) | `list-windows`, `get-window`, `session-info`, `list-verbs` |
 | [Tape verbs](#run-command) | `run-command` |
 | [Configuration](#configuration) | `config`, `set-config`, `get-config`, `list-options`, `list-themes`, `import-theme`, `list-glyphs`, `keybinds` |
@@ -901,6 +902,38 @@ tuios subscribe --hosts --types agent-state,host-changed
 - `--after-seq <n>` and `--boot-id <id>`: resume after a disconnect. The first line is an ack carrying `seq` and `boot_id`. When the daemon cannot replay everything you missed, a `gap` line says why, and you should read current state again.
 
 See [Control Protocol](/docs/control-protocol) for the event types.
+
+## Paste buffers
+
+Read and change the [paste buffers](/docs/paste-buffers), as the tmux commands of the same names do. A yank in copy mode adds a buffer. The daemon keeps the buffers, so every client and session on this machine shares them. `[paste_buffers]` sets how many to keep.
+
+```bash
+tuios list-buffers [--json]
+tuios show-buffer [-b <name>] [--json]
+tuios set-buffer [-b <name>] [-a] [<text> | -] [--json]
+tuios delete-buffer [-b <name>] [--json]
+tuios paste-buffer [-b <name>] [-s <session>] [-w <window>] [-d] [-r] [--json]
+```
+
+- `-b, --buffer <name>`: the buffer. The default is the newest buffer that TUIOS named, as in tmux. For `set-buffer`, the default is a new buffer named `bufferN`.
+- `-a, --append`: `set-buffer` adds the text to the end of the named buffer. With no `-b`, it makes a new buffer, as in tmux.
+- `-s, --session`, `-w, --window`: the pane that `paste-buffer` pastes into. The default is the focused pane.
+- `-d, --delete`: `paste-buffer` deletes the buffer after the paste, unless the buffer was set again in the meantime.
+- `-r, --raw`: `paste-buffer` keeps each line feed. Without it, each line feed becomes a carriage return, as in tmux.
+- `--json`: print the result as JSON.
+
+A buffer can hold any bytes, a binary file included. `show-buffer` prints the content and adds no line feed. `set-buffer -` reads the standard input. With no text on a terminal, `set-buffer` stops and says how to give the text. `set-buffer` with empty text stores nothing and exits 0, as tmux does. Input larger than 64 MiB is refused, and nothing is stored.
+
+`paste-buffer` removes control characters. It uses the bracketed paste marks when the program in the pane turned them on. With a session on another machine, `paste-buffer` sends the text of a buffer from this machine.
+
+From inside a pane, reading the buffers needs the `read` grant. Changing them needs `write`, and `paste-buffer` needs both. A buffer that a pane without `admin` sets is that pane's own, and such a pane reaches only its own buffers. It cannot make a named buffer. With no `-b`, your own commands take the newest of your own buffers, never one that a pane set. See [Who owns a buffer](/docs/paste-buffers#who-owns-a-buffer).
+
+```bash
+tuios list-buffers
+tuios set-buffer -b deploy 'kubectl rollout restart deploy/api'
+tuios paste-buffer -b deploy -w ops
+git log -1 --format=%H | tuios set-buffer
+```
 
 ## Inspection
 

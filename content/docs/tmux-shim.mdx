@@ -150,7 +150,7 @@ tuios tmux list-panes -F '#{pane_id} #{?pane_active,*, } #{=20:pane_title}'
 
 The loop modifiers (`S`, `W`, `P`, `L`), `N`, `C`, `c`, `e`, `q/e` and the strftime form of `t` are not supported. They expand to nothing and are logged. `#(command)` runs no command.
 
-The shim fills the session, window and pane variables tools use, among them `session_name`, `session_id`, `window_id`, `window_index`, `window_name`, `window_layout`, `window_zoomed_flag`, `pane_id`, `pane_index`, `pane_title`, `pane_current_path`, `pane_current_command`, `pane_active`, the pane size and edge variables, `pane_pid`, `pane_tty`, `history_size`, `pid`, `version` and `tuios_window_id`. `list-clients` and `list-buffers` add their own variables. A variable the shim cannot fill expands to nothing, as in tmux, and is logged. Some values come from TUIOS facts:
+The shim fills the session, window and pane variables tools use, among them `session_name`, `session_id`, `window_id`, `window_index`, `window_name`, `window_layout`, `window_zoomed_flag`, `pane_id`, `pane_index`, `pane_title`, `pane_current_path`, `pane_current_command`, `pane_active`, the pane size and edge variables, `pane_pid`, `pane_tty`, `history_size`, `pid`, `version` and `tuios_window_id`. `list-clients` adds its own variables. `list-buffers` adds `buffer_name`, `buffer_size`, `buffer_sample` and `buffer_created`. A variable the shim cannot fill expands to nothing, as in tmux, and is logged. Some values come from TUIOS facts:
 
 - `pane_current_command` is the program in the pane's foreground. At a shell prompt it is the base name of `$SHELL`.
 - `pane_pid` is the process the pane started, and `pane_tty` its terminal device. A pane the shim opened runs its pane holder first, so its `pane_pid` is the holder's. A pane on another machine has neither.
@@ -189,16 +189,22 @@ tuios tmux wait-for -S build-done     # in another
 
 ### Paste buffers
 
-A paste buffer is a file in `tmux/buffers/` beside the daemon socket, readable only by you, so a buffer stays between calls. Without `-b`, the newest buffer is used. A new buffer without `-b` is named `buffer0000`, `buffer0001` and so on.
+The daemon keeps the [paste buffers](/docs/paste-buffers), as the tmux server does. They are the same buffers that a yank in copy mode adds and that `tuios list-buffers` shows. So `tmux paste-buffer` pastes your last yank. A buffer stays between two calls, as in tmux: `tmux load-buffer notes.txt` and then `tmux paste-buffer`.
+
+Without `-b`, `paste-buffer` and `delete-buffer` use the newest buffer that `tmux` named. A new buffer without `-b` is named `buffer0`, `buffer1` and so on. The daemon holds the caller to its pane grants: reading the buffers needs `read`, and changing them needs `write`.
+
+A daemon from before the paste buffers has no buffers of its own. With such a daemon, a buffer is a file in `tmux/buffers/` beside the daemon socket, and only you can read it.
 
 `paste-buffer` types the buffer into the target pane:
 
-- Each line feed becomes a carriage return. `-s` sets another separator, and `-r` keeps the line feeds.
-- Control characters other than tab, line feed and carriage return are removed.
+- Each line feed becomes a carriage return, as in tmux. `-s` sets another separator, and `-r` keeps the line feeds.
+- Control characters other than tab, line feed and carriage return are removed, as from every TUIOS paste. So a buffer cannot end a bracketed paste early.
 - With `-p`, the text is wrapped in bracketed paste when the program in the pane turned it on.
 - `-d` deletes the buffer after the paste.
 
-The paste goes through `send-text`, so the daemon holds it to the caller's pane grants. `save-buffer` writes the file as you. It refuses a path in the shim's own directory.
+The paste goes through `send-text`, so the daemon holds it to the caller's pane grants. A pane without `write` cannot paste into another pane. When the daemon refuses the paste, nothing is typed and the buffer stays.
+
+`save-buffer` writes the file as you, from the process that called it, so it reaches only files that you could write yourself. A relative path starts from the caller's directory. Only you can read a new file. `save-buffer` refuses a path in the shim's own directory (`tmux/` beside the daemon socket), so a buffer cannot overwrite the shim's state.
 
 ### Environment
 
