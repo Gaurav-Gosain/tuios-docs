@@ -1,0 +1,69 @@
+name: Check
+
+# Runs on every pull request what deploy.yml runs on main, short of the deploy
+# and the /learn engine: lint, types, the tests, the build, and a check of the
+# export. A pull request that breaks the build or a link fails here instead of
+# on main, where every push deploys.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Cache Bun packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Type check
+        run: bun run types:check
+
+      - name: Test the Worker and the /learn engine
+        run: bun test worker/ lib/
+
+      - name: Cache the Next.js build
+        uses: actions/cache@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('app/**', 'components/**', 'content/**', 'lib/**', '*.ts', '*.mjs') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
+
+      # Without the /learn engine the page shows that the engine is missing.
+      # Everything else builds as it does for a deploy.
+      - name: Build
+        run: bun run build
+
+      - name: Check links, anchors and file types in the export
+        run: bun scripts/check-out.mjs
+
+      # Serves the export through the Worker with wrangler dev, the version
+      # deploy.yml pins, and checks the prefetch range answer, the search
+      # index type, _headers and _redirects.
+      - name: Smoke test the Worker
+        run: bun scripts/smoke-worker.mjs

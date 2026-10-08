@@ -39,7 +39,7 @@ app/
   og/docs/[...slug]/          Open Graph images for docs pages (all cards are drawn by lib/og.tsx)
   og/blog/[...slug]/          Open Graph images for posts
   og/releases/[...slug]/      Open Graph images for releases
-  api/search/                 static search index (staticGET)
+  api/search.json/            static search index (staticGET), served as JSON so it is compressed
   llms.txt/                   index of every page for language models
   llms-full.txt/              every docs page as one text file
   sitemap.ts, robots.ts       sitemap.xml and robots.txt, built from the content
@@ -64,7 +64,7 @@ lib/
   metadata.ts                 pageMetadata: canonical, feed links, OG and Twitter cards
   feed.ts, feeds.ts           RSS and Atom rendering, markdown to HTML for feeds
   layout.shared.tsx           nav title and top links (Docs, Blog, Releases)
-public/                       favicons, web manifest, demo.gif, fonts, CNAME, _headers
+public/                       favicons, web manifest, fonts, CNAME, _headers, _redirects
 public/shots/                 whole-screen captures of tuios for the landing page and docs, 1600
                               and 800 wide WebP (see "Screenshots" below)
 lib/keybindings/defaults.json the default bindings behind the keybinding explorer, written by
@@ -148,4 +148,5 @@ scripts/upload-release-media.sh v0.8.0 ~/dev/tuios-media/releases/v0.8.0/site
 1. **Static export**: there is no server at runtime. Route handlers must be static (search uses `staticGET`, and every route sets `revalidate = false`).
 2. **Generated files**: do not edit `.source/`. `fumadocs-mdx` regenerates it.
 3. **Search engines**: `app/sitemap.ts` lists every docs page, post and release note, so a new page needs no sitemap edit. Every page's metadata goes through `pageMetadata` in `lib/metadata.ts`, which sets the canonical URL and the feed links; Next.js replaces `alternates` as a whole, so a page that builds its own metadata loses the feed links. Docs, posts and release notes also emit JSON-LD (`components/json-ld.tsx`). A docs page's frontmatter `description` is its meta description, so keep it a real sentence.
-4. **Headers**: `public/_headers` sets a Content-Security-Policy. An external script, font or image host must be allowed there.
+4. **Headers**: `public/_headers` sets a Content-Security-Policy. An external script, font or image host must be allowed there. It also marks the hashed build files and the fonts as immutable. A file under `/fonts/` must get a new name when it changes.
+5. **No extensionless files**: Workers static assets send a file with no extension with no Content-Type, and the edge does not compress it. Give every generated file an extension. `scripts/check-out.mjs` fails the PR checks on one.
