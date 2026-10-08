@@ -52,9 +52,11 @@ export const layouts: Track = {
       id: "master",
       title: "Master and stack",
       note: "One big window on the left, the rest stacked on the right.",
-      keys: ["ctrl+p", { text: "master" }, "enter"],
+      // "master" alone puts "Set master position: top" first, and enter
+      // runs that instead of the layout.
+      keys: ["ctrl+p", { text: "master-stack" }, "enter"],
       done: changed("layout", "master-stack"),
-      hint: "ctrl+p opens the palette. Type master and press enter.",
+      hint: "ctrl+p opens the palette. Type master-stack and press enter.",
       learned: "master-stack",
     },
     {
