@@ -3,7 +3,10 @@
 //   bun scripts/learn-engine.mjs <build-dir>
 //
 // <build-dir> is what tuios's cmd/tuios-wasm/build.sh writes: tuios.wasm.gz,
-// wasm_exec.js, webterm.js, webterm.css, xterm.css, fonts/ and manifest.json.
+// wasm_exec.js, webterm.js, webterm.css, xterm.css, fonts/ and manifest.json,
+// and webterm-vtgl.js when tuios's sip ships the vtgl renderer as its own
+// file. The page loads that one only for ?renderer=vtgl, so it is copied but
+// not counted in totalBytes.
 // The deploy workflow runs it after building tuios at the ref in
 // learn/TUIOS_REF, and it works the same on a local build.
 //
@@ -63,6 +66,8 @@ const files = [
   fonts.bold,
 ];
 
+const vtgl = built.includes("webterm-vtgl.js") ? "webterm-vtgl.js" : undefined;
+
 const gz = await readFile(path.join(src, "tuios.wasm.gz"));
 const hash = createHash("sha256").update(gz).digest("hex").slice(0, 12);
 const root = path.resolve("public/learn");
@@ -90,6 +95,14 @@ const manifest = {
   fonts,
   ref: build.commit ?? "",
 };
+if (vtgl) {
+  await copyFile(path.join(src, vtgl), path.join(dir, vtgl));
+  const { size } = await stat(path.join(dir, vtgl));
+  if (size > LIMIT) {
+    throw new Error(`${vtgl} is ${size} bytes, over the 25 MiB asset limit`);
+  }
+  manifest.vtgl = vtgl;
+}
 await writeFile(
   path.join(root, "engine.json"),
   `${JSON.stringify(manifest, null, 2)}\n`,

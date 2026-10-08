@@ -38,6 +38,12 @@ export type EngineManifest = {
   totalBytes?: number;
   /** Font files under `base`, woff2 or ttf. */
   fonts?: { regular: string; bold: string };
+  /**
+   * The vtgl renderer under `base`, when the build has it as its own file.
+   * Loaded only for ?renderer=vtgl. A build from an older sip has vtgl inside
+   * webterm.js and leaves this out.
+   */
+  vtgl?: string;
   ref: string;
 };
 
@@ -84,6 +90,7 @@ declare global {
   interface Window {
     Go?: new () => GoRuntime;
     WebTerm?: { WebTerm: new (options: unknown) => WebTermInstance };
+    WebTermVtgl?: { vtgl: () => unknown };
     tuiosInitialSize?: [number, number];
     onTuiosReady?: (api: TuiosApi) => void;
   }
@@ -217,6 +224,27 @@ async function peek(stream: ReadableStream<Uint8Array>) {
   return { first, rest };
 }
 
+let vtglLoading: Promise<unknown> | null = null;
+
+/**
+ * The vtgl renderer provider, or undefined when the build has none or it
+ * fails to load. webterm then draws with WebGL. The file is about 900 KB, so
+ * it is fetched only when a page asks for vtgl, and once per page.
+ */
+function loadVtgl(manifest: EngineManifest): Promise<unknown> {
+  if (!manifest.vtgl) return Promise.resolve(undefined);
+  if (!vtglLoading) {
+    vtglLoading = addScript(`${manifest.base}${manifest.vtgl}`).then(
+      () => window.WebTermVtgl?.vtgl(),
+      (err) => {
+        console.warn("learn: the vtgl renderer did not load", err);
+        return undefined;
+      },
+    );
+  }
+  return vtglLoading;
+}
+
 function addScript(src: string) {
   return new Promise<void>((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) return resolve();
@@ -303,6 +331,9 @@ async function boot(
   if (!WebTermClass || !GoClass) throw new Error("engine scripts missing");
 
   const fonts = manifest.fonts ?? DEFAULT_FONTS;
+  const prefer =
+    new URLSearchParams(location.search).get("renderer") ?? "webgl";
+  const vtgl = prefer === "vtgl" ? await loadVtgl(manifest) : undefined;
   // Keys the page sends itself, in place of the terminal. Set once tuios runs.
   let sendKeys: (bytes: string) => void = () => {};
   const term = new WebTermClass({
@@ -320,9 +351,7 @@ async function boot(
         style: "normal",
       },
     ],
-    renderer: {
-      prefer: new URLSearchParams(location.search).get("renderer") ?? "webgl",
-    },
+    renderer: { prefer, vtgl },
     theme: { background: "#11111b" },
     mouse: { suppressContextMenu: true },
     keyboard: {
