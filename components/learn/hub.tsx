@@ -9,7 +9,7 @@ import {
   SquareTerminal,
   Trophy,
 } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { formatTime } from "@/lib/learn/engine";
 import type { Progress } from "@/lib/learn/progress";
 import { runSetup, type TuiosInstance } from "@/lib/learn/runtime";
@@ -42,6 +42,7 @@ export function Hub({
   onStart: (track: Track) => void;
   onPlay: () => void;
 }) {
+  const [heroFocused, setHeroFocused] = useState(false);
   const onReady = useCallback(async (t: TuiosInstance) => {
     await new Promise<void>((resolve) => t.onFirstFrame(resolve));
     await runSetup(t, HERO_DEMO, () => t.exited());
@@ -102,10 +103,11 @@ export function Hub({
               className="h-[340px] rounded-t-none border-t-0 md:h-[460px]"
               fontSize={13}
               onReady={onReady}
+              onFocusChange={setHeroFocused}
               label="tuios, running live. Click to try it."
             />
           </WindowChrome>
-          <HeroCaption />
+          <HeroCaption focused={heroFocused} />
         </div>
       </section>
 
@@ -196,8 +198,11 @@ function WindowChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Under the hero: the ctrl+b warm-up while it loads, then an invitation. */
-function HeroCaption() {
+/**
+ * Under the hero: the ctrl+b warm-up while it loads, then an invitation, and
+ * the way out while the terminal has the keys.
+ */
+function HeroCaption({ focused }: { focused: boolean }) {
   const status = useEngineStatus();
   const held = useHeldKeys();
   const ctrl = held.has("ctrl");
@@ -216,6 +221,13 @@ function HeroCaption() {
               ? "That is the leader key. Nice."
               : "the key tuios is built around."}
           </span>
+        </>
+      ) : status.phase === "ready" && focused ? (
+        <>
+          <Keycap label="esc" size="sm" />
+          <Keycap label="esc" size="sm" />
+          <Keycap label="esc" size="sm" />
+          <span>leaves the terminal</span>
         </>
       ) : status.phase === "ready" ? (
         <span>It is live. Click in and play, or pick a track below.</span>

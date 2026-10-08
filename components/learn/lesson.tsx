@@ -477,6 +477,7 @@ export function Lesson({
           <LiveTerminal
             className="absolute inset-0"
             stageRef={stageRef}
+            escapable={false}
             onReady={onReady}
             onFocusChange={(f) => {
               setTermFocused(f);

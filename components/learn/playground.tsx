@@ -159,6 +159,18 @@ export function Playground({ onExit }: { onExit: () => void }) {
               </span>
             </div>
             <ModeBadge state={tstate} />
+            <p className="font-mono text-fd-muted-foreground text-xs">
+              <kbd className="lk" data-size="sm">
+                esc
+              </kbd>{" "}
+              <kbd className="lk" data-size="sm">
+                esc
+              </kbd>{" "}
+              <kbd className="lk" data-size="sm">
+                esc
+              </kbd>{" "}
+              leaves the terminal
+            </p>
           </div>
 
           <div className="rounded-xl border border-fd-border bg-fd-card p-4">

@@ -76,8 +76,10 @@ export function LearnApp() {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = document.activeElement;
-      if (el?.closest("[role=application], input, textarea, [contenteditable]"))
-        return;
+      // The terminal takes its keys through a textarea. The stage around it
+      // takes focus when the reader leaves the terminal, and then the keys
+      // pick a track again.
+      if (el?.closest("input, textarea, [contenteditable]")) return;
       const n = Number(e.key);
       if (e.key === "0") {
         e.preventDefault();
