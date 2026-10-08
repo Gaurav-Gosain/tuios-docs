@@ -32,6 +32,9 @@ export const blog = defineDocs({
     schema: frontmatterSchema.extend({
       date: z.string().date(),
       author: z.string(),
+      // Topic slugs from lib/topics.ts. The blog index and the topic pages
+      // list posts by them.
+      tags: z.array(z.string()).default([]),
     }),
     postprocess: {
       includeProcessedMarkdown: true,

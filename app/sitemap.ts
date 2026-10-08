@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { absoluteUrl, site } from "@/lib/site";
 import { getBlogPosts, getDocsInSidebarOrder, getReleases } from "@/lib/source";
+import { topics } from "@/lib/topics";
 
 export const dynamic = "force-static";
 
@@ -51,6 +52,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.7,
     },
+    ...topics.map((topic) => ({
+      url: absoluteUrl(`/blog/topic/${topic.slug}`),
+      changeFrequency: "weekly" as const,
+      priority: 0.5,
+    })),
     ...posts.map((post) => ({
       url: absoluteUrl(post.url),
       lastModified: lastModified(post.data.date),

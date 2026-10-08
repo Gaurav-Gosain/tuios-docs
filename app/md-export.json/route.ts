@@ -4,6 +4,7 @@ import { learnMarkdown } from "@/lib/learn/markdown";
 import { markdownPath } from "@/lib/markdown-path";
 import { absoluteUrl, site } from "@/lib/site";
 import { getBlogPosts, getDocsInSidebarOrder, getReleases } from "@/lib/source";
+import { topics } from "@/lib/topics";
 
 export const dynamic = "force-static";
 export const revalidate = false;
@@ -37,6 +38,15 @@ export async function GET() {
     "/blog",
     [["Posts", posts]],
   );
+  for (const topic of topics) {
+    const path = `/blog/topic/${topic.slug}`;
+    files[markdownPath(path)] = listing(topic.title, topic.blurb, path, [
+      [
+        "Posts",
+        posts.filter((post) => (post.data.tags ?? []).includes(topic.slug)),
+      ],
+    ]);
+  }
   files["/releases.md"] = listing(
     "Releases",
     "What changed in each release of tuios.",

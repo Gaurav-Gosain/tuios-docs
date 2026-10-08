@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { FeedLinks } from "@/components/article/feed-links";
+import { PostList, TopicNav } from "@/components/article/post-list";
 import { breadcrumbLd, JsonLd, personLd } from "@/components/json-ld";
 import { pageMetadata } from "@/lib/metadata";
 import { absoluteUrl, feeds } from "@/lib/site";
-import { formatShortDate, getBlogPosts, getReadingMinutes } from "@/lib/source";
+import { getBlogPosts, getReadingMinutes } from "@/lib/source";
 
 export const metadata: Metadata = pageMetadata({
   title: "Engineering blog",
@@ -57,33 +57,10 @@ export default async function BlogIndex() {
           Every number comes from a run you can repeat from the repository.
         </p>
         <FeedLinks rss={feeds.blog.rss} atom={feeds.blog.atom} />
+        <TopicNav posts={posts.map(({ post }) => post)} />
       </header>
 
-      <ol className="divide-y divide-fd-border border-fd-border border-y">
-        {posts.map(({ post, minutes }) => (
-          <li key={post.url}>
-            <Link
-              href={post.url}
-              className="group grid gap-x-8 gap-y-2 py-7 md:grid-cols-[9rem_1fr]"
-            >
-              <p className="flex gap-3 font-mono text-fd-muted-foreground text-xs md:flex-col md:gap-1 md:pt-1.5">
-                <time dateTime={post.data.date}>
-                  {formatShortDate(post.data.date)}
-                </time>
-                <span>{minutes} min read</span>
-              </p>
-              <div>
-                <h2 className="font-semibold text-fd-foreground text-xl leading-snug transition-colors group-hover:text-fd-primary">
-                  {post.data.title}
-                </h2>
-                <p className="mt-2 text-fd-muted-foreground leading-relaxed">
-                  {post.data.description}
-                </p>
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ol>
+      <PostList items={posts} />
     </div>
   );
 }

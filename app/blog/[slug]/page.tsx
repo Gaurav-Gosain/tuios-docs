@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArticleLayout } from "@/components/article/article-layout";
+import { postTopics } from "@/components/article/post-list";
 import {
   breadcrumbLd,
   JsonLd,
@@ -31,10 +33,29 @@ export default async function Page(props: {
   const newer = index > 0 ? posts[index - 1] : undefined;
   const older = index >= 0 ? posts[index + 1] : undefined;
   const words = await getWordCount(page);
+  const topics = postTopics(page);
 
   return (
     <ArticleLayout
       back={{ href: "/blog", label: "All posts" }}
+      eyebrow={
+        topics.length > 0 ? (
+          <>
+            <span className="flex gap-2">
+              {topics.map((t) => (
+                <Link
+                  key={t.slug}
+                  href={`/blog/topic/${t.slug}`}
+                  className="text-fd-primary underline-offset-4 hover:underline"
+                >
+                  {t.title}
+                </Link>
+              ))}
+            </span>
+            <span aria-hidden="true">·</span>
+          </>
+        ) : undefined
+      }
       title={page.data.title}
       description={page.data.description}
       date={page.data.date}
@@ -58,6 +79,7 @@ export default async function Page(props: {
             wordCount: words,
             author: personLd(page.data.author),
             publisher: publisherLd,
+            keywords: topics.map((t) => t.title).join(", "),
             isPartOf: {
               "@type": "Blog",
               name: "tuios engineering blog",
