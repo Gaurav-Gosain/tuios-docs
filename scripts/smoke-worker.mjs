@@ -123,7 +123,7 @@ try {
       "demo.gif",
       res.status === 301 &&
         to ===
-          "https://raw.githubusercontent.com/Gaurav-Gosain/tuios/main/assets/demo.gif",
+          "https://cdn.jsdelivr.net/gh/Gaurav-Gosain/tuios@main/assets/demo.gif",
       `${res.status} ${to}`,
     );
   }
