@@ -792,7 +792,9 @@ leader_key = "ctrl+a"
 
 `alt+space` is already the app launcher.
 
-`opt+` and `option+` mean `alt+` (macOS only), `cmd+` and `command+` mean `super+`, and `control+` means `ctrl+`. See [Modifier spellings](/docs/keybindings#modifier-spellings). Press the leader two times in terminal mode to send it to the pane.
+`opt+` and `option+` mean `alt+` on every platform, `cmd+` and `command+` mean `super+`, and `control+` means `ctrl+`. See [Modifier spellings](/docs/keybindings#modifier-spellings). Press the leader two times in terminal mode to send it to the pane.
+
+If TUIOS cannot read the leader, the leader is `ctrl+b` until you correct it. See [When a key is wrong](#when-a-key-is-wrong).
 
 ### Sections
 
@@ -826,12 +828,12 @@ Each section is a table under `[keybindings]`. Each action takes a list of keys.
 
 ### Key syntax
 
-- **Modifiers:** `ctrl+`, `alt+`, `shift+`, `super+`. On macOS, also `opt+` and `option+`, which mean the same as `alt+`.
+- **Modifiers:** `ctrl+`, `alt+`, `shift+`, `super+`. Also `opt+` and `option+`, which mean `alt+`, `cmd+` and `command+`, which mean `super+`, and `control+`, which means `ctrl+`. These spellings work on every platform.
 - **Special keys:** `enter`, `return`, `esc`, `escape`, `tab`, `space`, `backspace`, `delete`, `up`, `down`, `left`, `right`, `home`, `end`, `pgup`, `pageup`, `pgdown`, `pagedown`, `f1` to `f12`.
 - **Any single character:** letters, digits, symbols, and accented letters.
 - **Held modifiers:** `leftalt`, `rightalt`, `leftctrl`, `leftsuper` and the like, for `hold_window_mode` only. They need the Kitty keyboard protocol.
 
-`super+` only reaches TUIOS in terminals that speak the Kitty keyboard protocol. `cmd+` is not valid. On Linux, `opt+` is an error.
+`super+` only reaches TUIOS in terminals that speak the Kitty keyboard protocol. On Linux, `opt+1` is `alt+1`. See [One config on macOS and Linux](#one-config-on-macos-and-linux).
 
 ```toml
 new_window = ["n", "ctrl+t"]   # several keys for one action
@@ -1388,23 +1390,58 @@ token_file = "~/.config/tuios/ntfy-token"   # optional
 
 The file is checked when it loads. Problems are errors or warnings.
 
-**Errors** are bindings TUIOS cannot parse, such as `"cmd+t"` or `"ctrl+"`. At startup they print to stderr:
+**Errors** are keys TUIOS cannot read, such as `"ctrl+nope"` or `"ctrl+"`. TUIOS ignores each of these keys and loads the rest of the file. See [When a key is wrong](#when-a-key-is-wrong).
 
-```
-Config error in [window_management]: cmd+t - invalid modifier: cmd
-```
+**Warnings** keep the key. They cover unknown values (which fall back to the default), unknown title placeholders, actions with no key, two actions on one key in the same section, and the macOS `alt+` advice.
 
-<Callout type="warn" title="One error at startup discards the whole file">
-If the file has an error when TUIOS starts, TUIOS uses the built-in defaults for everything, not just the broken key. The message prints before the screen is taken over, so it is easy to miss. Run `tuios keybinds list` to see it: that command prints `Using default keybindings...` when the file was rejected.
+TUIOS shows the number of problems when it starts, for example `2 config problems, see the log viewer`. The log viewer (leader <kbd>D</kbd> <kbd>l</kbd>) shows each problem.
 
-A file saved with an error while TUIOS runs is not applied, and the error is shown on screen.
+<Callout type="warn" title="A file that does not parse">
+If `config.toml` is not valid TOML, TUIOS cannot read any of it. At startup, TUIOS uses the built-in defaults and shows a config problem. If you save such a file while TUIOS runs, TUIOS keeps the config that it has.
 </Callout>
 
-**Warnings** keep the file. They cover unknown values (which fall back to the default), unknown title placeholders, actions with no key, two actions on one key in the same section, and the macOS `alt+` advice. TUIOS shows them on screen.
+## When a key is wrong
+
+TUIOS ignores a key that it cannot read, such as `ctrl+nope`. It loads the rest of the file. Your other keys, the leader and the other settings stay as you wrote them.
+
+The action of an ignored key gets a key as follows:
+
+- If the action has another key that TUIOS can read, the action keeps that key.
+- If the action has no other key, it gets its default key.
+- If another action already has that default key, the action has no key.
+- If TUIOS cannot read `leader_key`, the leader is `ctrl+b` until you correct it.
+
+TUIOS does not change your file. Correct the key, then save. The change applies at once.
+
+To find the ignored keys:
+
+- Look for the `config problems` notification when TUIOS starts.
+- Open the log viewer (leader <kbd>D</kbd> <kbd>l</kbd>). Each line names the key and its file.
+- Run `tuios keybinds doctor`. It lists each key by file and says what TUIOS does instead. See [Keybindings](/docs/keybindings#keys-tuios-cannot-read).
+- Run `tuios config apply`. It lists the keys it ignored.
+
+The same rule applies to keys in an included file and in `config.d`.
+
+## One config on macOS and Linux
+
+You can use one `config.toml` on a Mac and on a Linux machine, for example from a dotfiles repo. TUIOS reads `opt+` and `option+` as `alt+` on every platform. On Linux, `opt+1` is `alt+1`.
+
+```toml
+[keybindings.workspaces]
+switch_workspace_1 = ["opt+1"]   # Option+1 on macOS, Alt+1 on Linux
+```
+
+`tuios keybinds doctor` lists these keys under `OPT KEYS READ AS ALT`. This is for information. You do not need to change them.
 
 ## Troubleshooting
 
-**The file is not loading.** Run `tuios config path` to confirm which file TUIOS reads, then `tuios keybinds list` to see parse errors. Run `tuios config files` to see every file that TUIOS reads.
+**My config seems ignored.**
+
+1. Run `tuios config path` to confirm which file TUIOS reads. Run `tuios config files` to see every file that TUIOS reads.
+2. Look for the `config problems` notification when TUIOS starts. Open the log viewer (leader <kbd>D</kbd> <kbd>l</kbd>) to see each problem.
+3. Run `tuios keybinds doctor`. It lists each key that TUIOS cannot read, and the leader that TUIOS uses. TUIOS ignores only those keys. See [When a key is wrong](#when-a-key-is-wrong).
+4. If the log says the file does not parse, correct the TOML. TUIOS uses the defaults until then.
+5. On Linux, a key copied from a Mac works. `opt+` is `alt+` on every platform.
 
 **A setting changed nothing.**
 

@@ -987,11 +987,13 @@ A key in `config.toml` can spell a modifier in more than one way. TUIOS reads ea
 
 | Write | TUIOS reads it as | Where |
 |-------|-------------------|-------|
-| `opt+`, `option+` | `alt+` | macOS only |
+| `opt+`, `option+` | `alt+` | All platforms |
 | `cmd+`, `command+` | `super+` | All platforms |
 | `control+` | `ctrl+` | All platforms |
 
 The order of the modifiers does not matter, so `shift+ctrl+x` is the same key as `ctrl+shift+x`. This applies to `leader_key`, to every binding table, and to `tuios keybinds explain`, `free` and `unbind`. `tuios keybinds explain opt+f12` prints `opt+f12 (tuios reads it as alt+f12)`. `tuios keybinds doctor` lists each key that TUIOS cannot read.
+
+You can use one `config.toml` on macOS and on Linux. On Linux, `opt+1` is `alt+1`. See [One config on macOS and Linux](/docs/configuration#one-config-on-macos-and-linux).
 
 A `super+` chord needs a terminal that sends the Super key. Most macOS terminals keep Command chords for their own menus. Ghostty and kitty send an unbound Command chord through the Kitty keyboard protocol. A `super+` chord on F1 to F12, such as `super+f12`, works the same way. On a Mac keyboard, F12 can also be a media key, and then TUIOS does not get it.
 
@@ -1007,6 +1009,33 @@ tuios keybinds free alt+left              # take a key off every action
 ```
 
 `doctor` tags each finding with its evidence: `certain` comes from TUIOS routing, `observed` from the live pane, `reference` from a list of common program defaults. `doctor` and `explain` take `--json` and `--guest <program>`.
+
+### Keys TUIOS cannot read
+
+TUIOS ignores a key that it cannot read, such as `ctrl+nope`, and loads the rest of the file. `tuios keybinds doctor` reads the config the same way as the running app. The leader, the conflicts and the keys taken from the pane in the report are the ones that TUIOS uses.
+
+The doctor lists the ignored keys under `KEYS TUIOS CANNOT READ`, grouped by file. Each line names the key, the problem, the section and the action. It also says what TUIOS does instead. This report is for a file with a bad leader, a bad `new_window` key and an `opt+1` key:
+
+```
+tuios keybinds: 2 keys tuios cannot read, 7 keys a guest wants
+leader: ctrl+b
+
+KEYS TUIOS CANNOT READ (certain)
+  tuios ignores these keys.
+  Correct them in config.toml.
+    hyper+a                invalid modifier: hyper [keybindings.leader_key]. The leader is ctrl+b until you correct it.
+    ctrl+nope              unknown special key: nope [window_management.new_window]. new_window uses its default key, n.
+
+OPT KEYS READ AS ALT (certain)
+  For information. tuios reads opt+ as alt+ on this system. Nothing needs a change.
+  opt+1                  read as alt+1 [workspaces.switch_workspace_1]
+```
+
+An action with no other key gets its default key. If another action already has that default key, the line says so, and the action has no key. Correct each key in the file that the doctor names.
+
+Keys spelled with `opt+` are under `OPT KEYS READ AS ALT`. They are for information. You do not need to change them.
+
+See [When a key is wrong](/docs/configuration#when-a-key-is-wrong).
 
 `tuios keybinds browse` opens the rows of `tuios keybinds list --json` in an explorer. Press <kbd>/</kbd> to search, and <kbd>Tab</kbd> or a click on a tab to show one scope. The detail pane shows the keys, the action, the scope and the description. <kbd>q</kbd> or <kbd>Esc</kbd> leaves it. Add a search to start with it: `tuios keybinds browse spotlight`. `tuios keybinds list` prints plain text, on a terminal too.
 

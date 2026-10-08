@@ -31,6 +31,22 @@ You can send several requests on one connection. They are answered in order, one
 
 The socket is only accessible to your user: its directory is created with mode `0700`, and TUIOS refuses a directory that another user owns or that is a symlink. There is no token or password on top of that. What a program inside a pane may do over the socket is limited by the pane's [grants](/docs/agents#what-a-pane-may-do).
 
+### Limits
+
+The daemon limits the connections and the memory that clients can use.
+
+| Limit | Value | What happens past it |
+|-------|-------|----------------------|
+| Connections on the main socket | 1024 | The daemon sends a `too_many_connections` error and closes the connection. |
+| Connections on the link sockets, together | 256 | The same. Other machines cannot take the connections that your own clients need. |
+| Memory for requests over 64 KiB | One budget for your own clients, and a smaller one for links and panes without the `admin` grant | The request waits up to 2 seconds. Then the daemon refuses it with `busy` and closes the connection. |
+| Length of one request line | 12 MiB | The daemon refuses the request with `invalid_request` and closes the connection. |
+| Large writes to one pane | One at a time | The next write waits up to 5 seconds for the pane to read. Then the daemon refuses it with `busy`. |
+
+A TUIOS client takes a few connections. A command takes one connection while it runs. A request of 64 KiB or less, such as a key press, never waits for the memory budget.
+
+`busy` and `too_many_connections` are the only errors that can clear without a change to the request. When you get `busy`, the daemon did nothing. Wait a short time and send the request again. If the connection closed, open a new one first. When you get `too_many_connections`, close some clients or commands, then connect again.
+
 ## Discovering the protocol
 
 The daemon describes itself, so you do not need this page to use it:
@@ -417,6 +433,8 @@ Codes are stable, so it is safe to branch on them.
 | `no_remote` | `ship-push` or `ship-pr` found no remote to push to. |
 | `gh_unavailable` | The `gh` CLI is not installed or not logged in. |
 | `agents_disabled` | The verb is an agent feature, and `[agents] enabled = false` turned those off. |
+| `busy` | The daemon has no room for the request now. Other large requests hold its memory, or the pane has not read the last large input. Nothing was done. Try again after a short wait. See [Limits](#limits). |
+| `too_many_connections` | The daemon already serves as many connections as it allows, and closed this one. Nothing was done. Close some clients or commands, then try again. See [Limits](#limits). |
 | `internal` | An unexpected failure inside the daemon. |
 
 ## Examples
