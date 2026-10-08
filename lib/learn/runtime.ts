@@ -36,7 +36,7 @@ export type EngineManifest = {
   wasmBytes: number;
   /** Everything the page downloads to run tuios. */
   totalBytes?: number;
-  /** Font files under `base`, woff2 or ttf. */
+  /** Font files under `base`, WOFF2. */
   fonts?: { regular: string; bold: string };
   /**
    * The vtgl renderer under `base`, when the build has it as its own file.
@@ -48,8 +48,8 @@ export type EngineManifest = {
 };
 
 const DEFAULT_FONTS = {
-  regular: "fonts/JetBrainsMonoNerdFontMono-Regular.ttf",
-  bold: "fonts/JetBrainsMonoNerdFontMono-Bold.ttf",
+  regular: "fonts/JetBrainsMonoNerdFontMono-Regular.woff2",
+  bold: "fonts/JetBrainsMonoNerdFontMono-Bold.woff2",
 };
 
 export type EngineStatus = {

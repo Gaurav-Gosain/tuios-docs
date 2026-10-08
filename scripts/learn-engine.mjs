@@ -15,9 +15,8 @@
 // fetches the .gz and unpacks it with DecompressionStream (see
 // lib/learn/runtime.ts).
 //
-// The fonts are woff2 or ttf depending on the tools build.sh found, so their
-// names come from the build's manifest.json and go into engine.json for the
-// page to use.
+// The font names come from the build's manifest.json and go into engine.json
+// for the page to use. They are sip's WOFF2 files.
 //
 // The files go under public/learn/engine/<hash>/, named by the hash of the
 // wasm, so they can be cached forever. public/learn/engine.json names that
@@ -49,7 +48,7 @@ const built = Object.keys(build.files ?? {});
 /** The one font file in the build for a face, such as "Regular". */
 function font(face) {
   const name = built.find((f) =>
-    new RegExp(`^fonts/[^/]*-${face}\\.(woff2|ttf)$`).test(f),
+    new RegExp(`^fonts/[^/]*-${face}\\.woff2$`).test(f),
   );
   if (!name) throw new Error(`the build has no ${face} font`);
   return name;
