@@ -361,7 +361,9 @@ export function HardTabHole() {
       </div>
 
       <div
-        className="overflow-x-auto bg-fd-background/40 p-4"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto bg-fd-background/40 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
         aria-describedby={statusId}
       >
         <div className="flex w-max flex-col gap-4">

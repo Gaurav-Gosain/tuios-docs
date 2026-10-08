@@ -452,7 +452,11 @@ export function ScrollbackBytes() {
             {used} of {width} columns used
           </span>
         </div>
-        <div className="overflow-x-auto whitespace-pre rounded border border-fd-border bg-fd-background px-3 py-2 font-mono text-sm text-fd-foreground">
+        <div
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+          tabIndex={0}
+          className="overflow-x-auto whitespace-pre rounded border border-fd-border bg-fd-background px-3 py-2 font-mono text-sm text-fd-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+        >
           <span className="sr-only">The line as it appears on screen: </span>
           {preview || " "}
         </div>

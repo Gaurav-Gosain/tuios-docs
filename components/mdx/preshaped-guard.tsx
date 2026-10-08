@@ -57,7 +57,11 @@ export function PreshapedGuard() {
 
   return (
     <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
-      <div className="overflow-x-auto">
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         <table className="w-full border-collapse font-mono text-sm">
           <caption className="sr-only">
             Each row of the pane body with its byte, rune and column count. The

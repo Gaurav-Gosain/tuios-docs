@@ -74,7 +74,12 @@ export function ShapingCompare() {
         <div className="mb-2 font-mono text-xs uppercase tracking-wide text-fd-muted-foreground">
           per codepoint
         </div>
-        <div className="overflow-x-auto" dir="ltr">
+        <div
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+          tabIndex={0}
+          className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+          dir="ltr"
+        >
           <div className="flex min-w-max gap-1">
             {codepoints.map((cp, i) => (
               <div

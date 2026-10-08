@@ -261,7 +261,11 @@ export function HeadlessTerm() {
         <p className="mb-2 font-mono text-xs text-fd-muted-foreground">
           the pane after typing clear; echo ready
         </p>
-        <pre className="overflow-x-auto rounded-md border border-fd-border bg-fd-background px-3 py-2 font-mono text-sm leading-6">
+        <pre
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+          tabIndex={0}
+          className="overflow-x-auto rounded-md border border-fd-border bg-fd-background px-3 py-2 font-mono text-sm leading-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+        >
           {dumb ? (
             <>
               <div className="text-fd-muted-foreground">

@@ -179,7 +179,11 @@ export function TapeTrustFlow() {
                   {edited ? "changed since trust" : "untrusted"}
                 </Pill>
               </div>
-              <pre className="overflow-x-auto px-3 py-2 font-mono text-[11px] leading-5">
+              <pre
+                // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+                tabIndex={0}
+                className="overflow-x-auto px-3 py-2 font-mono text-[11px] leading-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+              >
                 {tape.map((line, i) => (
                   <div
                     // biome-ignore lint/suspicious/noArrayIndexKey: tape lines repeat and never reorder, so a line's position is its identity.

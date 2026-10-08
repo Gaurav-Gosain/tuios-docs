@@ -143,7 +143,9 @@ export function ClipWidth() {
       </div>
 
       <div
-        className="overflow-x-auto border-t border-fd-border px-4 py-3"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto border-t border-fd-border px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
         aria-live="polite"
       >
         <table className="w-full font-mono text-xs">

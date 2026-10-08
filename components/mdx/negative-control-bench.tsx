@@ -152,7 +152,11 @@ function Column({
       <div className="mb-2 font-mono text-xs text-fd-muted-foreground">
         {title}
       </div>
-      <pre className="mb-3 max-w-full overflow-x-auto rounded border border-fd-border bg-fd-background p-2 font-mono text-[11px] leading-snug text-fd-foreground">
+      <pre
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="mb-3 max-w-full overflow-x-auto rounded border border-fd-border bg-fd-background p-2 font-mono text-[11px] leading-snug text-fd-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         {code}
       </pre>
       <Result outcome={outcome} />

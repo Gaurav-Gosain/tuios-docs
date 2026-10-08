@@ -22,6 +22,11 @@ export function Mermaid({ chart }: { chart: string }) {
           fontFamily: "inherit",
           themeCSS: "margin: 1.5rem auto 0;",
           theme: resolvedTheme === "dark" ? "dark" : "default",
+          // The dark theme puts its light grey edge labels on #585858, 4.4:1.
+          // Catppuccin surface1 under them gives 5.8:1.
+          ...(resolvedTheme === "dark"
+            ? { themeVariables: { edgeLabelBackground: "#45475a" } }
+            : {}),
         });
 
         const result = await mermaid.render(

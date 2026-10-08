@@ -760,7 +760,11 @@ export function MailboxSandbox() {
               {fenced ? "fenced (what tuios prints)" : "raw (no fence)"}
             </button>
           </div>
-          <pre className="max-h-72 overflow-auto rounded-md bg-fd-muted/40 px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap break-words">
+          <pre
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+            tabIndex={0}
+            className="max-h-72 overflow-auto rounded-md bg-fd-muted/40 px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap break-words focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+          >
             {screen.length
               ? keyedScreen.map(({ l, k }) => (
                   <div

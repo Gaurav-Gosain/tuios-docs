@@ -101,7 +101,11 @@ export function CellShape() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-4 overflow-x-auto border-t border-fd-border p-4 sm:flex-row sm:gap-8">
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="flex flex-col gap-4 overflow-x-auto border-t border-fd-border p-4 sm:flex-row sm:gap-8 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         <CellGrid
           ratio={round.host}
           label={`the terminal (${round.hostNote})`}

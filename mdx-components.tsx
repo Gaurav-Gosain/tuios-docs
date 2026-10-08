@@ -56,6 +56,17 @@ import { WindowTargetOrder } from "@/components/mdx/window-target-order";
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
+    // The same wrapper as fumadocs, which scrolls a wide table on a phone.
+    // It takes focus, so a keyboard can scroll it too.
+    table: (props) => (
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="prose-no-margin relative my-6 overflow-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary"
+      >
+        <table {...props} />
+      </div>
+    ),
     Step,
     Steps,
     Mermaid,

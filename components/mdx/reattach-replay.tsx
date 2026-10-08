@@ -306,7 +306,11 @@ function ReplayTab() {
             The client is sent {r.sends}.
           </span>
         </p>
-        <div className="overflow-x-auto rounded-md border border-fd-border bg-fd-background">
+        <div
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+          tabIndex={0}
+          className="overflow-x-auto rounded-md border border-fd-border bg-fd-background focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+        >
           <pre className="min-w-max px-3 py-2 font-mono text-xs leading-5">
             {r.rows.map((row, i) => (
               <div

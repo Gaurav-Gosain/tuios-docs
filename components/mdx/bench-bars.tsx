@@ -95,13 +95,17 @@ export function BenchBars({
         })}
       </div>
 
-      <div className="overflow-x-auto border-fd-border border-t">
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto border-fd-border border-t focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">{caption}</caption>
           <thead>
             <tr>
               <th scope="col" className="p-3 text-left font-medium">
-                {groupLabel}
+                {groupLabel || <span className="sr-only">Case</span>}
               </th>
               {series.map((s) => (
                 <th

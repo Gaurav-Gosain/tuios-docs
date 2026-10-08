@@ -524,7 +524,9 @@ export function AgentSourceTimeline() {
                     <span className="max-w-full truncate text-[10px]">
                       {SHORT[s.kind]}
                     </span>
-                    <span className="text-[9px] opacity-70">{fmt(s.t)}</span>
+                    <span className="text-[9px] dark:opacity-70">
+                      {fmt(s.t)}
+                    </span>
                   </button>
                 </th>
               ))}
@@ -578,9 +580,7 @@ export function AgentSourceTimeline() {
                     )}
                   >
                     {lane.label}
-                    <span className="ml-1 hidden opacity-60 sm:inline">
-                      {lane.rank}
-                    </span>
+                    <span className="ml-1 hidden sm:inline">{lane.rank}</span>
                   </th>
                   {steps.map((s, i) => {
                     const c = s.lanes[lane.id];

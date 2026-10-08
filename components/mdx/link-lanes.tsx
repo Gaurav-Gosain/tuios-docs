@@ -417,7 +417,7 @@ function LaneRow({ lane }: { lane: Lane }) {
       >
         {lane.id} {lane.label}
       </span>
-      <span className="shrink-0 opacity-80">{stateText}</span>
+      <span className="shrink-0 dark:opacity-80">{stateText}</span>
     </li>
   );
 }
@@ -439,7 +439,9 @@ function Machine({
       )}
     >
       <span className="font-mono text-xs font-medium sm:text-sm">{title}</span>
-      <span className="mt-0.5 text-[10px] opacity-80 sm:text-xs">{sub}</span>
+      <span className="mt-0.5 text-[10px] sm:text-xs dark:opacity-80">
+        {sub}
+      </span>
     </div>
   );
 }

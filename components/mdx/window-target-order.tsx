@@ -314,7 +314,11 @@ export function WindowTargetOrder() {
         </div>
       </div>
 
-      <div className="overflow-x-auto border-t border-fd-border">
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto border-t border-fd-border focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         <table className="w-full min-w-[20rem] font-mono text-xs">
           <caption className="sr-only">
             The six panes and their window ids
@@ -345,7 +349,10 @@ export function WindowTargetOrder() {
                   key={p.name}
                   className={cn(
                     "border-t border-fd-border/60",
-                    hit && (wrong ? "bg-fd-primary/10" : "bg-fd-accent/60"),
+                    hit &&
+                      (wrong
+                        ? "bg-fd-primary/5 dark:bg-fd-primary/10"
+                        : "bg-fd-accent/60"),
                   )}
                 >
                   <td className="px-4 py-1.5 text-fd-muted-foreground">{i}</td>

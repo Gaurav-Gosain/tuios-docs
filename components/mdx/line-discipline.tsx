@@ -163,8 +163,10 @@ export function LineDiscipline() {
         {title}
       </div>
       <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
         className={cn(
-          "h-24 overflow-y-auto rounded border border-fd-border bg-fd-background p-2",
+          "h-24 overflow-y-auto rounded border border-fd-border bg-fd-background p-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary",
           "font-mono text-xs leading-5",
           tone,
         )}
@@ -172,7 +174,7 @@ export function LineDiscipline() {
         {items.length ? (
           items.join(" ")
         ) : (
-          <span className="opacity-40">nothing</span>
+          <span className="text-fd-muted-foreground">nothing</span>
         )}
       </div>
     </div>

@@ -284,14 +284,20 @@ export function ExtentScan() {
         </div>
       </div>
 
-      <div className="overflow-x-auto border-t border-fd-border">
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto border-t border-fd-border focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">
             Cells of the blank tail touched per line and in total
           </caption>
           <thead>
             <tr className="text-fd-muted-foreground">
-              <th scope="col" className="p-3 text-left font-medium" />
+              <th scope="col" className="p-3 text-left font-medium">
+                <span className="sr-only">Scan</span>
+              </th>
               <th scope="col" className="p-3 text-right font-medium">
                 this line
               </th>

@@ -157,7 +157,11 @@ export function MediumProbe() {
         />
       </div>
 
-      <div className="overflow-x-auto border-t border-fd-border">
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto border-t border-fd-border focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         <pre className="min-w-max px-4 py-3 font-mono text-sm leading-6">
           {o.replies ? (
             o.replies.map((r) => (

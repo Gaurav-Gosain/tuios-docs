@@ -596,7 +596,7 @@ export function PaneBoxNegotiation() {
                   className={cn(
                     "absolute flex flex-col items-center justify-center gap-0.5 overflow-hidden rounded-[2px] border font-mono text-[10px] leading-tight transition-all duration-300 motion-reduce:transition-none",
                     bad
-                      ? "border-fd-error bg-fd-error/10 text-fd-error"
+                      ? "border-fd-error bg-fd-error/10 text-red-700 dark:text-red-300"
                       : sim.focus === p
                         ? "border-fd-primary bg-fd-primary/10 text-fd-foreground"
                         : "border-fd-border bg-fd-muted/50 text-fd-foreground",

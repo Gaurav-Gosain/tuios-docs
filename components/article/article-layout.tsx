@@ -82,7 +82,7 @@ export function ArticleLayout({
               </p>
             ) : null}
             <p className="mt-6 flex items-center gap-2.5 text-sm">
-              <span className="inline-flex size-7 items-center justify-center rounded-full bg-fd-primary/15 font-mono font-semibold text-fd-primary text-xs">
+              <span className="inline-flex size-7 items-center justify-center rounded-full bg-fd-primary/10 font-mono font-semibold text-fd-primary text-xs">
                 {initials(author)}
               </span>
               <span className="text-fd-foreground">{author}</span>

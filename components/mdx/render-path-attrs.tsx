@@ -251,8 +251,10 @@ export function RenderPathAttrs() {
 
       <div className="bg-fd-background/40 p-3 sm:p-4">
         <div
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+          tabIndex={0}
           className={cn(
-            "overflow-x-auto rounded-md border border-fd-border/70 bg-fd-background px-3 py-4 font-mono text-sm sm:text-base",
+            "overflow-x-auto rounded-md border border-fd-border/70 bg-fd-background px-3 py-4 font-mono text-sm sm:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary",
             "[--rpa-bg:var(--color-fd-background)]",
             path.dimmed
               ? "[--rpa-fg:var(--color-fd-muted-foreground)]"

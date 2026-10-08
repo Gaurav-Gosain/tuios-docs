@@ -150,7 +150,11 @@ export function ShrinkRace() {
 
   return (
     <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
-      <div className="overflow-x-auto border-b border-fd-border">
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto border-b border-fd-border focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         <pre className="min-w-max px-4 py-3 font-mono text-sm leading-6">
           {TAPE.map((c, i) => {
             const kept = step.kept.includes(i);

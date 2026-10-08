@@ -167,7 +167,11 @@ export function ClusterExplorer() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-primary"
+      >
         <table className="w-full min-w-max text-sm">
           <thead>
             <tr className="border-b border-fd-border bg-fd-muted/40 text-left">
