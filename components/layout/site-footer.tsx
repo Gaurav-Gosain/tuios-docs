@@ -66,7 +66,7 @@ export function SiteFooter() {
                       href={link.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-fd-foreground/80 transition-colors hover:text-fd-primary"
+                      className="text-fd-muted-foreground transition-colors hover:text-fd-primary"
                     >
                       {link.text}
                     </a>
@@ -74,14 +74,14 @@ export function SiteFooter() {
                     // A feed or text file, not a page the router can render.
                     <a
                       href={link.href}
-                      className="text-fd-foreground/80 transition-colors hover:text-fd-primary"
+                      className="text-fd-muted-foreground transition-colors hover:text-fd-primary"
                     >
                       {link.text}
                     </a>
                   ) : (
                     <Link
                       href={link.href}
-                      className="text-fd-foreground/80 transition-colors hover:text-fd-primary"
+                      className="text-fd-muted-foreground transition-colors hover:text-fd-primary"
                     >
                       {link.text}
                     </Link>

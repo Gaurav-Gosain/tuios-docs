@@ -28,7 +28,7 @@ export function ReleaseTag({
         </Chip>
       ) : null}
       {latest ? (
-        <Chip className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+        <Chip className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300">
           latest release
         </Chip>
       ) : null}
