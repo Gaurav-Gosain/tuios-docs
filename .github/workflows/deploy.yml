@@ -67,7 +67,7 @@ jobs:
       # The engine is a function of the tuios commit: build.sh, the Go version
       # (go.mod names an exact release) and sip's webterm bundle (go.sum pins
       # the sip version) all come from that checkout. A deploy with an
-      # unchanged pin restores the last build and skips Go, uv and build.sh.
+      # unchanged pin restores the last build and skips Go and build.sh.
       # learn-engine.mjs is not part of the key because it runs on every
       # deploy, on the restored build too.
       - name: Restore the /learn engine build
@@ -83,22 +83,6 @@ jobs:
         with:
           go-version-file: .tuios/go.mod
           cache-dependency-path: .tuios/go.sum
-
-      # build.sh copies sip's WOFF2 fonts. A tuios that pins a sip with only
-      # TTFs makes build.sh convert them with fonttools, which uvx fetches, and
-      # without it the fonts ship as TTF, 2.5 times the size. Drop this step
-      # once learn/TUIOS_REF pins a tuios whose sip ships WOFF2.
-      # setup-uv publishes no moving major tags since v8, so it is pinned to a
-      # release.
-      #
-      # The job has no Python project, so setup-uv's default cache glob matched
-      # nothing and it warned that the cache would never be invalidated. The
-      # script that calls uvx stands in for a lock file.
-      - name: Setup uv
-        if: steps.learn.outputs.cache-hit != 'true'
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          cache-dependency-glob: .tuios/cmd/tuios-wasm/build.sh
 
       # build.sh finds bubbletea, creack/pty and sip in the module cache with
       # go list -m, which does not download them. It needs brotli too.
