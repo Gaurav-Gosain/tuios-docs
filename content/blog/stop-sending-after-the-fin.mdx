@@ -1,0 +1,233 @@
+---
+title: The shell exited, and Firefox opened a new one
+description: Over WebTransport, a sip session that the program ended came back as a fresh shell in 4 runs of 6. The server's last frame was a STOP_SENDING that one of my own September fixes had added, and Firefox threw away the close message it had already received.
+date: '2026-10-08'
+author: Gaurav Gosain
+---
+
+[sip](https://github.com/Gaurav-Gosain/sip) is the library that serves a
+terminal program in a browser. `tuios-web` is built on it. The page talks to
+the server over a WebSocket, or over WebTransport when the browser has it,
+which is HTTP/3 on QUIC.
+
+When the program in the page exits, the server sends one last message,
+`MsgClose`. The page reads it, prints "Session ended" in the status bar and
+stays put. If the connection closes without that message, the page assumes
+the network dropped and reconnects, and a reconnect means a new shell. So
+`MsgClose` is the difference between "you typed `exit`" and "your Wi-Fi
+blinked".
+
+Over WebTransport in Firefox, typing `exit` got you a new shell most of the
+time. This post is about the one line that caused it, and the fact that I
+wrote that line myself, in a fix that was also about keeping `MsgClose`.
+
+## How I found it
+
+I was moving sip onto [webterm](https://github.com/Gaurav-Gosain/webterm)'s
+browser client in [sip#9](https://github.com/Gaurav-Gosain/sip/pull/9).
+sip had its own copies of the transports, the search and the touch layer,
+and webterm had better ones. The PR deletes `static/mobile.js` (2,305 lines)
+and has sip's `SipConnection` use webterm's
+`fallback(webTransportTransport, webSocketTransport)` inside `reconnecting()`.
+
+Swapping out the code that reconnects is a good moment to pin down when it
+should not reconnect. So the PR adds `clienttests/connection.spec.mjs`, a
+Playwright suite for what is still sip's job, and one of its tests is short:
+
+```js
+test('a session the program ended stays ended', async ({ page }) => {
+  await boot(page, transport);
+  await page.evaluate(() => window.sipTerm.sendInput('exit\r'));
+  await page.waitForFunction(() => window.sipTerm.connected === false, null, { timeout: 15_000 });
+  await page.waitForTimeout(3000);
+
+  expect(await page.evaluate(() => window.__connects.length)).toBe(1);
+  expect(await page.locator('#status-text').textContent()).toBe('Session ended');
+});
+```
+
+Type `exit`, wait for the page to notice, give it three seconds to do
+something silly, then check it connected exactly once and says the session
+ended. It runs once per transport. Over WebSocket it passed. Over
+WebTransport, which the suite runs in Firefox, it failed 4 runs in 6.
+
+My first move was to check whether the new client caused it. It did not: the
+same test failed 4 runs in 6 on main too, before any of the webterm code was
+in. So the bug was older than the PR and on the server side. I marked the
+WebTransport case as a known failure, with a note to myself:
+
+```js
+// Over WebTransport the server sometimes ends the stream without
+// MsgClose when the shell exits: the page shows no "Session ended"
+// line, sees a plain close and reconnects to a new shell. It fails 4
+// runs in 6 on main before this change too, so it is a server race in
+// the WebTransport end of session, not the client. Fix it in
+// handlers.go, then drop this fixme.
+test.fixme(transport === 'webtransport', 'the server drops MsgClose over WebTransport on exit');
+```
+
+The fixme did not last long. It went out in the same PR, because the end of
+a WebTransport session in `handlers.go` is only a few lines.
+
+## The end of a WebTransport session
+
+A sip session over WebTransport is one bidirectional QUIC stream. The server
+writes length-prefixed frames to it, and reads the page's input frames from
+it. Two goroutines do that work, one per direction, and a third one, the
+watchdog, waits for the session to end and tears things down.
+
+When the program exits, the output goroutine forwards whatever the program
+printed last, writes `MsgClose`, and then closes its side of the stream,
+which sends a FIN. That order is right: the close message
+reaches the page before the end of the stream does.
+
+The watchdog ran at the same time. Here is what it looked like before the
+fix:
+
+```go
+go func() {
+	<-ctx.Done()
+	closeFunc()
+	_ = stream.SetReadDeadline(time.Now())
+	stream.CancelRead(0)
+}()
+```
+
+`CancelRead` is the receive half of a QUIC stream saying "I will not read
+anything more from you". On the wire it is a STOP_SENDING frame, sent to the
+peer. It is a polite thing to do in principle. The server really was done
+reading.
+
+The problem is when it went out. By the time the watchdog woke up, the output
+goroutine had usually already sent everything:
+
+```
+server -> page   last output frames
+server -> page   MsgClose
+server -> page   FIN
+server -> page   STOP_SENDING      (from the watchdog's CancelRead)
+```
+
+Firefox, on getting STOP_SENDING, errored the whole bidirectional stream. The
+`MsgClose` frame had already arrived, but the page never got to read it. From
+the page's side the connection just closed, so `reconnecting()` did its job
+and opened a new session, and the server started a new shell for it.
+
+The watchdog and the output goroutine race each other, which is why this
+was 4 runs in 6 and not 6 in 6.
+
+## Where the line came from
+
+I went looking for why `CancelRead` was there, because a line like that is
+usually there for a reason. It was mine. On 28 September I landed
+[7a89545](https://github.com/Gaurav-Gosain/sip/commit/7a89545), titled "keep
+MsgClose when the drain runs out during a write". One of its bullets:
+
+> The WebTransport handler cancels the stream read when the connection
+> ends, closes the stream after the last frame, and waits at most five
+> seconds for the client to close.
+
+The reason was real. A stream read in quic-go does not watch a context, so
+without something to wake it, the input goroutine could wait forever for a
+client that was never going to send again. `CancelRead` woke it.
+
+Later the same day,
+[520ef56](https://github.com/Gaurav-Gosain/sip/commit/520ef56) found that
+`CancelRead` alone was not enough. Once the server had closed its send side
+and cancelled the read, webtransport-go dropped the stream from the
+session's map, and a `Read` parked waiting for the session close was never
+woken. So that commit added a read deadline before the cancel:
+
+> The watchdog now sets a read deadline before it cancels the read. The
+> deadline wakes that Read.
+
+And that is the bit I missed at the time. Once the deadline was in, it was
+doing all the waking. `CancelRead` was left there doing nothing useful for
+the server, and one harmful thing for the page.
+
+## The fix is a deleted line
+
+[307ca0b](https://github.com/Gaurav-Gosain/sip/commit/307ca0b) removes the
+call and leaves a comment where it was, so I do not put it back in a month:
+
+```go
+// The deadline is the whole wake-up. Do not add stream.CancelRead here:
+// its STOP_SENDING frame goes out after the last output frames and the
+// FIN, and Firefox then errors the whole bidirectional stream and drops
+// the MsgClose it already had. The page saw a plain close and
+// reconnected to a new shell. TestWTNoStopSendingAtEnd checks for the
+// frame.
+go func() {
+	<-ctx.Done()
+	closeFunc()
+	_ = stream.SetReadDeadline(time.Now())
+}()
+```
+
+A comment is not a test, though, and the browser test needs Playwright and
+Firefox. I wanted something in `go test` that fails if the frame comes back.
+
+The awkward part is that quic-go, which the Go tests use as the client, does
+not do what Firefox does. It reads the `MsgClose` just fine with or without
+the STOP_SENDING. So a Go test that checks "did the client see `MsgClose`"
+passes on the broken server.
+
+What the test can check is the frame itself. STOP_SENDING means the server
+stopped its receive side. If the server did that, a write from the client
+after the session ended fails. If it did not, the write goes through:
+
+```go
+func TestWTNoStopSendingAtEnd(t *testing.T) {
+	srv := newCmdHTTPServer(DefaultConfig(), &CommandHandler{name: "sh", args: []string{"-c", "printf " + finalMarker}})
+	srv.connectMW = []ConnectMiddleware{connLimitMiddleware(srv)}
+	h := startWT(t, srv)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	c := h.dial(t, ctx)
+	if _, saw, eof, err := c.readAll(-1); !saw || !eof {
+		t.Fatalf("bad end: MsgClose=%v EOF=%v err=%v", saw, eof, err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if err := writeFramed(c.stream, []byte{MsgPing}); err != nil {
+		t.Fatalf("the server sent STOP_SENDING at the end of the session: %v", err)
+	}
+	_ = c.sess.CloseWithError(0, "")
+}
+```
+
+The program prints a marker and exits. The test reads to the end and checks
+it got both `MsgClose` and the FIN. Then it waits 300 ms for any late frame
+from the watchdog, and writes a ping. With `CancelRead` in place the write
+fails. Without it, it succeeds. The commit says the test fails without the
+fix, which is the half I care about most: a test written against a client
+that never showed the bug still has to fail on the bug.
+
+The 300 ms sleep is the part I like least. It is there because the frame I am
+testing for comes from another goroutine with no event to wait on. The test
+does not flake in the direction that matters, though: a fixed server never
+sends the frame, so a slow machine can only make the broken case pass by
+accident, not make a good build fail.
+
+With the fix, the browser test passed 8 runs in 8 over WebTransport, and the
+fixme came out of the spec in the same commit.
+
+## What I took from it
+
+The thing that bugs me here is that the line came from a fix for the same
+symptom. 7a89545 was all about keeping `MsgClose` intact when the server ended
+a session, and it added the frame that, a few weeks later, was the most
+common way to lose it. Then 520ef56 made it redundant the same afternoon,
+and I did not go back and ask whether the earlier line still had a job.
+
+The other thing is how the bug hid. The Go tests use quic-go as the client,
+and quic-go does not mind a late STOP_SENDING, so a Go test that only checks
+for `MsgClose` cannot see this. The browser that does mind runs WebTransport
+in the Playwright suite, and the test that asks what happens after `exit`
+only arrived with the webterm move. The line had been in the watchdog since
+28 September, and it took a test about reconnects, written for a different
+reason, to catch it.
+
+All of this is merged on sip's main branch.
+[sip#9](https://github.com/Gaurav-Gosain/sip/pull/9) is the PR, and
+[307ca0b](https://github.com/Gaurav-Gosain/sip/commit/307ca0b) is the fix
+on its own. `tuios-web` gets it with its next sip bump.
