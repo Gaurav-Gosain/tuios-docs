@@ -1,0 +1,204 @@
+---
+title: Two reads of one transcript took the daemon down
+description: A tuios daemon on Windows died twice in one afternoon, with every pane in it. The trace ended inside encoding/json. Two goroutines were reading one agent transcript through one buffer, because stopping a timer does not stop a callback that has already started.
+date: '2026-10-08'
+author: Gaurav Gosain
+---
+
+This one was found and fixed by someone else, and I think it is worth telling
+anyway, because the bug comes from a Go API that reads one way and works
+another.
+
+[Guilherme Pegoraro](https://github.com/Guipegoraro) runs tuios on Windows
+with Claude Code in a few panes. On v0.8.5, the daemon died twice in one
+afternoon. When the daemon dies, every pane in every session goes with it, so
+this is about the worst thing tuios can do to someone. Guilherme tracked it down and
+sent [#574](https://github.com/Gaurav-Gosain/tuios/pull/574), which went out
+in v0.9.1.
+
+## The trace
+
+Both crashes ended in the same place:
+
+```
+panic: JSON decoder out of sync - data changing underfoot?
+encoding/json.Unmarshal(...)
+github.com/Gaurav-Gosain/tuios/internal/transcript.(*Reader).scan(...)          transcript.go:263
+github.com/Gaurav-Gosain/tuios/internal/transcript.(*Reader).Read(...)          transcript.go:215
+github.com/Gaurav-Gosain/tuios/internal/session.(*Session).readAgentTranscript(...) agent_transcript.go:200
+github.com/Gaurav-Gosain/tuios/internal/session.(*Session).onTranscriptChanged.func1()  agent_transcript.go:185
+created by time.goFunc
+```
+
+The first one panicked a step earlier on the same path, with `index out of
+range [2773] with length 2773` in `decodeState.skip`.
+
+"Data changing underfoot" is `encoding/json` telling you, very politely,
+that the bytes it was decoding changed while it was decoding them. That only
+happens when something else writes to the same slice at the same time.
+
+## What reads a transcript
+
+Some background on why tuios reads these files at all. Agents like Claude Code
+write a transcript as they work, one JSON record per line. tuios tails that
+file as one of the signals for what the agent in a pane is doing.
+I wrote about where the transcript fits among the other signals in
+[an earlier post](/blog/the-moment-nothing-could-tell-them).
+
+The reader is `transcript.Reader`. It remembers where the last read stopped,
+reads what was appended since, and decodes the new lines from one buffer that
+it refills and zeroes on every read. That buffer is the important part.
+
+The session reads a pane's transcript from three places:
+
+- a debounce callback, armed when the file changes,
+- a synchronous read in `JoinAgentTranscript` when a pane joins its transcript,
+- `readTranscriptOnOutput`, a fallback for when there is no file watcher,
+  driven by pane output.
+
+`readAgentTranscript` calls `j.reader.Read()` with no lock held.
+
+## The debounce
+
+The trace starts in the debounce callback, so that is where to look. One turn
+of an agent appends several records, and reading after each of them would
+parse the same answer several times. So the watcher arms a 150 ms timer, and
+each new change stops the old timer and arms a new one:
+
+```go
+if j.debounce != nil {
+	j.debounce.Stop()
+}
+j.debounce = time.AfterFunc(transcriptDebounce, func() {
+	s.transcripts.mu.Lock()
+	if cur, ok := s.transcripts.joins[windowID]; ok {
+		cur.debounce = nil
+	}
+	s.transcripts.mu.Unlock()
+	s.readAgentTranscript(windowID)
+})
+```
+
+That looks like it allows one read at a time, and it does not. The `time`
+package documentation says so for a timer made by `AfterFunc`: if `Stop`
+returns false, the timer has already expired and the function has been started
+in its own goroutine, and "Stop does not wait for f to complete before
+returning."
+
+So `Stop` cancels a callback that has not started yet. It does nothing about
+one that is already running. A callback that is still inside `Read` when the
+next change comes in is left alone, and 150 ms later a second callback starts
+a second `Read` on the same `Reader`. Add the read on join and the output
+fallback, and there are several ways for two reads to overlap.
+
+Two reads share `r.buf` and `r.off`. One of them refills or clears the buffer
+while the other is inside `json.Unmarshal`, and the decoder sees its input
+change. One of the transcripts on that machine was 118 MB, which the PR
+mentions in case the size matters.
+
+## Why one goroutine took everything down
+
+A panic in Go that nothing recovers ends the whole process, whichever
+goroutine it happens in. This one happened in a timer goroutine inside the
+daemon, so the daemon exited, and every PTY it owned went with it. One bad
+read of one pane's transcript cost every pane in every session.
+
+## The comment was right
+
+The funny part is that `Reader` said exactly this, in its doc comment:
+
+```go
+// Reader tails one transcript. It is not safe for concurrent use; one reader
+// belongs to one joined pane and is driven by that pane's watcher.
+```
+
+The comment was accurate. The callers did not follow it: three of them read
+the same `Reader`, and the debounce that looked like it kept them apart did
+not.
+
+## The fix
+
+The fix puts a mutex in `Reader` and holds it across `Read`. `Skipped`, the
+count of lines that failed to parse, reads under it too:
+
+```go
+type Reader struct {
+	path string
+	// mu serializes Read. A second read refilling or zeroing buf while the first
+	// decodes from it is a panic inside encoding/json.
+	mu sync.Mutex
+	// ...
+}
+
+func (r *Reader) Read() (Observation, bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	// ...
+}
+```
+
+The lock is in `Reader`, not in the session. The PR explains the choice: that
+way every caller is covered, the three that exist and any added later. The doc
+comment now says the reader is safe for concurrent use, and why the session
+needs it to be.
+
+## The test, and its control
+
+`TestConcurrentReadsShareOneReaderSafely` reads one `Reader` from four
+goroutines while a writer appends 3000 turns, then checks that no line was
+skipped:
+
+```go
+var wg sync.WaitGroup
+for range 4 {
+	wg.Go(func() {
+		for {
+			select {
+			case <-writerDone:
+				return
+			default:
+			}
+			if _, _, err := r.Read(); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	})
+}
+wg.Wait()
+
+if r.Skipped() != 0 {
+	t.Fatalf("skipped = %d: a line read while another read reused the buffer", r.Skipped())
+}
+```
+
+The PR came with its negative control, which is the part I always want to
+see in a race fix. With the two lock lines removed and the test kept, it
+fails:
+
+```
+--- FAIL: TestConcurrentReadsShareOneReaderSafely (0.07s)
+    transcript_test.go:422: skipped = 2: a line read while another read reused the buffer
+```
+
+On other runs it panics instead, with `BUG: consumeArray must be called with
+a buffer that starts with '['`. Under `-race` the same control fails every
+time, with 5 data race reports: the `ReadAt` into the buffer, the
+`json.Unmarshal`, and the `clear` after it. With the lock, it passed 5 of 5
+runs, and 3 of 3 under `-race` with no race reported.
+
+Guilherme tested it on Windows 11, where it crashed, and under WSL on Ubuntu 24.04,
+because the session tests that cover transcripts start `/bin/sh` and could
+not run on Windows. The PR lists both.
+
+## What I take from it
+
+`time.AfterFunc` plus `Stop` reads like a debounce that runs one thing at a
+time. It is a debounce of when things start. It says nothing about how many
+are running. If the callback can take longer than the gap, or anything else
+calls the same code, the work needs its own lock.
+
+The doc comment is the other thing. "Not safe for concurrent use" put the
+burden on every caller, and three callers is a lot of places to get it right.
+Putting the lock in the type was the right call, and it was Guilherme's. Thanks again,
+[@Guipegoraro](https://github.com/Guipegoraro) :)
