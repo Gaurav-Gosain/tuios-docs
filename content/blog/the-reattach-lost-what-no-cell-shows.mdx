@@ -1,0 +1,221 @@
+---
+title: A reattach lost the state that no cell shows
+description: One CI failure, "scrollback differs on 2 of 396 lines, first at column 37", was a pane snapshot that forgot a wrap was pending. Its review found five more pieces of terminal state a snapshot dropped, and the fix for one of them broke the character sets of a program that had already quit.
+date: '2026-10-08'
+author: Gaurav Gosain
+---
+
+When a tuios client attaches to a pane that is already running, the daemon
+sends it a snapshot of the pane: the cells, the history, the cursor, the
+modes. The client loads the snapshot into its own emulator and then follows
+the live stream from where the snapshot left off. If the snapshot is complete,
+the client's screen and the daemon's stay the same forever. If it misses
+something, they agree right up to the moment the program does something that
+depends on the missing piece.
+
+[An older post](/blog/sessions-come-back) covered how reattach works in
+general. This one is about state that is real but invisible. Nothing on screen
+shows it, so a snapshot that drops it looks perfect, and a test that compares
+the screen right after a reattach passes.
+
+## Column 37
+
+`TestRehydrationMatrix` in `internal/app` runs a grid of reattach cases
+against a real daemon and compares the client with the daemon line by line.
+The `reattach/mid-output` case starts a loop and reattaches while it is still
+printing:
+
+```sh
+i=1; while [ $i -le 400 ]; do echo "MID-$i-END"; i=$((i+1)); done
+```
+
+On CI it failed once with:
+
+```
+scrollback differs on 2 of 396 lines, first 2 last 3, first at column 37
+```
+
+The pane in that test is 38 columns wide, so column 37 is the last one. And
+scrollback lines 2 and 3 are the shell's echo of that `while` command, which
+is longer than 38 columns, so it wraps right there.
+
+## The pending wrap
+
+When a program prints into the last column of a row, the cursor does not
+move to the next row. It stays on that last cell, and the terminal sets a
+flag: a wrap is pending. The next printed character first wraps to the next
+row and lands at column 0. A cursor move or a carriage return clears the
+flag instead.
+
+So "the cursor is at column 37" means two different things, depending on that
+flag. Without it, the next character overwrites column 37. With it, the next
+character goes to column 0 of the row below.
+
+The snapshot carried the cursor position and not the flag, and restoring the
+position clears the flag anyway. If the daemon took the snapshot just after
+the shell's echo reached column 37, the client printed the next streamed
+character over the last cell, and every byte after it landed one column out.
+
+I could not make the matrix case fail on my machine.
+[#571](https://github.com/Gaurav-Gosain/tuios/pull/571) records the attempt:
+300 runs each, with 8 niced busy loops on cores 0 to 7, at GOMAXPROCS 1 and 4,
+with and without `-race`, before and after the fix. 0 failures in all eight
+cells. The window is the moment the shell's echo reaches the last column, and
+that is rare.
+
+So the regression test does not wait for that moment. It makes it.
+`TestWireCarriesThePendingWrap` takes a snapshot at the seam, restores it into
+a client, then feeds the same bytes to both sides and compares. Its failures
+have the same shape as the CI one: in #571's controls, the client had `N` at
+column 39 where the daemon had `Z`.
+
+## Setting a flag the library will not let me set
+
+`TerminalState` got a `PendingWrap` field
+([690e8500](https://github.com/Gaurav-Gosain/tuios/commit/690e8500)). On the
+pure Go emulator the restore sets the flag directly.
+
+On the libghostty-vt backend there is no sequence that sets it. So the restore
+does what the guest did to get there in the first place: it prints the cell
+under the cursor again. That leaves the cursor on the last cell with a wrap
+pending, exactly like the guest's own print did.
+
+Reprinting a cell is fiddlier than it sounds. The cell has its own style, and
+the pen in force may be different. The character set in force may translate
+the character a second time, so a plain `q` in that cell would come back as a
+line if the line-drawing set is selected. A wide glyph has to be printed from its lead cell. So the
+reprint goes out with the cell's own style and ASCII selected, and then the
+pen and the character sets are put back.
+
+The tests cover the plain case, a cursor parked on the last column by CUP,
+which must not wrap, a move and a CR after the restore, autowrap off, a wide
+glyph, the line-drawing set, a pen in force, origin mode and the last row.
+`TestGhosttyWireCarriesThePendingWrap` runs the same cases pure Go to
+ghostty, ghostty to pure Go, and ghostty to ghostty. With the restore line
+removed, 16 of 20 pure cases fail. With the ghostty reprint turned off, 37
+ghostty cases fail.
+
+## A bug the reprint found
+
+Writing the margin cases turned up a bug older than the PR.
+
+Under origin mode (DECOM), cursor addresses are relative to the margins. The
+ghostty restore subtracted the top margin from the row, but it sent the column
+as absolute, while the library reads a CUP column relative to the left margin.
+So a pane with left and right margins (DECSLRM) and origin mode came back
+with its cursor too far right by the width of the left margin.
+
+That was already broken on main. The pending-wrap reprint just made it
+visible, because it used the same column: a wide glyph at the right margin was
+reprinted one column left, wrapped, and lost the pending wrap.
+[51bce182](https://github.com/Gaurav-Gosain/tuios/commit/51bce182) subtracts
+the left margin from both. With it reverted, the two margin cases fail into a
+ghostty client, and so does the cursor-only case, which is the proof that the
+cursor bug was on main.
+
+## Five more things no cell shows
+
+The review of #571 asked the obvious next question: what else does a snapshot
+not carry? It came back with five gaps, all older than the PR, and
+[#580](https://github.com/Gaurav-Gosain/tuios/pull/580) fixes them:
+
+1. On the ghostty backend, an open OSC 8 link in the pen was not carried.
+   Text printed inside the link after a reattach was not a link.
+2. The pure emulator did not implement DECSCA at all, so a selective erase
+   (DECSED) after a reattach erased cells the guest had protected.
+3. The character that REP (`CSI b`) repeats was not carried.
+4. The cursor that DECSC saved was not carried, on either screen. DECRC went
+   to the top left, and so did the shell's cursor when a vim that was open
+   across the reattach quit.
+5. A client wider than the snapshot was left wider. A pending wrap at the
+   snapshot's last column was then not at the client's margin.
+
+Every one of these is invisible at the moment of the reattach. The saved
+cursor is the clearest example. You reattach to a pane running vim, and
+everything is fine until you quit vim. vim leaves the alternate screen, the
+terminal restores the cursor it saved on the way in, and the client has
+nothing saved, so the shell prompt shows up at the top left.
+
+`TerminalState` gains a field for each, and both backends gain the read and
+restore methods. On ghostty, where the library exposes neither the saved
+cursor nor REP's character, a scanner reads them off the stream as the guest
+sends them.
+
+The tests went in first, on both wire forms. On main with only the tests
+added, 32 of 56 pure cases and all 8 wider-client cases failed. On the ghostty
+build, 28, 52 and 44 of 56 failed going pure to ghostty, ghostty to pure, and
+ghostty to ghostty.
+
+## The fix that broke a program after it quit
+
+Fixing the saved cursor needed a change to the emulator too. Entering the
+alternate screen with mode 1049 saves the cursor, and leaving it restores the
+cursor the way DECRC does, character sets included. xterm and libghostty both
+do that. The pure emulator only switched screens back, so the alternate
+screen's character sets stayed in force after a full-screen program quit.
+[6af85a90](https://github.com/Gaurav-Gosain/tuios/commit/6af85a90) made 1049
+restore the cursor.
+
+The review of #580 found what that broke. Both screens shared one slot for the
+character sets that DECSC saves. Before, nothing read that slot on the way out
+of the alternate screen, so sharing it did not matter. Now 1049 did read it,
+and a program that saved its cursor on the alternate screen handed its
+character sets to the shell. The commit that fixed it,
+[5d7b4173](https://github.com/Gaurav-Gosain/tuios/commit/5d7b4173), has a
+one-line repro:
+
+```
+\e[?1049h \e(0 \e7 \e(B \e[?1049l q
+```
+
+Enter the alternate screen, select the line-drawing set, save the cursor,
+go back to ASCII, leave. Then print `q`. It should be a `q`. On the pure
+emulator it printed a line, because the line-drawing set saved on the
+alternate screen came back on the main one. The saved character sets now live
+in each screen's own saved state.
+
+A later commit in the same PR changed one decision I had made on purpose. The PR
+originally narrowed a wider client and left a taller one alone, on the theory
+that extra rows change nowhere a line wraps. That is true for wrapping and
+false for scrolling: a line feed on the client's last row moved the cursor
+down, where the daemon, one row shorter, scrolled.
+[2ba3b7de](https://github.com/Gaurav-Gosain/tuios/commit/2ba3b7de) sizes the
+client to the snapshot in both directions.
+
+## Controls
+
+#580 cut one call site at a time and ran both builds, and all 19 controls were
+caught. A few of them:
+
+| Cut | Result |
+| --- | --- |
+| the OSC 8 write in the ghostty restore | 12 subtests fail, the `open-link` cases into a ghostty client |
+| `RestoreProtectedCells` | 12 pure and 48 ghostty subtests fail |
+| `RestoreLastPrinted` | 14 pure subtests fail |
+| the scanner's DECSC hook | 28 subtests fail from a ghostty daemon |
+| the narrowing resize | every wider-client case fails, 8 pure and 32 ghostty |
+
+Every new field is optional on the wire.
+`TestCursorStateFieldsAreOptionalOnTheWire` checks that an old peer decodes a
+new snapshot, and that a snapshot from an old peer decodes with none of the
+fields and leaves no cell protected.
+
+There is a cost on ghostty. The backend now records the saved cursor at each
+DECSC, SCOSC, 1048 and 1049, which means flushing to the library and reading
+the cursor at that point. A stream of 50 saves per write went from 12.5 µs to
+about 90 µs per write, about 1.5 µs per save. Plain text writes are within
+noise of main.
+
+## What I take from it
+
+The matrix test compares screens, and every one of these bugs left the screen
+right. The pending wrap, the saved cursor, the protected cells, REP's
+character: none of them is drawn anywhere. They only show up when the guest
+sends the one sequence that reads them, and the matrix guest mostly prints
+lines.
+
+The test that catches them restores at the seam, then feeds both sides the
+same bytes and compares after. That is the shape
+`TestWireCarriesThePendingWrap` started with, and #580 put every case through
+the same helper, `runSeamCases`. It found a lot more than the one CI failure
+that started this.
