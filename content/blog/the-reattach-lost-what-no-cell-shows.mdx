@@ -203,8 +203,12 @@ fields and leaves no cell protected.
 
 There is a cost on ghostty. The backend now records the saved cursor at each
 DECSC, SCOSC, 1048 and 1049, which means flushing to the library and reading
-the cursor at that point. A stream of 50 saves per write went from 12.5 µs to
-about 90 µs per write, about 1.5 µs per save. Plain text writes are within
+the cursor at that point. apt pays that on every line, because it saves the
+cursor around its status line, so `BenchmarkBackendApt` replays that stream.
+The first version read which screen was active from the library, three cgo
+calls per save, and took 2000 lines from about 3 ms to 5.3 to 6.9 ms. The
+review pointed at a flag the scanner already keeps, and reading that brought
+it down to 4.3 to 4.9 ms, about 0.8 µs a save. Plain text writes are within
 noise of main.
 
 ## What I take from it
