@@ -44,6 +44,9 @@ import { TillyControls, TillyGuide, usePrefs } from "./tilly";
 /** How many rows the keys learned list shows. */
 const SHELF_ROWS = 5;
 
+/** The least time the card shows a finished step, with its tick. */
+const DONE_MS = 700;
+
 /**
  * Events this soon after a step starts belong to the step before it, unless
  * the reader presses a key first: a key starts a new update, so it and what
@@ -79,6 +82,9 @@ export function Lesson({
   // A step just completed. The card shows a tick; Tilly does the praising, and
   // when Tilly is hidden the card adds a plain "Done" so the reader still sees it.
   const [justDone, setJustDone] = useState(false);
+  // A finished step whose card stays up while the next step's setup runs,
+  // so the reader does not type into a scene that is about to change.
+  const [holding, setHolding] = useState<number | null>(null);
   const prefs = usePrefs();
   const [termFocused, setTermFocused] = useState(false);
   const [leftTerminal, setLeftTerminal] = useState(false);
@@ -202,8 +208,18 @@ export function Lesson({
         onProgress();
         phaseRef.current = "finished";
         setTimeout(() => alive.current && setPhase("finished"), 1700);
+      } else if (track.steps[index + 1]?.setup?.length) {
+        // The next step moves the scene, such as to another window. Run that
+        // now, and show its card only when it is done.
+        setHolding(index);
+        const shownAt = performance.now();
+        startStep(index + 1).then(async () => {
+          const rest = DONE_MS - (performance.now() - shownAt);
+          if (rest > 0) await sleep(rest);
+          if (alive.current) setHolding(null);
+        });
       } else {
-        setTimeout(() => startStep(index + 1), 700);
+        setTimeout(() => startStep(index + 1), DONE_MS);
       }
     },
     [track, onProgress, startStep, script],
@@ -360,18 +376,25 @@ export function Lesson({
   useModalOverlay(rootRef);
 
   const lesson = lessonRef.current;
-  const step = currentStep(lesson);
+  const holdingCard = holding !== null;
+  const shownIndex = holding ?? lesson.index;
+  const step = holdingCard
+    ? (track.steps[shownIndex] ?? null)
+    : currentStep(lesson);
   const now = Date.now();
   const level =
-    phase === "running" && step && !step.explainer ? hintLevel(lesson, now) : 0;
+    phase === "running" && step && !step.explainer && !holdingCard
+      ? hintLevel(lesson, now)
+      : 0;
   const altBlocked =
     phase === "running" &&
+    !holdingCard &&
     !!step &&
     !altNoteClosed.has(step.id) &&
     altChordBlocked(lesson, now);
   const noWindow = !!step && lacksWindow(step, tstate);
   const nudge =
-    phase === "running" && step && !step.explainer
+    phase === "running" && step && !step.explainer && !holdingCard
       ? nudgeFor({
           level,
           wrong: lesson.wrong,
@@ -510,7 +533,7 @@ export function Lesson({
                 {phase === "booting"
                   ? "GETTING READY"
                   : step
-                    ? `STEP ${lesson.index + 1} / ${track.steps.length}`
+                    ? `STEP ${shownIndex + 1} / ${track.steps.length}`
                     : "DONE"}
               </span>
               {justDone ? (
@@ -571,7 +594,9 @@ export function Lesson({
                       <KeySequence
                         items={step.keys}
                         size="xl"
-                        pressed={lesson.pressed}
+                        pressed={
+                          holdingCard ? step.keys.length : lesson.pressed
+                        }
                         held={allHeld}
                         pulseNext={level >= 1}
                       />
@@ -627,7 +652,7 @@ export function Lesson({
                       <button
                         type="button"
                         onClick={showMe}
-                        disabled={phase !== "running"}
+                        disabled={phase !== "running" || holdingCard}
                         className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 font-mono text-sm transition-colors disabled:opacity-50 ${
                           level >= 2
                             ? "learn-glow border-[var(--brand-a)] bg-[var(--brand-a)]/10 text-fd-foreground"
@@ -640,7 +665,7 @@ export function Lesson({
                       <button
                         type="button"
                         onClick={skip}
-                        disabled={phase !== "running"}
+                        disabled={phase !== "running" || holdingCard}
                         className="inline-flex items-center gap-2 rounded-lg px-3 py-2 font-mono text-fd-muted-foreground text-sm transition-colors hover:text-fd-foreground disabled:opacity-50"
                       >
                         <SkipForward className="size-4" />
