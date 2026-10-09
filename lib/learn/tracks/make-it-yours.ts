@@ -47,9 +47,11 @@ export const makeItYours: Track = {
       id: "glyphs",
       title: "Pick heavy glyphs",
       note: "The shapes tuios draws its frames and marks with.",
-      keys: ["down", "right"],
+      // The page opens on its first row, Agent features. Glyph set is two
+      // rows down, after Theme.
+      keys: ["down", "down", "right"],
       done: setting("glyphs"),
-      hint: "Down once to Glyph set, then right to change it.",
+      hint: "Down twice to Glyph set, then right to change it.",
       learned: "glyphs",
     },
     {
