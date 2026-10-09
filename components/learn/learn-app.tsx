@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { pageKeysAllowed } from "@/lib/learn/page-keys";
 import { type Progress, readProgress } from "@/lib/learn/progress";
 import { loadEngine } from "@/lib/learn/runtime";
 import { findTrack, tracks } from "@/lib/learn/tracks";
@@ -75,11 +76,7 @@ export function LearnApp() {
     if (active || playing || mobile) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const el = document.activeElement;
-      // The terminal takes its keys through a textarea. The stage around it
-      // takes focus when the reader leaves the terminal, and then the keys
-      // pick a track again.
-      if (el?.closest("input, textarea, [contenteditable]")) return;
+      if (!pageKeysAllowed(document.activeElement)) return;
       const n = Number(e.key);
       if (e.key === "0") {
         e.preventDefault();

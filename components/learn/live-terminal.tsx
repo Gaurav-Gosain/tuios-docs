@@ -6,6 +6,12 @@ import { bootTuios, loadEngine, type TuiosInstance } from "@/lib/learn/runtime";
 import { BspLoader } from "./bsp-loader";
 import { useEngineStatus } from "./hooks";
 
+/**
+ * The data attribute (`data-left-by-keys`) on a stage the reader left with
+ * esc three times. pageKeysAllowed in lib/learn/page-keys.ts reads it.
+ */
+const LEFT_BY_KEYS = "leftByKeys";
+
 /** Esc presses this close together leave the terminal. */
 const ESCAPE_WINDOW_MS = 900;
 
@@ -121,11 +127,19 @@ export function LiveTerminal({
       while (times.length && now - times[0] > ESCAPE_WINDOW_MS) times.shift();
       if (times.length < 3) return;
       times.length = 0;
+      // Marks a stage the reader left with the keyboard. A click can also
+      // focus the stage, and then the page keys stay off.
+      el.dataset[LEFT_BY_KEYS] = "";
       el.focus();
     };
+    const onBlur = () => delete el.dataset[LEFT_BY_KEYS];
     // Capture, so this sees the key before the terminal does.
     el.addEventListener("keydown", onKey, true);
-    return () => el.removeEventListener("keydown", onKey, true);
+    el.addEventListener("blur", onBlur);
+    return () => {
+      el.removeEventListener("keydown", onKey, true);
+      el.removeEventListener("blur", onBlur);
+    };
   }, [escapable]);
 
   const setRefs = (node: HTMLDivElement | null) => {
