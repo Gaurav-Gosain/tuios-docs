@@ -36,7 +36,7 @@ export default async function TopicPage(props: {
   const all = getBlogPosts();
   const posts = await Promise.all(
     all
-      .filter((post) => (post.data.tags ?? []).includes(topic.slug))
+      .filter((post) => post.data.tags.includes(topic.slug))
       .map(async (post) => ({
         post,
         minutes: await getReadingMinutes(post),

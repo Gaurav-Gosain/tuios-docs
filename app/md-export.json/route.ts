@@ -41,10 +41,7 @@ export async function GET() {
   for (const topic of topics) {
     const path = `/blog/topic/${topic.slug}`;
     files[markdownPath(path)] = listing(topic.title, topic.blurb, path, [
-      [
-        "Posts",
-        posts.filter((post) => (post.data.tags ?? []).includes(topic.slug)),
-      ],
+      ["Posts", posts.filter((post) => post.data.tags.includes(topic.slug))],
     ]);
   }
   files["/releases.md"] = listing(

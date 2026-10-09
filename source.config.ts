@@ -10,6 +10,7 @@ import {
 } from "fumadocs-mdx/config";
 import type { ShikiTransformer } from "shiki";
 import { z } from "zod";
+import { topicSlugs } from "./lib/topics";
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -33,8 +34,8 @@ export const blog = defineDocs({
       date: z.string().date(),
       author: z.string(),
       // Topic slugs from lib/topics.ts. The blog index and the topic pages
-      // list posts by them.
-      tags: z.array(z.string()).default([]),
+      // list posts by them. A typo or a post with no topic fails the build.
+      tags: z.array(z.enum(topicSlugs)).min(1),
     }),
     postprocess: {
       includeProcessedMarkdown: true,

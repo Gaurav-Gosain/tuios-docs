@@ -30,16 +30,22 @@ export const topics = [
     blurb: "The daemon, its clients, and panes on other machines.",
   },
   {
-    slug: "input",
-    title: "Input",
-    blurb: "Keys, mouse and links.",
+    slug: "layout",
+    title: "Layout",
+    blurb: "Tiling, dividers and how windows share the screen.",
   },
   {
-    slug: "releases",
-    title: "Releases",
-    blurb: "Posts about a release.",
+    slug: "input",
+    title: "Input",
+    blurb: "Keys, mouse, links and terminal queries.",
   },
 ] as const;
+
+/** The topic slugs, for the frontmatter schema in source.config.ts. */
+export const topicSlugs = topics.map((t) => t.slug) as [
+  (typeof topics)[number]["slug"],
+  ...(typeof topics)[number]["slug"][],
+];
 
 export type Topic = (typeof topics)[number];
 

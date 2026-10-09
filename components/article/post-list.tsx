@@ -12,7 +12,7 @@ export interface PostListItem {
 
 /** The topics of a post, read from its `tags` frontmatter. */
 export function postTopics(post: Post): Topic[] {
-  return topicsOf(post.data.tags ?? [], post.url);
+  return topicsOf(post.data.tags, post.url);
 }
 
 /**
@@ -66,7 +66,8 @@ export function TopicNav({
   current?: string;
 }) {
   const count = (slug: string) =>
-    posts.filter((p) => (p.data.tags ?? []).includes(slug)).length;
+    posts.filter((p) => (p.data.tags as readonly string[]).includes(slug))
+      .length;
   const links = [
     { href: "/blog", title: "All posts", n: posts.length, slug: undefined },
     ...topics.map((t) => ({
