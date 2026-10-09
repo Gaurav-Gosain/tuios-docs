@@ -30,6 +30,11 @@ export const topics = [
     blurb: "The daemon, its clients, and panes on other machines.",
   },
   {
+    slug: "web",
+    title: "Web",
+    blurb: "tuios in a browser: tuios-web, sip and the browser client.",
+  },
+  {
     slug: "layout",
     title: "Layout",
     blurb: "Tiling, dividers and how windows share the screen.",
