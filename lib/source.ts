@@ -35,13 +35,33 @@ export const releasesSource = loader({
 /**
  * Releases newest first. The date is a plain date string validated by the
  * frontmatter schema, so lexicographic order is chronological order, the same
- * ordering the blog uses.
+ * ordering the blog uses. Two releases on the same day (v0.9.0 and v0.9.1 both
+ * shipped on 8 October 2026) fall back to the version, highest first; a note
+ * with no version, such as "since-v0-7-0", sorts above the tags of its day.
  */
 export function getReleases() {
   return releasesSource
     .getPages()
     .slice()
-    .sort((a, b) => b.data.date.localeCompare(a.data.date));
+    .sort(
+      (a, b) =>
+        b.data.date.localeCompare(a.data.date) ||
+        compareVersions(getReleaseTag(b), getReleaseTag(a)),
+    );
+}
+
+/** Orders two tags such as "v0.9.1" numerically; a missing tag counts as newest. */
+function compareVersions(a: string | null, b: string | null) {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  const pa = a.slice(1).split(".").map(Number);
+  const pb = b.slice(1).split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }
 
 /**
