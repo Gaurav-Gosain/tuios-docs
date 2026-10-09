@@ -34,6 +34,32 @@ export default async function Page(props: {
   const older = index >= 0 ? posts[index + 1] : undefined;
   const words = await getWordCount(page);
   const topics = postTopics(page);
+  // The post's first tag is its main topic. The section at the end lists up
+  // to three other posts on it, those that share more tags first, then the
+  // newest. A topic with no other post gives way to the next tag.
+  const tags: readonly string[] = page.data.tags;
+  const others = posts.filter((p) => p.url !== page.url);
+  const main = topics
+    .slice()
+    .sort((a, b) => tags.indexOf(a.slug) - tags.indexOf(b.slug))
+    .find((t) =>
+      others.some((p) => (p.data.tags as readonly string[]).includes(t.slug)),
+    );
+  const related = main
+    ? others
+        .filter((p) => (p.data.tags as readonly string[]).includes(main.slug))
+        .map((p) => ({
+          p,
+          shared: p.data.tags.filter((t) => tags.includes(t)).length,
+        }))
+        .sort((a, b) => b.shared - a.shared)
+        .slice(0, 3)
+        .map(({ p }) => ({
+          url: p.url,
+          title: p.data.title,
+          date: p.data.date,
+        }))
+    : [];
 
   return (
     <ArticleLayout
@@ -64,6 +90,15 @@ export default async function Page(props: {
       toc={page.data.toc}
       newer={newer && { url: newer.url, title: newer.data.title }}
       older={older && { url: older.url, title: older.data.title }}
+      related={
+        main
+          ? {
+              heading: `More on ${main.title}`,
+              href: `/blog/topic/${main.slug}`,
+              links: related,
+            }
+          : undefined
+      }
     >
       <JsonLd
         data={[

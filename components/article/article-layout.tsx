@@ -27,6 +27,12 @@ export interface ArticleLayoutProps {
   newer?: ArticleLink;
   /** The entry below this one in the index (older). */
   older?: ArticleLink;
+  /** Posts on the same topic, with a heading such as "More on Testing". */
+  related?: {
+    heading: string;
+    href: string;
+    links: (ArticleLink & { date: string })[];
+  };
   children: ReactNode;
 }
 
@@ -47,6 +53,7 @@ export function ArticleLayout({
   eyebrow,
   newer,
   older,
+  related,
   children,
 }: ArticleLayoutProps) {
   const outline = toc.filter((item) => item.depth <= 3);
@@ -99,6 +106,39 @@ export function ArticleLayout({
           ) : null}
 
           <div className="prose article-prose max-w-none">{children}</div>
+
+          {related && related.links.length > 0 ? (
+            <section
+              aria-labelledby="related-heading"
+              className="mt-16 border-fd-border border-t pt-8"
+            >
+              <h2
+                id="related-heading"
+                className="font-mono text-fd-muted-foreground text-sm"
+              >
+                <Link href={related.href} className="hover:text-fd-foreground">
+                  {related.heading}
+                </Link>
+              </h2>
+              <ul className="mt-4 divide-y divide-fd-border">
+                {related.links.map((link) => (
+                  <li key={link.url}>
+                    <Link
+                      href={link.url}
+                      className="group flex flex-col gap-1 py-3 sm:flex-row sm:items-baseline sm:gap-4"
+                    >
+                      <span className="shrink-0 font-mono text-fd-muted-foreground text-xs sm:w-24">
+                        {formatPostDate(link.date)}
+                      </span>
+                      <span className="font-medium text-fd-foreground leading-snug group-hover:text-fd-primary">
+                        {link.title}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           {newer || older ? (
             <nav
