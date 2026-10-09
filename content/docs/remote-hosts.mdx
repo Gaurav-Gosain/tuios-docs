@@ -41,6 +41,16 @@ tuios hosts remove build     # drop it
 
 <Callout type="warn" title="Accept the host key first">
 The daemon runs ssh with `BatchMode` on, so a link never asks for a password or about a host key. Run `ssh` to the host once by hand to accept its key, and use key-based login.
+
+A link can use an ssh master that is already open. A client that can ask you for a password or a code, such as tuios-gpui, keeps that connection open in `$XDG_RUNTIME_DIR/tuios/cm`, or `/tmp/tuios-<uid>/cm` when `XDG_RUNTIME_DIR` is not set. Each link and `tuios hosts test` then use the master when one is open for that machine. A machine that needs a password or a second factor works for as long as the master is open. With no master open, ssh connects as before. TUIOS stores no secret.
+
+A link does not use the folder in these cases:
+
+- Other users can open the folder or its parent, or either is a symbolic link.
+- Your `~/.ssh/config` gives the host its own `ControlPath`. The link uses the master you open there.
+- The host forwards the agent (`ForwardAgent`). A connection through a master gets the forwarding of the master, so the link would lose its agent.
+- A socket path in the folder is too long. The limit is 107 characters on Linux and 103 on macOS.
+- TUIOS runs on Windows. Win32-OpenSSH has no `ControlMaster`.
 </Callout>
 
 ### Link states

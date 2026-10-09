@@ -1065,6 +1065,44 @@ This needs a terminal that sends the US-layout key through the Kitty keyboard pr
 In window mode, TUIOS tells the terminal to send every key as a code. TUIOS resets this when it stops. After `kill -9` or a dropped ssh connection, the terminal can stay in this mode. The shell then shows codes such as `[97u` when you type. To reset the terminal, run `printf '\033[=0;1u'`, or close the tab.
 </Callout>
 
+### Shifted digits and AZERTY
+
+On a US keyboard `&` is <kbd>Shift</kbd>+<kbd>7</kbd>. Some terminals send the chord and others send the character. By default, a binding on `opt+shift+7` also matches `opt+&`, and a binding on `!` also matches `shift+1`. These US aliases apply only when no binding names the key itself. A binding that you write for a key always wins over an alias.
+
+On other layouts these keys are in other places. On a French Mac, `&` is the unshifted 1 key and the digits need <kbd>Shift</kbd>. TUIOS turns off the US aliases for a key when the terminal reports that the key is not where a US layout has it. Terminals that send this through the Kitty keyboard protocol include Ghostty, kitty, WezTerm and foot. Other terminals do not report the layout. To turn off the US aliases for every key, set this:
+
+```toml
+[keybindings]
+keyboard_layout = "other"   # the default is "us"
+```
+
+`tuios keybinds explain opt+&` shows a binding that the key runs through a US alias.
+
+#### French AZERTY on macOS
+
+Set the left Option key to send Alt. In iTerm2 this is "Esc+". In WezTerm it is `send_composed_key_when_left_alt_is_pressed = false`. Then:
+
+- <kbd>Option</kbd> and <kbd>Shift</kbd> with a number key types the digit. The default `opt+1` to `opt+9` switch workspaces with it.
+- The default `opt+shift+1` to `opt+shift+9` need <kbd>Shift</kbd> and a digit together, which AZERTY cannot type. Bind the move to the unshifted keys:
+
+```toml
+[keybindings]
+keyboard_layout = "other"
+
+[keybindings.workspaces]
+move_and_follow_1 = ["opt+&"]
+move_and_follow_2 = ["opt+é"]
+move_and_follow_3 = ['opt+"']
+move_and_follow_4 = ["opt+'"]
+move_and_follow_5 = ["opt+("]
+move_and_follow_6 = ["opt+§"]
+move_and_follow_7 = ["opt+è"]
+move_and_follow_8 = ["opt+!"]
+move_and_follow_9 = ["opt+ç"]
+```
+
+To type `[ ] { } |` with Option, set the right Option key to compose. See [One Option key for typing](#one-option-key-for-typing). With `keyboard_layout = "other"`, TUIOS sends those characters to the pane.
+
 ## Keys sent to a pane
 
 In terminal mode, TUIOS sends these keys to the program in the pane:
@@ -1096,6 +1134,26 @@ To fix both, turn on your terminal's Option-as-Alt setting:
 | VS Code | `terminal.integrated.macOptionIsMeta` |
 
 Ghostty also needs `keybind = alt+left=unbind` and `keybind = alt+right=unbind`, because its own keybinds rewrite those arrows first.
+
+### One Option key for typing
+
+If you use Option to type characters such as `#`, `•` or `{`, set this. TUIOS then sends the character to the pane:
+
+```toml
+[keybindings]
+option_glyphs = "type"   # the default is "bind"
+```
+
+With the default, `bind`, TUIOS reads a composed character as the Option chord that types it on a US layout. Option+8 types `•`, and TUIOS runs the `opt+8` binding. With `keyboard_layout = "other"`, TUIOS does not use the US characters, and the characters go to the pane.
+
+Some terminals let you set the two Option keys differently. Use the left Option key for TUIOS and the right Option key to type characters. In WezTerm:
+
+```lua
+config.send_composed_key_when_left_alt_is_pressed = false
+config.send_composed_key_when_right_alt_is_pressed = true
+```
+
+In iTerm2, set Left Option key to "Esc+" and Right Option key to "Normal". Then set `option_glyphs = "type"`. The left Option key sends Alt and runs TUIOS bindings. The right Option key types characters into the pane.
 
 The prefix works on every terminal with no setup. <kbd>Ctrl</kbd>+<kbd>B</kbd> then an arrow, <kbd>n</kbd>, <kbd>p</kbd>, <kbd>(</kbd>, <kbd>)</kbd>, <kbd>a</kbd> or a digit covers every navigation command.
 
