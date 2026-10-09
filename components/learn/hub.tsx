@@ -9,7 +9,9 @@ import {
   SquareTerminal,
   Trophy,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useState } from "react";
+import { InstallTabs } from "@/components/home/install-tabs";
 import { formatTime } from "@/lib/learn/engine";
 import type { Progress } from "@/lib/learn/progress";
 import { runSetup, type TuiosInstance } from "@/lib/learn/runtime";
@@ -179,6 +181,7 @@ export function Hub({
             No account, no tracking. Nothing is sent anywhere.
           </Fact>
         </div>
+        <InstallBlock />
       </section>
     </>
   );
@@ -375,6 +378,26 @@ function Fact({
       <p className="mt-1.5 text-fd-muted-foreground text-sm leading-relaxed">
         {children}
       </p>
+    </div>
+  );
+}
+
+/** The way from the tour to a real install, for a reader who is ready. */
+export function InstallBlock() {
+  return (
+    <div className="mt-10 rounded-xl border border-fd-border bg-fd-card p-5">
+      <h3 className="font-semibold">Run it for real</h3>
+      <p className="mt-1.5 text-fd-muted-foreground text-sm">
+        Same keys, your own shell. Install it, then read{" "}
+        <Link
+          href="/docs/getting-started"
+          className="text-fd-foreground underline decoration-fd-primary/50 underline-offset-4 hover:decoration-fd-primary"
+        >
+          getting started
+        </Link>
+        .
+      </p>
+      <InstallTabs className="mt-3" />
     </div>
   );
 }

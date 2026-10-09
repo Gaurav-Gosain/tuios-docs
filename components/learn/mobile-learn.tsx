@@ -6,6 +6,7 @@ import type { EngineManifest } from "@/lib/learn/runtime";
 import { tracks } from "@/lib/learn/tracks";
 import { absoluteUrl } from "@/lib/site";
 import { ShareCanvas } from "./finish-panel";
+import { InstallBlock } from "./hub";
 import { TillyFigure } from "./tilly-figure";
 import { TrackPreview } from "./track-preview";
 
@@ -172,6 +173,8 @@ export function MobileLearn({ onTryAnyway }: { onTryAnyway: () => void }) {
             className="aspect-[1200/630] w-full rounded-xl border border-fd-border shadow-lg"
           />
         </div>
+
+        <InstallBlock />
 
         <button
           type="button"
