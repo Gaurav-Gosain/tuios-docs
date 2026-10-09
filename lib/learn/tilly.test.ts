@@ -63,7 +63,7 @@ describe("reactionFor", () => {
     ["typing", ev("mode", { to: "terminal" }), "", "typing"],
     ["window mode", ev("mode", { to: "window" }), "", "windowMode"],
     ["which key", ev("prefix", { from: "window", to: "" }), "", "menu"],
-    ["neofetch", ev("shell.command", { command: "neofetch" }), "", "command"],
+    ["fastfetch", ev("shell.command", { command: "fastfetch" }), "", "command"],
     ["top", ev("shell.start", { command: "top" }), "", "command"],
     ["tape", ev("tape.finish"), "", "tape"],
     ["agent works", ev("agent", { to: "working" }), "", "agentWorking"],

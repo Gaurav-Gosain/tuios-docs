@@ -14,7 +14,7 @@ export const powerMoves: Track = {
     { command: "mode", args: ["terminal"], wait: 150 },
     { command: "type", args: ["ls\r"], wait: 300 },
     // Last, so it is the row the scrollback browser opens on.
-    { command: "type", args: ["neofetch\r"] },
+    { command: "type", args: ["fastfetch\r"] },
   ],
   steps: [
     {
@@ -58,7 +58,7 @@ export const powerMoves: Track = {
       title: "Copy mode with vim keys",
       note: "hjkl, w, b, gg and G all work. / searches.",
       keys: ["ctrl+b", "[", "/", { text: "WebAssembly" }, "enter"],
-      // Back to the window neofetch ran in, which has the word to find.
+      // Back to the window fastfetch ran in, which has the word to find.
       setup: [{ command: "action", args: ["select_window_1"], wait: 200 }],
       done: seq(opened("copyMode"), opened("search"), closed("search")),
       hint: "ctrl+b [ enters copy mode. / starts a search, type the word, enter jumps to it.",

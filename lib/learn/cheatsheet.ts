@@ -73,7 +73,7 @@ export const cheatsheet: CheatGroup[] = [
 
 /** Things to run in the fake shell. */
 export const shellIdeas: { line: string; label: string }[] = [
-  { line: "neofetch", label: "say hi" },
+  { line: "fastfetch", label: "say hi" },
   { line: "claude", label: "a pretend agent" },
   { line: "tuios tape play party.tape", label: "tuios drives itself" },
   { line: "rain", label: "digital rain" },

@@ -40,13 +40,14 @@ export const basics: Track = {
       learned: "typing mode",
     },
     {
+      // The id stays as it was, so progress saved under it still counts.
       id: "run-neofetch",
       title: "Say hi to the shell",
       note: "Your keys go to the program now.",
-      keys: [{ text: "neofetch" }, "enter"],
+      keys: [{ text: "fastfetch" }, "enter"],
       needs: "terminal",
-      done: ran("neofetch"),
-      hint: "Type neofetch and press enter.",
+      done: ran("fastfetch"),
+      hint: "Type fastfetch and press enter.",
       learned: "run a command",
     },
     {

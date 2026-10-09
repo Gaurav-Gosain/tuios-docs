@@ -44,7 +44,7 @@ export function Playground({ onExit }: { onExit: () => void }) {
     await runSetup(t, [
       { command: "newWindow", wait: 300 },
       { command: "mode", args: ["terminal"], wait: 150 },
-      { command: "type", args: ["neofetch\r"] },
+      { command: "type", args: ["fastfetch\r"] },
     ]);
     t.term.focus();
   }, []);

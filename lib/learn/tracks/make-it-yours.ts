@@ -12,7 +12,7 @@ export const makeItYours: Track = {
   setup: [
     { command: "newWindow", wait: 250 },
     { command: "mode", args: ["terminal"], wait: 150 },
-    { command: "type", args: ["neofetch\r"], wait: 300 },
+    { command: "type", args: ["fastfetch\r"], wait: 300 },
     // top redraws every second, so a theme shows on it straight away.
     { command: "newWindow", wait: 250 },
     { command: "type", args: ["top\r"], wait: 300 },
@@ -78,7 +78,7 @@ export const makeItYours: Track = {
       title: "Keep it forever",
       note: "Your picks, saved in one file.",
       keys: ["i", { text: "cat .config/tuios/config.toml" }, "enter"],
-      // The window neofetch ran in has a prompt. top is in the other one.
+      // The window fastfetch ran in has a prompt. top is in the other one.
       setup: [{ command: "action", args: ["select_window_1"], wait: 200 }],
       done: ran("cat"),
       hint: "Press i to type, then cat .config/tuios/config.toml and enter.",

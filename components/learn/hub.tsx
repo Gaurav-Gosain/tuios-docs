@@ -26,8 +26,10 @@ const HERO_LABELS = ["Start from zero", "I know tmux", "I know zellij"];
 const HERO_DEMO: SetupCommand[] = [
   { command: "newWindow", wait: 450 },
   { command: "mode", args: ["terminal"], wait: 250 },
-  { command: "type", args: ["neofetch\r"], wait: 1500 },
   { input: "\x02|", wait: 700 },
+  { input: "\x1b[1;3D", wait: 300 },
+  { command: "type", args: ["fastfetch\r"], wait: 1500 },
+  { input: "\x1b[1;3C", wait: 300 },
   { command: "type", args: ["ls\r"], wait: 1100 },
   { input: "\x02-", wait: 700 },
   { command: "type", args: ["colors\r"], wait: 300 },
@@ -170,7 +172,7 @@ export function Hub({
             The same Go code you install, compiled to WebAssembly.
           </Fact>
           <Fact icon={<SquareTerminal />} title="A pretend shell">
-            Try <code>ls</code>, <code>cat</code>, <code>neofetch</code>,{" "}
+            Try <code>ls</code>, <code>cat</code>, <code>fastfetch</code>,{" "}
             <code>top</code> or <code>rain</code>. Nothing can break.
           </Fact>
           <Fact icon={<Lock />} title="Stays in your browser">
