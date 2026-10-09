@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { InstallTabs } from "@/components/home/install-tabs";
 import { formatTime } from "@/lib/learn/engine";
-import type { Progress } from "@/lib/learn/progress";
+import { type Progress, resumeStep } from "@/lib/learn/progress";
 import { runSetup, type TuiosInstance } from "@/lib/learn/runtime";
 import { tracks } from "@/lib/learn/tracks";
 import type { SetupCommand, Track } from "@/lib/learn/types";
@@ -298,6 +298,8 @@ function TrackCard({
             <>
               <Check className="size-4 text-[#9ece6a]" /> Play again
             </>
+          ) : progress && resumeStep(track, { [track.id]: progress }) > 0 ? (
+            `Resume at step ${resumeStep(track, { [track.id]: progress }) + 1}`
           ) : (
             "Start"
           )}

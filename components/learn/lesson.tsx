@@ -66,7 +66,10 @@ export function Lesson({
   onRestart,
   onPickTrack,
   onProgress,
+  resumeFrom = 0,
 }: {
+  /** Steps already done on an earlier visit. The page plays them quickly. */
+  resumeFrom?: number;
   track: Track;
   onExit: () => void;
   onRestart: () => void;
@@ -262,10 +265,14 @@ export function Lesson({
       lessonRef.current = startLesson(track, Date.now());
       phaseRef.current = "running";
       setPhase("running");
+      if (resumeFrom > 0) {
+        await catchUpRef.current(resumeFrom);
+        return;
+      }
       startStep(0);
       say(script.greet(track));
     },
-    [onEvent, startStep, track, script],
+    [onEvent, startStep, track, script, resumeFrom],
   );
 
   /** Type the step's keys for the reader, lighting each cap as it goes. */
@@ -318,6 +325,33 @@ export function Lesson({
     },
     [focusTerminal],
   );
+
+  // Resume: play the steps done on an earlier visit at speed, so the scene
+  // on screen is the one the next step expects.
+  const [catching, setCatching] = useState<number | null>(null);
+  const catchUpRef = useRef<(n: number) => Promise<void>>(async () => {});
+  catchUpRef.current = async (n: number) => {
+    setCatching(n);
+    await startStep(0);
+    for (let i = 0; i < n && alive.current; i++) {
+      await sleep(250);
+      const step = track.steps[i];
+      if (!step) break;
+      if (!step.explainer) {
+        await play(true);
+        const until = performance.now() + 3000;
+        while (lessonRef.current.index === i && performance.now() < until) {
+          await sleep(50);
+        }
+      }
+      if (lessonRef.current.index === i) {
+        lessonRef.current = advance(lessonRef.current, "clean", Date.now());
+        stepDone(i);
+      }
+      await sleep(800);
+    }
+    setCatching(null);
+  };
 
   const showMe = () => {
     lessonRef.current = markHinted(lessonRef.current);
@@ -508,7 +542,16 @@ export function Lesson({
             }}
             label={`tuios, running live. Current step: ${step?.title ?? "done"}`}
           >
-            {phase === "running" && step && !step.explainer && !termFocused ? (
+            {catching !== null ? (
+              <span className="learn-pop absolute top-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-white/15 bg-[#1e1e2e]/90 px-4 py-2 font-mono text-[#cdd6f4] text-sm shadow-xl backdrop-blur">
+                Back to step {catching + 1}. Playing the steps you did.
+              </span>
+            ) : null}
+            {phase === "running" &&
+            step &&
+            !step.explainer &&
+            !termFocused &&
+            catching === null ? (
               <button
                 type="button"
                 onClick={focusTerminal}

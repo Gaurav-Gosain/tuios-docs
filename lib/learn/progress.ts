@@ -52,3 +52,17 @@ export function markFinished(trackId: string, seconds: number) {
   write(all);
   return all;
 }
+
+/**
+ * The step to go back to on a track left halfway: the first step not done,
+ * or 0 for a track not started or already finished.
+ */
+export function resumeStep(
+  track: { id: string; steps: { id: string }[] },
+  progress: Progress,
+): number {
+  const p = progress[track.id];
+  if (!p || p.finished) return 0;
+  const first = track.steps.findIndex((s) => !p.done.includes(s.id));
+  return first > 0 ? first : 0;
+}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { pageKeysAllowed } from "@/lib/learn/page-keys";
-import { type Progress, readProgress } from "@/lib/learn/progress";
+import { type Progress, readProgress, resumeStep } from "@/lib/learn/progress";
 import { loadEngine } from "@/lib/learn/runtime";
 import { findTrack, tracks } from "@/lib/learn/tracks";
 import type { Track } from "@/lib/learn/types";
@@ -28,6 +28,7 @@ export function LearnApp() {
   const [active, setActive] = useState<Track | null>(null);
   const [playing, setPlaying] = useState(false);
   const [run, setRun] = useState(0);
+  const [resumeFrom, setResumeFrom] = useState(0);
   const mobile = small === true && !forceLive;
 
   const refresh = useCallback(() => setProgress(readProgress()), []);
@@ -52,6 +53,7 @@ export function LearnApp() {
 
   const start = useCallback((track: Track) => {
     history.pushState(null, "", `/learn?t=${track.id}`);
+    setResumeFrom(resumeStep(track, readProgress()));
     setRun((n) => n + 1);
     setPlaying(false);
     setActive(track);
@@ -104,7 +106,11 @@ export function LearnApp() {
           key={`${active.id}-${run}`}
           track={active}
           onExit={exit}
-          onRestart={() => setRun((n) => n + 1)}
+          resumeFrom={resumeFrom}
+          onRestart={() => {
+            setResumeFrom(0);
+            setRun((n) => n + 1);
+          }}
           onPickTrack={(id) => {
             const t = findTrack(id);
             if (t) start(t);
