@@ -1,6 +1,7 @@
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
+import { VersionIndex } from "@/components/docs/version-index";
 import { BenchBars } from "@/components/mdx/bench-bars";
 import {
   AgentSourceTimeline,
@@ -88,6 +89,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ClusterExplorer,
     RunTally,
     Since,
+    VersionIndex,
     TerminalCapture,
     TapeTrustFlow,
     StartupPreview,
