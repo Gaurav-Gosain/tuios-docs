@@ -668,6 +668,42 @@ tuios pip --off        # unpin whatever is pinned
 
 The view belongs to the client, not to the session, so the command needs an attached client. `--json` prints `pinned` and `window_id`.
 
+### pane-view <Since command="pane-view" /> [#pane-view]
+
+Show one pane in this terminal, with no tuios around it.
+
+```bash
+tuios pane-view -w <window> [flags]
+```
+
+The pane's output goes to this terminal as it is. What you type goes to the pane, Ctrl-C included. A terminal that draws its own panes, such as Tern, runs one `pane-view` for each tuios pane. Each pane then gets the terminal's own scrollback, selection and search.
+
+`pane-view` does not attach. It reads the pane through [`stream-pane`](/docs/control-protocol#stream-pane), so the clients of the session do not change. The daemon answers the requests that a program sends to its terminal. `pane-view` keeps these requests from the outer terminal, which would answer them a second time.
+
+- `-s, --session <name>`: the session. Default: the most recently active.
+- `-w, --window <window>`: the pane to show, by ID or name.
+- `--size follow|pane`: whether the pane takes the size of this terminal. Default: `follow`.
+
+With `--size follow`, the pane takes the size of this terminal while no tuios client shows the session. With several viewers, the largest decides. When the last viewer leaves, the pane goes back to its own size. While a client shows the session, the pane only gets smaller to fit this terminal. With `--size pane`, the pane keeps its size and only gets smaller. The daemon makes these decisions, so a client that attaches or detaches, or a rename, changes the size at once.
+
+At start, `pane-view` asks this terminal for its colours and graphics, and tells the daemon. While no tuios client shows the session, a program in the pane can ask for these (OSC 10, 11 and 4, DA1, the kitty graphics query). It gets the answers of this terminal.
+
+Close the terminal to stop viewing. The pane and its session keep running. After a daemon restart, `pane-view` resumes on the new daemon.
+
+Exit status:
+
+| Status | Meaning |
+|--------|---------|
+| The status of the pane's program | The program exited. |
+| 128 plus a signal number | A signal ended the pane's program, or ended `pane-view`. |
+| `3` | The window of the pane closed while its program ran. |
+| `1` | An error, such as a pane or session that does not exist. |
+
+```bash
+tuios pane-view -s work -w build              # show the pane named build of the session work
+tuios pane-view -s work -w build --size pane  # keep the size that the session gives the pane
+```
+
 ### move-window <Since command="move-window" /> [#move-window]
 
 Move a window to another workspace.
@@ -1047,6 +1083,40 @@ tuios list-verbs --json
 ```
 
 These are kebab-case protocol verbs. They are a different set from the PascalCase `run-command` verbs. See [Control Protocol](/docs/control-protocol).
+
+### call <Since command="call" /> [#call]
+
+Send one verb to the daemon and print its reply as JSON.
+
+```bash
+tuios call <verb> [params]
+```
+
+`params` is a JSON object, or `-` to read it from standard input. Omit it for a verb that takes none. The reply is the daemon's result object as it is.
+
+Use it from a program that can start a process but cannot write to the socket, such as a Tern plugin. The daemon checks the call as it checks any other call. A pane keeps its grants, and the verbs only the person may call stay refused from a pane. `tuios list-verbs` lists every verb.
+
+`call` refuses the verbs that hold the connection open after their reply: `subscribe` (use [`tuios subscribe`](#subscribe)), `stream-pane`, `open-file-stream`, `open-pane`, `pane-calls`, `link-peer` and `open-host-connection`.
+
+The call waits 30 seconds. If the verb has a `timeout` param, the call waits for that time in milliseconds and 10 seconds more. `--timeout` sets the wait.
+
+- `--pretty`: indent the JSON.
+- `--json`: print bad input and transport errors as JSON too, with the code `invalid_input` or `transport`.
+- `--timeout <duration>`: how long to wait for the reply.
+
+Exit status:
+
+| Status | Meaning |
+|--------|---------|
+| `1` | The daemon answered with an error. `call` prints `{"error": {"code", "message", "hint"}}`. |
+| `2` | The arguments or params are wrong. |
+| `3` | The daemon could not be reached, or did not answer in time. |
+
+```bash
+tuios call list-sessions                          # every session, as the daemon reports it
+tuios call list-windows '{"session":"work"}'      # a verb with params
+echo '{"session":"work"}' | tuios call list-windows -
+```
 
 ## run-command
 
