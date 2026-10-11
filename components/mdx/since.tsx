@@ -1,20 +1,31 @@
 import { cn } from "@/lib/cn";
-import { sinceLabel } from "@/lib/since";
+import {
+  resolveSince,
+  type SinceProps,
+  showsBadge,
+  sinceLabel,
+} from "@/lib/since";
 
 /**
- * A quiet label for the tuios version that added a feature. With no version,
- * or "unreleased", it says the feature is on main and in no release yet, so a
- * reader on the last release knows why they do not have it.
+ * A quiet label for the tuios version that added a feature. Name what it
+ * labels and the version comes from lib/since/data.json:
+ *
+ *   <Since config="appearance.link_hover" />
+ *   <Since command="notify push" />
+ *   <Since action="next_workspace" />
+ *   <Since verb="stream-pane" />
+ *   <Since feature="mail-seen" />
+ *
+ * "Unreleased" means the feature is on tuios main and in no release yet. A
+ * version older than the badge floor shows nothing.
  */
 export function Since({
-  version,
   className,
-}: {
-  version?: string;
-  className?: string;
-}) {
-  const unreleased = !version || version === "unreleased";
-  const label = sinceLabel(version);
+  ...props
+}: SinceProps & { className?: string }) {
+  const version = resolveSince(props);
+  if (!showsBadge(version)) return null;
+  const unreleased = version === "unreleased";
   return (
     <span
       className={cn(
@@ -27,10 +38,10 @@ export function Since({
       title={
         unreleased
           ? "On tuios main. Not in a release yet."
-          : `First in tuios v${version.replace(/^v/, "")}`
+          : `First in tuios v${version}`
       }
     >
-      {label}
+      {sinceLabel(version)}
     </span>
   );
 }

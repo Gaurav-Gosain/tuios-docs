@@ -200,7 +200,7 @@ The daemon currently implements 115 verbs, some of them only for one daemon to c
 | `set-agent-meta` | Record display metadata about a pane's agent, such as its model or context use. |
 | `set-agent-session` | Store a harness's conversation id for a pane without changing its state. |
 | `report-agent-activity` | Report a hook event that changes no state, such as a subagent's start, tool call or stop. It moves the pane's subagent count and list. |
-| `agent-transcript` <Since /> | Read the conversation of the agent in a pane, as data. Only the person can. See [below](#agent-transcript). |
+| `agent-transcript` <Since verb="agent-transcript" /> | Read the conversation of the agent in a pane, as data. Only the person can. See [below](#agent-transcript). |
 | `start-agent` | Start an agent in a new pane and answer once it is ready for a prompt. |
 | `resume-agent` | Type a pane's resume command for the conversation a hook recorded. |
 | `agent-activity` | Read what a pane's agent has been doing, from the activity the daemon keeps. |
@@ -266,11 +266,11 @@ The verbs that act as the person need the nonce a client receives when it attach
 | `list-host-sessions` | List sessions here and on every configured host. |
 | `list-host-agents` | List agent windows here and on every configured host. |
 | `open-host-connection` | Turn this connection into a connection to the daemon on a host. |
-| `stream-pane` <Since /> | Send one pane as bytes to a client that is not tuios, such as a phone. See [below](#stream-pane). |
-| `attach-presence` <Since /> | Give this connection the person's `human_nonce` without an attach. See [below](#attach-presence). |
-| `register-push`, `list-push`, `remove-push` <Since /> | Register, list and remove the phones that get Inbox items by Web Push. Only the person can. See [Push Notifications](/docs/push-notifications#web-push-to-a-phone). |
+| `stream-pane` <Since verb="stream-pane" /> | Send one pane as bytes to a client that is not tuios, such as a phone. See [below](#stream-pane). |
+| `attach-presence` <Since verb="attach-presence" /> | Give this connection the person's `human_nonce` without an attach. See [below](#attach-presence). |
+| `register-push`, `list-push`, `remove-push` <Since verb="register-push" /> | Register, list and remove the phones that get Inbox items by Web Push. Only the person can. See [Push Notifications](/docs/push-notifications#web-push-to-a-phone). |
 
-### File transfers <Since /> [#file-transfers]
+### File transfers <Since verb="transfer-start" /> [#file-transfers]
 
 These verbs act on the files of the machine whose daemon answers them. To reach the files of another machine, send them on a connection from `open-host-connection`. That machine's [`files` policy](/docs/configuration#files-over-a-link) then decides. Every path is absolute or starts with `~`. A pane needs the `admin` grant to use them.
 
@@ -305,7 +305,7 @@ With `[agents] enabled = false`, every agent verb fails with `agents_disabled`, 
 | `unsubscribe` | Stop this connection's event stream. |
 | `wait-for` | Block until a condition matches, or fail with `timeout`. |
 
-### stream-pane <Since /> [#stream-pane]
+### stream-pane <Since verb="stream-pane" /> [#stream-pane]
 
 `stream-pane` sends one pane to a client that cannot read tuios's own wire format, such as a phone app. The client reaches the daemon with `tuios stdio-proxy` over ssh.
 
@@ -331,7 +331,7 @@ The daemon answers with one JSON line. After that line, the connection carries b
 - A lease holds the pane at most at that size. It lasts 30 seconds, so send the same `L` frame again every 10 seconds. When it ends, the pane goes back to the size its clients asked for. A lease never changes the session size or another pane.
 - `list` on a linked machine allows the stream. `I` frames need `write`.
 
-### attach-presence <Since /> [#attach-presence]
+### attach-presence <Since verb="attach-presence" /> [#attach-presence]
 
 ```json
 {"id":1,"verb":"attach-presence","params":{"session":"work"}}
@@ -343,7 +343,7 @@ The reply carries a `human_nonce`. The verbs that act as the person accept it, s
 - The caller must be outside every pane of this daemon. A process in a pane gets `forbidden`, so an agent cannot act as the person.
 - The presence ends when its connection closes, or when the connection calls `restrict-connection`.
 
-### agent-transcript <Since /> [#agent-transcript]
+### agent-transcript <Since verb="agent-transcript" /> [#agent-transcript]
 
 ```json
 {"id":1,"verb":"agent-transcript","params":{"session":"work","window":"api","human_nonce":"294e0a27..."}}
@@ -453,7 +453,7 @@ The acknowledgement carries `seq`, the last event number when the stream went li
 
 The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `workspace-renamed`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `client-session-changed`, `host-changed`, `transcript`, `transfer`, `transfer-progress` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
 
-`transcript` and `transfer-progress` are opt-in: they arrive only when `types` names them. <Since /> A `transcript` event says the conversation of a pane grew, with the `cursor` of `agent-transcript`. A `transfer` event has `action` `created`, `state` or `ended`, and the copy's row. `transfer-progress` carries the row while bytes move, at most four times a second.
+`transcript` and `transfer-progress` are opt-in: they arrive only when `types` names them. <Since verb="agent-transcript" /> A `transcript` event says the conversation of a pane grew, with the `cursor` of `agent-transcript`. A `transfer` event has `action` `created`, `state` or `ended`, and the copy's row. `transfer-progress` carries the row while bytes move, at most four times a second.
 
 A `workspace-renamed` event fires when a workspace's name is set, changed or cleared. It carries `session`, `workspace` and `title`, the new name. `title` is absent when the name was cleared.
 

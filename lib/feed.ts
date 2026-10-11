@@ -7,7 +7,7 @@ import remarkRehype from "remark-rehype";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
-import { sinceLabel } from "./since";
+import { resolveSince, type SinceProps, showsBadge, sinceLabel } from "./since";
 import { absoluteUrl, legacyOrigin, site } from "./site";
 
 /** One entry in a feed: a blog post or a release note. */
@@ -123,8 +123,9 @@ function forReaders(mdast: MdastRoot, pageUrl: string): MdastRoot {
         node.type === "mdxJsxTextElement") &&
       node.name === "Since"
     ) {
-      parent.children.splice(index, 1, sinceText(node) as never);
-      return [SKIP, index + 1];
+      const replacement = sinceText(node);
+      parent.children.splice(index, 1, ...(replacement as never[]));
+      return [SKIP, index + replacement.length];
     }
     if (node.type === "mdxJsxFlowElement" && node.name === "ReleaseClip") {
       parent.children.splice(
@@ -185,21 +186,23 @@ function forReaders(mdast: MdastRoot, pageUrl: string): MdastRoot {
 function sinceText(node: {
   type: string;
   attributes: Extract<RootContent, { type: "mdxJsxFlowElement" }>["attributes"];
-}): RootContent {
-  const version = node.attributes.find(
-    (entry) => entry.type === "mdxJsxAttribute" && entry.name === "version",
-  )?.value;
-  const text = {
-    type: "text" as const,
-    value: `(${sinceLabel(typeof version === "string" ? version : undefined)})`,
-  };
-  if (node.type === "mdxJsxFlowElement") {
-    return {
-      type: "paragraph",
-      children: [{ type: "emphasis", children: [text] }],
-    };
+}): RootContent[] {
+  const props: Record<string, string> = {};
+  for (const entry of node.attributes) {
+    if (entry.type === "mdxJsxAttribute" && typeof entry.value === "string") {
+      props[entry.name] = entry.value;
+    }
   }
-  return text as never;
+  const version = resolveSince(props as SinceProps);
+  // A badge the page does not show is not in the twin either.
+  if (!showsBadge(version)) return [];
+  const text = { type: "text" as const, value: `(${sinceLabel(version)})` };
+  if (node.type === "mdxJsxFlowElement") {
+    return [
+      { type: "paragraph", children: [{ type: "emphasis", children: [text] }] },
+    ];
+  }
+  return [text as never];
 }
 
 /**
