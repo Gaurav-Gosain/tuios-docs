@@ -292,13 +292,15 @@ A pane has one size, so a session has one size for all of its clients. `window_s
 
 | Value | The session uses |
 |-------|------------------|
-| `smallest` | The smallest client. This is the default. Every client shows the full session. A larger client shows empty space around it |
+| `latest` | The client that last had input. This is the default, as in tmux since 3.1 |
+| `smallest` | The smallest client. Every client shows the full session |
 | `largest` | The largest client |
-| `latest` | The client that last had input |
+
+A client that is larger than the session shows the panes at the top left of its pane area. Dots fill the rest of the area, as tmux does. A line in that area names the machine of the client that sets the size and tells you what to do. Under `latest`, type in the larger client to give it the size. The rail and the dock stay at the edges of each client's screen.
 
 ```toml
 [daemon]
-window_size = "latest"
+window_size = "smallest"
 ```
 
 For `latest`, input is a key, a paste, a click, a drag or a turn of the mouse wheel. A resize, a focus change and a reply that your terminal sends by itself are not input. So a phone that only attaches does not take the session from the person who types on a laptop. A client keeps the session for 1 second after its last input, so two people who type at the same time do not resize the session on each key. When the latest client detaches, the session goes to the client with the most recent input.
@@ -322,7 +324,7 @@ The rail is part of the session. When you show or hide it on one client, every c
 
 A new session takes the rail setting of the first client that attaches, from `appearance.sidebar.enabled`. A later client with a different setting uses the session's value. When you toggle the rail, TUIOS also keeps the new value in your config for the next new session. A reload of the config file does not change the rail of a session that is running.
 
-The width of the rail stays per client. A client too narrow to show the rail does not change it for the session. When the clients use different widths, the panes use the space next to the widest rail. A client with a narrower rail shows the difference as empty space.
+The width of the rail stays per client. A client too narrow to show the rail does not change it for the session. Under `latest`, the panes use the space next to the rail of the client that sets the size. Under `smallest` and `largest`, the panes use the space next to the widest rail, and a client with a narrower rail shows the difference as empty space.
 
 A client from an older version of TUIOS keeps its rail to itself. A new client attached to an older daemon also keeps its rail to itself.
 
