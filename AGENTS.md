@@ -69,6 +69,8 @@ public/shots/                 whole-screen captures of tuios for the landing pag
                               and 800 wide WebP (see "Screenshots" below)
 lib/keybindings/defaults.json the default bindings behind the keybinding explorer, written by
                               scripts/keybindings.mjs from `tuios keybinds doctor --json`
+lib/since/data.json           the first tuios tag of each config key, command, action and verb,
+                              written by scripts/since.mjs (see "Version badges")
 public/brand/                 the logo: Tilly mark, wordmark and lockups (SVG and PNG)
 assets/                       build-time only: the Fredoka font and the pieces of the OG card
 components/brand.tsx          the header and footer logo (mark and outlined wordmark)
@@ -102,6 +104,41 @@ A widget that shows TUIOS behavior should match the code. Check it against the t
 Pictures of tuios come from tuios's own renderer, never from a screen grab of a terminal. `public/shots/` holds whole-screen captures made with the `screenshot_screen` action (PNG at scale 2, frame `none`, theme `catppuccin_mocha`) from a client attached to a demo session in an isolated `HOME` and `XDG_RUNTIME_DIR`, then resized to WebP with `cwebp`. Look at each one at full size before you commit it: no personal paths, prompts or leftover notifications.
 
 The keybinding explorer reads `lib/keybindings/defaults.json`. Regenerate it after tuios changes its defaults; the header of `scripts/keybindings.mjs` has the commands, one report per platform because macOS binds `opt+` where the others bind `alt+`.
+
+### Version badges
+
+`<Since />` marks the tuios version that added a feature. Name the thing it labels, and the version comes from `lib/since/data.json`:
+
+```mdx
+| `link_hover` <Since config="appearance.link_hover" /> | ... |
+### pair <Since command="pair" /> [#pair]
+| <kbd>H</kbd> | `prefix_toggle_other_rail` <Since action="prefix_toggle_other_rail" /> | ... |
+<Since verb="stream-pane" />
+<Since feature="mail-seen" />
+```
+
+- A feature on tuios main and in no release yet reads "Unreleased". After the release it reads "Added in vX.Y.Z", with no edit to the page.
+- A version older than `badgeFloor` in `lib/since.ts` (v0.8.0) shows no badge, so old keys do not fill every table with badges.
+- For a feature no config key, command, action or verb names, add an entry to `lib/since/features.json` with a `probe`: a string the tuios source has only once the feature is there.
+- A heading with a badge needs an explicit id, `[#slug]`, or its anchor ends in a dash.
+- `bun test lib/` fails on a badge that names nothing, or names a key tuios does not have.
+
+`scripts/since.mjs` writes `lib/since/data.json` from a tuios checkout with its tags. It also builds tuios to read the command tree, unless `--bin` names a binary built from the same commit:
+
+```bash
+bun scripts/since.mjs ../tuios                 # items from origin/main
+bun scripts/since.mjs ../tuios --ref HEAD --bin /tmp/tuios
+```
+
+`/docs/versions` lists every item by version, from the same file.
+
+### A tuios release
+
+When tuios tags a release:
+
+1. Run the **Since** workflow (`.github/workflows/since.yml`) by hand, or wait for its daily run. It runs `scripts/since.mjs` against tuios main and opens a pull request when a version changed. Every item the new tag holds moves from "Unreleased" to that version.
+2. The pull request starts no checks by itself. Push to it, or close and reopen it, then merge it once Check passes.
+3. Add the release notes page in `content/releases/`. `/docs/versions` links each version to its notes when the page exists.
 
 ## Writing rules
 

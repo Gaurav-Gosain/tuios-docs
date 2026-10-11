@@ -1,0 +1,84 @@
+name: Since
+
+# Keeps lib/since/data.json, the data behind the <Since /> badges and the
+# /docs/versions page, in step with tuios. After a tuios release tag, the
+# next run moves every item that tag holds from "unreleased" to its version,
+# and opens a pull request with the change. Run it by hand right after a
+# release; the schedule catches a release nobody ran it for.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: since
+  cancel-in-progress: false
+
+jobs:
+  since:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Every tag is needed: the script finds the first one that has each key.
+      - name: Checkout tuios
+        uses: actions/checkout@v7
+        with:
+          repository: Gaurav-Gosain/tuios
+          ref: main
+          path: .tuios
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: .tuios/go.mod
+          cache-dependency-path: .tuios/go.sum
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate the version data
+        run: bun scripts/since.mjs .tuios --ref HEAD
+
+      # The commit goes through the contents API, so GitHub writes it as the
+      # token's own app and the workflow sets no git identity. A PR made with
+      # GITHUB_TOKEN starts no other workflow: push to it, or close and reopen
+      # it, to run the Check workflow before merging.
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # The source line names the tuios commit, which moves with every
+          # push to tuios main. Only a change to a version opens a PR.
+          if diff -q <(git show HEAD:lib/since/data.json | jq 'del(.source)') \
+                     <(jq 'del(.source)' lib/since/data.json) >/dev/null; then
+            echo "lib/since/data.json is current."
+            exit 0
+          fi
+          if [ -n "$(gh pr list --repo "$REPO" --state open --search 'head:since/' --json number --jq '.[].number')" ]; then
+            echo "A version data PR is open already. Merge or close it first."
+            exit 0
+          fi
+          latest=$(bun -e 'console.log(require("./lib/since/data.json").latest)')
+          branch="since/v$latest-$(date -u +%Y%m%d%H%M)"
+          base=$(git rev-parse HEAD)
+          gh api "repos/$REPO/git/refs" -f ref="refs/heads/$branch" -f sha="$base" >/dev/null
+          old=$(gh api "repos/$REPO/contents/lib/since/data.json?ref=$branch" --jq .sha)
+          gh api -X PUT "repos/$REPO/contents/lib/since/data.json" \
+            -f message="chore(since): regenerate the version data up to v$latest" \
+            -f content="$(base64 -w0 lib/since/data.json)" \
+            -f branch="$branch" -f sha="$old" >/dev/null
+          gh pr create --repo "$REPO" --base main --head "$branch" \
+            --title "chore(since): regenerate the version data up to v$latest" \
+            --body "scripts/since.mjs ran against tuios main. Items that a tag now holds move from Unreleased to that version."
