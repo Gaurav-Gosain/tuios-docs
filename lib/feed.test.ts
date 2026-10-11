@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { type Feed, feedId, renderAtom, renderRss } from "./feed";
+import {
+  type Feed,
+  feedId,
+  markdownForAgents,
+  renderAtom,
+  renderRss,
+} from "./feed";
 import { absoluteUrl, legacyOrigin, site } from "./site";
 
 describe("site origin", () => {
@@ -55,5 +61,25 @@ describe("feeds", () => {
     expect(xml).toContain("<id>https://tuios.gaurav.zip/blog/a-post</id>");
     expect(xml).toContain("<id>https://tuios.gaurav.zip/blog</id>");
     expect(xml).toContain('href="https://tuios.dev/blog/atom.xml"');
+  });
+});
+
+describe("version badges in the markdown twin", () => {
+  const url = "https://tuios.dev/docs/x";
+
+  test("an inline badge keeps its text", () => {
+    const md = markdownForAgents("## Both edges <Since />\n", url);
+    expect(md).toContain("Both edges (Unreleased)");
+    const tagged = markdownForAgents(
+      '`files` <Since version="0.9.2" />\n',
+      url,
+    );
+    expect(tagged).toContain("(Added in v0.9.2)");
+  });
+
+  test("a badge on its own line is not a figure", () => {
+    const md = markdownForAgents("<Since />\n\nText.\n", url);
+    expect(md).toContain("*(Unreleased)*");
+    expect(md).not.toContain("interactive figure");
   });
 });

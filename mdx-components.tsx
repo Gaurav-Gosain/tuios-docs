@@ -53,6 +53,7 @@ import {
 } from "@/components/mdx/lazy";
 import { Mermaid } from "@/components/mdx/mermaid";
 import { RunTally } from "@/components/mdx/run-tally";
+import { Since } from "@/components/mdx/since";
 import { TerminalCapture } from "@/components/mdx/terminal-capture";
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
@@ -86,6 +87,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ShrinkRace,
     ClusterExplorer,
     RunTally,
+    Since,
     TerminalCapture,
     TapeTrustFlow,
     StartupPreview,

@@ -7,6 +7,7 @@ import remarkRehype from "remark-rehype";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
+import { sinceLabel } from "./since";
 import { absoluteUrl, legacyOrigin, site } from "./site";
 
 /** One entry in a feed: a blog post or a release note. */
@@ -117,6 +118,14 @@ function forReaders(mdast: MdastRoot, pageUrl: string): MdastRoot {
       // Visit the replacement so its children are rewritten too.
       return index;
     }
+    if (
+      (node.type === "mdxJsxFlowElement" ||
+        node.type === "mdxJsxTextElement") &&
+      node.name === "Since"
+    ) {
+      parent.children.splice(index, 1, sinceText(node) as never);
+      return [SKIP, index + 1];
+    }
     if (node.type === "mdxJsxFlowElement" && node.name === "ReleaseClip") {
       parent.children.splice(
         index,
@@ -167,6 +176,30 @@ function forReaders(mdast: MdastRoot, pageUrl: string): MdastRoot {
     }
   });
   return mdast;
+}
+
+/**
+ * A version badge as text: "(Unreleased)" or "(Added in v0.9.2)". On a line of
+ * its own it becomes a paragraph, so it is not read as a figure.
+ */
+function sinceText(node: {
+  type: string;
+  attributes: Extract<RootContent, { type: "mdxJsxFlowElement" }>["attributes"];
+}): RootContent {
+  const version = node.attributes.find(
+    (entry) => entry.type === "mdxJsxAttribute" && entry.name === "version",
+  )?.value;
+  const text = {
+    type: "text" as const,
+    value: `(${sinceLabel(typeof version === "string" ? version : undefined)})`,
+  };
+  if (node.type === "mdxJsxFlowElement") {
+    return {
+      type: "paragraph",
+      children: [{ type: "emphasis", children: [text] }],
+    };
+  }
+  return text as never;
 }
 
 /**
