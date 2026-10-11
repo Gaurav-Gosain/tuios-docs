@@ -6,6 +6,7 @@ icon: Settings
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 TUIOS reads `~/.config/tuios/config.toml`. If `XDG_CONFIG_HOME` is set, the file is `$XDG_CONFIG_HOME/tuios/config.toml`. On the first run, TUIOS writes a `config.toml` with comments and no settings, except `[startup]`.
 
@@ -277,7 +278,7 @@ Any other `{...}` produces a validation warning and is drawn as written.
 | `link_click` | `"both"` | `both`, `ctrl`, `shift`, `off` | The click that opens a link. `both` is <kbd>Ctrl</kbd>+click and <kbd>Shift</kbd>+click |
 | `link_opener` | `""` | a command | The command that opens a web link. TUIOS puts the URL where `%s` is, or at the end. Empty uses `$BROWSER`, then the system opener |
 | `nvim_navigation` | `false` | bool | Let the terminal-mode focus keys move through Neovim splits first. See [Neovim pane navigation](/docs/keybindings#neovim-pane-navigation) |
-| `link_hover` | `"safe"` | `safe`, `always` | The hover underline and label on a link. `safe` skips a pane whose program tracks the mouse. `always` draws them in every pane |
+| `link_hover` <Since /> | `"safe"` | `safe`, `always` | The hover underline and label on a link. `safe` skips a pane whose program tracks the mouse. `always` draws them in every pane |
 | `kitty_placeholders` | `"auto"` | `auto`, `on`, `off` | Draw images placed with kitty Unicode placeholders |
 | `image_symbols` | `"auto"` | `auto`, `octant`, `sextant`, `quadrant`, `half`, `off` | The block characters for a sixel image on a terminal without graphics. See [Images Without Graphics](/docs/images-without-graphics) |
 
@@ -431,7 +432,8 @@ Pastes, notifications, OSC 66 text and link addresses lose their control charact
 | `width` | `24` | columns | Preferred width on a wide screen |
 | `background` | `""` | `off`, `theme`, `#RRGGBB` | The rail's background. Empty follows `appearance.background`. See [Backgrounds](#backgrounds) |
 | `agent_rest_fold` | `"1h"` | a duration, or `off` | How long an agent row rests (idle, unknown, or done and seen) before it folds into one `+N at rest` line |
-| `header_case` | `"lowercase"` | `lowercase`, `uppercase` | How the headers of the rail sections read. `lowercase` is the quiet default. `uppercase` draws every header as a bold heading, with a rule to the edge of the rail |
+| `subagent_rows` <Since /> | `"rows"` | `rows`, `count` | How an agent row shows its subagents. `rows` draws a row for each subagent under its agent's row. `count` draws the count alone. See [Subagent rows](/docs/session-rail#subagent-rows) |
+| `header_case` <Since /> | `"lowercase"` | `lowercase`, `uppercase` | How the headers of the rail sections read. `lowercase` is the quiet default. `uppercase` draws every header as a bold heading, with a rule to the edge of the rail |
 | `sections` | `"sessions:25,terminals,files:25,agents:34"` | layout string | Which sections to draw, in what order. See [below](#sections) |
 | `show_glyphs` | `true` | bool | Agent-state glyph on each row |
 | `show_counts` | `true` | bool | Window count on each session row |
@@ -527,6 +529,42 @@ Each run gets the client's environment and these variables: `TUIOS_SESSION`, `TU
 
 `sections` works with `tuios set-config`. `[appearance.sidebar.custom]` is read from the file only, so a program in a pane cannot change the command.
 
+#### Two edges <Since /> [#two-edges]
+
+The rail can show on both edges of the screen at the same time. `[appearance.sidebar]` still configures the original rail. Add `[appearance.sidebar.left]` or `[appearance.sidebar.right]` to configure one edge:
+
+```toml
+[appearance.sidebar]
+position = "right"
+sections = "sessions,terminals,custom"
+
+[appearance.sidebar.custom]
+command = "right-summary"
+
+[appearance.sidebar.left]
+enabled = true
+width = 28
+sections = "sessions,files,custom"
+
+[appearance.sidebar.left.custom]
+command = "left-summary"
+```
+
+| Key | What it does |
+|-----|--------------|
+| `enabled` | Show a rail on this edge. The edge opposite `position` stays hidden until you set `enabled = true` |
+| `width` | The preferred width of the rail on this edge, in columns |
+| `sections` | The section layout of this edge. See [sections](#sections) |
+| `custom` | A table with the `command` of this edge's custom section |
+
+- On the edge of `position`, the edge table overrides only the keys it sets. The other keys come from `[appearance.sidebar]`.
+- On the other edge, a key you do not set takes its default. An unset `sections` takes the default section order.
+- With `position = "hidden"`, an edge table with `enabled = true` still draws. When both edges are on, the left one is the original rail.
+- Each rail has its own scroll, keyboard focus and custom command. Both read the same sessions, files and git state.
+- On a narrow screen, the second rail closes before the original rail.
+
+The edge tables are read from the file only. `tuios set-config` cannot change them, because a custom command runs outside the panes. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>H</kbd> shows or hides the second rail. See [Session Rail](/docs/session-rail#both-edges).
+
 #### Agent rows
 
 `[appearance.sidebar.agent_row]` chooses which tokens an agent row shows and styles each one, with optional rules that match on the token's value:
@@ -540,7 +578,7 @@ gt = 30          # minutes in the current state
 fg = "warning"
 ```
 
-The `tokens` above are the shipped list. The other tokens are `state`, `host` and `prompt`. A `tokens` list you wrote keeps its own order and gets no new tokens, so add `subagents` or `pr` to it to see them. `need` says what a row wants from you, such as `approval` or `question`. `context` shows `ctx 84%` once the agent's context is 80% full. `now` is what a working agent is doing, such as `Bash: go test ./...`. `subagents` shows how many subagents a Claude Code agent has at work, such as `3 subagents`, on any row while any run. `pr` shows the pull request of the session's worktree branch and its checks, such as `PR #12 open pass`. `meta` draws the other keys the pane reported with `tuios set-agent-meta`, and `$` followed by a key, such as `$model` or `$cost`, places one key. See [Session Rail](/docs/session-rail#agent-rows).
+The `tokens` above are the shipped list. The other tokens are `state`, `host` and `prompt`. A `tokens` list you wrote keeps its own order and gets no new tokens, so add `subagents` or `pr` to it to see them. `need` says what a row wants from you, such as `approval` or `question`. `context` shows `ctx 84%` once the agent's context is 80% full. `now` is what a working agent is doing, such as `Bash: go test ./...`. `subagents` shows how many subagents a Claude Code agent has at work, such as `3 subagents`, on any row while any run. When the subagents have rows of their own, it reads `3 of 4 run`. `pr` shows the pull request of the session's worktree branch and its checks, such as `PR #12 open pass`. `meta` draws the other keys the pane reported with `tuios set-agent-meta`, and `$` followed by a key, such as `$model` or `$cost`, places one key. See [Session Rail](/docs/session-rail#agent-rows).
 
 Each rule has one test: `equals`, `contains`, `starts_with`, `gt` or `lt`. The first matching rule wins. A mistake in this table is a warning, not an error.
 
@@ -1238,12 +1276,56 @@ allow = ["list", "mail"]
 | `open` | Start sessions, windows, worktrees, fans and agents |
 | `write` | Type into panes, close and move windows, set options and names, report agent state, attach, and pull a worktree's work |
 | `respond` | Answer for you: prompts, held approvals, `ask-human` questions, dismissing Inbox items and passing on held mail. Also type, from a pane on the other machine, into a pane here that waits on a prompt. The person at the other machine, outside every pane, needs only `write` for that |
+| `files` <Since /> | Read and write files here, and copy files in and out. Writes land only in the folders of `files_roots`. See [Files over a link](#files-over-a-link) |
 
-With no table, a machine may `list`, `mail`, `open` and `write`. `respond` is opt-in. An `allow` that is set replaces that list, and `allow = []` allows nothing. Anything not allowed is refused with `forbidden`.
+`list` also lets the other machine stream the bytes of a pane (`stream-pane`). <Since />
+
+With no table, a machine may `list`, `mail`, `open`, `write` and `files`. `respond` is opt-in. An `allow` that is set replaces that list, and `allow = []` allows nothing. A table that sets `allow` without `files` keeps that machine from your files. Anything not allowed is refused with `forbidden`.
+
+To relay on to this machine's own hosts, a machine needs `list`, `mail`, `open`, `write` and `respond`. A table written for an older tuios that allows those five still relays.
 
 `hold_mail = true` holds mail from that machine to an agent here in your Inbox, marked `held for NAME`, until you pass it on with <kbd>p</kbd>. `hosted_grace` is how long a pane this machine runs for the other one (a window opened there with `--host`) keeps running after the link drops: a duration, `"0"` to end it with the link, 10 minutes when unset, at most 24 hours.
 
 The name is the one the other machine gives for itself, its host name up to the first dot, unless the ssh key it logs in with pins one with `command="tuios stdio-proxy --as laptop",restrict`. Only a pinned name is a boundary. A change that allows less applies to the next call on every link. A change that allows more waits for `tuios config apply`.
+
+### Files over a link <Since /> [#files-over-a-link]
+
+A machine with `files` can read your files and write new ones. Three keys in its `[hosts.NAME]` table set the limits:
+
+```toml
+[hosts.laptop]
+allow = ["list", "files"]
+files_roots = ["~/Downloads/tuios", "~/dev"]   # where it may write
+files_read_roots = ["~/share"]                 # where it may read
+files_min_free = "5GiB"                        # the space a write must leave free
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `files_roots` | one receive folder | The folders the machine may write in. The default is `~/Downloads/tuios` on macOS and Windows, and `$XDG_DOWNLOAD_DIR/tuios` (or `~/Downloads/tuios`) on other systems. tuios makes it on first use |
+| `files_read_roots` | not set | The folders the machine may read. Not set means every file you can read, apart from the read deny list. When set, the machine also reads the folders of `files_roots` |
+| `files_min_free` | `"1GiB"` | The free space a write must leave on its disk. A whole number with `B`, `KB`, `MB`, `GB`, `TB`, `KiB`, `MiB`, `GiB` or `TiB`. `"0"` turns the check off |
+
+A path is absolute or starts with `~`. Some places are always closed, whatever the roots say:
+
+- **Writes** never go into `~/.ssh`, `~/.gnupg`, cloud and git credentials, shell start files such as `.bashrc` and `.zshrc`, login items, crontabs, `/proc`, or tuios's own config and state.
+- **Reads** never return keys, credentials, keyrings, shell histories, browser profiles, `/proc`, or tuios's own state. A public `*.pub` key in `~/.ssh` is the one exception.
+- A file with more than one name (a hard link) is never read over a link. Copy it to a new file to share it.
+
+A refused write says where writes may land and which key to change. A deny list can never name every secret on a machine, so `files_read_roots` is the stronger choice.
+
+Other limits:
+
+- One machine may have at most 8 write streams and 64 unfinished copies here at once. Past that, a write is `busy`, and a copy waits and tries again.
+- Files dropped on a pane go to a private drop folder. It holds at most 256 MiB for all drops, for 24 hours.
+- A copy another machine starts here keeps to the same rules, also after tuios restarts. When `files` is taken away, its copies here stop.
+- A change that widens `files_roots` or `files_read_roots`, removes `files_read_roots`, or lowers `files_min_free` waits for `tuios config apply`. A change that narrows applies at once.
+
+<Callout type="warn" title="Give files only to machines you trust">
+A machine with `files` can write any file inside its roots and read any file outside the deny list. A file copy can run code: a binary in a folder on your `PATH`, or a config file that a program reads. Give `files`, and a wide `files_roots`, only to a machine you trust as you trust your own.
+</Callout>
+
+See [Remote Hosts](/docs/remote-hosts#copy-files-between-machines) for the copies themselves.
 
 ### Using a linked host
 
@@ -1398,6 +1480,23 @@ token_file = "~/.config/tuios/ntfy-token"   # optional
 | `allow_http_redirects` | `false` | Let a provider redirect to a plain `http` address |
 
 `[notify.triggers]` selects the Inbox kinds: `approval`, `plan`, `question` and `ask` are on by default, `mail`, `errored` and `finished` are off. Like `[hosts]`, `[notify]` is not in `list-options`, and `tuios set-config` cannot change it. A new address or a new source for a secret waits for `tuios config apply` from a terminal outside TUIOS. `tuios notify test` sends a test notification through each provider. See [Push Notifications](/docs/push-notifications) for the providers and the secrets.
+
+### Web Push <Since /> [#web-push]
+
+`[notify.webpush]` configures the pushes the daemon sends to a phone that registered for Web Push. It needs no provider.
+
+```toml
+[notify.webpush]
+subject = "https://example.com/tuios-contact"   # optional
+allow_insecure = false
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `subject` | `https://tuios.dev/push` | The VAPID subject: an `https` URL or a `mailto:` address that a push service can use to contact you |
+| `allow_insecure` | `false` | Let tuios send to a push service on a loopback or private address, by `https` or `http`. A change to `true` waits for `tuios config apply` |
+
+See [Push Notifications](/docs/push-notifications#web-push-to-a-phone).
 
 ## Hooks
 

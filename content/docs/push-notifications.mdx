@@ -6,6 +6,7 @@ icon: BellRing
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 The `[notify]` table sends a push notification when the [Inbox](/docs/agent-inbox) gets an item that waits for you. The daemon sends it, so it works when no client is attached. The link in the notification opens the Inbox on that item in [tuios-web](/docs/web).
 
@@ -34,7 +35,19 @@ pushover (api.pushover.net): sent.
 webhook (hooks.example.com): failed. The server answered 401 Unauthorized. Check the token.
 ```
 
-`tuios notify test` sends a test notification through each provider and prints one line per provider. It exits `1` when a provider fails. `--json` prints `provider`, `host`, `ok` and `error` for each one. The command sends from its own process, not from the daemon, so it reads a `token_env` variable from your shell. The daemon reads it from its own environment.
+`tuios notify test` sends a test notification through each provider and prints one line per provider. It exits `1` when a provider fails. It does not send to the phones of Web Push. `--json` prints `provider`, `host`, `ok` and `error` for each one. The command sends from its own process, not from the daemon, so it reads a `token_env` variable from your shell. The daemon reads it from its own environment.
+
+## Web Push to a phone <Since /> [#web-push-to-a-phone]
+
+A phone can also get Inbox items by Web Push, with no provider in `[notify]`. The phone registers with the daemon, and the daemon sends it an encrypted push for each item of a kind the phone asked for. When the item closes, the daemon sends a close, so the phone can remove the notification.
+
+```bash
+tuios notify push register --device pixel --subscription pixel.json
+tuios notify push ls
+tuios notify push rm pixel
+```
+
+Only you can register a phone. A program in a pane cannot. See [Phones](/docs/phones#web-push-to-a-phone) for the setup, and [Web Push](/docs/configuration#web-push) for `[notify.webpush]`.
 
 ## When a notification is sent
 

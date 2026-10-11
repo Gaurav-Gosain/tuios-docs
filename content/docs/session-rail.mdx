@@ -6,6 +6,7 @@ icon: PanelLeft
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 The session rail is a sidebar down one edge of the screen. It lists your sessions, the panes in the current session, the files in the focused pane's directory, the agents at work, and the git state of the focused pane. Everything on it can be reached with the mouse or the keyboard.
 
@@ -19,6 +20,7 @@ The rail is on by default, on the right edge, 24 columns wide.
 |-----|--------------|
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>b</kbd> | Show or hide the rail |
 | Palette: `Toggle sidebar` | The same |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>H</kbd> <Since /> | Show or hide the second rail, on the other edge. See [Both edges](#both-edges) |
 | `appearance.sidebar.enabled` | Whether a new session shows it. Default `true` |
 
 ```bash
@@ -29,6 +31,30 @@ tuios set-config appearance.sidebar.position left
 In a daemon session, the rail belongs to the session. When you show or hide it on one client, every client of the session shows or hides it, and the panes take the new space on every client. A new session takes the setting of the first client that attaches. When you toggle the rail, TUIOS also keeps the new value in your config for the next new session. A reload of the config file does not change the rail of a running session. The width of the rail stays per client. See [The rail with more than one client](/docs/sessions#the-rail-with-more-than-one-client).
 
 `position` is `right` (default), `left` or `hidden`. `width` is the preferred width in columns on a wide screen (default `24`). A config file that sets `enabled`, `position` or `width` keeps its value, so an install from before v0.8.0 whose file names them keeps the old rail. On a narrow screen, or after <kbd>&lt;</kbd>, the rail collapses to a one-column strip of marks. Hover the strip for a label (`tooltips`).
+
+## Both edges <Since /> [#both-edges]
+
+You can show a rail on each edge of the screen. Each rail has its own width, sections and custom command. Turn on the second edge in `config.toml`:
+
+```toml
+[appearance.sidebar]
+position = "right"
+sections = "sessions,terminals,agents"
+
+[appearance.sidebar.left]
+enabled = true
+width = 28
+sections = "files,git"
+```
+
+| How | What it does |
+|-----|--------------|
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>b</kbd> | Show or hide the original rail |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>H</kbd> | Show or hide the second rail. It does not turn on an edge that has no `enabled = true` |
+| <kbd>e</kbd>, while a rail has the keyboard | Move the keyboard to the rail on the other edge, and back |
+| Drag the inner border | Change the width of that rail, for this client only |
+
+Both rails read the same sessions, files and git state. Each rail has its own scroll, cursor and mouse areas. On a narrow screen the second rail closes first. Every key of the edge tables is on the [configuration page](/docs/configuration#two-edges).
 
 ## The sections
 
@@ -142,12 +168,33 @@ Each row shows the pane's state glyph and its name. A row says how long it has b
 │    ctx 84% · Bash: go…
 ```
 
-While a Claude Code agent has subagents at work, the second line says how many, such as `3 subagents`, on any row. An agent that hands work to subagents and ends its turn shows `done`, and the count shows that the work goes on. On a narrow line, the harness name gives way to the count. The count needs the Claude Code [integration](/docs/agents#the-agent-reports-for-itself), version 3 or later.
+### Subagent rows <Since /> [#subagent-rows]
+
+While a Claude Code agent has subagents at work, each subagent gets a row under its agent's row. The agent's row says how many run, such as `3 of 4 run`.
 
 ```
-│ ○ lead
-│    claude · 3 subagents
+ agents
+ ◊ lead
+    claude · 3 of 4 run
+    ● Research tmux
+      Bash: go test ./…
+    ● Audit the rail
+      Read: internal/a…
+    ■ Write the docs
+      done · 14 tools
 ```
+
+- The first line of a subagent row is what the agent asked it to do.
+- The second line, on a tall section, is the tool it runs now, or how it ended.
+- The mark is `●` running, `■` done, `×` failed and `○` stopped (`*`, `#`, `x` and `o` with ASCII glyphs).
+- A finished row is muted. It goes one minute after the subagent ends, or five minutes after it fails.
+- A click on a subagent row focuses its agent's pane. The keyboard cursor skips subagent rows.
+
+An agent at rest whose subagents still run shows `◊` (`%` with ASCII glyphs) in the working colour, and its state reads `waiting`. The title bar and the switcher show the same mark. The daemon still keeps the pane `done`, so `wait-for` and the done alert work as before.
+
+When the section is short, the rail first drops the finished subagent rows. Then it shows the newest few with a line such as `+2 more`. Then it shows none. It never hides an agent row to show a subagent row.
+
+`appearance.sidebar.subagent_rows = "count"` draws only the count, such as `3 subagents`. The settings page has this option on its Sidebar tab. The rows need the Claude Code [integration](/docs/agents#the-agent-reports-for-itself).
 
 On a rail 30 columns wide or narrower, a pane running an agent is listed once, in the agents section, and the terminals section keeps the panes that run no agent. Rows that have rested longer than `agent_rest_fold` (an hour by default) fold into one `+N at rest` line. <kbd>Enter</kbd> or a click on it shows them again. A row that needs you, a working agent, the focused pane, a pane with messages queued and a pane whose agent has subagents at work never fold.
 
@@ -200,7 +247,8 @@ When messages wait for the machine, the count comes first, as in `3 queued, offl
 | `file_actions` | `true` | Allow create, rename, delete, copy, cut and paste |
 | `file_delete` | `"trash"` | `trash` or `permanent` |
 | `agent_rest_fold` | `"1h"` | How long an agent row rests before it folds. A duration, or `off` |
-| `header_case` | `"lowercase"` | `lowercase` or `uppercase`. Applies to every rail header |
+| `subagent_rows` <Since /> | `"rows"` | `rows` or `count`. How an agent row shows its subagents |
+| `header_case` <Since /> | `"lowercase"` | `lowercase` or `uppercase`. Applies to every rail header |
 | `background` | `""` | The rail's background: `off`, `theme` or `#RRGGBB`. Empty follows `appearance.background` |
 
 "cd here" types a `cd` only into a pane whose shell is at its prompt. In daemon mode, the daemon does this check. TUIOS types no `cd` for a folder whose name holds a quote, a backslash or a control character. The dock says when it did not type.

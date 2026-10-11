@@ -6,6 +6,7 @@ icon: Bot
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 TUIOS keeps an agent state for every pane. When a pane runs a coding agent such as Claude Code, Codex or Gemini CLI, the state says whether it is working, waiting for you, or done. The state is drawn on the pane's title bar and in the rail, it can raise an alert, and scripts can read it and wait on it. Everything an agent waits on you for collects in the [Inbox](/docs/agent-inbox).
 
@@ -69,7 +70,7 @@ You can do the same from inside TUIOS. See [The Agents tab](#the-agents-tab).
 
 The installer adds its hook entries to the harness's own settings file, keeps everything else in it, and saves the file as it was the first time as `<file>.tuios.bak`. It refuses a file it cannot parse rather than rewrite it. Each entry runs `tuios agent-hook`, which never blocks the harness for long and prints nothing a harness could read as an answer. `tuios integration uninstall <harness>` removes exactly what it wrote.
 
-Twelve integrations report the pane's state: Claude Code, Codex, Copilot, Cursor Agent, Gemini CLI, opencode, Kilo, Amp, Kimi Code CLI, Pi, oh-my-pi and Qwen Code. Seven more (Antigravity, Crush, Devin, Droid, Grok, Hermes and Qoder) report only the conversation id, so the pane can be [resumed after a restart](/docs/agent-inbox#resuming-after-a-restart), and leave the state to the screen rules. The Claude Code and Codex hooks also feed the rail what the agent is doing now and the Inbox its [activity log](/docs/agent-inbox#what-the-agent-has-been-doing). The Claude Code hooks also count the subagents the agent runs, and the rail shows the count, such as `3 subagents`. This needs version 3 of the Claude Code integration. `tuios integration status` shows an older install as out of date, and `tuios integration install claude-code` updates it. `tuios integration install claude-code --statusline` also feeds the model, context use and cost from Claude Code's status line. It never replaces a status line of your own: `--then` chains to it.
+Twelve integrations report the pane's state: Claude Code, Codex, Copilot, Cursor Agent, Gemini CLI, opencode, Kilo, Amp, Kimi Code CLI, Pi, oh-my-pi and Qwen Code. Seven more (Antigravity, Crush, Devin, Droid, Grok, Hermes and Qoder) report only the conversation id, so the pane can be [resumed after a restart](/docs/agent-inbox#resuming-after-a-restart), and leave the state to the screen rules. The Claude Code and Codex hooks also feed the rail what the agent is doing now and the Inbox its [activity log](/docs/agent-inbox#what-the-agent-has-been-doing). The Claude Code hooks also follow the subagents the agent runs, and the rail shows a row for each one. See [Subagents](#subagents). This needs version 3 of the Claude Code integration. `tuios integration status` shows an older install as out of date, and `tuios integration install claude-code` updates it. `tuios integration install claude-code --statusline` also feeds the model, context use and cost from Claude Code's status line. It never replaces a status line of your own: `--then` chains to it.
 
 The opencode integration works with opencode V1 (1.18.29 or later) and V2. On V2, the plugin runs in the opencode terminal client, so it reports the state of the session that pane shows. Events from other sessions and subagents do not change the pane. A V2 server that several panes share does not report pane state. After you update TUIOS, run `tuios integration install opencode` again and restart opencode. Headless V2 clients, such as `opencode run`, do not load the plugin.
 
@@ -212,6 +213,41 @@ The same three commands report `evidence_age_ms`: the milliseconds since the las
 - A title or screen rule that reads the same claim again does not reset it.
 - For a state that the detector or the stall timer inferred (`source` `detect` or `stall`), new output from the pane also resets it. A pane that keeps printing reads fresh.
 - The value is `null` for a pane that never had a state.
+
+## Subagents <Since /> [#subagents]
+
+The Claude Code hooks tell the daemon about each subagent: what the agent asked it to do, the tool it runs, how many tool calls it made, and how it ended. The rail shows a [row for each subagent](/docs/session-rail#subagent-rows).
+
+`get-agent-state --json` and `list-agents --json` return them as `subagent_list`, in start order:
+
+```json
+"subagent_list": [
+  {"id": "ab34da07d2d63ee3c", "type": "general-purpose", "description": "Research tmux",
+   "state": "running", "now": "Bash: go test ./...", "tools": 3},
+  {"id": "aa84fb4f695c1ee02", "type": "general-purpose", "description": "Audit the rail",
+   "state": "done", "last": "Bash: go vet ./...", "tools": 2, "result": "The rail is fine."}
+]
+```
+
+- `state` is `running`, `done`, `failed` or `stopped`.
+- `now` is the tool a running subagent runs. `last` is the tool it ran last. `result` is the first line it ended with, or the error of a failed one.
+- The text is cut to one line of 80 bytes, and likely secrets are masked. The list holds at most 16 subagents.
+- A finished subagent stays on the list for one minute, or five minutes when it failed. `subagents` counts only the running ones.
+
+A pane whose agent ended its turn reports `done` while its subagents work. `wait-for agent-state` matches at once. To wait for the work itself, poll until `subagents` is 0, then read `subagent_list` for how each one ended. The [activity log](/docs/agent-inbox#what-the-agent-has-been-doing) keeps each start and end, such as `Research tmux (general-purpose) done after 3m, 14 tools`.
+
+Two subagents of one type that start together can show each other's description for a short time. No hook says how a subagent ended, so a stop with a final message reads as `done`, and one without reads as `stopped`.
+
+## Reading the conversation <Since /> [#reading-the-conversation]
+
+The `agent-transcript` verb returns the conversation of the agent in a pane as data: prompts, answers, thinking, tool calls, diffs of edits, plans and todo lists. It is for a client that shows the conversation in its own view, such as a phone. It reads Claude Code transcripts only.
+
+- Only you can read it. The call needs the `human_nonce` of an attached client or of an `attach-presence` connection. A process in a pane cannot read it.
+- The caller names a window. The path of the transcript file stays in the daemon.
+- The daemon reads only a regular `*.jsonl` file under `~/.claude/projects`.
+- Text is cleaned of escape sequences and likely secrets. A reply holds at most 1000 entries.
+
+The opt-in `transcript` event says that the conversation grew. See [Control Protocol](/docs/control-protocol#agent-transcript).
 
 ## When a pane is marked wrong
 

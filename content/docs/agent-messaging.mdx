@@ -6,6 +6,7 @@ icon: MessagesSquare
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 Agents in the same session can work together. One agent can find the others, leave a message in another's inbox, ask a question and wait for the answer, or hand over a file. You can read and answer their messages too.
 
@@ -69,19 +70,30 @@ subject: retest please
 │ rebased onto main, please retest
 --- end untrusted content ---
 
-1 message, 1 unread.
+1 message, marked read.
 ```
+
+The last line says the state of the messages after the call: `marked read`, `marked seen`, a count of `seen` and `unread` messages, or `all read`.
 
 | Flag | Effect |
 |------|--------|
 | `-w` | Read this pane's inbox and mark what is returned as read |
 | `--unread` | Only messages nobody has read |
-| `--peek` | Read without marking anything read |
+| `--peek` | Read without marking anything read. A peek of your own inbox marks unread messages seen |
 | `--notices` | Include session notices in an inbox read |
 | `--thread ID` | One conversation, oldest first. Any id in the thread works |
 | `--limit N` | At most N messages (default 20) |
 
 Reading without `-w` shows everything in the session and marks nothing, so looking around never empties someone else's inbox.
+
+### Unread, seen and read <Since /> [#unread-seen-and-read]
+
+A message goes from unread to seen to read:
+
+- **Seen:** the recipient peeked its own inbox (`--peek -w "$TUIOS_PANE_ID"`). A peek of another pane's inbox marks nothing.
+- **Read:** the recipient read its inbox without `--peek`.
+
+The sender sees the state in the header of `read-agent-messages` on the session. `--json` has `seen_at` and `read_at`. Seen means that the recipient looked at the message. It does not mean that the recipient acted on it. A seen message still counts as unread: `--unread` returns it, and the `MAIL` column of `list-agents` shows it as `1 (1 seen)`. The mailbox and the Inbox row also say `seen`.
 
 Wait for mail instead of polling:
 

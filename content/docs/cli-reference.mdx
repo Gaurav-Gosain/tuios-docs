@@ -6,6 +6,7 @@ icon: Terminal
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 ```bash
 tuios [flags]              # start or attach to TUIOS
@@ -96,7 +97,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 | [Agents](#agents) | `list-agents`, `get-agent-state`, `set-agent-state`, `set-agent-meta`, `set-agent-session`, `start-agent`, `send-agent-message`, `read-agent-messages`, `ask-agent`, `ask-human`, `explain-agent-detect`, `explain-agent-screen`, `stash` |
 | [Inbox and review](#inbox-and-review) | `list-attention`, `peek-prompt`, `respond`, `queue`, `review`, `checkpoint`, `agent-log`, `resume-agent` |
 | [Agent setup](#agent-setup) | `integration`, `doctor`, `pane-grants`, `set-pane-grants`, `mcp`, `tmux-shim`, `tmux` |
-| [Remote hosts](#remote-hosts) | `hosts` |
+| [Remote hosts](#remote-hosts) | `hosts`, `pair` |
 | [Tapes and layouts](#tapes-and-layouts) | `tape`, `layout` |
 | [Other](#other-commands) | `ssh`, `notify`, `update`, `completion`, `help` |
 
@@ -1318,7 +1319,7 @@ tuios list-agents --select 'harness:codex state:idle,done'
 tuios list-agents --json | jq -r '.agents[] | select(.state=="needs_input") | .window_id'
 ```
 
-The states are `needs_input`, `errored`, `done`, `idle`, `working` and `unknown`. The JSON also carries `needs_you`, `queued` (messages waiting in the pane's [queue](#queue)), `completion_seq`, `finished_unread`, the agent's `meta`, `identity` and `confidence` (how TUIOS recognised the harness), `evidence_age_ms`, and `subagents`, the number of subagents the agent has at work. The `ID` and `NAME` columns work with `-w`. `--session` cannot be combined with `--all-hosts` or `--host`.
+The states are `needs_input`, `errored`, `done`, `idle`, `working` and `unknown`. The JSON also carries `needs_you`, `queued` (messages waiting in the pane's [queue](#queue)), `completion_seq`, `finished_unread`, the agent's `meta`, `identity` and `confidence` (how TUIOS recognised the harness), `evidence_age_ms`, and `subagents`, the number of subagents the agent has at work. With `--json`, each row also has `subagent_list`: each subagent with its description, state, tool and how it ended. <Since /> See [Subagents](/docs/agents#subagents). The `ID` and `NAME` columns work with `-w`. `--session` cannot be combined with `--all-hosts` or `--host`.
 
 ### get-agent-state and set-agent-state
 
@@ -1418,11 +1419,11 @@ tuios read-agent-messages --thread 12
 - `-w, --window <target>`: read this pane's inbox and mark what it returns as read.
 - `--unread`: only unread messages.
 - `--notices`: include session-wide notices in an inbox read.
-- `--peek`: do not mark anything read.
+- `--peek`: do not mark anything read. A peek of your own inbox (`-w "$TUIOS_PANE_ID"`) marks unread messages seen. <Since />
 - `--thread <id>`: one conversation. Any message ID in the thread works.
 - `--limit <n>`: at most this many, newest last. Default `20`.
 
-Without `-w`, it reads every message and marks nothing.
+Without `-w`, it reads every message and marks nothing. The last line says the state after the call, such as `1 message, marked read.` The header of a message that its recipient peeked says `seen`, and `--json` has `seen_at` and `read_at`. See [Unread, seen and read](/docs/agent-messaging#unread-seen-and-read).
 
 ### ask-agent
 
@@ -1594,7 +1595,7 @@ See [Checkpoints](/docs/checkpoints).
 
 ### agent-log
 
-Show what the agent in a pane has been doing: prompts, tool calls and how they ended, finished turns, the subagents it started and stopped, and commands its shell ran, oldest first. It needs the Claude Code or Codex integration.
+Show what the agent in a pane has been doing: prompts, tool calls and how they ended, finished turns, the subagents it started and how each ended, and commands its shell ran, oldest first. It needs the Claude Code or Codex integration.
 
 ```bash
 tuios agent-log -w build
@@ -1804,6 +1805,37 @@ All ssh calls of one run to a host use one shared connection, through a private 
 
 See [the hosts table](/docs/configuration#the-hosts-table).
 
+### pair <Since /> [#pair]
+
+Show a QR code that adds this machine to a phone. The phone sends its ssh key, and you accept it. The key can only open a tuios link, with the policy of a new `[hosts.DEVICE]` table. See [Phones](/docs/phones#pair-a-phone).
+
+```bash
+tuios pair [--name DEVICE] [--machine NAME] [--allow list,mail,open,write,respond,files] [--timeout 5m]
+           [--listen HOST:PORT] [--listen-all] [--accept-local] [--authorized-keys PATH]
+           [--advertise-ssh HOST:PORT,...] [--advertise-pair HOST:PORT,...]
+           [--ssh-port 22] [--host-key PATH] [--command PATH] [--yes] [--json]
+```
+
+| Flag | What it does |
+|------|--------------|
+| `--name DEVICE` | The device name. It replaces the name the phone sends. Use letters, digits, dot, dash and underscore |
+| `--machine NAME` | The machine name in the code. The phone shows it. The default is the host name, up to the first dot |
+| `--allow LIST` | The `allow` list of the new `[hosts.DEVICE]` table. The default is `list,mail` |
+| `--timeout D` | The time the code works. The default is 5 minutes. The maximum is 1 hour |
+| `--listen HOST:PORT` | Listen on this address. Port 0 picks a free port. Without it, tuios listens on each address in the code |
+| `--listen-all` | Let the listener use every interface, or a public address. tuios prints a warning for each interface |
+| `--accept-local` | Accept a request from this machine. Use it for a phone emulator, or for tailscaled in userspace mode |
+| `--authorized-keys PATH` | The file for the key. The default is `~/.ssh/authorized_keys` |
+| `--advertise-ssh LIST` | The ssh addresses in the code. They replace the addresses tuios finds |
+| `--advertise-pair LIST` | The pairing addresses in the code. They replace the addresses tuios finds |
+| `--ssh-port N` | The ssh port for the addresses tuios finds. The default is 22 |
+| `--host-key PATH` | The ssh host public key in the code. The default is the first of the ed25519, ecdsa and rsa keys in `/etc/ssh` |
+| `--command PATH` | The tuios path in the forced command. The default is the `tuios` on `PATH` when it is this tuios, so an upgrade does not break the key |
+| `--yes` | Accept the key with no question. Use it for tests only |
+| `--json` | Print the link as the first JSON line and the result as the last |
+
+The QR code holds a `tuios://pair?v=1&...` link with the machine name, the ssh user, the ssh and pairing addresses, the host key fingerprint and a one-time token. The phone sends `POST /v1/pair` with its device name, its key and an HMAC-SHA256 of them, keyed by the token. Both screens show a six-digit check code made from the token and the key. The full protocol is in `docs/CLI_REFERENCE.md` in the tuios repository.
+
 ## Tapes and layouts
 
 ### tape
@@ -1901,6 +1933,9 @@ Send a test notification through each provider in the `[notify]` table, and prin
 
 ```bash
 tuios notify test [--json]
+tuios notify push register --device NAME --subscription FILE [--kind KIND]... [--json]
+tuios notify push ls [--json]
+tuios notify push rm NAME [--json]
 ```
 
 ```
@@ -1908,7 +1943,16 @@ ntfy (ntfy.sh): sent.
 webhook (hooks.example.com): failed. The server answered 401 Unauthorized. Check the token.
 ```
 
-The command sends from its own process, not from the daemon, so it reads a `token_env` variable from your shell. The output shows the host of each provider, never a token or the full address. It exits `1` when a provider fails. `--json` prints `provider`, `host`, `ok` and `error` for each. See [Push notifications](/docs/push-notifications).
+The command sends from its own process, not from the daemon, so it reads a `token_env` variable from your shell. The output shows the host of each provider, never a token or the full address. It exits `1` when a provider fails. `--json` prints `provider`, `host`, `ok` and `error` for each. `notify test` does not send to the phones of Web Push. See [Push notifications](/docs/push-notifications).
+
+`notify push` <Since /> registers, lists and removes the phones that get Inbox items by Web Push. Run it in a terminal outside tuios. From a pane, the daemon refuses it.
+
+- `register` reads the push subscription from `FILE`, or from stdin when `FILE` is `-`. The file is the JSON of `PushSubscription.toJSON()`. `--kind` picks an Inbox kind to push. Give it once for each kind. The default is `approval`, `plan`, `ask` and `question`. A second `register` with the same `--device` replaces the phone.
+- `ls` shows each phone, the origin of its push service, its kinds, and the daemon's VAPID public key.
+- `rm NAME` removes a phone.
+- `--human-nonce` uses this nonce in place of a presence of the command's own.
+
+See [Phones](/docs/phones#web-push-to-a-phone).
 
 ### update
 

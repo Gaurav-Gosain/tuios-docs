@@ -6,6 +6,7 @@ icon: Network
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 TUIOS can reach other machines over ssh. Once a machine is added as a host, you can list its sessions and agents, open one of its sessions in your own client, run a single pane on it inside a local session, and send commands and messages to it.
 
@@ -220,6 +221,33 @@ Messages and files cross links too. Mail to a host whose link is down waits on t
 
 Agents on every linked host appear on the rail and in your [Inbox](/docs/agent-inbox), and `fan`, `worktree` and `start-agent` can run there. See [Worktrees](/docs/worktrees#work-from-another-machine).
 
+## Copy files between machines <Since /> [#copy-files-between-machines]
+
+The daemon copies files and folders between this machine and a host, or between two hosts. It runs the copy itself, so the copy goes on after you exit, after a dropped link and after a daemon restart. The copy uses the `transfer-start` verb. It has no command of its own yet. A client, or a script that writes JSON to `$TUIOS_SOCKET`, starts it:
+
+```json
+{"id":1,"verb":"transfer-start","params":{"src":{"host":"build","path":"~/out/app.tar"},"dst":{"path":"~/Downloads/app.tar"}}}
+```
+
+An empty `host` is this machine. `dst` is the full path of the copy, not the folder it goes into. Follow the copy on the event stream:
+
+```bash
+tuios subscribe --types transfer,transfer-progress
+```
+
+- Every file is checked with sha256 before it is put in place. A file that does not match is copied one more time.
+- A copy keeps the permission bits and the modification time of the original. It does not keep the owner.
+- When a machine goes away, the copy waits. When the machine is back, the copy goes on from where it stopped.
+- At most three copies move bytes at once. The others wait in the queue.
+- A copy on a link waits behind your typing, so a large copy does not slow a pane.
+- Links, named pipes, sockets and devices in a folder are not copied. The copy lists them as skipped.
+
+`transfer-list`, `transfer-pause`, `transfer-resume` and `transfer-cancel` control the copies. The [file verbs](/docs/control-protocol#file-transfers) also list, read, rename and remove files on a host.
+
+### What a host lets you copy
+
+The machine that receives a write decides where it may land. Each machine needs `files` in the other machine's `allow` list. A host lets a write land only in its `files_roots`: by default one receive folder, `~/Downloads/tuios`. It never lets a write reach `~/.ssh`, credentials or shell start files, and it never lets a read return keys or credentials. When a host refuses a copy, the error names the setting to change on that host. See [Files over a link](/docs/configuration#files-over-a-link).
+
 ## Keeping hosts on one version
 
 `tuios hosts sync` installs the TUIOS version of this machine on each host that runs another version. A release build sends its own release. `--dev` sends a build of a checkout, and `--binary` sends a file.
@@ -264,11 +292,12 @@ With `ssh_agent = "follow"` on both machines and agent forwarding on the link, a
 
 ## What another machine may do here
 
-The `[hosts]` table on the machine a link arrives at also says what the machine of that name may do there. With no entry, a linked machine may list, send mail, open sessions and panes, and type into panes. Answering prompts for you (`respond`) is off unless you allow it:
+The `[hosts]` table on the machine a link arrives at also says what the machine of that name may do there. With no entry, a linked machine may list, send mail, open sessions and panes, type into panes, and read and write files (`files`). Answering prompts for you (`respond`) is off unless you allow it:
 
 ```toml
 [hosts.laptop]
-allow = ["list", "mail", "open", "write", "respond"]
+allow = ["list", "mail", "open", "write", "respond", "files"]
+files_roots = ["~/Downloads/tuios", "~/dev"]   # where it may write
 hold_mail = true      # hold its mail to agents here in your Inbox until you pass it on
 
 [hosts."*"]           # every machine with no entry of its own
@@ -285,4 +314,5 @@ Anything not allowed is refused with `forbidden`. See [What another machine may 
   <Card title="Configuration" href="/docs/configuration#the-hosts-table" description="The hosts table and ProxyCommand transports" />
   <Card title="SSH Agent" href="/docs/ssh-agent" description="Forward your ssh agent to a host" />
   <Card title="Web Terminal" href="/docs/web" description="Reach TUIOS from a browser instead" />
+  <Card title="Phones" href="/docs/phones" description="Pair a phone with tuios pair" />
 </Cards>

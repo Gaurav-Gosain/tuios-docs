@@ -1,0 +1,168 @@
+---
+title: Phones
+description: Pair a phone with tuios pair, stream panes to it, and send it Inbox items by Web Push.
+icon: QrCode
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
+
+<Since />
+
+The tuios daemon has the parts that a phone client needs:
+
+- `tuios pair` adds a phone's ssh key with a QR code. You do not copy a key by hand.
+- `stream-pane` sends one pane to the phone as plain terminal bytes.
+- `agent-transcript` gives the phone an agent's conversation as data.
+- Web Push sends Inbox items to the phone while it sleeps.
+
+<Callout type="info" title="A phone client">
+These are daemon features. A phone client uses them over ssh, through `tuios stdio-proxy`. This page describes what the daemon does and how you set it up.
+</Callout>
+
+## Pair a phone
+
+Run `tuios pair` in a terminal on the machine:
+
+```bash
+tuios pair --name phone
+```
+
+<Steps>
+<Step>
+
+Scan the QR code with the phone client.
+
+</Step>
+<Step>
+
+Compare the check code and the key fingerprint on the screen with the ones on the phone.
+
+</Step>
+<Step>
+
+Type `y` to accept the key.
+
+</Step>
+</Steps>
+
+```
+A device asks to pair.
+  Name:  phone
+  Check: 482916
+  Key:   ECDSA SHA256:...
+  From:  192.168.1.23:51734
+  Allow: list, mail
+Compare the check code and the key with the phone. Add this key? [y/N]
+```
+
+The phone must reach this machine, for example on the same Wi-Fi network or on your tailnet. tuios puts the MagicDNS name of the machine in the code when Tailscale answers, then up to three LAN addresses.
+
+The code works one time, for 5 minutes. It stops after three wrong requests. Anyone who sees the code can try to pair until the phone does, so do not show it on a shared screen.
+
+### What pairing changes
+
+tuios changes two files, in this order:
+
+1. It adds a new `[hosts.phone]` table to `config.toml`. The table sets what the phone may do. When tuios cannot write the table, it stops and does not add the key.
+2. It adds one line to `~/.ssh/authorized_keys`. The line ends in `tuios-pair:phone`.
+
+```
+command="/usr/bin/tuios stdio-proxy --as phone",restrict ecdsa-sha2-nistp256 AAAA... tuios-pair:phone
+```
+
+The key can only run `tuios stdio-proxy --as phone`. `restrict` stops port forwards, agent forwards and a terminal.
+
+By default the phone gets `list` and `mail`:
+
+- `list` lets the phone read listings, pane captures, screenshots, agent state, the Inbox and the event stream. It also lets the phone stream a pane.
+- `mail` lets the phone send and read agent mail.
+
+The phone cannot start programs, type into panes or answer prompts. To allow more, give `--allow`:
+
+```bash
+tuios pair --name phone --allow list,mail,open,write
+```
+
+See [What another machine may do here](/docs/configuration#what-another-machine-may-do-here) for each capability.
+
+### Safety checks
+
+- tuios refuses a device name that a `[hosts]` table has, that another paired key uses, or that is the name of this machine. Case does not matter.
+- tuios refuses a pairing request from this machine, or from a machine in `[hosts]`. A program on such a machine can read the code from the screen, and that program is not the phone. Use `--accept-local` only for a phone emulator, or for a machine that runs tailscaled in userspace mode.
+- The key must be ECDSA P-256, Ed25519, or RSA with 3072 bits or more. A key that is in the file already is refused.
+- tuios refuses an authorized keys file that sshd would not read: one that anyone can write to, or that another user owns.
+- `--yes` accepts the key with no question. Use it for tests only.
+
+### Remove a phone
+
+1. Delete the line that ends in `tuios-pair:phone` from `~/.ssh/authorized_keys`.
+2. Delete the `[hosts.phone]` table from `config.toml`.
+
+Every flag and the pairing protocol are in [`tuios pair`](/docs/cli-reference#pair).
+
+## Stream a pane
+
+A phone client streams one pane with the `stream-pane` verb. It gets a snapshot of the screen, then the output as it comes. After a dropped connection, it resumes from where it stopped when the daemon still holds that output.
+
+A phone screen is small. The phone can hold the pane at most at its own size with a size lease. The lease changes only that pane, never the session or the other panes. When the phone stops renewing the lease, the pane goes back to its old size after 30 seconds.
+
+The phone acts for you with `attach-presence`. That gives its connection your nonce without a full attach, so it can answer an approval or read a transcript. A process in a pane cannot get it. See [Control Protocol](/docs/control-protocol#stream-pane).
+
+## Web Push to a phone
+
+A phone can get Inbox items by Web Push. The phone does not keep a connection to tuios. Its push service, or a UnifiedPush distributor such as the ntfy app, wakes it. Web Push needs no provider in `[notify]`.
+
+The phone client registers itself with the `register-push` verb. You can also register a phone from a terminal:
+
+```bash
+tuios notify push register --device pixel --subscription pixel.json
+tuios notify push ls
+tuios notify push rm pixel
+```
+
+- `register` reads the push subscription from a file, or from stdin with `-`. The subscription holds secrets, so the command line never takes them.
+- `--kind` picks the Inbox kinds to push. Give it once for each kind. The default is `approval`, `plan`, `ask` and `question`.
+- A second `register` with the same `--device` replaces the phone.
+- `ls` shows each phone and the daemon's VAPID public key. A phone client needs that key before it subscribes.
+
+```
+$ tuios notify push ls
+pixel: https://push.example.net, approval, plan, ask, question
+VAPID public key: BCM4cML1lw6X1BHn3-nOS6-QtjYUql5FDx-etpdO8RHCTTipUMWpGY46YBB4bLwbc31yGx_O9LQVABj-B0Dqvp0
+```
+
+Only you can register, list or remove a phone. Run these commands in a terminal outside tuios. From a pane, the daemon refuses them with `not_human`.
+
+### What the phone gets
+
+- When an item opens, tuios encrypts it for each phone that asked for its kind, and sends it to the phone's push service.
+- When the item closes, tuios sends a close, so the phone can remove the notification.
+- tuios tries a failed push again after 1, 4 and 15 seconds.
+- When the push service says that the phone is gone, tuios removes the phone and opens an Inbox item about it.
+- An item from another machine is not pushed. That machine pushes to its own phones.
+- `max_per_hour` applies to each phone. `enabled = false` in `[notify]` stops new pushes, but a phone still gets the close of an item.
+
+Each registration opens an Inbox item named `phone NAME` that says who registered the phone. Check the item. Remove a phone that you do not know with `tuios notify push rm NAME`.
+
+### Configure it
+
+```toml
+[notify.webpush]
+subject = "https://example.com/tuios-contact"   # optional
+allow_insecure = false
+```
+
+`subject` is a URL or `mailto:` address that a push service can use to contact you. `allow_insecure = true` lets tuios send to a push service on a loopback or private address. Without it, tuios does not send to such an address, and a push never follows a redirect. See [Web Push](/docs/configuration#web-push).
+
+The phones and the VAPID key are in the state directory, in `push/`, with mode 600.
+
+## Related
+
+<Cards>
+  <Card title="Push Notifications" href="/docs/push-notifications" description="ntfy, Pushover and webhooks for the Inbox" />
+  <Card title="Remote Hosts" href="/docs/remote-hosts" description="Links between machines and what each may do" />
+  <Card title="Agent Inbox" href="/docs/agent-inbox" description="The items a phone gets" />
+  <Card title="Control Protocol" href="/docs/control-protocol" description="stream-pane, attach-presence and agent-transcript" />
+</Cards>

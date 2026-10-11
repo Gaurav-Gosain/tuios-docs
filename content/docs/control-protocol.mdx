@@ -6,6 +6,7 @@ icon: Terminal
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 The TUIOS daemon accepts JSON requests on its Unix socket. Send one JSON object per line and read one JSON object back per line. No client library is needed: a shell, `nc` and `jq` are enough.
 
@@ -41,7 +42,7 @@ The daemon limits the connections and the memory that clients can use.
 | Connections on the link sockets, together | 256 | The same. Other machines cannot take the connections that your own clients need. |
 | Memory for requests over 64 KiB | One budget for your own clients, and a smaller one for links and panes without the `admin` grant | The request waits up to 2 seconds. Then the daemon refuses it with `busy` and closes the connection. |
 | Length of one request line | 12 MiB | The daemon refuses the request with `invalid_request` and closes the connection. |
-| Large writes to one pane | One at a time | The next write waits up to 5 seconds for the pane to read. Then the daemon refuses it with `busy`. |
+| Large writes to one pane | One at a time | A queued write waits for the write ahead of it. When the write ahead has held the pane for 5 seconds and the pane still does not read, the daemon refuses the queued write with `busy`. |
 
 A TUIOS client takes a few connections. A command takes one connection while it runs. A request of 64 KiB or less, such as a key press, never waits for the memory budget.
 
@@ -198,7 +199,8 @@ The daemon currently implements 115 verbs, some of them only for one daemon to c
 | `ask-human` | Ask the person a question with fixed answers, and wait for the answer. |
 | `set-agent-meta` | Record display metadata about a pane's agent, such as its model or context use. |
 | `set-agent-session` | Store a harness's conversation id for a pane without changing its state. |
-| `report-agent-activity` | Report a hook event that changes no state, such as a subagent's start or stop. It moves the pane's subagent count. |
+| `report-agent-activity` | Report a hook event that changes no state, such as a subagent's start, tool call or stop. It moves the pane's subagent count and list. |
+| `agent-transcript` <Since /> | Read the conversation of the agent in a pane, as data. Only the person can. See [below](#agent-transcript). |
 | `start-agent` | Start an agent in a new pane and answer once it is ready for a prompt. |
 | `resume-agent` | Type a pane's resume command for the conversation a hook recorded. |
 | `agent-activity` | Read what a pane's agent has been doing, from the activity the daemon keeps. |
@@ -231,7 +233,7 @@ The daemon currently implements 115 verbs, some of them only for one daemon to c
 | `checkpoint-diff` | Read what one turn changed. Nothing in the repository changes. |
 | `restore-checkpoint` | Put a pane's work tree back to a checkpoint, after a safety checkpoint. Refused while the agent works, unless `force`. |
 
-The verbs that act as the person need the nonce a client receives when it attaches, and refuse a caller inside a pane even when it has a copy.
+The verbs that act as the person need the nonce a client receives when it attaches, or the nonce of [`attach-presence`](#attach-presence). They refuse a caller inside a pane even when it has a copy.
 
 ### Files and worktrees
 
@@ -264,6 +266,32 @@ The verbs that act as the person need the nonce a client receives when it attach
 | `list-host-sessions` | List sessions here and on every configured host. |
 | `list-host-agents` | List agent windows here and on every configured host. |
 | `open-host-connection` | Turn this connection into a connection to the daemon on a host. |
+| `stream-pane` <Since /> | Send one pane as bytes to a client that is not tuios, such as a phone. See [below](#stream-pane). |
+| `attach-presence` <Since /> | Give this connection the person's `human_nonce` without an attach. See [below](#attach-presence). |
+| `register-push`, `list-push`, `remove-push` <Since /> | Register, list and remove the phones that get Inbox items by Web Push. Only the person can. See [Push Notifications](/docs/push-notifications#web-push-to-a-phone). |
+
+### File transfers <Since /> [#file-transfers]
+
+These verbs act on the files of the machine whose daemon answers them. To reach the files of another machine, send them on a connection from `open-host-connection`. That machine's [`files` policy](/docs/configuration#files-over-a-link) then decides. Every path is absolute or starts with `~`. A pane needs the `admin` grant to use them.
+
+| Verb | Purpose |
+|------|---------|
+| `file-stat` | Describe one path: kind, size, time and mode. |
+| `file-list` | List a folder a page at a time, folders first, in natural order. |
+| `file-read` | Read up to 4 MiB of a regular file, as base64. |
+| `file-hash` | The sha256 of a file, or of a range of it. |
+| `file-walk` | List every file and folder under a folder, for a folder copy. |
+| `file-mkdir` | Make a folder and its parents. |
+| `file-rename` | Move a path on one disk. |
+| `file-remove` | Delete a path. A folder that holds files needs `recursive`. The home folder and `/` are refused. |
+| `open-file-stream` | Turn the connection into the bytes of one file, to read or to write. |
+| `file-commit`, `file-abort` | Check a written part file against its sha256 and put it in place, or remove it. |
+| `file-drop-dir`, `drop-files` | Make a private folder for files dropped on a pane, and copy files into it. |
+| `transfer-start` | Start a copy of a file or a folder between this machine and a host, or between two hosts. The daemon runs it. |
+| `transfer-list` | List the copies, with progress, rate and time left. |
+| `transfer-pause`, `transfer-resume`, `transfer-cancel` | Control a copy by its `id`. |
+
+A copy goes on after the client exits, after a dropped link and after a daemon restart. Each file is checked with sha256 before it is put in place, and keeps the permission bits and modification time of the original. A destination that exists answers `file_exists` unless the call passes `conflict`: `replace`, `keep-both`, `merge` (a folder into a folder) or `fail`. With `move`, the original is removed after every file is checked. Links, named pipes, sockets and devices in a folder are not copied. The row counts them in `skipped`. See [Remote Hosts](/docs/remote-hosts#copy-files-between-machines).
 
 More verbs, `open-pane`, `pane-agent`, `pane-cwd`, `resize-pane`, `read-dir`, `wait-dir`, `close-pane`, `pane-calls`, `paste-pane-image` and `link-peer`, are what one daemon calls on another to run a window's process on a different machine. You do not normally call them yourself.
 
@@ -276,6 +304,59 @@ With `[agents] enabled = false`, every agent verb fails with `agents_disabled`, 
 | `subscribe` | Turn this connection into a stream of events. |
 | `unsubscribe` | Stop this connection's event stream. |
 | `wait-for` | Block until a condition matches, or fail with `timeout`. |
+
+### stream-pane <Since /> [#stream-pane]
+
+`stream-pane` sends one pane to a client that cannot read tuios's own wire format, such as a phone app. The client reaches the daemon with `tuios stdio-proxy` over ssh.
+
+```json
+{"id":1,"verb":"stream-pane","params":{"session":"work","window":"build"}}
+```
+
+The daemon answers with one JSON line. After that line, the connection carries binary frames in both directions: one type byte, a 4-byte big-endian length, and the payload.
+
+| Frame | From | What it carries |
+|-------|------|-----------------|
+| `S` | daemon | A snapshot of the screen, as bytes that any xterm-compatible emulator reads |
+| `O` | daemon | Output |
+| `R` | daemon | A resize |
+| `E` | daemon | An error for one frame, such as `busy` or `lease_expired` |
+| `X` | daemon | The end of the stream |
+| `I` | client | Input. It passes the checks of `send-text` |
+| `L` | client | A size lease: u16 cols and u16 rows. `0 0` releases it |
+
+- Skip a frame type that you do not know. Read its length, then read and drop the payload.
+- Keep the `seq` of the last frame you applied. Send it back as `from_seq` with `boot_id` to resume after a dropped connection. The reply `mode` is `resume` or `snapshot`.
+- At most 4 `I` frames wait for a pane that does not read its input. The next one gets an `E` frame with `busy`.
+- A lease holds the pane at most at that size. It lasts 30 seconds, so send the same `L` frame again every 10 seconds. When it ends, the pane goes back to the size its clients asked for. A lease never changes the session size or another pane.
+- `list` on a linked machine allows the stream. `I` frames need `write`.
+
+### attach-presence <Since /> [#attach-presence]
+
+```json
+{"id":1,"verb":"attach-presence","params":{"session":"work"}}
+```
+
+The reply carries a `human_nonce`. The verbs that act as the person accept it, such as `respond`, `reply-approval`, `answer-ask`, `dismiss-attention` and `agent-transcript`. The connection is not attached, so it does not size the session or count as a viewer.
+
+- A presence made with `session` acts only in that session. A presence with no session acts in every session.
+- The caller must be outside every pane of this daemon. A process in a pane gets `forbidden`, so an agent cannot act as the person.
+- The presence ends when its connection closes, or when the connection calls `restrict-connection`.
+
+### agent-transcript <Since /> [#agent-transcript]
+
+```json
+{"id":1,"verb":"agent-transcript","params":{"session":"work","window":"api","human_nonce":"294e0a27..."}}
+```
+
+The reply holds the newest `limit` entries (default 200, 1 to 1000), oldest first. Each entry has a stable `id`, `at`, `role` (`user`, `assistant` or `tool`) and `kind` (`text`, `thinking`, `tool_call`, `tool_result`, `plan` or `todos`). A tool call that edits a file carries its `diff`, with colour spans for each line.
+
+- Send the reply's `cursor` as `after` to read what comes next.
+- Send the reply's `older` as `before` to read the page before. `older` is empty at the start of the file.
+- `reset` is `true` when the cursor no longer fits the file, for example after the agent started a new file. Start the list again.
+- `more` is `true` when a read stopped before the end of the file. Read again with the new cursor.
+
+The pane must be joined to a Claude Code transcript under `~/.claude/projects`. Otherwise the call fails with `no_transcript` or `unsupported_harness`. Over a link the call needs `respond`. Subscribe to the `transcript` event to hear when the conversation grows.
 
 ## Clients
 
@@ -370,7 +451,9 @@ Filter with `session`, `window` and `types`. Leave `types` out to receive everyt
 
 The acknowledgement carries `seq`, the last event number when the stream went live, and `boot_id`, a random id for this daemon start. Every event carries both. To resume after a disconnect, subscribe with `after_seq` and the `boot_id` it came with: the daemon replays the events it still holds after that seq, then carries on live. When it cannot replay everything you missed, a `gap` event comes first and names the reason (`evicted`, `boot_changed`, `not_retained` or `overflow`). Output events are never replayed. After a gap, read the current state again with `list-windows` or `list-agents`.
 
-The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `workspace-renamed`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `client-session-changed`, `host-changed` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
+The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `workspace-renamed`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `client-session-changed`, `host-changed`, `transcript`, `transfer`, `transfer-progress` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
+
+`transcript` and `transfer-progress` are opt-in: they arrive only when `types` names them. <Since /> A `transcript` event says the conversation of a pane grew, with the `cursor` of `agent-transcript`. A `transfer` event has `action` `created`, `state` or `ended`, and the copy's row. `transfer-progress` carries the row while bytes move, at most four times a second.
 
 A `workspace-renamed` event fires when a workspace's name is set, changed or cleared. It carries `session`, `workspace` and `title`, the new name. `title` is absent when the name was cleared.
 
@@ -416,6 +499,12 @@ Codes are stable, so it is safe to branch on them.
 | `agent_blocked` | The target agent is on `needs_input`, and text typed now would answer its prompt. Nothing was typed. |
 | `prompt_stalled` | The text was typed and the agent did not show it took it in time. Look at the pane before sending again. |
 | `forbidden` | The caller may not do this: its pane's grants, or a linked machine's policy, do not allow it. |
+| `no_transcript`, `unsupported_harness` | From `agent-transcript`: the pane is not joined to a transcript, or its harness keeps none that the daemon reads. |
+| `no_file`, `file_exists`, `no_permission` | From the file verbs and `transfer-start`: the path is not there, the destination is there and the call did not pass `conflict`, or the daemon's user may not touch it. |
+| `hash_mismatch` | A copy did not match the sha256 of the original. The copy was removed. The transfer tries that file one more time. |
+| `cross_device` | `file-rename` cannot move a path to another disk. Use `transfer-start` with `move`. |
+| `disk_full` | The disk has no room, or a write over a link would leave less than `files_min_free`. `transfer-resume` goes on once there is space. |
+| `no_transfer` | No transfer has that id. A finished transfer leaves the list 30 minutes after it ends. |
 | `not_human` | Only the person at an attached client may make this call. |
 | `prompt_changed` | `respond` pressed nothing: the prompt is gone, is not the one `prompt_id` names, or was already answered. |
 | `risk_unacknowledged` | An allow of a risky approval did not name exactly the risk rules it matched. |
