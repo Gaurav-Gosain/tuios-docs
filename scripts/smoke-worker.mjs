@@ -142,6 +142,27 @@ try {
     );
   }
   {
+    const res = await get("/progstatus?go-get=1");
+    const body = await res.text();
+    check(
+      "go-import meta tag",
+      res.status === 200 &&
+        body.includes(
+          'content="tuios.dev/progstatus git https://github.com/Gaurav-Gosain/tuios progstatus"',
+        ),
+      `${res.status}, ${body.length} bytes`,
+    );
+  }
+  {
+    const res = await get("/progstatus");
+    const to = res.headers.get("location") ?? "";
+    check(
+      "library path redirect",
+      res.status === 302 && to.endsWith("/docs/libraries/progstatus"),
+      `${res.status} ${to}`,
+    );
+  }
+  {
     const res = await get("/");
     await res.arrayBuffer();
     const csp = res.headers.get("content-security-policy") ?? "";

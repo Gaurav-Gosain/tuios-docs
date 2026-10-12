@@ -15,12 +15,15 @@
  *
  * Before any of that, a request to a moved host (tuios.gaurav.zip,
  * www.tuios.dev) gets a 301 to the same path on https://tuios.dev. See
- * redirect.ts. Then a page that moved gets a 301 to its new path (see
+ * redirect.ts. Then a Go import path of a library (tuios.dev/progstatus)
+ * gets its go-import meta tags or a redirect to its docs page (see
+ * goimport.ts). Then a page that moved gets a 301 to its new path (see
  * moved.ts), and a release clip is served from the MEDIA bucket (see
  * media.ts). A page request for its first bytes, which Next's link prefetch
  * sends, gets a 206 with just those bytes (see range.ts).
  */
 
+import { goImport } from "./goimport";
 import { mediaKey, serveMedia } from "./media";
 import { movedTo } from "./moved";
 import {
@@ -41,6 +44,9 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const hostMoved = hostRedirect(request);
     if (hostMoved) return hostMoved;
+
+    const goImportAnswer = goImport(request);
+    if (goImportAnswer) return goImportAnswer;
 
     const url = new URL(request.url);
     const moved = movedTo(url.pathname);

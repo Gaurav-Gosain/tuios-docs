@@ -156,6 +156,8 @@ The site lives at `https://tuios.dev`, set once in `lib/site.ts` (`site.url`), w
 
 The Worker is attached to three custom domains in `worker/wrangler.jsonc`. `tuios.dev` serves the site. `www.tuios.dev` and `tuios.gaurav.zip` (the site's first address) answer every request with a permanent 301 to the same path and query on `https://tuios.dev`, with no exceptions. That redirect is in `worker/redirect.ts` and must stay permanent: old links, feed subscriptions and search results depend on it.
 
+The Go libraries of tuios have import paths on this site, such as `tuios.dev/progstatus`. `worker/goimport.ts` answers `/<name>?go-get=1`, and any path below it, with the `go-import` meta tag. The tag names the library's folder in the tuios repository, a form the go command reads from Go 1.25 on. Other requests to those paths get a 302 to `/docs/libraries/<name>`. An import path is permanent once published, so an entry in `LIBRARIES` is never renamed or removed. Add a library there before its first version is fetched.
+
 A page that moved is listed in `worker/moved.ts`, which answers its old path with a 301 to the new one. The unreleased `since-v0-7-0` page became the v0.8.0 notes that way.
 
 ### Release clips
