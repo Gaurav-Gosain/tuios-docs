@@ -1,0 +1,94 @@
+---
+title: progstatus
+description: A Go package for the Program Status Protocol, OSC 7501. Write a report from a program, or read reports in a terminal.
+icon: Activity
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+`tuios.dev/progstatus` is a Go package for the Program Status Protocol, OSC 7501. A program writes one escape sequence to say what it does: idle, working, done, blocked or error. A terminal reads the sequence and shows the state. tuios uses this package for its [program status](/docs/program-status) support.
+
+```bash
+go get tuios.dev/progstatus
+```
+
+The package uses only the standard library. It follows revision 0.2 of the [specification](https://www.superlogical.com/rex/docs/build/program-status). The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/progstatus).
+
+## What is in it
+
+- **The parser.** It applies every discard rule of the specification before it returns a report.
+- **The record store.** It has the limits, the eviction, the id hierarchy and the lifetime rules.
+- **The summary rule.** It picks the record that a pane shows.
+- **The encoder.** A program uses it to write a report.
+
+## Write a report from a program
+
+```go
+package main
+
+import (
+	"os"
+
+	"tuios.dev/progstatus"
+)
+
+func main() {
+	tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	if err != nil {
+		return // no terminal: nothing to report to
+	}
+	defer tty.Close()
+
+	tty.WriteString(progstatus.Sequence(progstatus.Report{
+		State:    progstatus.Working,
+		App:      "build",
+		Msg:      "Compiling",
+		Progress: 40,
+	}))
+}
+```
+
+Write the sequence to `/dev/tty`. Then the report reaches the terminal when the output of the program goes to a file or a pipe.
+
+<Callout>
+A terminal discards a report that breaks a rule, such as a message that is too long. Use `FitText` for free text and `FitSegment` for an id or an app name that comes from outside input.
+</Callout>
+
+```go
+seq := progstatus.Sequence(progstatus.Report{
+	State:    progstatus.Working,
+	ID:       progstatus.FitSegment(branch, progstatus.MaxSegment),
+	Msg:      progstatus.FitText(line, progstatus.MaxMsgDecoded),
+	Progress: progstatus.NoProgress,
+})
+```
+
+## Read reports in a terminal
+
+Give `Parse` the bytes after `7501;` and the length of the whole sequence. Store each report that it accepts.
+
+```go
+var store progstatus.Store
+
+func onOSC7501(body []byte, seqLen int, reply func(string)) {
+	if progstatus.IsQuery(body) {
+		reply(progstatus.QueryReply + "\x1b\\") // use the terminator of the query
+		return
+	}
+	report, ok := progstatus.Parse(body, seqLen)
+	if !ok {
+		return // discarded: apply nothing
+	}
+	store.Apply(report, time.Now().UnixNano())
+}
+
+func paneStatus() (progstatus.Record, bool) {
+	return progstatus.Summary(store.Records())
+}
+```
+
+`SequenceLen` gives the length of a sequence from the length of its payload. Call `Store.DropTransient` when a shell prompt appears (OSC 133 A) or the process exits. Call `Store.Reset` on a full reset (RIS).
+
+## Versions
+
+The module is at v0. The API can change between minor versions. Its tags have the folder name as a prefix, such as `progstatus/v0.1.0`. The source is in the [progstatus folder](https://github.com/Gaurav-Gosain/tuios/tree/main/progstatus) of the tuios repository, under the MIT licence.
