@@ -1191,7 +1191,7 @@ A smaller limit removes the oldest buffers at once. A yank larger than `max_kb` 
 [dock]
 left   = ["mode", "workspaces", "trail", "tape"]
 center = ["windows"]
-right  = ["notifications", "copy-help", "cpu", "ram", "clock", "session-controls"]
+right  = ["transfers", "notifications", "copy-help", "cpu", "ram", "clock", "session-controls"]
 
 [dock.clock]
 format = "15:04"
@@ -1204,7 +1204,9 @@ on-click = "tuios new-window log -- git log --oneline -20"
 
 These lists are the default. A missing list uses the default. An empty list (`left = []`) draws nothing on that side.
 
-The built-in components are `mode`, `workspaces`, `trail`, `tape`, `windows`, `notifications`, `copy-help`, `cpu`, `ram`, `clock` and `session-controls`. Listing one lets it draw. It still needs its own condition, so `cpu` still needs `show_cpu`. `copy-help` shows the keys of copy mode, multi copy mode and hints mode while the mode is open. See [Mode keys in the dock](/docs/keybindings#mode-keys-in-the-dock).
+The built-in components are `mode`, `workspaces`, `trail`, `tape`, `windows`, `transfers`, `notifications`, `copy-help`, `cpu`, `ram`, `clock` and `session-controls`. Listing one lets it draw. It still needs its own condition, so `cpu` still needs `show_cpu`. `copy-help` shows the keys of copy mode, multi copy mode and hints mode while the mode is open. See [Mode keys in the dock](/docs/keybindings#mode-keys-in-the-dock).
+
+`transfers` <Since feature="copies-panel" /> shows the copies between machines. It shows nothing while no copy exists. One copy is a bar and a percent, `[####--] 61%`. More copies are a count and a percent, `3 copies 42%`. `waiting` means a link is down. `1 failed` stays until you open the Copies panel. A click opens the [Copies panel](/docs/keybindings#copies-between-machines).
 
 `[dock.clock]` takes `format`, a Go time layout. A layout without seconds refreshes once a minute.
 
@@ -1469,7 +1471,7 @@ max_untracked_mb = 50                   # a negative value means no limit
 | `approvals.risk.panes_may_allow` <Since config="agents.approvals.risk.panes_may_allow" /> | `false` | Let a pane holding the `respond` grant allow a risky call |
 | `approvals.risk.rule` <Since config="agents.approvals.risk.rule" /> | none | Your own rules: a `name`, the `tools` it applies to, and an RE2 `pattern` |
 | `permissions.mode` <Since config="agents.permissions.mode" /> | `"open"` | `open` gives a pane started with no grants of its own `admin`. `strict` gives it `grants`. Any other value reads as `strict` |
-| `permissions.grants` <Since config="agents.permissions.grants" /> | `["read", "write", "fan"]` | What such a pane holds under `strict`. An empty list gives nothing |
+| `permissions.grants` <Since config="agents.permissions.grants" /> | `["read", "write", "fan"]` | What such a pane holds under `strict`. An empty list gives nothing. Add `files` to let a pane copy files near its work. See [Copying files with the files grant](/docs/agents#copying-files-with-the-files-grant) |
 | `recap.mode` <Since config="agents.recap.mode" /> | `"toast"` | Where the away recap shows: `toast` in the dock and the Inbox, `inbox` only in the Inbox, `off` only in `tuios agent-log --recap` |
 | `recap.away` <Since config="agents.recap.away" /> | `"10m"` | How long you must have been away from a pane for the dock to show its recap |
 | `recap.test_patterns` <Since config="agents.recap.test_patterns" /> | built in | Commands that count as a test run in the recap, such as `go test` and `npm test` |
@@ -1478,7 +1480,7 @@ max_untracked_mb = 50                   # a negative value means no limit
 | `checkpoints.keep` <Since config="agents.checkpoints.keep" /> | `50` | How many checkpoints one pane keeps, at most 1000 |
 | `checkpoints.max_untracked_mb` <Since config="agents.checkpoints.max_untracked_mb" /> | `50` | Leave an untracked file larger than this many megabytes out of a checkpoint. `tuios checkpoint list` names the files left out, and a restore does not change them |
 
-After turning on `approvals.enabled`, run `tuios integration install` for that harness again, so its hook is the version that waits. The grants are `read`, `write`, `fan`, `respond` and `admin`. See [What a pane may do](/docs/agents#what-a-pane-may-do).
+After turning on `approvals.enabled`, run `tuios integration install` for that harness again, so its hook is the version that waits. The grants are `read`, `write`, `fan`, `respond`, `files` and `admin`. See [What a pane may do](/docs/agents#what-a-pane-may-do).
 
 A change to `[agents.permissions]` that gives panes less applies at once. A change that gives more, such as `strict` to `open`, waits. Run `tuios config apply` from a terminal outside TUIOS, or restart the daemon. See [Changes that wait](/docs/agents#changes-that-wait).
 

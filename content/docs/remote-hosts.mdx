@@ -176,7 +176,9 @@ The session is still an ordinary session: `tuios ls`, scripting, the mailbox, ho
 
 Agent detection works in such a pane: the local daemon asks the host what the pane is running. An agent inside it can also report its own state and read its own mail with the usual commands and hooks: the report goes to the daemon on the host, which passes it back over the link as that window and nothing else. These panes have `TUIOS_PANE_ID`, `TUIOS_PANE_HOSTED=1`, `TUIOS_HOST` set to the host, and `TUIOS_SESSION_REMOTE` set to the session name here. They do not have `TUIOS_SOCKET` or `TUIOS_SESSION`, since those would name a daemon and a session on the host.
 
-To paste an image from your clipboard into such a pane, press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>V</kbd>. TUIOS sends the image over the link. The host saves it to a file, and TUIOS pastes the path of that file into the pane. See [Paste an image](/docs/keybindings#paste-an-image).
+To paste an image from your clipboard into such a pane, press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>V</kbd>. TUIOS sends the image over the link. The host saves it to a file, and TUIOS pastes the path of that file into the pane.
+
+The same works in a session attached with `tuios attach --host`. It also works <Since feature="paste-image-ssh" /> in a pane of this machine that runs `ssh` to a machine in your `[hosts]` table. TUIOS finds the entry that matches the ssh command, and writes the image on that machine. The host must allow `files` from this machine. When TUIOS cannot tell which machine the pane is on, it pastes nothing and shows a message that says why. See [Paste an image](/docs/keybindings#paste-an-image-other-machine).
 
 **Limits:**
 
@@ -221,28 +223,50 @@ Messages and files cross links too. Mail to a host whose link is down waits on t
 
 Agents on every linked host appear on the rail and in your [Inbox](/docs/agent-inbox), and `fan`, `worktree` and `start-agent` can run there. See [Worktrees](/docs/worktrees#work-from-another-machine).
 
-## Copy files between machines <Since verb="transfer-start" /> [#copy-files-between-machines]
+## Copy files between machines <Since command="cp" /> [#copy-files-between-machines]
 
-The daemon copies files and folders between this machine and a host, or between two hosts. It runs the copy itself, so the copy goes on after you exit, after a dropped link and after a daemon restart. The copy uses the `transfer-start` verb. It has no command of its own yet. A client, or a script that writes JSON to `$TUIOS_SOCKET`, starts it:
-
-```json
-{"id":1,"verb":"transfer-start","params":{"src":{"host":"build","path":"~/out/app.tar"},"dst":{"path":"~/Downloads/app.tar"}}}
-```
-
-An empty `host` is this machine. `dst` is the full path of the copy, not the folder it goes into. Follow the copy on the event stream:
+`tuios cp` copies files and folders between this machine and a host, or between two hosts. The daemon runs the copy. It goes on after you exit, after a dropped link and after a daemon restart.
 
 ```bash
-tuios subscribe --types transfer,transfer-progress
+tuios cp ./build.tar build:              # to the receive folder on build
+tuios cp build:~/logs ./                 # a folder from build to here
+tuios cp build:/var/log/app.log gpu:/tmp/  # from one host to another
 ```
 
-- Every file is checked with sha256 before it is put in place. A file that does not match is copied one more time.
+A path with `HOST:` in front is on that host. A path without it is on this machine. `HOST:` alone is the receive folder of the host. See [`tuios cp`](/docs/cli-reference#cp) for every flag and exit code.
+
+- TUIOS checks every file with sha256 before it puts the file in place. A file that does not match is copied one more time.
+- A file that is there with the same bytes is never sent again. A second run of the same copy is a quick check.
+- A folder copies with all that it holds. Small files go in one stream with a sha256 for each file, so a folder of thousands of files is fast on a slow link.
 - A copy keeps the permission bits and the modification time of the original. It does not keep the owner.
-- When a machine goes away, the copy waits. When the machine is back, the copy goes on from where it stopped.
+- Links, named pipes, sockets and devices in a folder are not copied. The copy lists them as skipped.
 - At most three copies move bytes at once. The others wait in the queue.
 - A copy on a link waits behind your typing, so a large copy does not slow a pane.
-- Links, named pipes, sockets and devices in a folder are not copied. The copy lists them as skipped.
 
-`transfer-list`, `transfer-pause`, `transfer-resume` and `transfer-cancel` control the copies. The [file verbs](/docs/control-protocol#file-transfers) also list, read, rename and remove files on a host.
+### When a file is already there
+
+A file there with different bytes follows the conflict policy. On a terminal, `tuios cp` asks for each file. Elsewhere, it skips the file. Pass `--conflict skip`, `replace` or `keep-both` to choose. Keep both names a copy from another machine `report (from build).pdf`.
+
+### Resume, pause and detach
+
+When a machine goes away, the copy waits. When the machine is back, the copy goes on from where it stopped. A restart of the daemon does the same. `--timeout 10m` makes the command exit after ten minutes of waiting. The copy keeps waiting in the daemon.
+
+`--detach` starts the copy and returns. Press Ctrl+C in a running `tuios cp` and choose `k` to leave the copy running. Follow, pause, resume, cancel and clear copies with [`tuios transfers`](/docs/cli-reference#transfers). `tuios hosts test build --speed` measures how fast a copy can be.
+
+### Progress
+
+On a terminal, `tuios cp` draws a progress block: a bar, the rate and the time left. In a pipe it prints plain lines. With `--json` it prints one JSON object on each line.
+
+In the TUI, nothing shows while there is no copy. When there is one:
+
+- The dock shows a bar and a percent.
+- The rail row of the machine shows a percent mark.
+- The [Copies panel](/docs/keybindings#copies-between-machines) (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>u</kbd>) lists every copy with pause, cancel and retry.
+- A notice shows when a copy ends.
+
+The files list of the rail has Send to machine for a file. A file dropped on a pane on another machine asks whether to send it there.
+
+You can also start a copy with the `transfer-start` verb. The `transfer-list`, `transfer-pause`, `transfer-resume` and `transfer-cancel` verbs control the copies. The [file verbs](/docs/control-protocol#file-transfers) also list, read, rename and remove files on a host.
 
 ### What a host lets you copy
 

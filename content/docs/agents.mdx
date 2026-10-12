@@ -352,7 +352,8 @@ Every pane holds grants that say what a program in it may do through TUIOS:
 | `write` | Type into the panes of its own session, and leave mail there |
 | `fan` | Write in its fan group, and start agents with `fan` and `start-agent` |
 | `respond` | Answer another pane's prompt without you, and type into a pane that waits on a prompt |
-| `admin` | Everything else, as every pane could before grants existed. Implies `read`, `write` and `fan`, never `respond` |
+| `files` <Since feature="pane-grant-files" /> | Copy files with [`tuios cp`](/docs/cli-reference#cp), inside the folder rules below. The pane sees and controls only the copies it started |
+| `admin` | Everything else, as every pane could before grants existed. Implies `read`, `write`, `fan` and `files`, never `respond` |
 
 A pane holds the grants it was started with (`--grants` on `start-agent`, `fan` and `new-window`), or else the default of `[agents.permissions]`: `admin` under `mode = "open"`, the default, and the `grants` list under `mode = "strict"`. A pane without `admin` types only into panes that hold nothing it does not, and never gives more than it holds.
 
@@ -368,6 +369,25 @@ tuios set-pane-grants -w reviewer --reset           # back to the default
 mode = "strict"
 grants = ["read", "write", "fan"]
 ```
+
+### Copying files with the files grant
+
+A pane with `files` and without `admin` may start a copy only when both rules hold:
+
+- Each end on this machine is inside the folder of the pane. That is its worktree, or else its working folder.
+- Each end on a host is under the home folder of that host, or is the receive folder of that host.
+
+A copy outside these folders is refused with exit code 4. `tuios transfers` in such a pane lists only the copies that the pane started, and pause, resume, cancel, wait and clear act only on those. `admin` includes `files` and has none of these limits.
+
+The default `grants` list has no `files`. To let every pane copy near its work under `strict`, add it:
+
+```toml
+[agents.permissions]
+mode = "strict"
+grants = ["read", "write", "fan", "files"]
+```
+
+The host that receives a copy has its own rules too. See [What a host lets you copy](/docs/remote-hosts#what-a-host-lets-you-copy).
 
 The daemon checks the grants on every way into a pane: the control socket, the link sockets, the tmux shim's pane holder, prompts, `send-keys`, `run-command` and typing through the client protocol.
 

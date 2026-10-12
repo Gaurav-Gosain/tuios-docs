@@ -248,11 +248,57 @@ TUIOS reads the image with the clipboard tool of your system:
 
 The file is a PNG, JPEG, GIF, WebP, BMP or TIFF image of 8 MB or less. Only you can read it. TUIOS deletes it after one hour, or when the daemon stops. The `paste` folder next to the TUIOS socket keeps at most 50 images and 100 MB. When it is full, TUIOS deletes the oldest image.
 
+#### A pane on another machine <Since feature="paste-image-ssh" /> [#paste-image-other-machine]
+
+TUIOS writes the image on the machine where the pane program runs. A pane can run on another machine in three ways:
+
+- A session on a host, attached with `tuios attach --host NAME`. The daemon on the host writes the file.
+- A window on a host in a session of this machine. The daemon on the host writes the file.
+- A pane of this machine that runs `ssh` or `mosh` to a machine in your `[hosts]` table, such as `ssh build` or `ssh -t build tmux`. TUIOS reads the ssh command line from the process. It resolves that line and each `[hosts]` entry with `ssh -G`. It compares the host name, the user, the port and the jump hosts. When exactly one entry is the same, TUIOS copies the image to the drop folder of that host and pastes the path there.
+
+The other machine must allow `files` from this machine. If it does not, TUIOS pastes nothing and shows the line to add to the config on that machine.
+
+TUIOS pastes nothing in an ssh pane in these cases. A message says why:
+
+- No `[hosts]` entry is the machine of the ssh command. Add the machine with `tuios hosts add NAME ADDR`.
+- More than one `[hosts]` entry is that machine. Keep one of them.
+- TUIOS cannot read the ssh command line, for example because it has `-F` or `-o ProxyCommand`.
+- The shell over there reports a folder on another `[hosts]` machine. The pane runs ssh inside ssh. Paste the image in a pane on that machine.
+
+An ssh tunnel (`ssh -N`, or `-f`, `-n` or `-W` without `-t`) does not read what you type. TUIOS saves the image on this machine for it. So it does for a pane that only reports a folder on another machine and runs no ssh.
+
 TUIOS does not read the clipboard when the client runs in a browser, when it runs on another machine through `tuios ssh`, or when the paste comes from `send-keys`. Inside ssh, TUIOS reads only an X display that `ssh -X` forwards. Any other clipboard there is the other machine's.
 
 Keys sent to the pane are encoded the way a real terminal encodes them. When the program in the pane turns on application cursor keys (DECCKM), as zsh's line editor does, the arrows, <kbd>Home</kbd> and <kbd>End</kbd> are sent in their SS3 form (`ESC O H` for <kbd>Home</kbd>) instead of the CSI form (`ESC [ H`), so the program's bindings for them work. `tuios send-keys` follows the same rule.
 
 `tuios send-keys` also encodes a named key or a chord in the keyboard mode the program asked for. A program that asked for the kitty keyboard protocol or modifyOtherKeys gets that encoding, the same as for a key you press. Vim then reads <kbd>Ctrl</kbd>+<kbd>H</kbd> as <kbd>Ctrl</kbd>+<kbd>H</kbd>, not as <kbd>Backspace</kbd>.
+
+## Copies between machines <Since feature="copies-panel" /> [#copies-between-machines]
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>u</kbd> opens the Copies panel. It shows one row for each copy between machines, newest first. The dock item `transfers` opens it with a click. The command palette row is "Copies between machines". Nothing shows in the dock or on the rail while no copy exists.
+
+A running copy also shows a percent mark on the rail row of its machine.
+
+| Key | Action | What it does |
+|-----|--------|--------------|
+| <kbd>j</kbd> <kbd>k</kbd> <kbd>↓</kbd> <kbd>↑</kbd> | `transfers_down`, `transfers_up` | Move the cursor |
+| <kbd>p</kbd> | `transfers_pause` | Pause the copy, or go on with it |
+| <kbd>x</kbd> | `transfers_cancel` | Cancel the copy. TUIOS asks first |
+| <kbd>r</kbd> | `transfers_retry` | Try a failed copy again from where it stopped |
+| <kbd>c</kbd> | `transfers_clear` | Remove the copies that ended |
+| <kbd>Enter</kbd> | `transfers_answer` | Answer a copy that waits for an answer |
+| <kbd>Esc</kbd> <kbd>q</kbd> | `transfers_close` | Close the panel |
+
+The keys are in `[keybindings.transfers]`. The panel key is `prefix_transfers` in `[keybindings.prefix_mode]`. A notice shows when a copy ends.
+
+A copy waits for an answer when a file is there on the other machine and the copy was started with `conflict = "ask"`. The dock says `1 copy asks`. Press <kbd>Enter</kbd> on the row to choose Replace, Keep both or Skip. Press <kbd>Space</kbd> to use the answer for the other files of the copy. TUIOS does not open this question by itself, because `tuios cp` in a pane asks the same question there.
+
+### Send files to another machine
+
+- In the files list of the rail, the menu of a file has Send to machine. It copies the file to the receive folder of the machine you pick.
+- When you drop files on a pane whose program runs on another machine, the terminal pastes their paths. TUIOS asks whether to send the files to that machine. Send copies them to a private drop folder there. When the copy is checked, TUIOS pastes the path on that machine. Paste the text pastes the paths as they are. A paste into a pane on this machine does not change.
+
+See [`tuios cp`](/docs/cli-reference#cp) and [Copy files between machines](/docs/remote-hosts#copy-files-between-machines).
 
 ## Global keys
 
@@ -313,6 +359,7 @@ Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, then the key. Section: `[keybindings.prefix_
 | <kbd>W</kbd> | `prefix_workspace_switcher` <Since action="prefix_workspace_switcher" /> | Open the workspace switcher |
 | <kbd>j</kbd> | `prefix_jump_notif` <Since action="prefix_jump_notif" /> | Jump to the pane of the newest message |
 | <kbd>N</kbd> | `prefix_last_message` <Since action="prefix_last_message" /> | Show the last message in full. See [Messages](#messages) |
+| <kbd>u</kbd> | `prefix_transfers` <Since action="prefix_transfers" /> | Open the [Copies panel](#copies-between-machines) |
 | <kbd>i</kbd> | `prefix_inbox` <Since action="prefix_inbox" /> | Open the [Inbox](/docs/agent-inbox) |
 | <kbd>o</kbd> | `prefix_next_attention` <Since action="prefix_next_attention" /> | Go to the oldest Inbox item that needs you. <kbd>o</kbd> again goes to the next |
 | <kbd>O</kbd> | `prefix_next_finished` <Since action="prefix_next_finished" /> | Go to the newest finished turn nobody has seen. <kbd>O</kbd> again goes to the next older one |
