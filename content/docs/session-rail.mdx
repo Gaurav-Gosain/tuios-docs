@@ -126,6 +126,7 @@ On an agent row, `[keybindings.sidebar_agents]` answers first:
 | <kbd>u</kbd> | Mark the pane's finished turn unread again, for every client |
 | <kbd>z</kbd> | Snooze the pane's Inbox item |
 | <kbd>x</kbd> | Drop the newest queued message. <kbd>u</kbd> within 10 seconds queues it again. With nothing queued, <kbd>x</kbd> opens the menu as on any row |
+| <kbd>Space</kbd> | Open or close the subagent rows of the agent. It needs a subagent heading. See [Shape the rows](#shape-the-rows) |
 
 Every key can be rebound. See [Configuration](/docs/configuration#keybindings).
 
@@ -194,7 +195,47 @@ An agent at rest whose subagents still run shows `◊` (`%` with ASCII glyphs) i
 
 When the section is short, the rail first drops the finished subagent rows. Then it shows the newest few with a line such as `+2 more`. Then it shows none. It never hides an agent row to show a subagent row.
 
-`appearance.sidebar.subagent_rows = "count"` draws only the count, such as `3 subagents`. The settings page has this option on its Sidebar tab. The rows need the Claude Code [integration](/docs/agents#the-agent-reports-for-itself).
+`appearance.sidebar.subagent_rows = "count"` draws only the count, such as `3 subagents`. `"tree"` draws the same rows on tree lines. The settings page has these options on its Sidebar tab. The rows need the Claude Code [integration](/docs/agents#the-agent-reports-for-itself).
+
+#### Shape the rows <Since config="appearance.sidebar.subagent_collapse" /> [#shape-the-rows]
+
+Four more options change how the rows look. Each default draws the rows as shown above.
+
+| Key | Values | Default | What it does |
+|-----|--------|---------|--------------|
+| `subagent_collapse` | `off`, `expanded`, `collapsed` | `off` | `expanded` and `collapsed` draw a heading line, `▾ 4 subagents`, over the rows of each agent. The value is the state at the start |
+| `subagent_fields` | a comma list of `mark`, `name`, `type`, `time`, `note` | `mark,name,time,note` | The parts each row shows. `type` is the agent type, such as `Explore`. `note` is the second line |
+| `subagent_max_rows` | `0` to `16` | `0` | The most lines the subagents of one agent use, the `+N more` line included. `0` means no limit |
+| `subagent_hide_finished` | a duration such as `30s`, or `off` | `off` | Remove the row of a finished subagent this long after it ends |
+
+```toml
+[appearance.sidebar]
+subagent_rows = "tree"
+subagent_collapse = "expanded"
+subagent_fields = "mark,name,time"
+subagent_max_rows = 4
+subagent_hide_finished = "20s"
+```
+
+With `subagent_rows = "tree"`, the rows look like this:
+
+```
+ agents
+ ◊ lead
+    claude · 4 of 4 run
+ ├─ ● Research tmux
+ │    Bash: go test ./…
+ ├─ ● Audit the rail
+ │    Read: internal/a…
+ └─ ● Check CI
+      Bash: gh run list
+```
+
+- A click on the heading, or <kbd>Enter</kbd> on it, opens or closes the rows. <kbd>Space</kbd> does the same with the cursor on the agent row or on its heading. The action is `agent_subagents`, in `[keybindings.sidebar_agents]`. It does nothing without a visible heading.
+- A closed heading shows `▸`. On a tall section, its second line names the subagents. The rail keeps the state of each pane until the client stops.
+- The daemon keeps a finished subagent for 60 seconds, or 5 minutes when it failed. `subagent_hide_finished` can remove a row earlier. It cannot keep a row longer than the daemon does.
+- Each of the five `subagent_*` options can be set again in `[appearance.sidebar.left]` or `[appearance.sidebar.right]`, for the rail on that edge. A key that the edge table does not set uses the value from `[appearance.sidebar]`.
+- `tuios set-config` and the settings page refuse a bad `subagent_fields`, `subagent_hide_finished` or `agent_rest_fold` value. A `subagent_fields` list that names no field gives a warning when the config loads.
 
 On a rail 30 columns wide or narrower, a pane running an agent is listed once, in the agents section, and the terminals section keeps the panes that run no agent. Rows that have rested longer than `agent_rest_fold` (an hour by default) fold into one `+N at rest` line. <kbd>Enter</kbd> or a click on it shows them again. A row that needs you, a working agent, the focused pane, a pane with messages queued and a pane whose agent has subagents at work never fold.
 
@@ -247,7 +288,11 @@ When messages wait for the machine, the count comes first, as in `3 queued, offl
 | `file_actions` | `true` | Allow create, rename, delete, copy, cut and paste |
 | `file_delete` | `"trash"` | `trash` or `permanent` |
 | `agent_rest_fold` | `"1h"` | How long an agent row rests before it folds. A duration, or `off` |
-| `subagent_rows` <Since config="appearance.sidebar.subagent_rows" /> | `"rows"` | `rows` or `count`. How an agent row shows its subagents |
+| `subagent_rows` <Since config="appearance.sidebar.subagent_rows" /> | `"rows"` | `rows`, `tree` or `count`. How an agent row shows its subagents |
+| `subagent_collapse` <Since config="appearance.sidebar.subagent_collapse" /> | `"off"` | `off`, `expanded` or `collapsed`. A heading over the subagent rows |
+| `subagent_fields` <Since config="appearance.sidebar.subagent_fields" /> | `"mark,name,time,note"` | The parts of a subagent row |
+| `subagent_max_rows` <Since config="appearance.sidebar.subagent_max_rows" /> | `0` | The most lines one agent's subagents use. `0` means no limit |
+| `subagent_hide_finished` <Since config="appearance.sidebar.subagent_hide_finished" /> | `"off"` | A duration after which a finished subagent leaves the rail, or `off` |
 | `header_case` <Since config="appearance.sidebar.header_case" /> | `"lowercase"` | `lowercase` or `uppercase`. Applies to every rail header |
 | `background` | `""` | The rail's background: `off`, `theme` or `#RRGGBB`. Empty follows `appearance.background` |
 

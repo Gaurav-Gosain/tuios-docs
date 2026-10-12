@@ -166,6 +166,8 @@ With `-d`, each other client of the session detaches as this client attaches. Th
 
 With `ssh_agent = "follow"` in `[daemon]`, `attach` points the ssh agent link of the session at the `SSH_AUTH_SOCK` of this client. See [SSH Agent](/docs/ssh-agent).
 
+With `display = "follow"` in `[daemon]`, the default, `attach` sends the display of this client. A daemon with no display of its own gives it to the new panes of the session. See [`display-env`](#display-env).
+
 #### Attach from inside a pane
 
 Inside a TUIOS pane, `tuios attach` refuses to attach the session that holds the pane. A bare `tuios attach` or `tuios` in a pane also refuses, because it names no session.
@@ -323,6 +325,23 @@ p=$(tuios ssh-agent-path 2>/dev/null) && export SSH_AUTH_SOCK="$p"
 ```
 
 See [SSH Agent](/docs/ssh-agent).
+
+### display-env <Since command="display-env" /> [#display-env]
+
+Print the display of a session as `export` lines. A daemon that started without a display gives new panes the display of the local client that attached or used the session last. This is `display = "follow"` in `[daemon]`, the default. See [The display of the client](/docs/configuration#the-display-of-the-client).
+
+```bash
+tuios display-env [-s NAME] [--json]
+```
+
+- `-s, --session <name>`: the session whose display to print. In a pane, the default is the session of the pane.
+- `--json`: print JSON, with `follow`, `own`, the Wayland `link`, the socket it points at (`target`) and the variables (`env`).
+
+The command prints an `export` line for each of `WAYLAND_DISPLAY`, `DISPLAY` and `XAUTHORITY` that the session has. It prints nothing when the session has no display to give. A shell that started before a desktop client attached has no display. Run this line in that shell, or add it to your shell rc:
+
+```bash
+eval "$(tuios display-env 2>/dev/null)"
+```
 
 ### resurrect <Since command="resurrect" /> [#resurrect]
 
@@ -2138,7 +2157,7 @@ Variables TUIOS reads:
 | `XDG_CONFIG_HOME` | Config directory. Default `~/.config` |
 | `XDG_STATE_HOME` | Where `daemon.log`, saved sessions and debug logs go |
 | `XDG_DATA_HOME` | Tape recordings and worktrees |
-| `XDG_RUNTIME_DIR` | Where the daemon socket lives |
+| `XDG_RUNTIME_DIR` | Where the daemon socket lives. When it is unset, tuios uses `/run/user/<uid>/tuios` if that folder is yours. See [One daemon per user](/docs/sessions#one-daemon-per-user) |
 | `EDITOR`, `VISUAL` | Editor for `tuios config edit` |
 | `TUIOS_LOG_LEVEL` | Starting daemon log level, as in `--log-level` |
 | `TUIOS_DEBUG_INTERNAL=1` | Internal debug logging, to `/tmp/tuios-debug.log`, and every key pressed in terminal mode to `/tmp/tuios-events.log`. Both are opened with mode `0600`, and a file there that another user owns, or a symlink, is refused |

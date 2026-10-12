@@ -6,6 +6,7 @@ icon: Layers
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 A session is a set of windows and workspaces. By default a background daemon holds your sessions, so they keep running when you close the terminal, and you can attach to them again later, from the same terminal or several at once.
 
@@ -495,13 +496,28 @@ See the [CLI Reference](/docs/cli-reference) for `tuios hosts`, including `tuios
 
 | What | Where |
 |------|-------|
-| Socket, Linux and macOS | `$XDG_RUNTIME_DIR/tuios/tuios.sock`, or `/tmp/tuios-<uid>/tuios.sock` when `XDG_RUNTIME_DIR` is unset |
+| Socket, Linux and macOS | `$XDG_RUNTIME_DIR/tuios/tuios.sock`. When `XDG_RUNTIME_DIR` is unset: `/run/user/<uid>/tuios/tuios.sock` on Linux if `/run/user/<uid>` is yours with mode `0700`, and `/tmp/tuios-<uid>/tuios.sock` otherwise. See [One daemon per user](#one-daemon-per-user) |
 | Socket, Windows | `%LOCALAPPDATA%\tuios\tuios.sock` |
 | PID file | The socket path with `.pid` appended |
 | Saved sessions | `$XDG_STATE_HOME/tuios/sessions/<name>.json`, usually `~/.local/state/tuios/sessions/`, readable only by you |
 | Archived bad state | `$XDG_STATE_HOME/tuios/sessions/archive/`, pruned after 14 days |
 
-Whoever controls the socket's directory could put their own socket in its place and read what every client sends. Without `XDG_RUNTIME_DIR`, the directory is `/tmp/tuios-<uid>`, a name any local user could create first. So TUIOS creates the directory with mode `0700`, and before using one that exists it checks that it is a real directory (not a symlink) owned by you. It refuses one that is not, and tells you to set `XDG_RUNTIME_DIR` to a directory you own. A directory you own that others can open is closed to them.
+Whoever controls the socket's directory could put their own socket in its place and read what every client sends. When tuios falls back to `/tmp/tuios-<uid>`, the directory is a name any local user could create first. So TUIOS creates the directory with mode `0700`, and before using one that exists it checks that it is a real directory (not a symlink) owned by you. It refuses one that is not, and tells you to set `XDG_RUNTIME_DIR` to a directory you own. A directory you own that others can open is closed to them.
+
+### One daemon per user <Since feature="one-daemon-per-user" /> [#one-daemon-per-user]
+
+A desktop session sets `XDG_RUNTIME_DIR`. A command run over ssh often does not: a host link, `tuios hosts sync`, or a paired device. tuios picks the same socket for both, so one user on one machine always reaches one daemon:
+
+1. `$XDG_RUNTIME_DIR/tuios`, when the variable is set.
+2. `/run/user/<uid>/tuios`, when the variable is unset and `/run/user/<uid>` is a folder that belongs to you and has mode `0700`. systemd makes it at login, for ssh logins too. macOS skips this step.
+3. `/tmp/tuios-<uid>` otherwise.
+
+An older tuios started its daemon in `/tmp/tuios-<uid>` when it ran over ssh. When the socket comes from step 1 or 2, a command also looks for a live daemon in `/tmp/tuios-<uid>`:
+
+- Only the daemon in `/tmp` answers: the command uses it and does not start a second daemon. After that daemon stops, the next one starts in `/run/user`.
+- Both answer: the daemon in `/run/user` wins. A command in a pane of the daemon in `/tmp` still reaches its own daemon, which `TUIOS_SOCKET` names. A command at a terminal says once that the other daemon runs, and gives its process ID. See [Two daemons on one machine](#two-daemons-on-one-machine).
+
+tuios looks in `/tmp/tuios-<uid>` only when that folder belongs to you and only you can open it.
 
 To run the daemon in the foreground with logging, for debugging:
 
@@ -621,6 +637,28 @@ tuios               # starts a fresh daemon
 <Callout type="warn">
 This does not give you a clean slate. `kill-server` saves every session on the way out, and the next daemon restores them. To start a daemon with no sessions, run `tuios daemon --no-restore`.
 </Callout>
+
+### Two daemons on one machine <Since feature="one-daemon-per-user" /> [#two-daemons-on-one-machine]
+
+A session that you made on one machine does not show in `tuios ls` on the same machine, or a host link shows other sessions than your desktop. Two daemons run for your user, each with its own sessions. Two sessions with one name, such as `session-0`, can make them look like one.
+
+The cause is an older tuios. It put the socket in `/tmp/tuios-<uid>` when a command ran without `XDG_RUNTIME_DIR`, as a command over ssh often does. The desktop used `/run/user/<uid>/tuios`. tuios now uses `/run/user/<uid>/tuios` for both. See [One daemon per user](#one-daemon-per-user).
+
+To find the daemons, look at both sockets:
+
+```bash
+ls -l /run/user/$(id -u)/tuios/tuios.sock /tmp/tuios-$(id -u)/tuios.sock
+```
+
+When both daemons run, tuios uses the one in `/run/user`. To move the sessions of the daemon in `/tmp`:
+
+1. Stop it: `kill $(cat /tmp/tuios-$(id -u)/tuios.sock.pid)`. It saves every session when it stops.
+2. List what it saved: `tuios resurrect`.
+3. Restore each session: `tuios resurrect NAME`.
+
+A session name that both daemons used has one saved file. Rename one of the two sessions before you stop that daemon if you need both.
+
+Upgrade tuios on every machine. A machine with the older tuios still starts a daemon in `/tmp` over ssh.
 
 ### Which `TERM` a pane gets
 

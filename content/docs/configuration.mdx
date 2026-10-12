@@ -432,7 +432,11 @@ Pastes, notifications, OSC 66 text and link addresses lose their control charact
 | `width` <Since config="appearance.sidebar.width" /> | `24` | columns | Preferred width on a wide screen |
 | `background` <Since config="appearance.sidebar.background" /> | `""` | `off`, `theme`, `#RRGGBB` | The rail's background. Empty follows `appearance.background`. See [Backgrounds](#backgrounds) |
 | `agent_rest_fold` <Since config="appearance.sidebar.agent_rest_fold" /> | `"1h"` | a duration, or `off` | How long an agent row rests (idle, unknown, or done and seen) before it folds into one `+N at rest` line |
-| `subagent_rows` <Since config="appearance.sidebar.subagent_rows" /> | `"rows"` | `rows`, `count` | How an agent row shows its subagents. `rows` draws a row for each subagent under its agent's row. `count` draws the count alone. See [Subagent rows](/docs/session-rail#subagent-rows) |
+| `subagent_rows` <Since config="appearance.sidebar.subagent_rows" /> | `"rows"` | `rows`, `tree`, `count` | How an agent row shows its subagents. `rows` draws a row for each subagent under its agent's row. `tree` draws the same rows on tree lines. `count` draws the count alone. See [Subagent rows](/docs/session-rail#subagent-rows) |
+| `subagent_collapse` <Since config="appearance.sidebar.subagent_collapse" /> | `"off"` | `off`, `expanded`, `collapsed` | Draw a heading line, such as `▾ 4 subagents`, over the subagent rows of each agent. The value is the state at the start |
+| `subagent_fields` <Since config="appearance.sidebar.subagent_fields" /> | `"mark,name,time,note"` | a comma list of `mark`, `name`, `type`, `time`, `note` | The parts each subagent row shows. `type` is the agent type, such as `Explore`. `note` is the second line |
+| `subagent_max_rows` <Since config="appearance.sidebar.subagent_max_rows" /> | `0` | 0 to 16 | The most lines the subagents of one agent use, the `+N more` line included. `0` means no limit |
+| `subagent_hide_finished` <Since config="appearance.sidebar.subagent_hide_finished" /> | `"off"` | a duration, or `off` | Remove the row of a finished subagent this long after it ends |
 | `header_case` <Since config="appearance.sidebar.header_case" /> | `"lowercase"` | `lowercase`, `uppercase` | How the headers of the rail sections read. `lowercase` is the quiet default. `uppercase` draws every header as a bold heading, with a rule to the edge of the rail |
 | `sections` <Since config="appearance.sidebar.sections" /> | `"sessions:25,terminals,files:25,agents:34"` | layout string | Which sections to draw, in what order. See [below](#sections) |
 | `show_glyphs` <Since config="appearance.sidebar.show_glyphs" /> | `true` | bool | Agent-state glyph on each row |
@@ -562,6 +566,8 @@ command = "left-summary"
 - With `position = "hidden"`, an edge table with `enabled = true` still draws. When both edges are on, the left one is the original rail.
 - Each rail has its own scroll, keyboard focus and custom command. Both read the same sessions, files and git state.
 - On a narrow screen, the second rail closes before the original rail.
+
+Each edge table also takes the five `subagent_*` keys. A key that the edge table does not set uses the value from `[appearance.sidebar]`. See [Subagent rows](/docs/session-rail#subagent-rows).
 
 The edge tables are read from the file only. `tuios set-config` cannot change them, because a custom command runs outside the panes. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>H</kbd> shows or hides the second rail. See [Session Rail](/docs/session-rail#both-edges).
 
@@ -918,9 +924,29 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 | `window_size` <Since config="daemon.window_size" /> | `"smallest"` | The size of a session that has more than one client: `smallest`, `largest` or `latest` (the client that last had input). The names are those of the tmux `window-size` option. See [Session size](/docs/sessions#session-size-with-more-than-one-client) |
 | `single_client` <Since config="daemon.single_client" /> | `false` | Keep one client for each session. Each attach detaches the other clients of the session, as `tuios attach -d` does. See [One client for each session](/docs/sessions#one-client-for-each-session) |
 | `ssh_agent` <Since config="daemon.ssh_agent" /> | `"off"` | `"follow"` gives each session a stable link to the ssh agent of the client used last. New panes get `SSH_AUTH_SOCK` set to the link. See [SSH Agent](/docs/ssh-agent) |
+| `display` <Since config="daemon.display" /> | `"follow"` | `"follow"` gives the new panes of a daemon with no display the display of the local client. `"off"` gives them none. See [The display of the client](#the-display-of-the-client) |
 | `respond_from_shell` <Since config="daemon.respond_from_shell" /> | `false` | Let `tuios respond`, run from a shell outside every pane, answer an agent's prompt. A caller inside a pane is refused either way. Not settable with `set-config` |
 
-A change to `single_client` or `ssh_agent` in the file applies to the next attach.
+A change to `single_client`, `ssh_agent` or `display` in the file applies to the next attach.
+
+### The display of the client <Since config="daemon.display" /> [#the-display-of-the-client]
+
+A daemon that a host link starts over ssh has no `WAYLAND_DISPLAY` or `DISPLAY`. Its panes have none either, so `wl-copy`, `wl-paste`, `xclip` and image paste fail. With `display = "follow"`, the default, the new panes of such a daemon get the display of the local client that attached to the session or used it last.
+
+```toml
+[daemon]
+display = "follow"
+```
+
+- A daemon that has a `WAYLAND_DISPLAY` or a `DISPLAY` of its own keeps it. The option does nothing then.
+- Each session has a link to the Wayland socket of the client: `wayland-<session id>.sock`, in the folder of the daemon socket. A new pane gets `WAYLAND_DISPLAY` set to the full path of the link. The link moves to the socket of the newest client.
+- A new pane also gets `DISPLAY` and `XAUTHORITY` of the client. `DISPLAY` is a name, not a path, so a pane keeps the value it started with.
+- A shell that started before a desktop client attached has no display. Run `eval "$(tuios display-env 2>/dev/null)"` in that shell, or add the line to your shell rc. See [`tuios display-env`](/docs/cli-reference#display-env).
+- When the client detaches, the session uses the display of the client before it. When no attached client has a display, tuios removes the link, and new panes get no display.
+- tuios uses the display of `tuios attach` and `tuios new` only. The client must run on this machine, as your user, and outside every pane. tuios ignores a client that comes through a host link, a client of the tuios SSH server and a client of `tuios-web`.
+- A `WAYLAND_DISPLAY` name such as `wayland-1` is looked up in the `XDG_RUNTIME_DIR` of the client, then in the one of the daemon, then in `/run/user/<uid>`. The client does not need `XDG_RUNTIME_DIR`.
+- The Wayland socket must be a Unix socket that you own. `DISPLAY` must be `:N` or `:N.S`, and tuios ignores a forwarded display such as `localhost:10.0`. `XAUTHORITY` must be a file that you own.
+- The option is read from the file only. `tuios set-config` cannot change it.
 
 To change `window_size` for one session while it runs, use `tuios set-config daemon.window_size latest -s NAME`. That value is not saved to the file. A change in the file applies when the daemon starts again.
 
