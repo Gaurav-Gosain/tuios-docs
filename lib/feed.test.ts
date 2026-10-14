@@ -72,7 +72,7 @@ describe("version badges in the markdown twin", () => {
       '## Both edges <Since config="appearance.sidebar.left.enabled" />\n',
       url,
     );
-    expect(md).toContain("Both edges (Unreleased)");
+    expect(md).toContain("Both edges (Added in v0.9.3)");
     const tagged = markdownForAgents(
       '`option_glyphs` <Since config="keybindings.option_glyphs" />\n',
       url,
@@ -85,7 +85,7 @@ describe("version badges in the markdown twin", () => {
       '<Since verb="stream-pane" />\n\nText.\n',
       url,
     );
-    expect(md).toContain("*(Unreleased)*");
+    expect(md).toContain("*(Added in v0.9.3)*");
     expect(md).not.toContain("interactive figure");
   });
 
