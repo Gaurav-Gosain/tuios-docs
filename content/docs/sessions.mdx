@@ -529,6 +529,26 @@ tuios daemon --log-level=messages
 
 `tuios kill-server` stops the daemon and every session. It waits until every session is saved and the socket is removed, so you can start a new daemon as soon as it returns.
 
+### A separate daemon <Since feature="named-servers" /> [#a-separate-daemon]
+
+`--server NAME` runs a command against a separate daemon with the name NAME. This is like `tmux -L NAME`. A named daemon has its own socket, saved sessions and daemon log. The default daemon and other named daemons do not see its sessions. All daemons use the same config file.
+
+```bash
+tuios --server scratch new work --detach   # starts the scratch daemon
+tuios --server scratch ls                  # lists its sessions
+tuios ls                                   # the default daemon does not change
+tuios --server scratch kill-server         # stops only the scratch daemon
+```
+
+- `TUIOS_SERVER=NAME` does the same for every `tuios` command in a shell. `--server` wins over it.
+- A named daemon sets `TUIOS_SERVER` in its panes. So a `tuios` command in one of its panes reaches that daemon. The `tmux` and `herdr` links do too.
+- `--server ""` reaches the default daemon from such a pane.
+- A name has 1 to 14 characters: letters, digits, `-` and `_`.
+- The socket is in `servers/NAME` in the socket folder of the default daemon. The state is in `$XDG_STATE_HOME/tuios-servers/NAME`.
+- `tuios ls --json` gives each session of a named daemon a `server` field. A session of the default daemon has none.
+
+`XDG_RUNTIME_DIR` and `XDG_STATE_HOME` do not change in a pane of a named daemon. Programs that use these folders, such as a Wayland client or `systemctl --user`, work as in any other pane.
+
 ## How it works
 
 Pick a scenario to see which process does the work:
