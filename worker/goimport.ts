@@ -27,6 +27,7 @@ export const importHost = "tuios.dev";
  */
 export const LIBRARIES: Readonly<Record<string, { dir: string }>> = {
   progstatus: { dir: "progstatus" },
+  vt: { dir: "vt" },
 };
 
 /** The library a path belongs to, or null when it is not a library path. */

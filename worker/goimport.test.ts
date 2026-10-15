@@ -7,6 +7,9 @@ describe("libraryFor", () => {
     ["/progstatus/", "progstatus"],
     ["/progstatus/sub/pkg", "progstatus"],
     ["/progstatusx", null],
+    ["/vt", "vt"],
+    ["/vt/snapshot", "vt"],
+    ["/vtx", null],
     ["/docs/progstatus", null],
     ["/", null],
     ["/constructor", null],
@@ -29,6 +32,13 @@ describe("goImport", () => {
     );
     // The go command reads the head only, so the tag comes before <body>.
     expect(body.indexOf("go-import")).toBeLessThan(body.indexOf("<body>"));
+  });
+
+  test("vt names its own folder", async () => {
+    const res = goImport(new Request("https://tuios.dev/vt/snapshot?go-get=1"));
+    expect(await res?.text()).toContain(
+      '<meta name="go-import" content="tuios.dev/vt git https://github.com/Gaurav-Gosain/tuios vt">',
+    );
   });
 
   test("a person is sent to the docs page", () => {
