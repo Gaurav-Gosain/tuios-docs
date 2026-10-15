@@ -27,6 +27,7 @@ export const importHost = "tuios.dev";
  */
 export const LIBRARIES: Readonly<Record<string, { dir: string }>> = {
   progstatus: { dir: "progstatus" },
+  swatch: { dir: "swatch" },
   vt: { dir: "vt" },
 };
 

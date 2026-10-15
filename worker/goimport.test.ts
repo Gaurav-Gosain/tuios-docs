@@ -10,6 +10,9 @@ describe("libraryFor", () => {
     ["/vt", "vt"],
     ["/vt/snapshot", "vt"],
     ["/vtx", null],
+    ["/swatch", "swatch"],
+    ["/swatch/omarchy", "swatch"],
+    ["/swatchx", null],
     ["/docs/progstatus", null],
     ["/", null],
     ["/constructor", null],
@@ -38,6 +41,15 @@ describe("goImport", () => {
     const res = goImport(new Request("https://tuios.dev/vt/snapshot?go-get=1"));
     expect(await res?.text()).toContain(
       '<meta name="go-import" content="tuios.dev/vt git https://github.com/Gaurav-Gosain/tuios vt">',
+    );
+  });
+
+  test("swatch names its own folder", async () => {
+    const res = goImport(
+      new Request("https://tuios.dev/swatch/teaswatch?go-get=1"),
+    );
+    expect(await res?.text()).toContain(
+      '<meta name="go-import" content="tuios.dev/swatch git https://github.com/Gaurav-Gosain/tuios swatch">',
     );
   });
 
