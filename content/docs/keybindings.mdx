@@ -199,7 +199,9 @@ Section: `[keybindings.terminal_mode]`. These keys work in terminal mode with no
 | <kbd>Alt</kbd>+arrows | `terminal_focus_left`, `_right`, `_up`, `_down` | Focus the pane in that direction |
 | <kbd>Shift</kbd>+<kbd>↑</kbd> | `terminal_scroll_up` <Since action="terminal_scroll_up" /> | Scroll into the pane's scrollback |
 | <kbd>Shift</kbd>+<kbd>↓</kbd> | `terminal_scroll_down` <Since action="terminal_scroll_down" /> | Scroll back toward live output |
-| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, <kbd>Super</kbd>+<kbd>V</kbd> | `terminal_paste_host` <Since action="terminal_paste_host" /> | Paste from the host clipboard. An image is pasted as a file path. See [Paste an image](#paste-an-image) |
+| <kbd>Shift</kbd>+<kbd>PgUp</kbd> | `terminal_scroll_page_up` <Since action="terminal_scroll_page_up" /> | Scroll one page into the pane's scrollback |
+| <kbd>Shift</kbd>+<kbd>PgDn</kbd> | `terminal_scroll_page_down` <Since action="terminal_scroll_page_down" /> | Scroll one page back toward live output |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, <kbd>Super</kbd>+<kbd>V</kbd>, <kbd>Shift</kbd>+<kbd>Super</kbd>+<kbd>V</kbd>, middle click | `terminal_paste_host` <Since action="terminal_paste_host" /> | Paste from the host clipboard. An image is pasted as a file path. See [Paste an image](#paste-an-image) |
 
 </Tab>
 <Tab value="macOS">
@@ -212,7 +214,9 @@ Section: `[keybindings.terminal_mode]`. These keys work in terminal mode with no
 | <kbd>Alt</kbd>+arrows | `terminal_focus_left`, `_right`, `_up`, `_down` | Focus the pane in that direction |
 | <kbd>Shift</kbd>+<kbd>↑</kbd> | `terminal_scroll_up` <Since action="terminal_scroll_up" /> | Scroll into the pane's scrollback |
 | <kbd>Shift</kbd>+<kbd>↓</kbd> | `terminal_scroll_down` <Since action="terminal_scroll_down" /> | Scroll back toward live output |
-| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, <kbd>Super</kbd>+<kbd>V</kbd> | `terminal_paste_host` <Since action="terminal_paste_host" /> | Paste from the host clipboard. An image is pasted as a file path. See [Paste an image](#paste-an-image) |
+| <kbd>Shift</kbd>+<kbd>PgUp</kbd> | `terminal_scroll_page_up` <Since action="terminal_scroll_page_up" /> | Scroll one page into the pane's scrollback |
+| <kbd>Shift</kbd>+<kbd>PgDn</kbd> | `terminal_scroll_page_down` <Since action="terminal_scroll_page_down" /> | Scroll one page back toward live output |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, <kbd>Super</kbd>+<kbd>V</kbd>, <kbd>Shift</kbd>+<kbd>Super</kbd>+<kbd>V</kbd>, middle click | `terminal_paste_host` <Since action="terminal_paste_host" /> | Paste from the host clipboard. An image is pasted as a file path. See [Paste an image](#paste-an-image) |
 
 </Tab>
 </Tabs>
@@ -223,7 +227,17 @@ Readline, fish and zsh use <kbd>Alt</kbd>+<kbd>←</kbd> and <kbd>Alt</kbd>+<kbd
 
 Plain <kbd>Ctrl</kbd>+<kbd>V</kbd> is not bound. It reaches the pane, so vim's visual block mode works.
 
-<kbd>Shift</kbd>+<kbd>↑</kbd> and <kbd>Shift</kbd>+<kbd>↓</kbd> scroll the pane into its history only when the program is on the main screen and did not turn on a mouse mode. In other panes, TUIOS sends the keys to the program, so nvim, less and htop get them. In copy mode the keys scroll. This is the same rule as for the mouse wheel, and the same rule as in kitty.
+<kbd>Shift</kbd>+<kbd>↑</kbd> and <kbd>Shift</kbd>+<kbd>↓</kbd> scroll the pane into its history only when the program is on the main screen and did not turn on a mouse mode. In other panes, TUIOS sends the keys to the program, so nvim, less and htop get them. In copy mode the keys scroll. This is the same rule as for the mouse wheel, and the same rule as in kitty. <kbd>Shift</kbd>+<kbd>PgUp</kbd> and <kbd>Shift</kbd>+<kbd>PgDn</kbd> follow the same rule, and scroll one page of the pane at a time.
+
+### Middle-click paste <Since feature="middle-click-paste" /> [#middle-click-paste]
+
+In terminal mode, a middle click pastes from the clipboard. It does not paste the primary selection. A program that uses the mouse, such as vim with `mouse=a`, lazygit or tmux, gets a plain middle press. In `[keybindings.terminal_mode]`, `middle` names the middle button. It takes `ctrl`, `alt` and `shift`, such as `ctrl+middle`. A binding with a modifier works over a program that uses the mouse too. Other tables do not accept `middle`.
+
+```toml
+[keybindings.terminal_mode]
+# Paste only on ctrl+middle, and give the plain middle click to every program
+terminal_paste_host = ["ctrl+shift+v", "super+v", "shift+super+v", "ctrl+middle"]
+```
 
 ### Paste an image
 
@@ -613,9 +627,33 @@ Every list moves the same way: the palette, the launcher, the settings page, the
 | <kbd>Home</kbd> <kbd>End</kbd> | First or last row |
 | <kbd>PgUp</kbd> <kbd>PgDn</kbd> | A page, stopping at the ends |
 | <kbd>k</kbd> <kbd>j</kbd> <kbd>g</kbd> <kbd>G</kbd> | Up, down, first and last, in a list with no filter to type into |
-| <kbd>Ctrl</kbd>+<kbd>U</kbd> | Clear a typed filter |
+| <kbd>Ctrl</kbd>+<kbd>U</kbd> | Clear a typed filter (fixed) |
+| Wheel | Scroll the list under the pointer, stopping at the ends (fixed) |
 
 Set `appearance.wrap_lists = false` to stop at the ends instead of wrapping.
+
+### List keys <Since config="keybindings.lists.*" /> [#list-keys]
+
+The movement keys are in the `[keybindings.lists]` section. Each action takes the keys that do it:
+
+| Action | Default keys |
+|---|---|
+| `list_up` <Since action="list_up" /> | `up`, `ctrl+p`, `k` |
+| `list_down` <Since action="list_down" /> | `down`, `ctrl+n`, `j` |
+| `list_page_up` <Since action="list_page_up" /> | `pgup` |
+| `list_page_down` <Since action="list_page_down" /> | `pgdown` |
+| `list_first` <Since action="list_first" /> | `home`, `g` |
+| `list_last` <Since action="list_last" /> | `end`, `G` |
+
+A key that is one printable character is a letter key. Only a list with no filter to type into reads it. A list with a filter keeps its letters for the filter. To move on <kbd>Ctrl</kbd>+<kbd>J</kbd> and <kbd>Ctrl</kbd>+<kbd>K</kbd> as well as the arrows:
+
+```toml
+[keybindings.lists]
+list_down = ["down", "ctrl+j"]
+list_up   = ["up", "ctrl+k"]
+```
+
+An action that you set replaces its default keys. The example above gives `ctrl+n`, `ctrl+p`, `j` and `k` back to the pane or the filter. An action that you leave out keeps its defaults. `list_page_down = []` unbinds it.
 
 The settings page (<kbd>,</kbd> in window mode, or <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>,</kbd>) reopens on the tab, row and search you left it on:
 
@@ -856,6 +894,7 @@ The command runs on the machine that runs the TUIOS client, the same machine as 
 | Title bar buttons | Minimize, zoom or close |
 | Click a dock item | Restore a minimized window |
 | Wheel up | Enter copy mode and scroll, when the program is not using the mouse |
+| Middle click | In terminal mode, paste from the clipboard. See [Middle-click paste](#middle-click-paste) |
 | Drag the right border | Scroll with the scrollbar |
 | Hover a link | Show where it goes. The label shows the real target, also when the text on the screen is different |
 | <kbd>Ctrl</kbd> + click a link | Open it. <kbd>Shift</kbd>+click also opens it, but most terminals keep it for their own selection. See [Links](/docs/links) |
@@ -1027,7 +1066,7 @@ description = "Copy pane folder"
 
 ## Customizing
 
-Bindings live in 23 sections under `[keybindings]` in `config.toml`. Each action takes a list of keys.
+Bindings live in 27 sections under `[keybindings]` in `config.toml`. Each action takes a list of keys.
 
 ```toml
 [keybindings]

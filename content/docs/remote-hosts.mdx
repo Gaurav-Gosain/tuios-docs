@@ -145,6 +145,17 @@ All ssh calls of one `hosts sync` run to a host use one shared connection. Thus 
 
 If the tailnet policy refuses the login, TUIOS names the user it refused. The row has `"error_kind": "tailscale_policy"`. Change the user in the `addr` of the host in `[hosts]`, for example `addr = "ubuntu@ente"`.
 
+### After sleep <Since feature="link-heartbeat" /> [#after-sleep]
+
+After a laptop wakes from sleep, the connection under a link can be dead with no sign of it. TUIOS finds such a link and dials again:
+
+- A link that carried nothing for 15 seconds sends a check to its host and waits 5 seconds. Two missed answers end the link, and TUIOS dials again.
+- A link that carries traffic sends no check.
+- After this machine wakes, one missed answer ends the link. A link that waits to dial again dials at once.
+- The `retry-host` verb, such as `tuios call retry-host '{"host":"build"}'`, checks a link that is up at once, and ends it after one missed answer. On a link that is down, it starts the dial again from a wait of 1 second. A click on a session of that host in the rail does the same.
+
+An ssh master connection (`ControlMaster`) can outlive the network under it. The first dial after a dead link runs ssh with `-o ControlPath=none`, so it opens a connection of its own. A host that needs a password or a second factor fails that one dial. The dial after it uses the master again.
+
 ## Opening a session on a host
 
 ```bash

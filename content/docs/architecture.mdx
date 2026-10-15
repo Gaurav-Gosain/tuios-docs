@@ -6,6 +6,7 @@ icon: Boxes
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 TUIOS is a Go program built on Bubble Tea v2 and its Model-View-Update pattern. The code lives under `internal/`, with the binaries in `cmd/` and the embeddable packages in `pkg/`. This page is a map for reading the code.
 
@@ -141,6 +142,7 @@ Programs in a pane ask the terminal what it is and what it supports. Both backen
 - **modifyOtherKeys** (`XTMODKEYS`, `CSI > 4 ; n m`) is supported at levels 1 and 2, and `XTQMODKEYS` (`CSI ? 4 m`) reports the level. A pane with kitty keyboard flags uses those instead. The level survives a reattach.
 - **Mouse reports** use the X10, UTF-8 (1005), urxvt (1015) and SGR (1006) encodings. A click past column 223 is not reported in the X10 form, because that form cannot carry it.
 - The main and the alternate screen each have their own kitty keyboard stack.
+- <Since feature="conpty-no-kitty-keyboard" /> A pane on a Windows ConPTY does not offer the kitty keyboard protocol. Its emulator ignores pushes, pops and sets, and does not answer `CSI ? u`. Older conhost versions drop the keys of that protocol. A program such as pi or neovim then uses the legacy keys. A pane on another machine keeps the protocol.
 - Under the daemon, an OSC 52 read gets an empty answer, because a daemon pane keeps no clipboard copy.
 
 ### Rendering (`internal/app/os_render.go`, `render_*.go`)

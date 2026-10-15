@@ -55,6 +55,17 @@ tuios worktree ls --repo api
 
 Each row shows the session, repository, branch, the agent state inside it, how many uncommitted changes it holds, and its pull request and checks once [`tuios ship pr`](/docs/ship) opened one. A row marked `gone` is a session whose worktree directory was removed. The session is kept, so what the agent printed can still be read.
 
+### Merged branches <Since feature="worktree-merged" /> [#merged-branches]
+
+The MERGED column shows `into <ref>` when the branch of a worktree is merged, so you can see which worktrees are safe to remove. A branch is merged when it has commits of its own, and a merge into its base changes nothing.
+
+- TUIOS checks the base of the worktree, then the upstream of the base, such as `origin/main`, as git last fetched it. TUIOS does not fetch.
+- A merge commit, a fast-forward, a rebase and a squash merge all count.
+- A new branch with no commits is not merged. A branch that only fast-forwarded to its base is not merged. A commit and its revert are not merged.
+- `tuios worktree ls --json` gives `merged` and `merged_into`.
+
+TUIOS does not remove a merged worktree. Use `tuios worktree rm`.
+
 ```bash
 tuios worktree diff api-feat-retry
 tuios worktree diff api-feat-retry --stat

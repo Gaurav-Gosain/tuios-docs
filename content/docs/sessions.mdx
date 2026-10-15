@@ -111,6 +111,23 @@ tuios ls
 
 A session with a label (`tuios set-session-name`) shows in the table as `name (label)`. The label is not the session's name: scripts and `-s` keep using the real name.
 
+### Spaces <Since command="set-session-space" /> [#spaces]
+
+A space is a named group of related sessions. It is only a label on its sessions. A space exists while at least one session is in it.
+
+```bash
+tuios new api --space payments --detach   # make a session in the space payments
+tuios set-session-space payments -s web   # file a session that exists
+tuios set-session-space -s web            # take it out of its space
+```
+
+When a session is in a space, `tuios ls` shows one table for each space, in name order, under the name of the space. The sessions in no space come last, with no heading. `tuios ls --json` stays one flat list, with `space` on each row that has one.
+
+- A space name follows the session name rules and is at most 64 bytes.
+- A global session cannot be in a space.
+- `--space` does not work with `--host`.
+- A daemon restart keeps the space of each session.
+
 ## Attaching and detaching
 
 | Action | How | What happens |
@@ -574,6 +591,17 @@ tuios send-keys 'ctrl+b,c'
 
 `send-text` writes its argument to the shell exactly as given. `send-keys` parses key names and splits on spaces and commas, which suits chords and control keys. Use `send-text` for anything that contains spaces.
 
+### Move a window to another session <Since feature="move-window-session" /> [#move-a-window-to-another-session]
+
+`--to-session` moves a window to another session. The program in it keeps running, and the window keeps its id and its scrollback. Without a workspace, the window goes to the workspace that the other session shows. `--follow` focuses it there.
+
+```bash
+tuios move-window -s work -w build --to-session review
+tuios move-window 2 -w build --to-session review --follow
+```
+
+A popup, a scratch pane and a pane on another machine cannot move. The client of the old session says that the window moved. The tmux shim's `join-pane` and `move-pane`, and herdr's `pane.move`, also move a pane to another session.
+
 ### Open windows
 
 ```bash
@@ -685,6 +713,8 @@ Upgrade tuios on every machine. A machine with the older tuios still starts a da
 ### Which `TERM` a pane gets
 
 A pane gets the `TERM` of the client that made the session, if the machine that runs the pane has a terminfo entry for it. If it has none, the pane gets `xterm-256color`, so `clear`, `tput` and curses programs still work. To keep your terminal's own `TERM`, install its terminfo entry on that machine, for example with `infocmp -x xterm-kitty | ssh HOST tic -x -`.
+
+<Since feature="caller-term" /> A session that a command makes also gets the `TERM` and `COLORTERM` of the terminal you ran the command in. This is true for `tuios new`, `tuios call new-session`, `tuios switch-session --create` and `start-agent`. A caller with no terminal, such as a script or CI, gives none, and the session gets `xterm-256color` and `truecolor`. The SSH server, `tuios-web` and the GUI bridge also give none.
 
 ### "Session not found"
 

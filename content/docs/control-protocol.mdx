@@ -114,6 +114,8 @@ A few rules hold for every verb:
 {"id":1,"verb":"hello","params":{"client":"my-script","version":"1.0.0","protocol":1}}
 ```
 
+<Since feature="caller-term" /> A client may also send `term` and `color_term`, its `TERM` and `COLORTERM`. A session that the connection makes later, with `new-session`, the `create` of `switch-session` or `start-agent`, gives its panes that terminal. A caller with no terminal of its own, such as a script, sends none, and its sessions get `xterm-256color` and `truecolor`.
+
 A caller whose version is outside the accepted range gets `protocol_mismatch`. New verbs are added without changing the version; it changes only when an existing verb or the envelope changes incompatibly.
 
 ## Verbs
@@ -143,20 +145,21 @@ The daemon currently implements 115 verbs, some of them only for one daemon to c
 | `rename-session` | Rename a session. Panes that already run still reach it by the old name. |
 | `set-session-name` | Set a display name. The session keeps its real name for addressing. |
 | `set-session-accent` | Set or clear a session's accent colour. |
+| `set-session-space` <Since verb="set-session-space" /> | File a session under a space, or take it out with an empty `space`. `new-session` also takes `space`, and `list-sessions` shows it. See [Spaces](/docs/sessions#spaces). |
 
 ### Windows
 
 | Verb | Purpose |
 |------|---------|
-| `list-windows` | List a session's windows with ID, index, name, workspace, size, focus and agent state. A window whose process runs on this machine also has `pid` and `tty`. A zoomed window has `zoomed: true`. |
+| `list-windows` | List a session's windows with ID, index, name, workspace, size, focus and agent state. A window whose process runs on this machine also has `pid` and `tty`. A zoomed window has `zoomed: true`. A floating window has `floating: true`. `started_by` names the pane whose call made the window. |
 | `get-window` | Describe one window. |
 | `new-window` | Create a window. Optional `name`, `workspace`, `cwd`, `focus`, `command` (an argv run instead of a shell), `host` (run it on another machine) and `grants`. |
 | `close-window` | Close a window. |
 | `close-workspace` | Close every pane on a workspace, like tmux `kill-window`. Scratch panes stay unless their scratch workspace is the target. A pane needs `admin`. |
 | `focus-window` | Focus a window by `window`, `relative` (`next`, `prev`) or `direction` (`left`, `right`, `up`, `down`). Direction needs an attached client. |
-| `move-window` | Move a window to another workspace, optionally following it. |
+| `move-window` | Move a window to another workspace, optionally following it. <Since feature="move-window-session" /> With `to_session`, move it to another session. The program keeps running. |
 | `set-window` | Rename a window or change its minimized state. |
-| `split-window` | Split a window `horizontal` or `vertical` and open a new one beside it. Needs an attached client with tiling on. |
+| `split-window` | Split a window `horizontal` or `vertical` and open a new one beside it. <Since feature="split-side" /> `side` (`left`, `right`, `up`, `down`) names the side the new window takes. Needs an attached client with tiling on. |
 | `resize` | Resize a window's PTY to `width` by `height`. |
 | `popup` | Run a command in a floating window that closes when the command exits. Needs an attached client. |
 | `screenshot` | Render a window to a `png`, `svg`, `ansi`, `html` or `txt` file. |
@@ -183,6 +186,16 @@ The daemon currently implements 115 verbs, some of them only for one daemon to c
 | `list-keys` | List the key names, modifiers and other tokens `send-keys` takes. A name that is not in the list is refused. |
 | `capture-pane` | Read a window's contents. See [Capturing windows](#capturing-windows). |
 | `run` | Type one command line at a pane's shell prompt, wait for it to finish, and return its exit code and output. Needs a shell that sends OSC 133 marks. |
+
+### Search
+
+| Verb | Purpose |
+|------|---------|
+| `search-panes` <Since verb="search-panes" /> | Find text in the history and the screen of every pane on this machine. `query`, and optional `regex`, `case` (`smart`, `sensitive`, `insensitive`), `sessions`, `max` and `per_pane`. Each pane gets 50 ms. |
+| `command-history` <Since verb="command-history" /> | The commands that shells in panes ran, newest first, with exit status, time and folder. Needs a shell that sends OSC 133 marks. Optional `session`, `window`, `limit` and `query`. |
+| `list-ports` <Since verb="list-ports" /> | The TCP ports that the programs in panes listen on, with the pid and the worktree. Linux and macOS. Optional `session`. |
+
+Over a link, these verbs need `list`.
 
 ### Options, themes and the dock
 
@@ -240,7 +253,8 @@ The daemon currently implements 115 verbs, some of them only for one daemon to c
 | `queue-prompt` | Queue a message for a pane's agent, typed when it comes to rest. |
 | `list-queued` | List the messages waiting in a pane's queue. |
 | `cancel-queued` | Drop queued messages before they are typed. |
-| `review-diff` | Read what the agent in a pane changed against its base. |
+| `review-diff` | Read what the agent in a pane changed against its base. Each line has its colours and its changed words marked. |
+| `review-stage` <Since verb="review-stage" /> | Stage or unstage a change in a pane's worktree, by file, by hunk or by line. Only the index changes. Every answer has an `undo` object, and `action` `undo` takes it back. Acts as the person. |
 | `review-note` | Add, edit, remove, list or clear review notes on a pane's changes. |
 | `send-review` | Send a pane's unsent review notes to its agent, through the queue. |
 | `list-checkpoints` | List a pane's checkpoints: its git work tree, saved each time its agent finished a turn that changed a file. |
@@ -256,6 +270,7 @@ The verbs that act as the person need the nonce a client receives when it attach
 | `stash-put` | Copy a file into the session's own store and return the stored path. |
 | `stash-get` | Read a stored file back. |
 | `stash-list` | List the files in a session's store. |
+| `file-preview` <Since verb="file-preview" /> | A preview of one file, made on the machine the file is on: an image scaled down, a PDF page or a film frame as an image, the first 256 KiB of text, or the type and size. It keeps the read rules of `file-read`. Over a link it needs `files`. |
 | `new-worktree` | Create a git worktree and a session in it. |
 | `list-worktrees` | List the sessions whose directory is a git worktree. |
 | `remove-worktree` | Remove a worktree session's worktree and kill the session. Refuses uncommitted changes unless told to stash or discard them. |
@@ -467,9 +482,9 @@ Filter with `session`, `window` and `types`. Leave `types` out to receive everyt
 
 The acknowledgement carries `seq`, the last event number when the stream went live, and `boot_id`, a random id for this daemon start. Every event carries both. To resume after a disconnect, subscribe with `after_seq` and the `boot_id` it came with: the daemon replays the events it still holds after that seq, then carries on live. When it cannot replay everything you missed, a `gap` event comes first and names the reason (`evicted`, `boot_changed`, `not_retained` or `overflow`). Output events are never replayed. After a gap, read the current state again with `list-windows` or `list-agents`.
 
-The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `workspace-renamed`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `client-session-changed`, `host-changed`, `transcript`, `transfer`, `transfer-progress` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
+The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `workspace-renamed`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `client-session-changed`, `host-changed`, `transcript`, `transfer`, `transfer-progress`, `layout-changed` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
 
-`transcript` and `transfer-progress` are opt-in: they arrive only when `types` names them. <Since verb="agent-transcript" /> A `transcript` event says the conversation of a pane grew, with the `cursor` of `agent-transcript`. A `transfer` event has `action` `created`, `state` or `ended`, and the copy's row. `transfer-progress` carries the row while bytes move, at most four times a second.
+`transcript`, `transfer-progress` and `layout-changed` are opt-in: they arrive only when `types` names them. <Since feature="layout-changed" /> A `layout-changed` event names the `session` and the `workspace` whose panes opened, closed, moved, were minimized, zoomed or resized, or whose session changed size. It is not kept for replay. Call `list-windows` to read the new rectangles. <Since verb="agent-transcript" /> A `transcript` event says the conversation of a pane grew, with the `cursor` of `agent-transcript`. A `transfer` event has `action` `created`, `state` or `ended`, and the copy's row. `transfer-progress` carries the row while bytes move, at most four times a second.
 
 A `workspace-renamed` event fires when a workspace's name is set, changed or cleared. It carries `session`, `workspace` and `title`, the new name. `title` is absent when the name was cleared.
 

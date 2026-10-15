@@ -56,6 +56,41 @@ sections = "files,git"
 
 Both rails read the same sessions, files and git state. Each rail has its own scroll, cursor and mouse areas. On a narrow screen the second rail closes first. Every key of the edge tables is on the [configuration page](/docs/configuration#two-edges).
 
+## A daemon session in a rail <Since config="appearance.sidebar.left.session" /> [#a-daemon-session-in-a-rail]
+
+A rail can show a daemon session in place of its sections. The panes of the session, on its current workspace, stack top to bottom in the rail. Make the sessions first, then name them in `config.toml`:
+
+```bash
+tuios new side-left --detach
+tuios new side-right --detach
+```
+
+```toml
+[appearance.sidebar]
+enabled = true
+position = "right"
+width = 36
+
+[appearance.sidebar.right]
+session = "side-right"
+
+[appearance.sidebar.left]
+enabled = true
+width = 36
+session = "side-left"
+```
+
+Settings, then Sidebar, has a session name, a width and a workspace for each edge. An empty session name shows the sections again.
+
+- Click a pane in the rail to type in it. Each pane has its own title bar, and its close and minimize buttons act on that pane.
+- With the rail focused, <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> and <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>c</kbd> make a pane in that session, under the others. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>|</kbd> also stacks the new pane under the others. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>n</kbd> and <kbd>p</kbd> change the active pane. Zoom makes a pane larger inside the rail.
+- When the rail cannot give each pane six rows, it shows a group of panes around the active pane.
+- <Since config="appearance.sidebar.left.session_workspace" /> `session_workspace = 0`, the default, shows the rail on every workspace. `session_workspace = 2` shows it only on workspace 2.
+- The rail does not change the size of the session. It cuts the panes to fit, and another client of the session keeps its size.
+- While a session is in a rail, the custom command of that rail does not run.
+
+A switch of workspace, a hidden rail or a detach does not stop the session or its programs. A daemon restart does. The name can be set before the session exists. The rail then shows an error and tries again when the session is made.
+
 ## The sections
 
 | Section | What it lists |
@@ -95,7 +130,7 @@ While rows are out of view, the section draws a scroll thumb on the rail's edge 
 
 - The size of the thumb shows the part of the rows that is on the screen.
 - The thumb is at the first line only at the top of the section, and at the last line only at the bottom.
-- A hover preview of the panes of another session gets a thumb too.
+- A hover preview of the panes of another session gets a thumb too. When the terminals section is above the sessions section, the preview keeps the height of the section, so the session row under the pointer does not move.
 - The collapsed strip and a section of one line have no thumb.
 
 The thumb uses the `scrollbar_thumb` glyph of the [glyph set](/docs/configuration#glyph-sets): `┃` by default, `#` with `--ascii-only` and `█` in the `heavy` set. When the thumb and the rule have the same glyph, as with a heavy border, the thumb is `█` (`#` with `--ascii-only`). `appearance.scrollbar` and `appearance.hide_scrollbar` change only the scroll bar of a pane.
@@ -154,6 +189,7 @@ The search stops after about 2.5 seconds and skips `.git`, `node_modules`, `.ven
 ## Using it with the mouse
 
 - Click a session to switch to it, or a pane to focus it.
+- <Since feature="remote-session-click" /> Click a session of another machine to open it. When the link to that machine is up, the dock says `Connecting to HOST`. When the link is down, TUIOS says `Reconnecting to HOST` and opens the session when the link comes up. The wait ends after one minute, and TUIOS says why. See [Remote Hosts](/docs/remote-hosts#after-sleep).
 - Click the `+` on a section header to make a session or a terminal. The `+` beside a machine makes a session on that machine.
 - Right-click a row for its menu. A folder's menu has **Copy path**, which copies its absolute path.
 - Right-click the header of a repository, or the row of a worktree session, and select **New worktree...** to make a worktree session. See [Worktrees](/docs/worktrees#from-the-rail).

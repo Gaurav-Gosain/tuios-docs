@@ -88,7 +88,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 |-------|----------|
 | [Sessions](#sessions) | `new`, `attach`, `ls`, `list-clients`, `detach-client`, `ssh-agent-path`, `resurrect`, `rename-session`, `kill-session`, `kill-server`, `daemon`, `logs` |
 | [Worktrees](#worktrees) | `worktree`, `fan`, `ship` |
-| [Windows and workspaces](#windows-and-workspaces) | `new-window`, `split-window`, `popup`, `xpanes`, `close-workspace`, `focus-window`, `pip`, `move-window`, `set-window`, `set-layout`, `select-workspace`, `list-workspaces`, `set-workspace-name`, `set-session-name`, `set-session-accent` |
+| [Windows and workspaces](#windows-and-workspaces) | `new-window`, `split-window`, `popup`, `xpanes`, `close-workspace`, `focus-window`, `pip`, `move-window`, `set-window`, `set-layout`, `select-workspace`, `list-workspaces`, `set-workspace-name`, `set-session-name`, `set-session-accent`, `set-session-space` |
 | [Input and output](#input-and-output) | `send-keys`, `send-text`, `run`, `capture-pane`, `screenshot`, `wait-for`, `subscribe` |
 | [Paste buffers](#paste-buffers) | `list-buffers`, `show-buffer`, `set-buffer`, `delete-buffer`, `paste-buffer` |
 | [Inspection](#inspection) | `list-windows`, `get-window`, `session-info`, `list-verbs` |
@@ -122,6 +122,7 @@ tuios new [session-name] [flags]
 - `--host <name>`: create the session on a machine from the `[hosts]` table.
 - `--ssh`: with `--host`, run ssh to the host and use its own `tuios` instead of attaching here.
 - `--global`: create a global session, which can hold panes from more than one machine.
+- `--space <name>` <Since command="set-session-space" />: file the session under a [space](/docs/sessions#spaces). It does not work with `--host` or `--global`.
 - `--hold`: after a failure, wait for <kbd>Enter</kbd> before exiting.
 - `--cwd <dir>`: the directory the session's windows start in. The default is the current directory. It does not work with `--host`.
 - The [interface flags](#interface-flags).
@@ -132,6 +133,7 @@ tuios new api --cwd ~/dev/api      # windows start in ~/dev/api
 tuios new work --theme dracula
 tuios new build --detach           # headless, for scripting
 tuios new --host buildbox ci -d    # on another machine
+tuios new api --space payments -d  # in the space payments
 ```
 
 A detached session gets one window and works at once with `send-keys`, `run-command` and `capture-pane`. It is 80x24 until a client attaches. Run from a script, a service or CI, with no terminal on stdout, its panes still get `TERM=xterm-256color` and `COLORTERM=truecolor`, not `dumb`. See [Headless Sessions](/docs/sessions#headless-sessions).
@@ -245,7 +247,9 @@ The table shows name, window count, status, creation time and last activity. `--
 
 - `created` and `last_active` are Unix seconds.
 - `dir` is the base name of the focused pane's directory (`~` for home). `branch` is its git branch. Both are omitted when unknown.
-- `display_name`, `accent` and `restored` appear only when set.
+- `display_name`, `accent` and `restored` appear only when set. So does `space`.
+
+When a session is in a [space](/docs/sessions#spaces), the table is one table for each space, under the name of the space. The sessions in no space come last. `--json` stays one flat list.
 
 With no daemon running, `ls` lists the sessions saved on disk, marks each `saved` (`"saved": true` in JSON), and exits `3`.
 
@@ -458,6 +462,8 @@ tuios worktree pull <host:session> [flags]
 
 `worktree ls` lists worktree sessions with their repository, branch, agent state, uncommitted changes and fan prompt status. A row marked `gone` is a session whose worktree was deleted. Filter with `--repo <name>` or `--group <stem>`.
 
+<Since feature="worktree-merged" /> The MERGED column shows `into <ref>` when the branch is merged. A branch is merged when it has commits of its own, and a merge into its base changes nothing. TUIOS checks the base, then the upstream of the base, such as `origin/main`. It does not fetch. A merge commit, a fast-forward, a rebase and a squash merge all count. A new branch with no commits is not merged. A branch that only fast-forwarded to its base is not merged. `--json` gives `merged` and `merged_into`. TUIOS does not remove a merged worktree. Use `worktree rm`.
+
 `worktree rm` runs `git worktree remove` and kills the session. It refuses a worktree with uncommitted changes and removes nothing. `--stash` keeps the changes in git stash, and `--force` discards them. `--keep-session` leaves the session running. The branch is never deleted.
 
 `worktree diff` prints the commits the session made on top of its base, then its uncommitted changes, then its untracked files. `--stat` prints the summary form.
@@ -584,8 +590,10 @@ tuios new-window --json | jq -r .window_id
 Split a pane and print the new pane's ID. Needs an attached client with tiling on.
 
 ```bash
-tuios split-window <horizontal|vertical> [flags]
+tuios split-window <horizontal|vertical|left|right|up|down> [flags]
 ```
+
+`horizontal` and `vertical` put the new pane below or to the right. <Since feature="split-side" /> `left`, `right`, `up` and `down` name the side of the pane that the new pane takes.
 
 - `-w, --window <target>`: the pane to split.
 - `--name <name>`: a name for the new pane.
@@ -726,13 +734,19 @@ tuios pane-view -s work -w build --size pane  # keep the size that the session g
 
 ### move-window <Since command="move-window" /> [#move-window]
 
-Move a window to another workspace.
+Move a window to another workspace, or to another session.
 
 ```bash
-tuios move-window <workspace> [-w <target>] [--follow] [--json]
+tuios move-window [workspace] [-w <target>] [--to-session <name>] [--follow] [--json]
 ```
 
 `--follow` switches to that workspace after the move.
+
+<Since feature="move-window-session" /> `--to-session <name>` moves the window to another session. The program in it keeps running, and the window keeps its id and its scrollback. The workspace is optional then: without it, the window goes to the workspace that session shows. A popup, a scratch pane and a pane on another machine cannot move.
+
+```bash
+tuios move-window -s work -w build --to-session review
+```
 
 ### set-window <Since command="set-window" /> [#set-window]
 
@@ -764,6 +778,7 @@ tuios set-layout --rotate
 | `tuios set-workspace-name <n> [name]` | Label a workspace. No name clears it |
 | `tuios set-session-name [name]` | Set the label the rail and dock show. The session keeps its real name for `-s` and `TUIOS_SESSION`. No name clears it. To change the name itself, use [`rename-session`](#rename-session) |
 | `tuios set-session-accent [accent]` | Set the session's accent colour, shared by every client. No accent clears it |
+| `tuios set-session-space [space]` <Since command="set-session-space" /> | File the session under a [space](/docs/sessions#spaces). No space takes it out of its space. A global session cannot be in a space |
 
 ```bash
 tuios set-workspace-name 2 review
@@ -1283,7 +1298,7 @@ tuios list-themes catppuccin_mocha
 tuios list-themes --json | jq -r .active
 ```
 
-It reads the themes directory again on every call, so a new theme file shows up at once.
+It reads the themes directory again on every call, so a new theme file shows up at once. <Since feature="omarchy-theme" /> On a machine with [Omarchy](/docs/omarchy), it also names the Omarchy theme it found, and says whether TUIOS follows it. Each installed Omarchy theme is in the list as `omarchy/NAME`.
 
 ### import-theme <Since command="import-theme" /> [#import-theme]
 
