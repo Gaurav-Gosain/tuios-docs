@@ -1,0 +1,92 @@
+---
+title: Omarchy
+description: On Omarchy, tuios uses the Omarchy theme and changes with it when you switch the theme.
+icon: Paintbrush
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+On [Omarchy](https://omarchy.org), tuios uses the Omarchy theme. You do not set anything. When you switch the theme, tuios changes its colours at the same moment as your terminal and the desktop. You do not restart tuios and you do not press a key.
+
+## What changes
+
+- **The panes.** The sixteen terminal colours, the text colour, the background and the cursor are the colours Omarchy gives kitty, ghostty and foot.
+- **The chrome.** The rail, the dock, the borders and the dialogs take the theme's accent and grounds.
+- **The programs in the panes.** A program that asks the terminal for its colours (OSC 10, 11 and 4) gets the theme's colours. This is true for a pane in a daemon session too.
+- **Light and dark.** A program that turned on mode 2031 gets a report when the theme changes between light and dark. Neovim, Claude Code and other programs use this report to select their own light or dark colours.
+
+tuios sends no SIGWINCH to the programs in the panes.
+
+## The setting
+
+| `appearance.theme` | On a machine with Omarchy | On a machine without Omarchy |
+|---|---|---|
+| empty (the default) | The Omarchy theme | The colours of your terminal |
+| `omarchy` | The Omarchy theme | The colours of your terminal, and a warning |
+| `none` | The colours of your terminal | The colours of your terminal |
+| a theme id | That theme | That theme |
+
+```toml
+[appearance]
+theme = "omarchy"
+```
+
+Use `omarchy` when one config file goes to machines with and without Omarchy, and you want a warning where Omarchy is missing. Use `none` to keep the colours of your terminal on Omarchy.
+
+An explicit theme always wins. When you select a theme in the theme picker, tuios stops following Omarchy until you select **omarchy** or **none** again.
+
+## Check what tuios found
+
+```bash
+tuios list-themes
+```
+
+```
+active: omarchy (default)
+themes dir: /home/you/.config/tuios/themes
+omarchy: Tokyo Night, from /home/you/.local/state/omarchy/current. tuios follows it.
+```
+
+## Each Omarchy theme by name
+
+Each installed Omarchy theme is also in the theme list as `omarchy/NAME`, such as `omarchy/gruvbox` or `omarchy/catppuccin-latte`. Such an id is fixed: it does not change when you switch the Omarchy theme. Use it to try an Omarchy theme in tuios only, or for a screenshot.
+
+```bash
+tuios list-themes --filter omarchy
+tuios set-config appearance.theme omarchy/matte-black
+```
+
+## How the colours map
+
+| tuios | Omarchy key in `colors.toml` |
+|---|---|
+| Background, text, cursor | `background`, `foreground`, `bright_foreground` |
+| ANSI 0 to 7 | `background`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `foreground` |
+| ANSI 8 to 15 | `muted`, the `bright_` colours, `bright_foreground` |
+| Accent | `accent` |
+| Focused border in window mode | The first colour of `hyprland_active_border`, else `accent` |
+| Terminal mode, copy mode, errors, notices | `green`, `yellow`, `red`, `blue` |
+| Dialogs | `lighter_background`, with `dark_background` and `darker_background` below it |
+
+tuios reads the colours with the same rules as Omarchy's own `omarchy-theme-color`, so a key that a theme leaves out gets the same value it gets in every other app. Each ink in the chrome is lifted until it reads on its ground, so a theme with a quiet accent, such as Kanagawa or White, stays readable.
+
+## Where tuios looks
+
+1. `~/.local/state/omarchy/current/theme/colors.toml` (Omarchy 4)
+2. `~/.config/omarchy/current/theme/colors.toml` (Omarchy 3)
+
+Set `SWATCH_OMARCHY_DIR` to another `current` directory to read that one.
+
+<Callout>
+tuios watches the `current` directory only on a machine with Omarchy. The watch is one inotify watch. tuios runs no timer and reads nothing while the theme stays the same.
+</Callout>
+
+## SSH, the browser and other machines
+
+- A client of the tuios SSH server follows the Omarchy theme of the machine that runs the server.
+- A client on a machine without Omarchy, such as a laptop attached to an Omarchy desktop over [hosts](/docs/remote-hosts), uses the colours of its own terminal.
+- `tuios-web` does not follow the theme yet.
+
+## For other programs
+
+The code that reads and follows the Omarchy theme is a Go library of its own, [swatch](/docs/libraries/swatch). A Bubble Tea program can follow the Omarchy theme with a few lines.

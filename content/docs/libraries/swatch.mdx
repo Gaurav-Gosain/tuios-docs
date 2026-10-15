@@ -1,0 +1,74 @@
+---
+title: swatch
+description: A Go library that reads the desktop's colour theme as a palette with semantic roles, and follows it while your program runs. The first source is Omarchy.
+icon: SwatchBook
+---
+
+`tuios.dev/swatch` reads the colour theme of the desktop your program runs on. It gives you a `Palette` with semantic roles: a background, a text colour, an accent, a border, the status colours and the sixteen ANSI colours. It also follows the theme while your program runs. tuios uses it to follow the [Omarchy](/docs/omarchy) theme.
+
+```bash
+go get tuios.dev/swatch
+```
+
+The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/swatch).
+
+## What is in it
+
+- **swatch**: the `Palette`, the `Source` interface, and `Watch`, which follows a source.
+- **swatch/omarchy**: the theme Omarchy has applied (Omarchy 4 and 3), and every installed Omarchy theme. The parser is a port of Omarchy's `omarchy-theme-color`, held to the script's own output for every shipped theme.
+- **swatch/termconfig**: the colour scheme of a kitty, ghostty, alacritty or wezterm config file.
+- **swatch/teaswatch**: Bubble Tea v2 messages for a change, and the terminal's own palette from OSC 10, 11 and 4 and mode 2031.
+
+Theme files come from strangers, so swatch reads colours only. Nothing in a theme file is executed or expanded.
+
+## Read the Omarchy theme
+
+```go
+p, err := omarchy.Current().Load()
+if errors.Is(err, swatch.ErrNotFound) {
+	return // not on Omarchy: keep your own colours
+}
+fmt.Println(p.Name, swatch.Hex(p.Accent), p.Light)
+// Tokyo Night #7aa2f7 false
+```
+
+The fields are `color.Color` values, which Lipgloss v2 takes as they are.
+
+## Follow it in a Bubble Tea program
+
+```go
+w, err := swatch.Watch(omarchy.Current())
+if err != nil {
+	return err
+}
+defer w.Close()
+
+func (m model) Init() tea.Cmd { return teaswatch.Listen(m.watcher) }
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case teaswatch.ChangedMsg:
+		m.styles = newStyles(msg.Palette)
+		return m, teaswatch.Listen(m.watcher)
+	}
+	return m, nil
+}
+```
+
+The watcher holds one file watch and one goroutine. It runs no timer and reads nothing while the theme stays the same. One Omarchy switch is one read, 50 ms after it. A switch to the theme already in force sends nothing.
+
+## The palette
+
+| Role | Omarchy key |
+|---|---|
+| `Background`, `Foreground` | `background`, `foreground` |
+| `Cursor` | `bright_foreground` |
+| `Surface` | `lighter_background` |
+| `Muted` | `muted` |
+| `Accent` | `accent` |
+| `Border` | the first colour of `hyprland_active_border`, else `accent` |
+| `Error`, `Success`, `Warning`, `Info` | `red`, `green`, `yellow`, `blue` |
+| `ANSI` | the mapping of Omarchy's kitty, ghostty and foot templates |
+| `Light` | `mode = "light"`, a `light.mode` file, or a light background |
+
+`Raw` holds every other key the theme defines or Omarchy derives, such as `orange` or `dark_background`.
