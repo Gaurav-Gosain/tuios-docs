@@ -369,7 +369,20 @@ for (const tag of tags) {
       leafCount.get(leaf) === 1 &&
       c.split(" ").length === 1 &&
       uses.some((u) => u.leaf === leaf);
-    if (here || anywhere) {
+    // A subcommand whose file on --ref is not in this tag was moved there
+    // later (the config subcommands left main.go for config_commands.go).
+    // It is in the tag when the file that declares its parent there also
+    // declares it.
+    const parent = c.split(" ").at(-2);
+    const moved =
+      parent !== undefined &&
+      !uses.some((u) => u.file === file) &&
+      uses.some(
+        (u) =>
+          u.leaf === leaf &&
+          uses.some((p) => p.leaf === parent && p.file === u.file),
+      );
+    if (here || anywhere || moved) {
       result.commands[c] = version;
       pending.commands.delete(c);
     }
