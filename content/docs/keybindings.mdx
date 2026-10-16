@@ -1064,6 +1064,30 @@ command = "printf %s \"$TUIOS_ACTIVE_PANE_CWD\" | (pbcopy || wl-copy || xclip -s
 description = "Copy pane folder"
 ```
 
+## Actions for a tmux-style keymap <Since action="mark_pane" /> [#actions-for-a-tmux-style-keymap]
+
+These actions have no default key. Bind them in any section where you want them.
+
+| Action | What it does |
+| --- | --- |
+| `mark_pane` | Marks the focused pane, or clears the mark when it is the marked one. The marked pane shows `[marked]` in its title bar |
+| `join_marked_left`, `join_marked_right`, `join_marked_up`, `join_marked_down` | Moves the marked pane next to the focused one, on that side, from this workspace or another. Needs BSP tiling |
+| `resize_pane_left_5`, `resize_pane_right_5`, `resize_pane_up_5`, `resize_pane_down_5` | Moves an edge of the focused pane by 5 cells. The `_20` actions move it by 20 |
+| `new_workspace` | Goes to the first workspace with no pane, the one the `+` button of the dock opens, and opens a pane there |
+| `move_workspace_left`, `move_workspace_right` | Swaps this workspace with the one before or after it, and follows it |
+| `send_to_workspace_1` to `send_to_workspace_9` | Sends the focused pane to that workspace |
+| `cycle_layout` | Cycles BSP, master-stack and scrolling |
+| `reload_config` | Reads `config.toml` again, as the "Reload config" palette row does |
+| `toggle_mouse` | Stops the mouse reports, so the terminal selects text itself. Run it again to turn the mouse back on. The setting lasts until you quit |
+
+For the synchronize-panes of tmux, bind `toggle_multifocus_all`. It puts every pane on the workspace in the multifocus set, so typing goes to all of them.
+
+```toml
+[keybindings.window_prefix]
+mark_pane = ["m"]
+join_marked_right = ["J"]
+```
+
 ## Customizing
 
 Bindings live in 27 sections under `[keybindings]` in `config.toml`. Each action takes a list of keys.
@@ -1238,14 +1262,24 @@ Ghostty also needs `keybind = alt+left=unbind` and `keybind = alt+right=unbind`,
 
 ### One Option key for typing
 
-If you use Option to type characters such as `#`, `•` or `{`, set this. TUIOS then sends the character to the pane:
+The same character can come from two keys. On a US keyboard, Option+3 types `£`. On a UK keyboard, Shift+3 types `£`. TUIOS reads the keyboard layout of the Mac when it starts: <Since feature="option-glyphs-auto" />
+
+- On a US or ABC layout, TUIOS runs the `opt+` binding for the character. Option+3 types `£` and switches to workspace 3.
+- On any other layout, the character goes to the pane. TUIOS also does this when it cannot read the layout.
+
+`keyboard_layout` overrides the layout that TUIOS reads. With `keyboard_layout = "us"`, TUIOS runs the binding. With `keyboard_layout = "other"`, the character goes to the pane. To use the `opt+` bindings on every layout, set your terminal to send Option as Alt. Ghostty and kitty send the character and also report Alt, so TUIOS runs the binding on every layout.
+
+To set the behaviour yourself, use `option_glyphs`:
 
 ```toml
 [keybindings]
-option_glyphs = "type"   # the default is "bind"
+option_glyphs = "auto"   # auto, alt, bind, type
 ```
 
-With the default, `bind`, TUIOS reads a composed character as the Option chord that types it on a US layout. Option+8 types `•`, and TUIOS runs the `opt+8` binding. With `keyboard_layout = "other"`, TUIOS does not use the US characters, and the characters go to the pane.
+- `auto` uses the layout of the Mac, as above. This is the default.
+- `alt` runs the binding only when the terminal reports Alt.
+- `bind` always runs the binding. Use it only on a US keyboard.
+- `type` always sends the character to the pane. Use it if you type characters such as `#`, `•` or `{` with Option.
 
 Some terminals let you set the two Option keys differently. Use the left Option key for TUIOS and the right Option key to type characters. In WezTerm:
 

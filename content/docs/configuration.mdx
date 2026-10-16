@@ -151,6 +151,7 @@ All keys below go under `[appearance]`.
 | `shared_borders` <Since config="appearance.shared_borders" /> | `false` | bool | Draw one border between neighbouring tiled panes, in every layout |
 | `gap` <Since config="appearance.gap" /> | `0` | 0 to 8 | Empty cells between tiled panes |
 | `dim_unfocused` <Since config="appearance.dim_unfocused" /> | `0` | 0 to 90 | Fade panes you are not in, in percent |
+| `dim_foreground` <Since config="appearance.dim_foreground" /> | `true` | bool | Let `dim_unfocused` dim the text of a pane you are not in, as well as its background. `false` keeps the text at full strength and dims only the background |
 | `dim_multifocus` <Since config="appearance.dim_multifocus" /> | `false` | bool | Dim the panes in the [multifocus](/docs/layout-modes#typing-into-several-panes) set like other panes you are not in |
 | `session_colors` <Since config="appearance.session_colors" /> | `true` | bool | Give each session its own colour on the rail and in the switcher |
 | `session_border` <Since config="appearance.session_border" /> | `false` | bool | Also draw that colour on every pane border |
@@ -325,7 +326,7 @@ The layout a new session starts in is `startup.layout`. See [The startup table](
 |-----|---------|--------|--------------|
 | `dockbar_position` <Since config="appearance.dockbar_position" /> | `"top"` | `top`, `bottom`, `hidden` | Edge the dock sits on |
 | `dock_workspace_tabs` <Since config="appearance.dock_workspace_tabs" /> | `true` | bool | Show the clickable workspace strip |
-| `dock_workspace_tab_format` <Since config="appearance.dock_workspace_tab_format" /> | `""` | template | Tab label with `{index}` and `{name}`. Empty means `{name}` |
+| `dock_workspace_tab_format` <Since config="appearance.dock_workspace_tab_format" /> | `""` | template | Tab label with `{index}` and `{name}`, and `{icon}` and `{zoom}` <Since config="dock.tabs" />. Empty means `{name}`. See [Workspace tab style](#workspace-tab-style) |
 | `dock_workspace_label_max` <Since config="appearance.dock_workspace_label_max" /> | `12` | cells, `0` for no cap | Longest workspace tab label. The cap counts the characters of the tab format |
 | `dock_workspace_tooltip` <Since config="appearance.dock_workspace_tooltip" /> | `true` | bool | Show a truncated workspace name in full on hover |
 | `dock_pill_caps` <Since config="appearance.dock_pill_caps" /> | `true` | bool | Rounded caps on every dock pill: the mode chip, the workspace pills and the minimized windows. `false` draws flat pills |
@@ -353,6 +354,39 @@ dock_mode_icon_tiling = ""
 ```
 
 To remove the whole mode pill, remove `"mode"` from the `left` list in the `[dock]` table. You can also set the icons on the settings page, in the Dock section, or with `tuios set-config appearance.dock_mode_icon_window WM`. The change applies at once.
+
+### Workspace tab style <Since config="dock.tabs" /> [#workspace-tab-style]
+
+By default the workspace strip draws rounded pills. `[dock.tabs]` can draw flat tabs, the way a tmux status line draws its window list:
+
+```toml
+[appearance]
+dock_workspace_tab_format = "{name}{zoom} {icon}"
+
+[dock.tabs]
+style         = "flat"        # pill (default) or flat
+separator     = " • "         # drawn between flat tabs
+separator_fg  = "#4c3743"
+active_fg     = "#272e33"
+active_bg     = "#a7c080"
+active_bold   = true
+inactive_fg   = "#4f5b58"
+number_glyphs = ["I", "II", "III"]  # {icon}: the first entry is workspace 1
+zoom_marker   = " [ ]"        # {zoom} on the current workspace while a pane is zoomed
+show_add      = false         # keep the "+" tab in the flat style
+```
+
+| Key | What it does |
+|-----|--------------|
+| `style` | `pill` (the default) or `flat` |
+| `separator`, `separator_fg` | The text between flat tabs, and its colour |
+| `active_fg`, `active_bg`, `active_bold` | The current tab |
+| `inactive_fg`, `inactive_bg`, `inactive_bold` | The other tabs |
+| `number_glyphs` | The text of `{icon}` for each workspace. A workspace past the end of the list shows its number |
+| `zoom_marker` | The text of `{zoom}` on the current workspace while a pane is zoomed |
+| `show_add` | Keep the `+` tab in the flat style |
+
+Colours are `#rrggbb`, and they are overrides. With no colour set, a flat strip draws the current tab in bold on the theme's accent, and the other tabs in dim text. tuios ignores a colour that is not `#rrggbb` and shows a warning. The flat style shows even one workspace, and drops the `+` tab unless `show_add` is on. With no `[dock.tabs]` table, the strip does not change.
 
 To reorder the dock or add your own cells, see [The dock table](#the-dock-table).
 
@@ -902,13 +936,13 @@ An empty list is different from a missing line. A missing action gets its defaul
 ```toml
 [keybindings]
 keyboard_layout = "us"   # us, other
-option_glyphs = "bind"   # bind, type
+option_glyphs = "auto"   # auto, alt, bind, type
 ```
 
 | Key | Default | What it does |
 |-----|---------|--------------|
 | `keyboard_layout` <Since config="keybindings.keyboard_layout" /> | `us` | `us` lets a binding on `opt+shift+7` also match `opt+&`, as on a US keyboard. Set `other` for AZERTY, QWERTZ and other layouts. A key that the terminal reports through the Kitty keyboard protocol uses that report. |
-| `option_glyphs` <Since config="keybindings.option_glyphs" /> | `bind` | What a character that macOS Option typed does. `bind` runs the Option binding that the character stands for on a US layout. `type` sends it to the pane. Set `type` if you use Option to type characters. |
+| `option_glyphs` <Since config="keybindings.option_glyphs" /> | `auto` <Since feature="option-glyphs-auto" /> | What a character that macOS Option typed does. `auto` reads the keyboard layout of the Mac when tuios starts. On a US or ABC layout it runs the Option binding for the character. On other layouts the character goes to the pane. A `keyboard_layout` that you set overrides the layout of the Mac. `alt` runs the binding only when the terminal also reports Alt. `bind` always runs it. `type` always sends the character to the pane. |
 
 See [Shifted digits and AZERTY](/docs/keybindings#shifted-digits-and-azerty) and [One Option key for typing](/docs/keybindings#one-option-key-for-typing).
 
@@ -1211,11 +1245,15 @@ on-click = "tuios new-window log -- git log --oneline -20"
 
 These lists are the default. A missing list uses the default. An empty list (`left = []`) draws nothing on that side.
 
-The built-in components are `mode`, `workspaces`, `trail`, `tape`, `windows`, `transfers`, `notifications`, `copy-help`, `cpu`, `ram`, `clock` and `session-controls`. Listing one lets it draw. It still needs its own condition, so `cpu` still needs `show_cpu`. `copy-help` shows the keys of copy mode, multi copy mode and hints mode while the mode is open. See [Mode keys in the dock](/docs/keybindings#mode-keys-in-the-dock).
+The built-in components are `mode`, `workspaces`, `trail`, `tape`, `windows`, `transfers`, `notifications`, `copy-help`, `cpu`, `ram`, `clock`, `session-controls` and `session`. Listing one lets it draw. It still needs its own condition, so `cpu` still needs `show_cpu`. `copy-help` shows the keys of copy mode, multi copy mode and hints mode while the mode is open. See [Mode keys in the dock](/docs/keybindings#mode-keys-in-the-dock).
 
 `transfers` <Since feature="copies-panel" /> shows the copies between machines. It shows nothing while no copy exists. One copy is a bar and a percent, `[####--] 61%`. More copies are a count and a percent, `3 copies 42%`. `waiting` means a link is down. `1 failed` stays until you open the Copies panel. A click opens the [Copies panel](/docs/keybindings#copies-between-machines).
 
 `[dock.clock]` takes `format`, a Go time layout. A layout without seconds refreshes once a minute.
+
+<Since config="dock.session" /> `session` shows the session name, the workspace and the pane, such as `main 2:1`. It is in no default list. `[dock.session]` takes `format`, with `{session}`, `{workspace}` and `{pane}`. It also takes the cell style keys `fg`, `bg`, `bold`, `cap_left` and `cap_right`. `[dock.custom.NAME]` takes the same style keys. Colours are `#rrggbb`.
+
+<Since feature="dock-center-steady" /> When the `center` list has a clock or a custom cell, the centre is at the middle of the terminal. A notification does not move it, and it does not shorten the minimized pane labels. On a crowded bar, the centre moves left to keep the cells on the right on the screen. Click a cut notification to read the full message.
 
 ### Custom components
 
@@ -1227,6 +1265,8 @@ The built-in components are `mode`, `workspaces`, `trail`, `tape`, `windows`, `t
 | `refresh` | `"once"` | `once`, a duration such as `"30s"`, `push`, or `event:TYPE[,TYPE]` |
 | `on-click` | `""` | Run with `sh -c` when the cell is clicked |
 | `max-width` | `24` | Widest the cell may be, in cells |
+| `fg`, `bg`, `bold` <Since config="dock.session" /> | unset | The text colour, the ground colour and bold text of the cell. Colours are `#rrggbb` |
+| `cap_left`, `cap_right` | unset | Text drawn before and after the cell, in the colour of its ground |
 
 With `push`, the command keeps running and each line it prints replaces the cell. With `event:`, the command runs again when the daemon reports one of those [hook events](/docs/hooks).
 
