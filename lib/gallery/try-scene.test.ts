@@ -12,6 +12,11 @@ describe("sceneBefore", () => {
     // The rail's shipped default and the scene agree, and the scene's comes last.
     expect(sets.at(-3)).toEqual(["appearance.sidebar.enabled", "true"]);
     expect(sets).toContainEqual(["appearance.show_clock", "true"]);
+    // The engine pins these too. Left out, a look reached by Next look kept
+    // the default undoLook gave them, and the same look opened first kept
+    // the engine's.
+    expect(sets).toContainEqual(["appearance.zoom_size", "95"]);
+    expect(sets).toContainEqual(["appearance.scrollbar.style", "track"]);
     // Every path is a look key, which the engine's set takes.
     const paths = new Set(keys.keys.map((k) => k.path));
     for (const [path] of sets) expect(paths.has(path)).toBe(true);

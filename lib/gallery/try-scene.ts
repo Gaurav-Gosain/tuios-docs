@@ -32,6 +32,8 @@ const PINNED = [
   "appearance.sidebar.width",
   "appearance.dockbar_position",
   "appearance.window_title_position",
+  "appearance.zoom_size",
+  "appearance.scrollbar.style",
 ];
 
 /** What the scene turns on so the look has something to style. */

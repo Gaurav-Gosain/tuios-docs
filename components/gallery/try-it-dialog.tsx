@@ -119,6 +119,14 @@ export function TryItDialog({
     setLive(true);
   }, []);
 
+  // The focus goes to Next look, not into the terminal. The terminal takes
+  // Tab and Escape, so from there the keyboard could not reach Next look or
+  // close the dialog. A click on the terminal still types into it.
+  const nextButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (live) nextButton.current?.focus();
+  }, [live]);
+
   const showNext = useCallback(async () => {
     const t = tuios.current;
     if (!t || !next?.look || !current || busy) return;
@@ -132,7 +140,6 @@ export function TryItDialog({
       ]);
       setCurrent(p);
       setAt(next.id);
-      t.term.focus();
     } catch {
       setProblem("The next look did not load. Try again later.");
     } finally {
@@ -204,15 +211,21 @@ export function TryItDialog({
               hint="The look applies to this tab only. Nothing is saved."
               onCommands={onCommands}
               onInstance={onInstance}
+              focusTerminal={false}
               stageClassName="aspect-[4/5] w-full sm:aspect-[16/10]"
             />
             {next ? (
               <div className="mt-3 flex items-center gap-2 text-sm">
+                {/* aria-disabled while a look loads, not disabled: a disabled
+                    button drops the focus, and Enter must step through the
+                    looks one after another. */}
                 <button
+                  ref={nextButton}
                   type="button"
-                  disabled={!live || busy}
+                  disabled={!live}
+                  aria-disabled={busy}
                   onClick={showNext}
-                  className="inline-flex items-center gap-1 rounded-full border border-fd-border px-3 py-1 hover:bg-fd-accent focus-visible:outline-2 focus-visible:outline-fd-primary focus-visible:outline-offset-2 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-full border border-fd-border px-3 py-1 hover:bg-fd-accent focus-visible:outline-2 focus-visible:outline-fd-primary focus-visible:outline-offset-2 disabled:opacity-50 aria-disabled:opacity-50"
                 >
                   Next look
                   <ChevronRight className="size-3.5" aria-hidden="true" />

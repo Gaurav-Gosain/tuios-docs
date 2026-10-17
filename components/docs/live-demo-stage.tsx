@@ -21,6 +21,7 @@ export function LiveDemoStage({
   onCommands,
   onInstance,
   stageClassName = "aspect-[16/10] w-full",
+  focusTerminal = true,
 }: {
   title: string;
   setup: SetupCommand[];
@@ -32,6 +33,12 @@ export function LiveDemoStage({
   onInstance?: (tuios: TuiosInstance) => void;
   /** The terminal's size classes. */
   stageClassName?: string;
+  /**
+   * Moves the focus into the terminal once the setup has run. The terminal
+   * takes Tab and Escape, so a page whose controls matter more can leave the
+   * focus where it is.
+   */
+  focusTerminal?: boolean;
 }) {
   const tuios = useRef<TuiosInstance | null>(null);
   const [ready, setReady] = useState(false);
@@ -53,9 +60,9 @@ export function LiveDemoStage({
       await runSetup(t, setup);
       setReady(true);
       onInstance?.(t);
-      t.term.focus();
+      if (focusTerminal) t.term.focus();
     },
-    [setup, onCommands, onInstance],
+    [setup, onCommands, onInstance, focusTerminal],
   );
 
   // An engine built before a command existed ignores it, so a control whose
