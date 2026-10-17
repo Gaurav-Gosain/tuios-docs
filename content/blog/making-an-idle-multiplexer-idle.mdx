@@ -16,12 +16,7 @@ None of that showed up as CPU. The client used about 0.2% of a core, which
 rounds to nothing in `top`. It showed up as wakeups, and wakeups are the thing
 a laptop cares about: every one pulls a core out of a deep sleep state. A
 terminal multiplexer is the program you leave running all day, often several
-of them over SSH, so I wanted idle to mean idle.
-
-This post is how I measured it, which timers were the culprits, and what it
-took to make each one sleep until there was work to do. There is also a
-renderer bug I found upstream along the way, and a section on what the
-lightness costs.
+of them over SSH, so I wanted idle to mean idle. Here is where it ended up:
 
 <Shot
   name="blog-idle-wakeups"
@@ -53,14 +48,12 @@ def snap(pid):
 ```
 
 Take a snapshot, sleep 30 seconds, take another, divide. The harness around
-it starts a throwaway daemon with scratch XDG folders, opens a session with
-two bash panes, attaches a client inside a detached tmux at 120x36, and waits
-for things to settle. Everything runs under `nice -n 19 taskset -c 0-7` with
+it starts a throwaway daemon with two bash panes and attaches a client inside
+a detached tmux. Everything runs under `nice -n 19 taskset -c 0-7` with
 `GOMAXPROCS=4`, because this machine is shared, and builds are interleaved so
 that background load hits both sides of a comparison.
 
-A count tells you how much. It does not tell you who. For that I used two
-more tools:
+A count tells you how much. It does not tell you who. For that:
 
 - **`runtime/trace`**, grouped by the stack each goroutine was blocked in
   when it woke. A goroutine parked in `startPeriodicSaveWith.func1` waking 0.5
@@ -68,12 +61,11 @@ more tools:
 - **`strace -f`** on the daemon, to see what each wakeup did. One of them
   read `/proc/<pid>/stat` every 2 seconds, forever.
 
-The first thing both tools showed was how much a single timer costs. A Go
-timer firing at idle is not one context switch. The netpoller thread wakes,
-the goroutine runs, and then sysmon spins in 20 µs sleeps before it parks
-again. On this machine each timer wakeup turned into 10 to 40 context
-switches. So 20 timer wakeups a second came out as about 130 context
-switches a second.
+Both tools showed how much a single timer costs. A Go timer firing at idle is
+not one context switch. The netpoller thread wakes, the goroutine runs, and
+then sysmon spins in 20 µs sleeps before it parks again. On the daemon, each
+timer wakeup turned into 10 to 40 context switches. On the client, 20 timer
+wakeups a second came out as about 130 context switches a second.
 
 ## The client: twenty wakeups to draw nothing
 
@@ -85,11 +77,9 @@ The client had two 10 Hz timers and one slow poll:
 | tuios's maintenance tick, at `IdleFPS` | 10.00 | 0 |
 | Session listing poll, rail open | 0.33 | 0 |
 
-The maintenance tick was where tuios checked for things like a pane whose
-process exited, a held alert coming due, or a toast that should expire. A
-previous round of work had already made it cheap. At idle, a gate skipped
-every scan. But look at what the gate did after deciding there was nothing
-to do:
+The maintenance tick checked for things like a pane whose process exited or
+a toast that should expire. At idle, a gate already skipped every scan. But
+look at what the gate did after deciding there was nothing to do:
 
 ```go
 if !m.tickNeedsWork() {
@@ -123,10 +113,9 @@ switches halved, from 270 to 277 down to 142 to 145.
 
 ### Stopping a ticker Bubble Tea does not let you stop
 
-Bubble Tea v2 has `WithFPS` and `WithoutRenderer`. It has no "render when I
-say so" mode. Forking it was an option I did not want. It turned out tuios
-already reached into the program to change the frame rate at runtime, so the
-ticker was right there:
+Bubble Tea v2 has no "render when I say so" mode, and I did not want to fork
+it. But tuios already reached into the program to change the frame rate at
+runtime, so the ticker was right there:
 
 ```go
 func programTicker(p *tea.Program) *time.Ticker {
@@ -139,8 +128,8 @@ func programTicker(p *tea.Program) *time.Ticker {
 ```
 
 Yes, it's reflection on an unexported field. `TestSetProgramFPS` fails on a
-Bubble Tea release that renames it, and if that happens the fallback is the
-old behaviour, not a crash.
+Bubble Tea release that renames it, and if that happens tuios falls back to
+the old behaviour instead of crashing.
 
 So the idle switch now calls `ticker.Stop()` instead of slowing it down
 ([#782](https://github.com/Gaurav-Gosain/tuios/pull/782)). Three things made
@@ -149,11 +138,9 @@ that work:
 1. `noteFrame` already called `ticker.Reset` to speed the ticker up for a
    burst of frames. `Reset` restarts a stopped ticker, so the wake path did
    not change.
-2. Bubble Tea writes some things only from that ticker: a clipboard set, a
-   colour query, a raw write. With the ticker stopped, a message that changed
-   none of the view could leave one of those queued until the next key. So
-   while the ticker is stopped, tuios asks for one flush after every message.
-   Messages are rare at idle, so that costs almost nothing.
+2. Bubble Tea writes some things only from that ticker, such as a clipboard
+   set. So while the ticker is stopped, tuios asks for one flush after every
+   message. Messages are rare at idle, so that costs almost nothing.
 3. Go 1.23 changed timers so that `Ticker.Stop` also empties the channel. A
    kick sent just before the stop would be thrown away, with nothing left to
    send another. So the stop is followed by one more tick:
@@ -173,10 +160,9 @@ With the clock off, frame ticker fires went from 10.0 to 0.33 a second. The
 ### A tick that only runs when a job is due
 
 The maintenance tick was the last 10 Hz timer
-([#787](https://github.com/Gaurav-Gosain/tuios/pull/787)). Rather than a tick
-that runs and asks "anything to do?", every job now says when it is next due,
-and the client arms one timer for the earliest of them. `nextWake` runs after
-every message:
+([#787](https://github.com/Gaurav-Gosain/tuios/pull/787)). Every job now says
+when it is next due, and the client arms one timer for the earliest of them.
+`nextWake` runs after every message:
 
 ```go
 func (m *OS) nextWake(now time.Time) (time.Time, bool) {
@@ -216,16 +202,11 @@ in its own message.
 | before, clock on (`15:04:05`) | 0.40 to 0.56% | 270 to 277 |
 | after, clock on (`15:04:05`) | 0.16 to 0.18% | 17.7 to 19.2 |
 
-The one timer left in the client was the listing poll, 0.33 a second with the
-rail open. The daemon section below removes it.
-
-One more change came out of this
-([#790](https://github.com/Gaurav-Gosain/tuios/pull/790)). With everything
-else asleep, a clock showing seconds was most of what a client with the clock
-on cost. The default clock format is now `15:04`, which wakes the client once
-a minute instead of once a second: 0.02% CPU and 6.7 to 7.5 context switches a
-second, with 2 clock frames in 120 seconds instead of 120. `15:04:05` still
-works if you want seconds.
+With everything else asleep, a clock showing seconds was most of what a
+client with the clock on cost. So the default clock format is now `15:04`
+([#790](https://github.com/Gaurav-Gosain/tuios/pull/790)), which wakes the
+client once a minute instead of once a second: 0.02% CPU and 6.7 to 7.5
+context switches a second. `15:04:05` still works if you want seconds.
 
 That one had a catch I nearly missed. A Go timer counts time the machine is
 awake. Arm a 59 second timer, suspend the laptop for an hour, and on wake the
@@ -241,19 +222,10 @@ all in one process. The latency is the time until that marker reaches the
 outer terminal through tmux `pipe-pane`. After 20 seconds of idle, over 20 runs:
 1.4 to 1.8 ms, against 1.4 to 1.6 ms over 10 runs on the old build.
 
-The planning build once measured 184 ms on one run of 7, and that scared me
-for a bit. The old probe took the time in one Python process and wrote the
-marker from the shell after Python had exited. That run was also the only one
-in which the daemon used real CPU, 0.26 s over 25 s, against 0.00 to 0.01 s in
-every other run. The delay was outside the client's wake path. With the
-one-process probe, 30 more runs did not repeat it.
-
 ## The daemon: five loops that polled
 
-The daemon owns the PTYs, so it has real background work: it saves sessions
-so they survive a restart, finds agents running in panes, notices when an
-agent stalls, and cleans up memory a flood of output left behind. Each of
-those was a loop on a ticker:
+The daemon owns the PTYs, so it has real background work. Each job was a loop
+on a ticker:
 
 | Loop | Interval | Wakeups/s at idle |
 |---|---|---|
@@ -263,25 +235,11 @@ those was a loop on a ticker:
 | Cleanup loop | 30 s | 0.03 |
 | Session listing, asked by a client with the rail open | 3 s | 0.33 per client |
 
-The resurrection saver is a good example of the shape they all had. Every
-2 seconds it woke, checked a dirty flag, and every 30 seconds it wrote the
-same state to disk again whether anything changed or not:
-
-```go
-ticker := time.NewTicker(resurrectionDirtyInterval)
-for {
-	select {
-	case now := <-ticker.C:
-		dirty := takeDirty == nil || takeDirty()
-		if !dirty && now.Sub(lastSave) < resurrectionInterval {
-			continue
-		}
-		// ... save
-```
-
-The agent monitor was the one strace caught reading `/proc/<pid>/stat` every
-2 seconds. A daemon whose panes sat at a prompt did 7 to 9 context switches a
-second alone, and 22 to 27 with one client attached.
+The resurrection saver woke every 2 seconds to check a dirty flag, and every
+30 seconds it wrote the same state to disk again whether anything changed or
+not. The agent monitor was the one strace caught reading `/proc/<pid>/stat`
+every 2 seconds. A daemon whose panes sat at a prompt did 7 to 9 context
+switches a second alone, and 22 to 27 with one client attached.
 
 ### A latch instead of a ticker
 
@@ -319,25 +277,24 @@ Then each loop got rules for when it really has work:
 
 - **The saver** ([#776](https://github.com/Gaurav-Gosain/tuios/pull/776)). A
   structural change (a pane opened, a split, a rename) reaches disk within 2
-  seconds, as before. Output or use of the session marks it stale, and a
-  stale session is written within 30 seconds of the last save. A session that
-  prints nothing writes nothing and arms no timer.
+  seconds, as before. Output marks the session stale, and a stale session is
+  written within 30 seconds of the last save. A session that prints nothing
+  writes nothing.
 - **The agent monitor** ([#777](https://github.com/Gaurav-Gosain/tuios/pull/777)).
   A program can only start or stop in a pane that takes input, prints, or was
-  just made. Each of those raises the latch. After 10 quiet seconds, in which
-  every pane is read once more, the monitor stops its timer.
-- **The stall monitor** ([#778](https://github.com/Gaurav-Gosain/tuios/pull/778)).
-  It works out when the earliest working pane could stall, and sleeps until
-  then. With no agent working, it arms nothing.
-- **The cleanup loop** ([#779](https://github.com/Gaurav-Gosain/tuios/pull/779)).
-  What it releases is left behind by output, input and resizes. It runs at
-  most twice after the last of those.
+  just made. Each of those raises the latch. After 10 quiet seconds the
+  monitor stops its timer.
+- **The stall monitor** ([#778](https://github.com/Gaurav-Gosain/tuios/pull/778))
+  sleeps until the earliest working pane could stall. With no agent working,
+  it arms nothing.
+- **The cleanup loop** ([#779](https://github.com/Gaurav-Gosain/tuios/pull/779))
+  runs at most twice after the last output, input or resize.
 
-### Push, not poll
+### A push for the listing
 
 That left the listing poll. A client with the rail open asked the daemon for
 every session, every 3 seconds, to draw the other sessions on the rail. Most
-of those answers were the same 1.7 KB as the last one.
+of those answers were the same as the last one.
 
 Everything the listing shows changes through an event the daemon already
 sees: output, input, a state change, a title, a folder, a client arriving or
@@ -345,11 +302,11 @@ leaving. So each of those raises one more latch, and a notifier builds the
 listing, hashes it, and sends `MsgSessionsChanged` only when the hash moved
 ([#794](https://github.com/Gaurav-Gosain/tuios/pull/794)). It looks at most
 once every 3 seconds, the old poll rate, so a busy session costs no more than
-before. An idle one costs nothing. The welcome message offers the push and
-the hello asks for it, so an older daemon is polled as before.
+before. An idle one costs nothing. An older daemon that does not offer the
+push is polled as before.
 
 Context switches a second, 40 seconds after the panes opened, three
-interleaved runs each:
+interleaved runs each. The last row comes from a later set of runs:
 
 | Build | Daemon alone | Daemon, client attached |
 |---|---|---|
@@ -357,20 +314,18 @@ interleaved runs each:
 | four loops sleep | 1.0, 2.0, 1.0 | 11.0, 7.7, 15.5 |
 | and the listing push | | 1.4, 1.0, 1.8 |
 
-What is left is the Go runtime. No timer of tuios's own fires while nothing
-happens. `TestDaemonIdleArmsNoTimers` holds that: it starts a real daemon,
-waits for the loops to settle, and allows 0 timer fires over an idle window.
-With the old poll put back for any one loop, the loops never settle and the
-test fails.
+What is left is the Go runtime: sysmon, and the forced GC every 2 minutes. No
+timer of tuios's own fires while nothing happens. `TestDaemonIdleArmsNoTimers`
+holds that: it starts a real daemon, waits for the loops to settle, and allows
+0 timer fires over an idle window.
 
 ## Busy, but not here
 
 A workspace you are not looking at still has panes that ring the bell or
-print. Since this week the dock can mark those tabs. A client streams only
-the panes it shows, so the daemon has to tell it, and the obvious way to do
-that is to tell it about every chunk. A build log in a background workspace
-would then wake the client hundreds of times a second for a mark that is
-already on screen.
+print, and since this week the dock can mark those tabs. A client streams
+only the panes it shows, so the daemon has to tell it. Telling it about every
+chunk would let a build log in a background workspace wake the client
+hundreds of times a second for a mark that is already on screen.
 
 So the mark is edge-triggered, like the latch
 ([#837](https://github.com/Gaurav-Gosain/tuios/pull/837)). Each pane keeps one
@@ -386,16 +341,12 @@ func (p *PTY) raisePaneMark(mark uint32) bool {
 }
 ```
 
-`BenchmarkPaneMarkRaised` puts that at 2.1 ns a chunk with 0 allocations. The
-first version of the benchmark said 1.1 ns, because it passed the event type
-as a constant and the compiler folded the switch away. In
-`BenchmarkE2EBackgroundFlood`, a pane out of view prints 16 MiB per iteration,
-and the client gets 0 marks and 0 socket reads per flood after the first.
+`BenchmarkPaneMarkRaised` puts that at 2.1 ns a chunk with 0 allocations. A
+pane out of view that prints 16 MiB sends the client 0 marks after the first.
 
 ## The bytes that do go out
 
-Making the client sleep is about frames that write nothing. While profiling
-the frames that do write something, I found a renderer bug in
+While profiling the frames that do write something, I found a renderer bug in
 [ultraviolet](https://github.com/charmbracelet/ultraviolet), the cell renderer
 under Bubble Tea v2.
 
@@ -415,31 +366,29 @@ instead:
 
 A run inside a range can never be longer than the range, so the jump never
 happened. A line that changed only at its two ends was rewritten from the
-first change to the last, on every frame. That is what a growing circle does,
-or a progress bar with a counter at the far end. On a one-row screen where
-only the first and last cells change:
+first change to the last, on every frame. That is what a progress bar with a
+counter at the far end does. On a one-row screen where only the first and
+last cells change:
 
 | Width | Before | After |
 |---:|---:|---:|
 | 80 | 91 B | 18 B |
 | 200 | 211 B | 19 B |
 
-Before, the output grows with the width of the line. After, it is two cells
-and one cursor move. The fix is
+The fix is
 [charmbracelet/ultraviolet#218](https://github.com/charmbracelet/ultraviolet/pull/218),
 with a test that fails without it. It is still open as I write this, so tuios
-does not have it yet. That matters most over SSH, where every byte of a frame
+does not have it yet. It matters most over SSH, where every byte of a frame
 crosses the network.
 
 ## What it costs
 
-Lightness is not free. Here is the bill.
+Here is the bill.
 
 - **Behaviour.** An agent started in a pane with no output and no input, more
   than 10 seconds after the last activity, is now found when its pane next
   prints, not within 10 seconds. Every agent harness tuios knows prints when it
-  starts, so I took the trade. The stall monitor fires about once per stall
-  timeout while an agent works, not every 7.5 seconds.
+  starts, so I took the trade.
 - **A visible default.** The clock lost its seconds. One line of config
   brings them back.
 - **Fragility.** Stopping the frame ticker depends on reflection into Bubble
@@ -453,30 +402,14 @@ Lightness is not free. Here is the bill.
   [binary size budget](/blog/making-the-binary-smaller), and this crossed a
   16 KiB page on darwin, so the budget raise went in as its own commit.
 
-And here is what it buys. An idle client now does 8 to 9 context switches a
-second where it did 124 to 135, and the daemon does 1 to 2 where it did 7 to 9
-alone and 22 to 27 with a client. Every SSH or web client runs the same model,
-so each one saves the same again. I have not measured battery life, and I am
-not going to quote a battery number I have not measured. What I can say is
-that tuios is off the list of programs that keep a laptop's cores awake.
+I have not measured battery life, and I am not going to quote a battery
+number I have not measured. Every SSH or web client runs the same model, so
+each one saves the same again.
 
-## What I measured and left alone
-
-`docs/perf.md` in the tuios repository keeps a ledger of things I measured and
-decided not to change, with the reason. A few from this round:
-
-- **The Go runtime's own wakeups**, the last 1 to 2 context switches a second
-  on the daemon: sysmon and the forced GC every 2 minutes. Not tuios code.
-- **Windows.** By reading the code, ultraviolet's console reader peeks the
-  console every 10 ms when there is no input. That would be about 100 wakeups
-  a second on a local Windows console, five times what this work removed. I
-  have not measured it, and the fix belongs upstream.
-- **`-tags nethttpomithttp2`**, which drops the bundled HTTP/2 client and
-  352,256 bytes. A release has to build what `go install` builds, and a build
-  tag breaks that.
-- **go-runewidth's width table.** The first non-ASCII width lookup fills a
-  2.2 MB table: 0.5 ms and 3.7 MB of RSS per client. Changing it changes
-  widths, so it is upstream material too.
+One thing I left alone: by reading the code, ultraviolet's console reader
+peeks the console every 10 ms when there is no input. That would be about 100
+wakeups a second on a local Windows console, five times what this work
+removed. I have not measured it, and the fix belongs upstream.
 
 The tests that hold all of this are the boring part, and the part that keeps
 it true. `TestIdleCostStaysLow` boots the real binary, idles for 10 seconds,
