@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# claude-demo
+#
+# Stands in for Claude Code in a docs scene. It writes a short conversation
+# to a transcript where Claude Code keeps one, prints the end of the turn,
+# and reports done with the transcript's path, as the claude-code hook does.
+# The Inbox's agents view then reads the conversation from the transcript.
+set -u
+dir=$HOME/.claude/projects/$(pwd | tr '/.' '--')
+mkdir -p "$dir"
+t=$dir/7d1c2a90-5b3e-4f61-9a2d-1c0e8b4f6a21.jsonl
+cwd=$(pwd)
+ts() { date -u -d "-$1 seconds" +%Y-%m-%dT%H:%M:%S.000Z; }
+rec() { # TYPE AGE CONTENT-JSON [EXTRA-JSON]
+  printf '{"type":"%s","timestamp":"%s","cwd":"%s","version":"2.1.280","message":{"role":"%s","content":%s}%s}\n' \
+    "$1" "$(ts "$2")" "$cwd" "$1" "$3" "${4:+,$4}"
+}
+{
+  rec user 300 '"The retry test is flaky on CI. Find out why and fix it."'
+  rec assistant 295 '[{"type":"text","text":"I will read the retry code, then run the test until it fails."},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"internal/store/retry.go"}}]'
+  rec user 294 '[{"type":"tool_result","tool_use_id":"t1","content":"func backoff(n int) time.Duration { ... }"}]'
+  rec assistant 290 '[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"go test -run TestRetryJitter -count=20 ./internal/store/","description":"Run the flaky test 20 times"}}]'
+  rec user 260 '[{"type":"tool_result","tool_use_id":"t2","is_error":true,"content":"--- FAIL: TestRetryJitter: wait 1873ms is over the 1800ms cap\nFAIL"}]'
+  rec assistant 250 '[{"type":"text","text":"The jitter is added after the cap, so a wait can pass 1800ms. I will clamp the wait after adding the jitter."},{"type":"tool_use","id":"t3","name":"Edit","input":{"file_path":"internal/store/retry.go","old_string":"\treturn d + jitter(d)","new_string":"\treturn min(d+jitter(d), maxWait)"}}]'
+  rec user 249 '[{"type":"tool_result","tool_use_id":"t3","content":"The file was updated."}]' '"toolUseResult":{"filePath":"internal/store/retry.go","structuredPatch":[{"oldStart":31,"newStart":31,"lines":["-\treturn d + jitter(d)","+\treturn min(d+jitter(d), maxWait)"]}]}'
+  rec assistant 245 '[{"type":"tool_use","id":"t4","name":"Bash","input":{"command":"go test -run TestRetryJitter -count=200 ./internal/store/","description":"Run the test 200 times"}}]'
+  rec user 200 '[{"type":"tool_result","tool_use_id":"t4","content":"ok  \texample.com/notes/internal/store\t4.102s"}]'
+  rec assistant 195 '[{"type":"text","text":"Fixed. The wait is now clamped after the jitter, and 200 runs pass. The cap is still 1800ms."}]'
+} >"$t"
+
+acc=$'\e[38;5;173m' bold=$'\e[1m' dim=$'\e[2m' grn=$'\e[32m' off=$'\e[0m'
+clear
+printf '%s* Claude Code%s  %s\n\n' "$acc$bold" "$off" "$dim~/project$off"
+printf '%s>%s The retry test is flaky on CI. Find out why and fix it.\n\n' "$bold" "$off"
+printf '  %sBash%s go test -run TestRetryJitter -count=200 ./internal/store/\n' "$grn" "$off"
+printf '    ok  example.com/notes/internal/store  4.102s\n\n'
+printf '  Fixed. The wait is now clamped after the jitter,\n  and 200 runs pass. The cap is still 1800ms.\n'
+tuios set-agent-state done --harness claude-code --transcript-path "$t" \
+  -m 'Fixed. The wait is now clamped after the jitter.' >/dev/null 2>&1
+exec sleep 100000

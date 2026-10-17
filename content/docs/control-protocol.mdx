@@ -220,7 +220,7 @@ Over a link, these verbs need `list`.
 | `set-agent-state` | Report an agent's state: `working`, `needs_input`, `idle`, `done`, `errored`, `unknown`, or `none` to clear. |
 | `explain-agent-detect` | Explain why a window was or was not detected as running an agent. |
 | `explain-agent-screen` | Show what the screen-reading rules make of a window. |
-| `send-agent-message` | Leave a message for another window, or a notice for the whole session. |
+| `send-agent-message` | Leave a message for another window, or a notice for the whole session. It takes the message as text or as [parts](#queue-prompt). |
 | `read-agent-messages` | Read a session's messages, or one window's inbox. |
 | `ask-agent` | Type a question into another agent's window and wait for its answer. |
 | `ask-human` | Ask the person a question with fixed answers, and wait for the answer. |
@@ -250,7 +250,9 @@ Over a link, these verbs need `list`.
 | `dismiss-attention` | Close an Inbox item. Only an attached client can. |
 | `mark-attention` | Snooze, wake, mark unread or restore an Inbox item. Only an attached client can. |
 | `release-agent-message` | Pass on mail from another machine that was held for the person. |
-| `queue-prompt` | Queue a message for a pane's agent, typed when it comes to rest. |
+| `queue-prompt` | Queue a message for a pane's agent, typed when it comes to rest. See [below](#queue-prompt). |
+| `reply-history` <Since verb="reply-history" /> | Read what the person sent to an agent, for the reply editor. Only the person can. |
+| `add-reply-history` <Since verb="add-reply-history" /> | Add a sent reply to that history. Only the person can. |
 | `list-queued` | List the messages waiting in a pane's queue. |
 | `cancel-queued` | Drop queued messages before they are typed. |
 | `review-diff` | Read what the agent in a pane changed against its base. Each line has its colours and its changed words marked. |
@@ -373,6 +375,35 @@ The reply carries a `human_nonce`. The verbs that act as the person accept it, s
 - A presence made with `session` acts only in that session. A presence with no session acts in every session.
 - The caller must be outside every pane of this daemon. A process in a pane gets `forbidden`, so an agent cannot act as the person.
 - The presence ends when its connection closes, or when the connection calls `restrict-connection`.
+
+### queue-prompt [#queue-prompt]
+
+```json
+{"id":1,"verb":"queue-prompt","params":{"window":"build","parts":[{"kind":"text","text":"this fails: "},{"kind":"paste","text":"--- FAIL: TestJitter\n…","n":1}]}}
+{"id":1,"result":{"type":"prompt_queued","id":"q4","position":1,"queued":1,"delivering":true,"parts":2}}
+```
+
+`text` holds at most 16 KiB. <Since feature="reply-composer" /> `parts` gives the message as ordered parts, as the reply editor sends it. With `parts`, the daemon ignores `text`, so a client can send both and an older daemon types the text.
+
+| Part | Is |
+|------|----|
+| `{"kind":"text","text":…}` | Typed text |
+| `{"kind":"paste","text":…,"n":1}` | A paste block. `n` is the number the person saw |
+| `{"kind":"image","data":…,"n":1}` <Since feature="reply-images" /> | An image, as the file in base64 |
+
+A message takes at most 64 parts, 8 images of 8 MiB each, and 8 MiB in total. The text parts with the label of each block must fit in 16 KiB. The daemon on the machine of the pane chooses how each block travels when it types the message:
+
+- A message of 12 KiB or less, for a pane that takes a bracketed paste, goes in one paste with each block in its place.
+- In any other message, each block goes to a file in the paste folder, and the text names it: `[Pasted text #1: PATH, 42 lines]`. The file is mode 0600, and the daemon keeps it for 24 hours.
+- Each image goes to a file there too. The `[input] images` value of the harness puts its path in a paste of its own, in the text as `[Image #1] PATH`, or refuses the message with `invalid_params`. See [How a reply is typed](/docs/agents#how-a-reply-is-typed).
+
+A pane's queue holds at most 32 MiB, and all queues together 128 MiB. Past either, the call fails with `queue_full`.
+
+<Since feature="queue-host" /> `host` names a machine from `[hosts]`. The daemon sends the message, with its parts, to the daemon of that machine over the link. That daemon queues it as `link:THIS-MACHINE`. Its policy for this machine must allow `write`, and `files` for a block or an image. Only a caller outside every pane can send `host`.
+
+`send-agent-message` takes `parts` too. A message that fits in 8 KiB and holds no image gets its blocks in place. In any other message, each paste and image is written to the paste folder, attached, and named in the body. A daemon from v0.10.0 or earlier answers `text is required` for a message in parts only.
+
+`reply-history` and `add-reply-history` keep what the person sent to each agent, in the daemon's memory only. Both take a live `human_nonce` that proves the person for every session. `add-reply-history` takes `target`, `parts` and `human_nonce`. A target keeps 100 messages, and the daemon keeps 64 targets. `reply-history` takes `target` and `human_nonce`, and answers `entries`, oldest first, each with `parts`, `at` and `dropped`.
 
 ### agent-transcript <Since verb="agent-transcript" /> [#agent-transcript]
 

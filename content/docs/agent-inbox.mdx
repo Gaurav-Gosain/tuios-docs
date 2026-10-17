@@ -1,11 +1,12 @@
 ---
 title: Inbox and Review
-description: One list of everything your agents are waiting on, answers from wherever you are, safer approvals, messages queued for a busy agent, and a review of what an agent changed.
+description: One list of everything your agents are waiting on, a view of every agent and its conversation, answers from wherever you are, safer approvals, replies queued for a busy agent, and a review of what an agent changed.
 icon: Inbox
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 The Inbox is one list of everything waiting for you, in every session and on every linked machine: approvals and questions an agent is blocked on, questions an agent put to you, mail, agents that errored, conversations to resume after a restart, and finished turns you have not looked at. From it you answer prompts, reply to agents and review what they changed.
 
@@ -32,6 +33,7 @@ A person who never runs an agent is not shown any of this. Until an agent has be
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>o</kbd> | Go to the oldest item that needs you, switching session and workspace. <kbd>o</kbd> again goes to the next |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>O</kbd> | Go to the newest finished turn you have not seen. <kbd>O</kbd> again goes to the next older one |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>M</kbd> | Open the Inbox on its mail. <kbd>m</kbd> there opens the whole mailbox |
+| <kbd>Tab</kbd> in the Inbox | Show every agent in one list, with its conversation. See [The agents view](#the-agents-view) |
 
 The palette has them too: type `agent`.
 
@@ -204,11 +206,183 @@ Try the keys on a pretend Inbox. Focus the list, then allow the risky command, s
 
 <InboxDemo />
 
+## The agents view <Since action="inbox_agents" /> [#the-agents-view]
+
+<kbd>Tab</kbd> in the Inbox shows every agent in one list: the agents of this session, of the other sessions, and of linked machines. <kbd>Tab</kbd> again goes back to the attention list. The Inbox opens on the view you used last. This needs the next TUIOS release after v0.10.0.
+
+<Shot
+  name="agents-view"
+  width={1600}
+  height={823}
+  alt="The Inbox's agents view. The list shows four agents with their state and session. Beside it, the thread of a Claude Code agent shows the prompt, its tool calls and its last answer."
+/>
+
+Each row shows the agent's state mark, its name, its session, what it does and how long it has done it. The row also shows what waits for the agent: queued replies, unread mail and subagents. An agent on another machine has the machine's name before its session. The rows come from the rail's agents section, so the two lists always agree.
+
+| Key | Does |
+|-----|------|
+| <kbd>j</kbd>, <kbd>k</kbd> | Move |
+| <kbd>f</kbd> | Show one group: all, needs you, working, done, error |
+| <kbd>s</kbd> | Sort: needs you first, name, most recent change, session |
+| <kbd>/</kbd> | Search. A `key:value` term is a [selector](#selectors). Other words match the name, the session and the agent's last message |
+| <kbd>Enter</kbd> | Go to the agent's pane |
+| <kbd>r</kbd> | Reply to the agent. See [Replying and the queue](#replying-and-the-queue) |
+| <kbd>Ctrl</kbd>+<kbd>]</kbd> | Look at the agent's own screen. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> comes back |
+| <kbd>Tab</kbd> | Go back to the attention list |
+| <kbd>Esc</kbd> | Close |
+
+### The thread <Since feature="agent-thread" /> [#the-thread]
+
+On a screen 110 columns wide or more, the thread of the selected agent is next to the list. On a narrower screen, <kbd>Enter</kbd> opens the thread in place of the list. <kbd>Enter</kbd> there goes to the pane, and <kbd>Esc</kbd> goes back.
+
+For Claude Code, the thread is the conversation from its transcript: your prompts, its answers, its tool calls and their result, plans and todo lists. The thread grows while the agent works. For other agents, the thread shows the recap of their turns, their last message and their last mail. A gutter mark is in front of all text that an agent wrote. Nothing in that text is a link or a key.
+
+When the agent waits on an approval that the Inbox holds, the whole approval is at the bottom of the thread. <kbd>1</kbd> allows it once, <kbd>2</kbd> always allows it, and <kbd>3</kbd> denies it. The [same rules](#approvals-the-inbox-holds) apply as in the attention list. <kbd>r</kbd> or <kbd>i</kbd> opens the reply editor under the thread.
+
+<kbd>Ctrl</kbd>+<kbd>]</kbd> closes the Inbox, focuses the agent's pane and zooms it. The dock shows `Press ctrl+b i to go back to the agents.` The Inbox then opens on the same agent, at the same scroll, with every draft kept. The key also works while the reply editor is open.
+
+<DocsClip
+  src="/clips/agents-thread"
+  width={1200}
+  height={828}
+  alt="The Inbox opens on the agents view. The cursor moves through four agents, and the thread next to the list changes. Ctrl+] shows the api agent's own pane, and Ctrl+B i comes back to the same agent."
+  caption="Move through the agents, look at one pane with Ctrl+], and come back with Ctrl+B i."
+/>
+
+The view does not poll. The list changes when the state of an agent changes. The times move on once a minute while the view is on the screen.
+
+### Many agents at once <Since feature="inbox-bulk" /> [#many-agents-at-once]
+
+<kbd>Space</kbd> marks the selected agent. <kbd>\*</kbd> marks every agent in the list, or clears the marks when all are marked. The title shows how many agents have a mark. With marks:
+
+| Key | Does |
+|-----|------|
+| <kbd>r</kbd> | Write one reply. <kbd>Enter</kbd> queues it for each marked agent, at most 32. An agent that waits on a prompt, or that runs on another machine, does not get it. The dock names those agents |
+| <kbd>1</kbd> | List each approval that the marked agents wait on. <kbd>Enter</kbd> allows all of them |
+| <kbd>3</kbd> | Deny each approval that the marked agents wait on |
+| <kbd>d</kbd> | Dismiss the Inbox items of the marked agents |
+| <kbd>z</kbd> | Snooze the Inbox items of the marked agents. Then select the time |
+
+The list that <kbd>1</kbd> opens shows each approval whole. <kbd>Enter</kbd> does nothing until the list has been on the screen for a moment. A risky approval, a plan, and an approval that the screen cannot show whole are not in the list. The list says `2 need a second look. Allow them one by one.` An approval that changed after the list showed it is not allowed. <kbd>2</kbd>, always allow, does not work on many agents at once.
+
+<kbd>Esc</kbd> and <kbd>Ctrl</kbd>+<kbd>]</kbd> close a reply to many agents and keep the draft. A key that `send-keys` typed does none of these actions.
+
 ## Replying and the queue
 
 A message for an agent in the middle of a turn has nowhere good to go: typed now, it lands in the middle of the turn. The queue holds it in the daemon and types it the moment the agent comes to rest.
 
-<kbd>r</kbd> on a finished or errored item in the Inbox, or on a rail agent row, opens a reply line. <kbd>Enter</kbd> queues it. If the agent is at rest it is typed within a second or so. Otherwise the row says `1 queued` until it is. On the rail, <kbd>x</kbd> drops the newest queued message and <kbd>u</kbd> within 10 seconds queues it again.
+<kbd>r</kbd> on a finished or errored item in the Inbox, on an agent in the agents view, or on a rail agent row opens the reply editor. <kbd>Enter</kbd> queues the reply. If the agent is at rest, TUIOS types the reply in a second or so. If not, the row says `1 queued` until TUIOS types it. On the rail, <kbd>x</kbd> drops the newest queued message and <kbd>u</kbd> within 10 seconds queues it again.
+
+On a pane that waits on a prompt, <kbd>r</kbd> opens nothing and says `api is waiting on a prompt. Answer it first (space to peek).`
+
+### The reply editor <Since feature="reply-composer" /> [#the-reply-editor]
+
+The reply editor keeps line breaks. It grows to 8 rows, then scrolls. This needs the next TUIOS release after v0.10.0.
+
+<Shot
+  name="composer"
+  width={1600}
+  height={777}
+  alt="The reply editor under the thread of the api agent. The draft holds text, a block for a pasted 23-line test log, and an image block. A preview of the image, a latency graph, is above the draft."
+/>
+
+| Key | Does |
+|-----|------|
+| <kbd>Enter</kbd> | Queue the reply |
+| <kbd>Ctrl</kbd>+<kbd>J</kbd>, <kbd>Shift</kbd>+<kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd>, <kbd>\\</kbd> then <kbd>Enter</kbd> | Add a new line |
+| <kbd>Alt</kbd>+<kbd>←</kbd> <kbd>→</kbd>, <kbd>Ctrl</kbd>+<kbd>←</kbd> <kbd>→</kbd> | Move by word |
+| <kbd>Home</kbd>, <kbd>End</kbd>, <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>E</kbd> | Go to the start or end of the line |
+| <kbd>Ctrl</kbd>+<kbd>W</kbd>, <kbd>Alt</kbd>+<kbd>Backspace</kbd> | Delete a word |
+| <kbd>Ctrl</kbd>+<kbd>U</kbd>, <kbd>Ctrl</kbd>+<kbd>K</kbd> | Delete to the start or end of the line |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Alt</kbd>+<kbd>Z</kbd> | Undo, redo |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd> | Clear the draft |
+| <kbd>Ctrl</kbd>+<kbd>V</kbd> | Paste from the clipboard: its text, or its image when it holds an image and no text |
+| <kbd>↑</kbd>, <kbd>↓</kbd>, <kbd>Ctrl</kbd>+<kbd>R</kbd> | Bring back an earlier reply. See [History and your editor](#history-and-your-editor) |
+| <kbd>Ctrl</kbd>+<kbd>G</kbd> | Edit the draft in `$VISUAL` or `$EDITOR` |
+| <kbd>Esc</kbd> | Close the editor and keep the draft. <kbd>r</kbd> on the same pane opens it again |
+
+The deny reason, the answer to a prompt and the selector line use the same editing keys, on one line.
+
+**Paste blocks.** A paste of more than 800 characters or 3 lines shows as one block, such as `[Pasted text #1 · 42 lines]`. The cursor steps over a block in one move, and <kbd>Backspace</kbd> deletes all of it. When the cursor is right after a block, the block is selected and the footer shows its keys:
+
+| Key | Does |
+|-----|------|
+| <kbd>Ctrl</kbd>+<kbd>O</kbd> | Read the text of the block. The arrows and page keys scroll, <kbd>Esc</kbd> goes back |
+| <kbd>Ctrl</kbd>+<kbd>E</kbd> | Put the text of the block into the draft, to edit it |
+| <kbd>Backspace</kbd> | Remove the block |
+
+Undo brings back a block that you removed or expanded.
+
+Before it sends, the editor removes invisible characters, such as Unicode tags, bidi controls and zero-width spaces. When it removes any, it does not send and says `Removed 3 invisible characters. Read the message and press enter to send.` Text from a web page can hide instructions in these characters.
+
+### Naming a pane, an agent or a file [#naming-a-pane-an-agent-or-a-file]
+
+Type `@` at the start of the reply or after a space. A list opens under the editor: the agents and panes of every session on this machine, and the files in the folder of the pane that gets the reply. Type more to narrow the list.
+
+```
+› compare with @rev
+  agent work/review  working
+```
+
+| Key | Does |
+|-----|------|
+| <kbd>↑</kbd>, <kbd>↓</kbd> | Select an entry |
+| <kbd>Tab</kbd> | Put the entry in place of the `@` and the text after it |
+| <kbd>Esc</kbd>, <kbd>Space</kbd> | Close the list |
+
+An agent or a pane goes in as its address, such as `work/review`. A file goes in as its path from the folder of the pane, such as `api/client.go`. A folder goes in with a slash and keeps the list open, so you can go into it. TUIOS does not copy the file. The agent reads it with its own tools.
+
+The list shows no files for a pane whose folder TUIOS does not know, or whose shell runs on another machine. A client in a browser or on the SSH server shows no files, because the files are on the server and not with you.
+
+### Images <Since feature="reply-images" /> [#images]
+
+An image in the reply shows as one block, such as `[Image #1 · 1280×720 png]`. These three actions attach an image:
+
+- <kbd>Ctrl</kbd>+<kbd>V</kbd> when the clipboard holds an image and no text. TUIOS reads it with `wl-paste`, `xclip`, `osascript` or PowerShell.
+- An empty paste from your terminal. Some terminals send one when the clipboard holds only an image.
+- A paste of only the path of an image file. A terminal pastes a file that you drop on it in this way.
+
+While the draft holds an image, a strip above the draft shows a preview of each image, 3 rows high. The strip shows at most 4 images, then `+N more`. TUIOS draws the previews with kitty graphics when your terminal has them, and with block characters if not. At 16 colours each image is a line of text, such as `Image #1 · 1280×720 png · 412 KB`.
+
+<kbd>Ctrl</kbd>+<kbd>O</kbd> on a selected image shows it larger in place of the draft. There, <kbd>o</kbd> opens the image in the image viewer of your desktop, from a private copy. TUIOS removes the copy when you close the view. <kbd>Esc</kbd> goes back to the draft.
+
+A reply takes 8 images, each at most 8 MB, and 8 MB in total. The same image twice is refused: `Image #1 is already in the message.` A client that runs on another machine, such as `tuios ssh` or the browser, cannot read your clipboard image. There, <kbd>Ctrl</kbd>+<kbd>V</kbd> pastes the text.
+
+When TUIOS types the reply, the daemon writes each image to a file on the machine of the pane. The harness manifest tells where the path goes. Claude Code, Codex, OpenCode, Kilo and Crush get the path in a paste of its own, where the image was, so the agent attaches the image. See [How a reply is typed](/docs/agents#how-a-reply-is-typed). An agent that takes no images refuses the reply: `This agent cannot take images. Remove the image to send.`
+
+### Large pastes [#large-pastes]
+
+The daemon on the machine of the pane decides how each block gets to the agent when it types the reply:
+
+- A reply of 12 KB or less goes in one paste, with the text of each block in its place.
+- In a larger reply, each block goes into a file, and a label in its place names the file.
+
+```
+make the backoff jitter configurable. The failing run:
+[Pasted text #1: /run/user/1000/tuios/paste/tuios-paste-reply-20261016-101500-3fa2c1.txt, 2,048 lines]
+```
+
+The agent reads the file with its own tools. The file is yours only, in the paste folder next to the daemon's socket. The daemon writes the file when it types the reply, so a reply that waits in the queue never names a file that is gone. The daemon keeps the file for 24 hours, and removes it when the daemon stops.
+
+The typed words without the blocks must fit in 16 KB, and the whole reply in 8 MB. A larger reply stays open and says why: `The message is larger than 16 KB. Make it shorter to send.` or `The message is larger than 8 MB. Remove a paste to send.`
+
+A daemon from v0.10.0 or earlier takes a reply with blocks only when all of it fits in 16 KB. For a larger reply, the editor keeps the draft and tells you to restart the daemon with `tuios kill-server`.
+
+### History and your editor [#history-and-your-editor]
+
+<kbd>↑</kbd> on the first row of the draft brings back what you sent to this agent before, newest first. <kbd>↓</kbd> on the last row goes the other way, back to your draft. <kbd>Ctrl</kbd>+<kbd>R</kbd> searches what you sent: type to narrow the list, select with the arrows, and press <kbd>Enter</kbd> to load the message. A draft that <kbd>Ctrl</kbd>+<kbd>C</kbd> cleared is in the history too.
+
+The daemon keeps the history in memory only, for each harness and folder. A pane that opens again in the same folder keeps its history. The history ends when the daemon stops. Only your attached client can read it. Each message keeps at most 256 KB of pastes and images. A larger block is not kept, and the editor tells you when the message comes back.
+
+<kbd>Ctrl</kbd>+<kbd>G</kbd> opens the draft in `$VISUAL` or `$EDITOR`, with the text of each block in its place. When you save and quit, the file becomes the draft. An image is in the file as its label, such as `[Image #1 · 640×480 png]`. Keep the label to keep the image in its place. Remove the label to remove the image. TUIOS refuses a file that is too large for a draft, and the draft does not change. The file is yours only, and TUIOS removes it when the editor closes.
+
+When the daemon refuses a reply, the draft stays. Drafts stay in the memory of the client and end with it.
+
+### Replying to an agent on another machine <Since feature="queue-host" /> [#replying-to-an-agent-on-another-machine]
+
+A reply to an agent on a linked machine goes to the daemon on this machine, which sends it over the link. The other machine queues it, writes the paste and image files there, and types the reply when the agent comes to rest. The `[hosts]` policy of that machine for this machine must allow `write`, and `files` for a paste block or an image. See [Remote Hosts](/docs/remote-hosts).
+
+### The queue [#the-queue]
 
 From a shell:
 
@@ -226,7 +400,8 @@ q1  waiting  shell  just now  build  make the backoff jitter configurable
 - A message is typed once the agent has been at rest for a second, one message per rest.
 - It is never typed over a prompt the agent waits on, so a queued message cannot answer an approval.
 - The daemon watches for the agent to take it. A message it does not take within 5 seconds is marked `stalled`, is never typed again, and opens a question in the Inbox asking you to look at the pane.
-- A pane holds at most 8 messages (`[agents.queue] max`), each at most 16 KiB. The queue lives in memory: a daemon restart, the pane closing, or the agent leaving the pane drops it.
+- A pane holds at most 8 messages (`[agents.queue] max`), each at most 16 KiB of typed text. A reply with paste blocks can carry up to 8 MiB of pasted text. The queues hold at most 32 MiB for each pane and 128 MiB in total.
+- The queue lives in memory: a daemon restart, the pane closing, or the agent leaving the pane drops it.
 
 ## Reviewing an agent's changes
 

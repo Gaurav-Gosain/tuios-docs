@@ -21,6 +21,8 @@
 #   "kind": "clip"  The take is drawn at 60 fps by media/render.mjs and
 #                   encoded by media/encode.sh to public/clips/NAME.webm (AV1),
 #                   NAME.mp4 (H.264) and the poster NAME.webp.
+#   "kind": "still" A shot of the take's last frame, drawn as a clip is.
+#                   For a screen with a glyph the font lacks.
 #
 # Every take runs against its own daemon in a throwaway HOME, never yours.
 # Encodes run one at a time at nice 19 on cores 0 to 3.
@@ -83,6 +85,21 @@ clip_scene() { # NAME
   echo "clip: public/clips/$name.webm"
 }
 
+still_scene() { # NAME
+  # A shot drawn by the clip renderer: the take's last frame, drawn by
+  # xterm.js. Use it when the screen has a glyph the font lacks, because
+  # Chromium falls back to a system font for it and screenshot_screen does not.
+  local name=$1 dir=$media/scenes/$1 shot font
+  font=$(jq -r '.font // 28' "$dir/scene.json")
+  shot=$(jq -r '.still' "$dir/scene.json")
+  python3 "$media/rig.py" "$dir" "$build/$name"
+  node "$media/render.mjs" "$build/$name" "$build/$name/master.mkv" --font "$font" --pre 0 --max 60
+  run ffmpeg -v error -y -sseof -0.1 -i "$build/$name/master.mkv" -frames:v 1 -update 1 "$build/$name/$shot.png"
+  webp "$build/$name/$shot.png" "$root/public/shots/$shot.webp" 1600
+  webp "$build/$name/$shot.png" "$root/public/shots/$shot-800.webp" 800
+  echo "shot: public/shots/$shot.webp"
+}
+
 scenes=("$@")
 if ((${#scenes[@]} == 0)); then
   for d in "$media"/scenes/*/; do scenes+=("$(basename "$d")"); done
@@ -92,6 +109,7 @@ for name in "${scenes[@]}"; do
   case $kind in
   shot) shot_scene "$name" ;;
   clip) clip_scene "$name" ;;
+  still) still_scene "$name" ;;
   *) echo "docs-media: $name: unknown kind $kind" >&2; exit 1 ;;
   esac
 done

@@ -257,6 +257,32 @@ The `agent-transcript` verb returns the conversation of the agent in a pane as d
 
 The opt-in `transcript` event says that the conversation grew. See [Control Protocol](/docs/control-protocol#agent-transcript).
 
+## How a reply is typed [#how-a-reply-is-typed]
+
+A reply from the Inbox, `ask-agent`, `fan`, `start-agent` and the queue type a prompt in the same way. The text goes in as one paste, then TUIOS waits a short time and sends the submit key. The `[input]` block of the harness manifest sets the details:
+
+```toml
+[input]
+submit              = "cr"          # or "lf": the key that submits
+bracketed_paste     = true          # false: never bracket the paste
+focus_before_submit = false         # true: send a focus-in report first
+source              = "measured on ..."
+images              = "path_paste"  # or "path_text" or "none"
+images_source       = "not measured"
+```
+
+`images` <Since feature="harness-images" /> tells how the harness takes an image that you attach to a reply. The daemon writes the image to a file on the machine of the pane, then:
+
+| Value | Does |
+|-------|------|
+| `path_paste` | Pastes the text before the image, then the path of the file in a paste of its own, then the text after it. The harness reads the pasted path as an attached image. A pane without bracketed paste gets the path in the text |
+| `path_text` | Puts the path in the text. The agent opens the file with its own tools. This is the default |
+| `none` | Refuses a reply with an image |
+
+Claude Code, Codex, OpenCode, Kilo and Crush use `path_paste`. Pi uses `path_text`. `images_source` tells which values were measured: OpenCode 1.19.3 and Crush v0.98.1 attach a pasted path, and Pi 0.73.1 keeps it as text. This needs the next TUIOS release after v0.10.0.
+
+A manifest without the block gets the defaults: a carriage return, and a bracketed paste when the pane asks for one.
+
 ## When a pane is marked wrong
 
 Two commands show exactly what the daemon saw.

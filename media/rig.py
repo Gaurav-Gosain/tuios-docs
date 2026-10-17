@@ -8,6 +8,10 @@ A scene is a folder under media/scenes/ with:
   scene.json   {"cols", "rows", "shots": [names], "clip": bool, "tail": s}
   setup.tape   optional. Played first. It is not part of a clip.
   scene.tape   played second. A clip covers this tape and "tail" seconds.
+               "steps" in scene.json replaces it with a list of tape names
+               and pastes, {"paste": TEXT} or {"paste_file": PATH in the
+               work folder}, which the rig writes to the client as the
+               terminal would.
                A shot scene ends its tape with `Action screenshot_screen`,
                once per name in "shots".
   setup.sh     optional. Runs before tuios starts, in the scene's work
@@ -277,7 +281,19 @@ def main():
             run_tape("setup.tape", 120)
             pump(now() + scene.get("settle", 0.8))
         start = now()
-        run_tape("scene.tape", scene.get("limit", 120))
+        # "steps" plays tapes and terminal pastes in turn, in place of
+        # scene.tape. A tape cannot paste: a paste is the terminal's, so the
+        # rig writes it to the client as a bracketed paste, between tapes.
+        for step in scene.get("steps", ["scene.tape"]):
+            if isinstance(step, str):
+                run_tape(step, scene.get("limit", 120))
+                continue
+            if "paste_file" in step:
+                text = open(os.path.join(work, step["paste_file"]), encoding="utf-8").read()
+            else:
+                text = step["paste"]
+            os.write(fd, b"\x1b[200~" + text.encode() + b"\x1b[201~")
+            pump(now() + step.get("settle", 0.8))
         end = now()
         pump(end + scene.get("tail", 1.0))
         with open(os.path.join(build, "marks.json"), "w") as f:
