@@ -6,13 +6,14 @@ icon: Scale
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 TUIOS is a terminal multiplexer that works like a window manager. Shells run in windows that float or tile. A daemon keeps them running when you detach. TUIOS also tracks the coding agents running in its panes. It runs inside any terminal, over SSH, or in a browser.
 
-TUIOS is not a terminal emulator: it does not draw fonts or open GUI windows. It is also young. The first commit is from September 2025, and the latest release is v0.10.0 (October 2026). This page describes that release.
+TUIOS is not a terminal emulator: it does not draw fonts or open GUI windows. It is also young. The first commit is from September 2025, and the latest release is v0.10.0 (October 2026). This page describes that release, plus some features on TUIOS main. Each of those has an "Unreleased" badge. To use them, build TUIOS from main. [Versions](/docs/versions) lists what each release added.
 
 <Callout type="info" title="How this page was checked">
-Each fact about another tool comes from that project's own docs, changelog, manual or source, as of September 2026. The [Sources](#sources) list links them. The versions checked are tmux 3.7c (3.8 is in release candidate), zellij 0.45.1, herdr 0.9.1, GNU screen 5.0.2, WezTerm 20240203, kitty 0.49.0 and Ghostty 1.3.1. The TUIOS facts are checked against the TUIOS source and a current build. There are no speed numbers here, because no side-by-side benchmark has been run.
+Each fact about another tool comes from that project's own docs, changelog, manual or source, as of October 2026. The [Sources](#sources) list links them. The versions checked are tmux 3.8, zellij 0.45.1, herdr 0.9.5, GNU screen 5.0.2, WezTerm 20240203, kitty 0.49.2 and Ghostty 1.3.1. Work on the main branch of these projects that is in no release yet is not listed. The TUIOS facts are checked against the TUIOS source and a current build. There are no speed numbers here, because no side-by-side benchmark has been run.
 </Callout>
 
 ## At a glance
@@ -22,10 +23,10 @@ This table covers the tools that run inside a terminal. Terminals with their own
 | | TUIOS | tmux | zellij | herdr | GNU screen |
 |---|---|---|---|---|---|
 | Language, licence | Go, MIT | C, ISC | Rust, MIT | Rust, Apache 2.0 | C, GPL 3 |
-| Binary, macOS arm64 | 23 MB, plus `tuios-web` | 1 MB, with shared libraries | 41 MB | 22 MB | Not measured |
-| Layout | Floating windows, or tiled: BSP, master-stack, scrolling columns | Tiled panes with preset layouts. Floating panes since 3.7 | Tiled, floating and stacked panes | Tiled splits, with zoom | Split regions |
+| Binary, macOS arm64 | 34.4 MB, plus 38.7 MB for `tuios-web` | 1.2 MB, with shared libraries | 41.4 MB | 22.5 MB | Not measured |
+| Layout | Floating windows, or tiled: BSP, master-stack, scrolling columns | Tiled panes with preset layouts. Floating panes since 3.7 | Tiled, floating and stacked panes | Tiled splits, with zoom. Modal popup panes for commands and plugins | Split regions |
 | Grouping | 9 workspaces per session | Windows in a session | Tabs in a session | Workspaces, then tabs | Windows in a session |
-| Mouse | Always on. Drag, resize, focus. Drop a pane on an edge to split | Off by default in 3.7, on in 3.8 | On by default | On by default. Click, drag, menus | Focus a region (`mousetrack`) |
+| Mouse | Always on. Drag, resize, focus. Drop a pane on an edge to split | On by default since 3.8 | On by default | On by default. Click, drag, menus | Focus a region (`mousetrack`) |
 | Detach and reattach | Yes, a daemon | Yes, a server | Yes, a server | Yes, a server | Yes |
 | After a restart | Layout, working directories, pane history and agent conversations | Nothing built in. The tmux-resurrect plugin | Layout and commands. Optional scrollback | Layout, working directories and supported agent conversations. Optional screen history | Nothing |
 | Several clients | Yes, all can type. Sized to the smallest, largest or latest client. `attach -d` detaches the others | Yes. Read-only clients and per-user access | Yes. A cursor per user, read-only attach | Yes. Each client can view its own tab | Yes. Per-user access lists, read-only possible |
@@ -34,30 +35,31 @@ This table covers the tools that run inside a terminal. Terminals with their own
 | Scripting | CLI verbs, JSON protocol, blocking waits, event stream, tapes, hooks | tmux commands, control mode, hooks, formats | `zellij action`, `subscribe`, JSON pane lists, plugin pipes | CLI and JSON socket API, output and agent waits, event subscriptions | `screen -X` and `-Q` |
 | Coding agents | States, alerts, waits, an Inbox that answers approvals, review with notes, queued prompts, messages between agents, worktrees, fan-out | None | None | States, alerts, prompt and wait, worktrees, conversation restore | None |
 | Images | Kitty graphics, and sixel cropped to the window. Block characters on a terminal without graphics. Experimental | Sixel when built with it. Others by passthrough | Sixel and Kitty graphics | Kitty graphics | None |
-| Config | TOML, live `set-config`, settings page | `tmux.conf`, written as tmux commands | KDL | TOML | `.screenrc` |
+| Config | TOML, live `set-config`, settings page. Keybind presets for tmux, screen and zellij <Since config="keybindings.preset" /> | `tmux.conf`, written as tmux commands | KDL | TOML | `.screenrc` |
 | Extending | Hooks, dock components, control protocol. Hosts herdr plugins | No plugin system. TPM, a third-party manager | WebAssembly plugins | Plugins: any executable with a manifest | None |
 | Platforms | Linux, macOS, Windows, FreeBSD, OpenBSD | Linux, macOS, the BSDs, Solaris | Linux, macOS, Windows | Linux, macOS, Windows | Unix-like systems |
 
-Binary sizes are for macOS on Apple silicon: tmux 3.7c from Homebrew, the zellij 0.45.1 and herdr 0.9.1 release binaries, and TUIOS built from main with `-ldflags "-s -w"`.
+Binary sizes are for macOS on Apple silicon, in megabytes of 1,000,000 bytes: tmux 3.8 from Homebrew, and the zellij 0.45.1, herdr 0.9.5 and TUIOS v0.10.0 release binaries. The TUIOS release binary is 34,434,994 bytes. A build of the v0.10.0 source with Go 1.26.9 and `-ldflags "-s -w"` has the same size.
 
 ## tmux
 
-tmux is the default choice, and for good reason. It is packaged almost everywhere and is often already installed. The binary is about 1 MB. Its control mode (`tmux -C`) lets terminals such as iTerm2 show tmux windows as native tabs and windows.
+tmux is the default choice, and for good reason. It is packaged almost everywhere and is often already installed. The binary is about 1.2 MB. Its control mode (`tmux -C`) lets terminals such as iTerm2 show tmux windows as native tabs and windows.
 
 **Where tmux is stronger**
 
 - It runs on servers you do not control, with nothing to install.
 - Read-only clients (`attach -r`) and per-user access (`server-access`) are built in. TUIOS has neither in its terminal client.
 - It is mature and widely documented, with a large body of shared configs and scripts.
-- 3.8 is moving fast: floating panes that move and resize with commands, modal panes, JSON layout strings, and `wait-for -E` to wait on hook events.
+- 3.8 shipped in September 2026. It added floating panes that move and resize with commands, modal panes, JSON layout strings, built-in light and dark themes, and `wait-for -E` to wait on hook events.
 
 **Where TUIOS is stronger**
 
-- Floating windows are the core model, not an add-on. In 3.7 tmux floating panes move and resize only with the mouse. TUIOS also has three tiling modes and zoom.
+- Floating windows are the core model, and every window can float or tile. TUIOS also has three tiling modes and zoom.
 - Layout and working directories come back after a reboot with no plugin.
 - Programs get a JSON protocol with `list-verbs` for discovery, blocking `wait-for` on output, exit, idle or agent state, and an event stream.
 - Agent state, alerts and messages between agents. tmux has nothing for agents.
 - A browser client and a built-in SSH server.
+- A theme editor <Since feature="theme-editor" /> that shows each change on the whole screen, and a second theme for a light terminal <Since config="appearance.theme_light" />.
 
 **Pick tmux** if you work on many machines you do not own, need read-only sharing, or use a terminal built around control mode.
 
@@ -67,7 +69,7 @@ zellij is the modern, friendly multiplexer. It shows the available keys on scree
 
 **Where zellij is stronger**
 
-- It teaches itself: the status bar shows the keys for the current mode.
+- It teaches itself: the status bar always shows the keys for the current mode. TUIOS shows a which-key menu only after the leader key.
 - Plugins are WebAssembly. Rust is the officially supported language, and community projects cover others.
 - The web client (`zellij web`) has login tokens, read-only tokens, and requires HTTPS on any address other than `127.0.0.1`. `tuios-web` has no login and needs an authenticating proxy in front.
 - Resurrection brings back the commands in each pane, behind a "Press ENTER to run" prompt, and can save the viewport and scrollback. TUIOS brings back a fresh shell under the pane's saved history, and runs no command again.
@@ -81,24 +83,24 @@ zellij is the modern, friendly multiplexer. It shows the available keys on scree
 - Blocking waits from the CLI on a pattern in the output, on idle and on exit. zellij can block until a pane's command exits, and `zellij subscribe` streams a pane's output for a script to watch.
 - Sessions on other machines in your own client, without a web server.
 
-**Pick zellij** if you want discoverable keys, plugins, or browser access with its own login.
+**Pick zellij** if you want discoverable keys, plugins, or browser access with its own login. If you move from zellij to TUIOS, the zellij preset <Since config="keybindings.preset" /> gives you zellij's unlock-first keys on <kbd>Ctrl</kbd>+<kbd>G</kbd>.
 
 ## herdr
 
-herdr is the closest tool to TUIOS. It is a multiplexer built for coding agents, released in March 2026. It is more widely used, with about 40k [GitHub stars](https://github.com/herdrdev/herdr) against 5.3k for TUIOS, and it releases more often: 0.9.0 and 0.9.1 both shipped in September 2026. Several of the agent screen rules in TUIOS are adapted from herdr's manifests, which are Apache 2.0.
+herdr is the closest tool to TUIOS. It is a multiplexer built for coding agents, released in March 2026. It is more widely used, with about 44k [GitHub stars](https://github.com/herdrdev/herdr) against 5.4k for TUIOS in October 2026. It also releases more often: 0.9.2 to 0.9.5 shipped between 29 September and 14 October 2026. Several of the agent screen rules in TUIOS are adapted from herdr's manifests, which are Apache 2.0.
 
 **Where herdr is stronger**
 
 - After a server restart it can replay recent screen history if you turn that on. TUIOS restores the layout, a fresh shell, and supported agents' conversations, but not the screen.
-- It adds new agents often: 0.9.1 added Letta Code and 0.9.0 added Muse.
+- It adds new agents often: 0.9.1 added Letta Code and 0.9.0 added Muse. Since 0.9.2, an agent can report its own resume command, and herdr reopens that session after a restart.
 - Plugins: a directory with a `herdr-plugin.toml` manifest and commands in any language, plus a marketplace.
 - One window holds local work and several saved SSH machines, with one combined agent list.
-- Each attached client can look at a different tab at its own size. TUIOS draws a session at one size for every client: the smallest, the largest or the latest, as `[daemon] window_size` sets.
+- Each attached client can look at a different tab at its own size. When two clients share a tab, the last one to use it sets its size. TUIOS draws a session at one size for every client: the smallest, the largest or the latest, as `[daemon] window_size` sets.
 - `herdr update --handoff` can update the server while panes keep running. This is experimental.
 
 **Where TUIOS is stronger**
 
-- Floating windows, and BSP, master-stack and scrolling-column layouts. herdr has splits and zoom.
+- Floating windows, and BSP, master-stack and scrolling-column layouts. herdr has splits, zoom, and modal popup panes for commands and plugins.
 - A browser client and a built-in SSH server. herdr uses an SSH client on phones instead.
 - Tape scripts to drive the UI, and tape recording.
 - Sixel images as well as Kitty graphics.
@@ -106,6 +108,9 @@ herdr is the closest tool to TUIOS. It is a multiplexer built for coding agents,
 - Agents that report to herdr, such as Crush, report to TUIOS too, with no install step.
 - Tools built for herdr's socket API, such as Collie's herdr adapter, work with TUIOS too. See [herdr Compatibility](/docs/herdr-compatibility).
 - An Inbox that answers held approvals, with risk rules that make a dangerous allow take two presses, and a review of what an agent changed, with notes sent back to it.
+- An agents view in the Inbox <Since action="inbox_agents" /> that lists every agent with its conversation as a thread. You can act on many agents at once.
+- A reply editor for agents <Since feature="reply-composer" />, with paste blocks, pasted images and <kbd>@</kbd> to name a pane, an agent or a file.
+- Replies to agents on linked machines <Since feature="queue-host" />, from the same Inbox.
 
 **Pick herdr** if agents are most of what you run, splits are enough, and you want plugins or screen history after a restart.
 
@@ -133,7 +138,7 @@ WezTerm, kitty and Ghostty are terminal emulators. They draw their own windows, 
 
 | | WezTerm | kitty | Ghostty |
 |---|---|---|---|
-| Version checked | 20240203 (latest stable, nightly builds since) | 0.49.0 | 1.3.1 |
+| Version checked | 20240203 (latest stable, nightly builds since) | 0.49.2 | 1.3.1 |
 | Language | Rust | C, Python and Go | Zig |
 | Splits | Panes, tabs, windows, workspaces | Layouts: splits, tall, fat, grid, stack, horizontal, vertical | Native tabs and splits |
 | Detach | Yes, through a mux server | No | No |
@@ -176,6 +181,8 @@ TUIOS uses the same leader key as tmux, and several prefix keys match:
 | Split left and right | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>%</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>&#124;</kbd> |
 | Split top and bottom | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>"</kbd> | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>-</kbd> |
 
+To keep the keys you know, set a keybind preset <Since config="keybindings.preset" />. The `tmux` preset gives tmux 3.8's keys after the leader. There are also `screen` and `zellij` presets. Press <kbd>U</kbd> in window management mode to pick one, or run `tuios keybinds preset tmux`. The welcome screen offers a preset when it finds a tmux, screen or zellij config. See [Keybindings](/docs/keybindings).
+
 Many CLI verbs share tmux's names too: `new-window`, `split-window`, `send-keys`, `capture-pane`, `list-windows`, `kill-session`.
 
 `tuios --server NAME` runs a separate daemon, as `tmux -L NAME` runs a separate server. See [A separate daemon](/docs/sessions#a-separate-daemon).
@@ -188,11 +195,12 @@ The difference to learn is the two modes. Keys typed in window management mode m
 
 **tmux**
 
-- [tmux 3.7c release](https://github.com/tmux/tmux/releases/tag/3.7c) and [3.8-rc2](https://github.com/tmux/tmux/releases/tag/3.8-rc2)
-- [CHANGES](https://github.com/tmux/tmux/blob/master/CHANGES): floating panes in 3.7 and 3.8, mouse on by default in 3.8, `wait-for -E`, sixel fixes
+- [tmux 3.8 release](https://github.com/tmux/tmux/releases/tag/3.8), September 2026
+- [CHANGES](https://github.com/tmux/tmux/blob/master/CHANGES): floating panes in 3.7 and 3.8, modal panes, JSON layouts, themes, mouse on by default in 3.8, `wait-for -E`, sixel fixes
+- [Homebrew formula](https://formulae.brew.sh/formula/tmux): tmux 3.8, the binary that was measured
 - [Manual page source](https://github.com/tmux/tmux/blob/master/tmux.1): `attach -r`, `server-access`, `mouse`, `allow-passthrough`, control mode
 - [README](https://github.com/tmux/tmux/blob/master/README): supported platforms
-- [configure.ac](https://github.com/tmux/tmux/blob/master/configure.ac): sixel is off unless built with `--enable-sixel`
+- [configure.ac](https://github.com/tmux/tmux/blob/3.8/configure.ac): sixel is off unless built with `--enable-sixel`
 - [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) and [TPM](https://github.com/tmux-plugins/tpm), both third party
 - [iTerm2 tmux integration](https://iterm2.com/documentation-tmux-integration.html): tmux windows as native tabs and windows
 
@@ -211,7 +219,8 @@ The difference to learn is the two modes. Keys typed in window management mode m
 - [Session state and restore](https://herdr.dev/docs/session-state/): restart, screen history, agent restore, live handoff
 - [Supported agents](https://herdr.dev/docs/agents/) and [agent automation](https://herdr.dev/docs/agent-automation/)
 - [Plugins](https://herdr.dev/docs/plugins/), [configuration](https://herdr.dev/docs/configuration/) (TOML, Kitty graphics), [connecting machines](https://herdr.dev/docs/connecting-machines/), [install](https://herdr.dev/docs/install/)
-- [CHANGELOG](https://github.com/herdrdev/herdr/blob/master/CHANGELOG.md) and [0.9.1 release](https://github.com/herdrdev/herdr/releases/tag/v0.9.1)
+- [CHANGELOG](https://github.com/herdrdev/herdr/blob/master/CHANGELOG.md): popup panes (0.7.4), clients on different tabs (0.9.0), Letta Code (0.9.1), resume commands that agents report (0.9.2)
+- [Releases](https://github.com/herdrdev/herdr/releases): 0.9.2 to 0.9.5, and the [0.9.5 release](https://github.com/herdrdev/herdr/releases/tag/v0.9.5) that was measured
 - [claude-squad](https://github.com/smtg-ai/claude-squad)
 
 **GNU screen**
@@ -223,7 +232,7 @@ The difference to learn is the two modes. Keys typed in window management mode m
 **Terminals**
 
 - WezTerm: [multiplexing](https://wezterm.org/multiplexing.html), [features](https://wezterm.org/features.html), [CLI](https://wezterm.org/cli/cli/index.html), [releases](https://github.com/wezterm/wezterm/releases)
-- kitty: [layouts](https://sw.kovidgoyal.net/kitty/layouts/), [remote control](https://sw.kovidgoyal.net/kitty/remote-control/), [sessions](https://sw.kovidgoyal.net/kitty/sessions/), [FAQ](https://sw.kovidgoyal.net/kitty/faq/), [changelog](https://sw.kovidgoyal.net/kitty/changelog/)
+- kitty: [layouts](https://sw.kovidgoyal.net/kitty/layouts/), [remote control](https://sw.kovidgoyal.net/kitty/remote-control/), [sessions](https://sw.kovidgoyal.net/kitty/sessions/), [FAQ](https://sw.kovidgoyal.net/kitty/faq/), [changelog](https://sw.kovidgoyal.net/kitty/changelog/), [0.49.2 release](https://github.com/kovidgoyal/kitty/releases/tag/v0.49.2)
 - Ghostty: [features](https://ghostty.org/docs/features), [1.3.1 release notes](https://ghostty.org/docs/install/release-notes/1-3-1)
 
 ## Related
