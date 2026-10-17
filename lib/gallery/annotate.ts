@@ -153,6 +153,16 @@ function classify(
   const dotted = path.join(".");
   if (path.length === 1 && LOOK_META.has(dotted)) return null;
   if (path[0] === "theme" || path[0] === "glyphs") return null;
+  // An inline table, such as appearance = { gap = 1 }, of a table that
+  // holds look keys: the look file takes its keys, so it is not left out.
+  // Its own keys get no notes.
+  if (
+    LOOK_TABLES.has(dotted) &&
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  )
+    return null;
   const key = LOOK_KEYS.get(dotted);
   if (key) {
     const checked = checkLookValue(key, value);

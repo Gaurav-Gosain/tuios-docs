@@ -2,7 +2,9 @@
 
 import { Check, Copy, X } from "lucide-react";
 import {
+  lazy,
   type ReactNode,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -18,8 +20,14 @@ import {
 } from "@/lib/gallery/feed";
 import { type SortMode, sortEntries } from "@/lib/gallery/votes";
 import { ApplyCommand } from "./apply";
-import { HighlightedCode } from "./highlight";
 import { TryItButton } from "./try-it";
+
+// The highlighted config with its key notes shows only in an open dialog, so
+// it is a chunk of its own. The plain text shows while it loads.
+const HighlightedCode = lazy(() =>
+  import("./highlight").then((m) => ({ default: m.HighlightedCode })),
+);
+
 import {
   GithubVotes,
   HeartButton,
@@ -381,7 +389,15 @@ function EntryDialog({
                   </h2>
                   <CopyFile file={file} />
                 </div>
-                <HighlightedCode file={file} />
+                <Suspense
+                  fallback={
+                    <pre className="shiki not-prose overflow-x-auto px-4 pb-4 font-mono text-[13px] leading-relaxed">
+                      <code>{file.text}</code>
+                    </pre>
+                  }
+                >
+                  <HighlightedCode file={file} />
+                </Suspense>
               </section>
             ))}
             {entry.files.length === 0 ? (

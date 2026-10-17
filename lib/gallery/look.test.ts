@@ -84,11 +84,13 @@ border_style = "spiky"
 window_title_format = "\\u001b]52;c;eA==\\u0007{title}"
 dock_compact = "yes"
 animation_speed = 1.5
+border_gradient_angle = 45.0
 border_focused_color = "#ff0000"
 `);
     expect(setKeys(must(l).text)).toContain("appearance.border_focused_color");
     expect(must(l).left.sort()).toEqual([
       "appearance.animation_speed",
+      "appearance.border_gradient_angle",
       "appearance.border_style",
       "appearance.dim_unfocused",
       "appearance.dock_compact",
@@ -154,7 +156,37 @@ border_focused_color = "#ff0000"
   });
 });
 
+/**
+ * The output of `tuios look keys --json`, from TUIOS_BIN or the tuios on PATH.
+ * Null when that tuios has no look keys command and TUIOS_BIN is not set.
+ */
+function tuiosLookKeys(): unknown {
+  const bin = process.env.TUIOS_BIN;
+  try {
+    const run = Bun.spawnSync([bin ?? "tuios", "look", "keys", "--json"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (run.success) return JSON.parse(run.stdout.toString());
+    if (bin) throw new Error(`${bin} look keys --json: ${run.stderr}`);
+  } catch (err) {
+    if (bin) throw err;
+  }
+  return null;
+}
+
+const published = tuiosLookKeys();
+
 describe("look-keys.json", () => {
+  // Set TUIOS_BIN to a tuios build to run it. Without it, the test runs only
+  // when the tuios on PATH has the look keys command.
+  test.skipIf(published === null)(
+    "matches tuios look keys --json exactly",
+    () => {
+      expect(published).toEqual(keys);
+    },
+  );
+
   test("is the list tuios publishes", () => {
     expect(keys.look).toBe(1);
     expect(lookKeyPaths().length).toBeGreaterThan(50);

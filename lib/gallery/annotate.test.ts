@@ -83,6 +83,21 @@ describe("annotate", () => {
     expect(at["appearance.panel_padding"].valueStart).toBeUndefined();
   });
 
+  test("a float for a whole-number key is bad, as tuios refuses it", () => {
+    const [n] = annotate("[appearance]\nanimation_speed = 100.0");
+    expect(n.kind).toBe("bad");
+    expect(n.why).toBe("expected a whole number");
+  });
+
+  test("an inline table of look keys is not called left out", () => {
+    for (const text of [
+      "appearance = { gap = 1 }",
+      "[appearance]\nsidebar = { enabled = true }",
+    ]) {
+      expect(annotate(text)).toEqual([]);
+    }
+  });
+
   test("text that is not TOML has no notes", () => {
     expect(annotate("[appearance\ngap = 1")).toEqual([]);
   });

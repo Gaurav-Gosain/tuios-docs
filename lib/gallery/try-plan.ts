@@ -5,9 +5,11 @@
  * - `set` for each key of the look, by its config path;
  * - `themeJSON` for a [theme] the look carries, last, so its theme wins.
  *
- * The browser build's `set` takes look and input options only, and a look
- * file holds look keys only. What the look left out, and a glyph set, which
- * the page cannot load, are returned as skipped.
+ * Only a look key goes to `set`: the caller passes the paths of
+ * look-keys.json, and any other path in the file is skipped. The browser
+ * build's `set` takes every look key, and refuses the rest itself as well.
+ * What the look left out, and a glyph set, which the page cannot load, are
+ * returned as skipped.
  */
 
 import type { SetupCommand } from "../learn/types";
@@ -33,6 +35,7 @@ function flatten(
 export function planLook(
   doc: Record<string, unknown>,
   look: GalleryLook,
+  keys: ReadonlySet<string>,
 ): Plan {
   const setup: SetupCommand[] = [];
   const skipped = [...look.left];
@@ -55,9 +58,10 @@ export function planLook(
       : null;
   for (const [path, value] of pairs) {
     if (
-      typeof value !== "string" &&
-      typeof value !== "number" &&
-      typeof value !== "boolean"
+      !keys.has(path) ||
+      (typeof value !== "string" &&
+        typeof value !== "number" &&
+        typeof value !== "boolean")
     ) {
       skipped.push(path);
       continue;

@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parse } from "smol-toml";
 import seed from "./gallery-seed.json";
+import lookKeys from "./look-keys.json";
 import { planLook } from "./try-plan";
+
+const KEYS = new Set(lookKeys.keys.map((k) => k.path));
 
 const look = {
   id: "amber",
@@ -23,6 +26,7 @@ describe("planLook", () => {
         theme: { id: "amber-crt", base: "nord", chrome: { accent: "#fff" } },
       },
       look,
+      KEYS,
     );
     expect(plan.setup).toEqual([
       { command: "set", args: ["appearance.gap", "1"], wait: 30 },
@@ -51,11 +55,31 @@ describe("planLook", () => {
     const plan = planLook(
       { look: 1, appearance: { theme: "nord" }, glyphs: { id: "g" } },
       { ...look, left: [], leftCount: 3 },
+      KEYS,
     );
     expect(plan.setup).toEqual([
       { command: "set", args: ["appearance.theme", "nord"], wait: 30 },
     ]);
     expect(plan.skipped).toEqual(["3 more", "glyphs (a glyph set)"]);
+  });
+
+  test("a path that is not a look key is skipped, never set", () => {
+    const plan = planLook(
+      {
+        look: 1,
+        appearance: { gap: 1, preferred_shell: "/bin/sh" },
+        hooks: { on_start: "touch /tmp/x" },
+      },
+      { ...look, left: [], leftCount: 0 },
+      KEYS,
+    );
+    expect(plan.setup).toEqual([
+      { command: "set", args: ["appearance.gap", "1"], wait: 30 },
+    ]);
+    expect(plan.skipped).toEqual([
+      "appearance.preferred_shell",
+      "hooks.on_start",
+    ]);
   });
 
   test("every seed look plans with no key skipped but its left-out ones", () => {
@@ -66,7 +90,7 @@ describe("planLook", () => {
         "utf8",
       );
       const l = (entry as { look: typeof look }).look;
-      const plan = planLook(parse(text) as Record<string, unknown>, l);
+      const plan = planLook(parse(text) as Record<string, unknown>, l, KEYS);
       expect(plan.skipped).toEqual(l.left);
       expect(plan.setup.length).toBeGreaterThan(0);
     }

@@ -103,7 +103,9 @@ export function checkLookValue(key: LookKey, value: unknown): Checked {
         ? { ok: true, value }
         : { ok: false, why: "expected true or false" };
     case "int": {
-      if (typeof value !== "bigint" && !Number.isInteger(value))
+      // A TOML float such as 100.0 is not a whole number to tuios, which
+      // refuses the whole look over it. The parse keeps integers as bigint.
+      if (typeof value !== "bigint")
         return { ok: false, why: "expected a whole number" };
       const n = Number(value);
       if (!Number.isSafeInteger(n))
