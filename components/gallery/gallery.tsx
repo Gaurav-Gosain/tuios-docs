@@ -258,21 +258,27 @@ function VoteRow({
 }
 
 function Byline({ entry }: { entry: GalleryEntry }) {
+  // The title comes from the look, so anyone can write "Zen by @someone" in
+  // it. It gets a line of its own and is cut short there. The login is on
+  // the next line, where a long title cannot push it out of the card.
   return (
-    <p className="min-w-0 truncate text-sm">
-      <a
-        href={entry.url}
-        target="_blank"
-        rel="nofollow ugc noopener"
-        className="font-medium text-fd-foreground underline decoration-fd-primary/40 underline-offset-4 hover:decoration-fd-primary"
-      >
-        {entryTitle(entry)}
-      </a>
-      <span className="text-fd-muted-foreground">
-        {" · "}
+    <div className="min-w-0 text-sm">
+      <p className="truncate">
+        <a
+          href={entry.url}
+          target="_blank"
+          rel="nofollow ugc noopener"
+          aria-label={entryTitle(entry)}
+          className="font-medium text-fd-foreground underline decoration-fd-primary/40 underline-offset-4 hover:decoration-fd-primary"
+        >
+          {entry.title ?? `@${entry.login}'s setup`}
+        </a>
+      </p>
+      <p className="truncate text-fd-muted-foreground">
+        {entry.title ? `by @${entry.login} · ` : null}
         <time dateTime={entry.date}>{formatDate(entry.date)}</time>
-      </span>
-    </p>
+      </p>
+    </div>
   );
 }
 

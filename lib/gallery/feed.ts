@@ -171,8 +171,11 @@ export type GalleryFeed = {
 
 /** The longest title an entry keeps, in characters. */
 export const MAX_TITLE = 60;
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching controls is the point
-const TITLE_BAD = /[\u0000-\u001f\u007f-\u009f]/;
+// Controls, and the bidirectional and invisible characters cleanText removes
+// (text.ts), so a feed written by anything but the sync cannot reorder a card.
+const TITLE_BAD =
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching controls is the point
+  /[\u0000-\u001f\u007f-\u009f\u061c\u180e\u200b\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufff9-\ufffb\u{e0000}-\u{e007f}]/u;
 
 /** Whether a title is one an entry may carry. */
 export function isTitle(value: unknown): value is string {

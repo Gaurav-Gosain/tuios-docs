@@ -48,6 +48,12 @@ describe("parseEntry", () => {
   ];
   for (const [name, over] of bad)
     test(name, () => expect(parseEntry(entry(over))).toBeNull());
+
+  test("a title with a bidi override or a zero-width space is dropped", () => {
+    for (const title of ["Evil\u202Eegami", "Ze\u200Bn", "x".repeat(61)])
+      expect(parseEntry(entry({ title }))?.title).toBeUndefined();
+    expect(parseEntry(entry({ title: "Neon 84" }))?.title).toBe("Neon 84");
+  });
 });
 
 describe("parseFeed", () => {
