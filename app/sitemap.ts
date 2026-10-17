@@ -64,6 +64,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.6,
     })),
     {
+      url: absoluteUrl("/gallery"),
+      changeFrequency: "weekly",
+      priority: 0.6,
+    },
+    {
       url: absoluteUrl("/releases"),
       lastModified: lastModified(releases[0]?.data.date),
       changeFrequency: "weekly",

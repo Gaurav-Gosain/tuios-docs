@@ -1,5 +1,6 @@
 import { brandMarkdown } from "@/lib/brand";
 import { markdownForAgents } from "@/lib/feed";
+import { galleryMarkdown } from "@/lib/gallery/markdown";
 import { learnMarkdown } from "@/lib/learn/markdown";
 import { markdownPath } from "@/lib/markdown-path";
 import { absoluteUrl, site } from "@/lib/site";
@@ -52,6 +53,7 @@ export async function GET() {
   );
   files["/learn.md"] = learnMarkdown();
   files["/brand.md"] = brandMarkdown();
+  files["/gallery.md"] = galleryMarkdown();
 
   return Response.json(files);
 }

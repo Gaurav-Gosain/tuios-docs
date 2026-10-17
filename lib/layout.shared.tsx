@@ -28,6 +28,11 @@ export function baseOptions(): BaseLayoutProps {
         url: "/releases",
         active: "nested-url",
       },
+      {
+        text: "Gallery",
+        url: "/gallery",
+        active: "nested-url",
+      },
     ],
   };
 }

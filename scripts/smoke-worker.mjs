@@ -163,6 +163,28 @@ try {
     );
   }
   {
+    // The local bucket is empty. A 404 in plain text shows the request
+    // reached worker/gallery.ts: the page negotiation would answer this
+    // Accept with a 406, and the assets with the HTML 404 page.
+    const res = await get("/gallery/feed", { Accept: "application/json" });
+    const type = res.headers.get("content-type") ?? "";
+    await res.arrayBuffer();
+    check(
+      "gallery feed route",
+      res.status === 404 && type.startsWith("text/plain"),
+      `${res.status}, ${type || "no content-type"}`,
+    );
+  }
+  {
+    const res = await get("/gallery");
+    const body = await res.text();
+    check(
+      "gallery page",
+      res.status === 200 && body.includes("Show us your setup"),
+      `${res.status}, ${body.length} bytes`,
+    );
+  }
+  {
     const res = await get("/");
     await res.arrayBuffer();
     const csp = res.headers.get("content-security-policy") ?? "";

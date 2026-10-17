@@ -16,6 +16,7 @@ const columns = [
     links: [
       { text: "Blog", href: "/blog" },
       { text: "Releases", href: "/releases" },
+      { text: "Gallery", href: "/gallery" },
       { text: "Contributing", href: "/docs/contributing" },
       { text: "Brand and logo", href: "/brand" },
       { text: "Blog RSS feed", href: "/blog/rss.xml" },

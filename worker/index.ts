@@ -19,10 +19,12 @@
  * gets its go-import meta tags or a redirect to its docs page (see
  * goimport.ts). Then a page that moved gets a 301 to its new path (see
  * moved.ts), and a release clip is served from the MEDIA bucket (see
- * media.ts). A page request for its first bytes, which Next's link prefetch
+ * media.ts), as are the community gallery's feed and images (see
+ * gallery.ts). A page request for its first bytes, which Next's link prefetch
  * sends, gets a 206 with just those bytes (see range.ts).
  */
 
+import { galleryObject, serveGallery } from "./gallery";
 import { goImport } from "./goimport";
 import { mediaKey, serveMedia } from "./media";
 import { movedTo } from "./moved";
@@ -57,6 +59,8 @@ export default {
     }
     const key = mediaKey(url.pathname);
     if (key && env.MEDIA) return serveMedia(request, env.MEDIA, key);
+    const gallery = galleryObject(url.pathname);
+    if (gallery && env.MEDIA) return serveGallery(request, env.MEDIA, gallery);
     if (
       (request.method !== "GET" && request.method !== "HEAD") ||
       !isPagePath(url.pathname)
