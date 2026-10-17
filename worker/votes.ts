@@ -12,13 +12,22 @@
  *
  * # Privacy
  *
- * No raw IP address is stored. A like is keyed by SHA-256(salt, IP, entry),
- * where salt is a random value the object makes each UTC day and deletes the
- * next. A key cannot be turned back into an address, and two entries' keys of
- * one visitor cannot be linked. So one visitor can like an entry once a day,
- * and can take a like back on the day it was given. No cookie is set; the
- * page keeps its own "liked" marks in localStorage, and Turnstile sets what
- * it needs.
+ * No raw IP address is stored. With the secret VOTE_PEPPER set (wrangler
+ * secret put VOTE_PEPPER, a long random value), a like is keyed by
+ * HMAC-SHA-256(VOTE_PEPPER, IP and entry). The key is stable, so one IP likes
+ * an entry once, for good, and can take the like back on any later day. A key
+ * cannot be turned back into an address without the pepper, which lives only
+ * in the Worker's secrets, never in storage, and two entries' keys of one
+ * visitor cannot be linked.
+ *
+ * Without VOTE_PEPPER, a like is keyed by SHA-256(salt, IP, entry), where salt
+ * is a random value the object makes each UTC day and deletes the next. Then
+ * one visitor can like an entry again each day, which inflates the counts, so
+ * set the pepper before the hearts take votes. Changing or removing the pepper
+ * later lets every visitor like each entry once more.
+ *
+ * No cookie is set; the page keeps its own "liked" marks in localStorage, and
+ * Turnstile sets what it needs.
  *
  * # The guards on a POST, in order
  *
@@ -30,7 +39,8 @@
  *    cannot make a key of its own.
  * 4. At most RATE_LIMIT attempts per IP (hashed as above) per RATE_WINDOW_MS.
  * 5. A Cloudflare Turnstile token, checked with siteverify, for this host
- *    and the "like" action.
+ *    and the "like" action. Siteverify accepts a token once, so a token
+ *    cannot be replayed.
  */
 
 import { parseFeed } from "../lib/gallery/feed";
@@ -68,14 +78,31 @@ function json(body: unknown, status = 200, cache = "no-store") {
   });
 }
 
-async function sha256(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(text),
-  );
-  return [...new Uint8Array(digest)]
+function hex(buf: ArrayBuffer): string {
+  return [...new Uint8Array(buf)]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+/** The pepper must be long enough that it cannot be guessed. */
+const MIN_PEPPER = 32;
+
+async function hmac(key: string, text: string): Promise<string> {
+  const enc = new TextEncoder();
+  const k = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return hex(await crypto.subtle.sign("HMAC", k, enc.encode(text)));
+}
+
+async function sha256(text: string): Promise<string> {
+  return hex(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
+  );
 }
 
 /**
@@ -85,10 +112,23 @@ async function sha256(text: string): Promise<string> {
 export class GalleryVotes {
   private sql: SqlStorage;
   private now: () => number;
+  private pepper: string | null;
 
-  constructor(state: VoteState, _env?: unknown, now: () => number = Date.now) {
+  constructor(
+    state: VoteState,
+    env?: { VOTE_PEPPER?: string },
+    now: () => number = Date.now,
+  ) {
     this.sql = state.storage.sql;
     this.now = now;
+    const pepper = env?.VOTE_PEPPER;
+    this.pepper =
+      typeof pepper === "string" && pepper.length >= MIN_PEPPER ? pepper : null;
+    if (pepper && !this.pepper) {
+      console.warn(
+        `VOTE_PEPPER is shorter than ${MIN_PEPPER} characters, so likes use the daily salt.`,
+      );
+    }
     this.sql.exec(
       "CREATE TABLE IF NOT EXISTS likes (entry TEXT NOT NULL, voter TEXT NOT NULL, PRIMARY KEY (entry, voter))",
     );
@@ -140,7 +180,10 @@ export class GalleryVotes {
     entry: string,
     like: boolean,
   ): Promise<{ count: number; liked: boolean }> {
-    const voter = await sha256(`${this.salt()}|${ip}|${entry}`);
+    // The "p:" prefix keeps a peppered key apart from a salted one.
+    const voter = this.pepper
+      ? `p:${await hmac(this.pepper, `like|${ip}|${entry}`)}`
+      : await sha256(`${this.salt()}|${ip}|${entry}`);
     if (like) {
       this.sql.exec(
         "INSERT OR IGNORE INTO likes (entry, voter) VALUES (?, ?)",
@@ -192,6 +235,8 @@ export type VoteEnv = {
   MEDIA?: MediaBucket;
   TURNSTILE_SECRET?: string;
   TURNSTILE_SITE_KEY?: string;
+  /** The HMAC key for like keys (see Privacy above). A secret. */
+  VOTE_PEPPER?: string;
 };
 
 /** What the vote handler needs from outside, replaced in tests. */
@@ -270,9 +315,7 @@ export async function verifyTurnstile(
       hostname?: string;
     };
     return (
-      out.success === true &&
-      out.action === "like" &&
-      (out.hostname === undefined || out.hostname === host)
+      out.success === true && out.action === "like" && out.hostname === host
     );
   } catch {
     return false;

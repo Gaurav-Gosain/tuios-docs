@@ -9,6 +9,8 @@ interface __BaseEnv_Env {
 	// A secret (wrangler secret put TURNSTILE_SECRET), so wrangler types
 	// cannot see it. Absent until it is set.
 	TURNSTILE_SECRET?: string;
+	// A secret (wrangler secret put VOTE_PEPPER): the HMAC key for likes.
+	VOTE_PEPPER?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

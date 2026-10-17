@@ -34,11 +34,15 @@ type Rig = {
   setNow(t: number): void;
 };
 
-function rig(opts: { secret?: boolean; turnstile?: unknown } = {}): Rig {
+const PEPPER = "0123456789abcdef0123456789abcdef0123456789abcdef";
+
+function rig(
+  opts: { secret?: boolean; turnstile?: unknown; pepper?: string } = {},
+): Rig {
   let now = Date.parse("2026-10-17T12:00:00Z");
   const votes = new GalleryVotes(
     { storage: { sql: sqlStorage() } },
-    undefined,
+    opts.pepper === undefined ? undefined : { VOTE_PEPPER: opts.pepper },
     () => now,
   );
   const verified: string[] = [];
@@ -154,6 +158,47 @@ describe("the vote handler", () => {
     expect((await vote(r, { id: "123", like: false })).body.count).toBe(1);
   });
 
+  test("with VOTE_PEPPER a like lasts: no second like the next day", async () => {
+    const r = rig({ pepper: PEPPER });
+    expect((await vote(r, { id: "123", like: true })).body.count).toBe(1);
+    r.setNow(Date.parse("2026-10-18T12:00:00Z"));
+    expect((await vote(r, { id: "123", like: true })).body.count).toBe(1);
+    r.setNow(Date.parse("2026-11-30T12:00:00Z"));
+    expect((await vote(r, { id: "123", like: true })).body.count).toBe(1);
+    // Another IP still counts, and the first IP can take its like back later.
+    expect(
+      (await vote(r, { id: "123", like: true }, {}, "198.51.100.2")).body.count,
+    ).toBe(2);
+    expect((await vote(r, { id: "123", like: false })).body.count).toBe(1);
+  });
+
+  test("with VOTE_PEPPER the key is an HMAC, never the IP or a plain hash", async () => {
+    const keys = async (pepper: string) => {
+      const r = rig({ pepper });
+      await vote(r, { id: "123", like: true });
+      return (r.votes as unknown as { sql: SqlStorage }).sql
+        .exec("SELECT voter FROM likes")
+        .toArray()
+        .map((row) => String(row.voter));
+    };
+    const [a] = await keys(PEPPER);
+    const [b] = await keys(`${PEPPER}x`);
+    expect(a).toStartWith("p:");
+    expect(a).not.toContain("203.0.113.7");
+    expect(a).not.toBe(b);
+    const plain = new Bun.CryptoHasher("sha256")
+      .update("like|203.0.113.7|123")
+      .digest("hex");
+    expect(a).not.toContain(plain);
+  });
+
+  test("a short VOTE_PEPPER falls back to the daily salt", async () => {
+    const r = rig({ pepper: "short" });
+    await vote(r, { id: "123", like: true });
+    r.setNow(Date.parse("2026-10-18T12:00:00Z"));
+    expect((await vote(r, { id: "123", like: true })).body.count).toBe(2);
+  });
+
   test("an id the feed does not have is refused and makes no key", async () => {
     const r = rig();
     for (const id of ["999", "seed-nope"]) {
@@ -195,6 +240,7 @@ describe("the vote handler", () => {
     for (const turnstile of [
       { success: true, action: "login", hostname: "tuios.dev" },
       { success: true, action: "like", hostname: "evil.example" },
+      { success: true, action: "like" },
     ]) {
       const r = rig({ turnstile });
       expect((await vote(r, { id: "123", like: true })).status).toBe(403);
