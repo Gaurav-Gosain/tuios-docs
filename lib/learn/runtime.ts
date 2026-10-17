@@ -5,14 +5,15 @@
  * content-hashed folder with the gzipped wasm, Go's wasm_exec.js and sip's
  * WebTerm renderer. scripts/learn-engine.mjs writes it.
  *
- * Why gzip and DecompressionStream, and not a Worker that sets
- * Content-Encoding on a brotli file: the raw wasm is about 27 MB, over the
- * 25 MiB limit on one static asset, so only a compressed file can ship. Having
- * the page unpack it means it works on every host the site runs on (next dev,
- * a preview, the Worker, plain static hosting) with no special headers, and
- * the byte count the loader shows is exact because the response length is
- * the compressed size. Brotli would save about 1.5 MB, but browsers cannot
- * unpack brotli in script, so it would need the Worker for every request.
+ * How the wasm arrives: the raw file is over the 25 MiB limit on one static
+ * asset, so only its compressed twins ship, tuios.wasm.br and tuios.wasm.gz.
+ * The Worker answers <base>tuios.wasm with the brotli one, or the gzip one
+ * for a browser without brotli, with Content-Encoding set (see
+ * worker/engine.ts). The browser unpacks it and the page compiles it as it
+ * arrives. A host without the Worker (next dev, a preview, plain static
+ * hosting) has no tuios.wasm, and then the page fetches the gzip file and
+ * unpacks it with DecompressionStream. Brotli is about 30 % smaller, and a
+ * browser cannot unpack brotli in script, which is why the Worker serves it.
  *
  * Each lesson runs its own instance of the compiled module, so starting a
  * track always starts from an empty desktop. Compiling happens once.
@@ -32,8 +33,17 @@ import type { TuiosApi, TuiosEvent } from "./types";
 
 export type EngineManifest = {
   base: string;
+  /** The gzip file, which the page can unpack itself. */
   wasm: string;
   wasmBytes: number;
+  /**
+   * The name the Worker answers with the brotli or the gzip file, encoded.
+   * An engine from before the brotli file has none.
+   */
+  wasmEncoded?: string;
+  brotliBytes?: number;
+  /** The size of the raw wasm. */
+  wasmRawBytes?: number;
   /** Everything the page downloads to run tuios. */
   totalBytes?: number;
   /** Font files under `base`, WOFF2. */
@@ -160,29 +170,48 @@ async function load() {
 }
 
 async function fetchModule(manifest: EngineManifest) {
+  return (await fetchEncoded(manifest)) ?? fetchGzip(manifest);
+}
+
+/**
+ * The wasm as the Worker serves it, brotli or gzip encoded, which the browser
+ * unpacks. null when no Worker answers, so the caller fetches the gzip file.
+ */
+async function fetchEncoded(manifest: EngineManifest) {
+  if (!manifest.wasmEncoded) return null;
+  const res = await fetch(`${manifest.base}${manifest.wasmEncoded}`).catch(
+    () => null,
+  );
+  if (!res) return null;
+  if (
+    !res.ok ||
+    !res.body ||
+    !res.headers.get("content-type")?.includes("application/wasm")
+  ) {
+    await res.body?.cancel();
+    return null;
+  }
+  // The body arrives unpacked. The loader counts what crosses the network,
+  // so each unpacked byte counts as its share of the packed file.
+  const packed =
+    res.headers.get("content-encoding") === "br"
+      ? manifest.brotliBytes
+      : manifest.wasmBytes;
+  const raw = manifest.wasmRawBytes;
+  if (packed) setStatus({ total: packed });
+  const scale = packed && raw ? packed / raw : 1;
+  return compile(res.body.pipeThrough(countBytes(scale)));
+}
+
+/** The gzip file, unpacked here unless the host already did. */
+async function fetchGzip(manifest: EngineManifest) {
   const res = await fetch(`${manifest.base}${manifest.wasm}`);
   if (!res.ok || !res.body) throw new Error(`wasm: HTTP ${res.status}`);
   const length = Number(res.headers.get("content-length"));
   if (length > 0 && !res.headers.get("content-encoding")) {
     setStatus({ total: length });
   }
-
-  // Count bytes as they arrive, for the loader.
-  let loaded = 0;
-  let last = 0;
-  const counted = res.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        loaded += chunk.byteLength;
-        const now = performance.now();
-        if (now - last > 50) {
-          last = now;
-          setStatus({ loaded: Math.min(loaded, status.total * 0.99) });
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
+  const counted = res.body.pipeThrough(countBytes(1));
 
   // A host may already have unpacked the gzip for us (Content-Encoding:
   // gzip). The first two bytes tell: 1f 8b is gzip, 00 61 is "\0asm".
@@ -196,13 +225,35 @@ async function fetchModule(manifest: EngineManifest) {
       >,
     );
   }
+  return compile(wasm);
+}
+
+/** Counts bytes as they pass, times scale, for the loader. */
+function countBytes(scale: number) {
+  let loaded = 0;
+  let last = 0;
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      loaded += chunk.byteLength * scale;
+      const now = performance.now();
+      if (now - last > 50) {
+        last = now;
+        setStatus({ loaded: Math.min(loaded, status.total * 0.99) });
+      }
+      controller.enqueue(chunk);
+    },
+  });
+}
+
+/** Compiles the wasm as it arrives. */
+function compile(wasm: ReadableStream<Uint8Array>) {
   const response = new Response(wasm, {
     headers: { "content-type": "application/wasm" },
   });
   if ("compileStreaming" in WebAssembly) {
     return WebAssembly.compileStreaming(response);
   }
-  return WebAssembly.compile(await response.arrayBuffer());
+  return response.arrayBuffer().then((b) => WebAssembly.compile(b));
 }
 
 /** Read the first chunk, and return a stream that still starts with it. */

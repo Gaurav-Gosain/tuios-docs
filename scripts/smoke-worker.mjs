@@ -1,11 +1,13 @@
 // Serves out/ through the Worker with `wrangler dev` and checks the responses
 // that only the deployed setup gives: the Worker's answer to Next's prefetch
 // range, and what public/_headers and public/_redirects do to static assets.
+// When the export has a /learn engine, it also checks that the Worker serves
+// the engine's wasm brotli or gzip encoded. The check build has no engine.
 // Run it after `bun run build`: bun scripts/smoke-worker.mjs
 //
 // It prints one line per check and exits 1 when any check fails.
 import { spawn } from "node:child_process";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const WRANGLER = "wrangler@4.137.0";
@@ -243,6 +245,46 @@ try {
       res.status === 200 && body.includes("Show us your setup"),
       `${res.status}, ${body.length} bytes`,
     );
+  }
+  const engine = await readFile("out/learn/engine.json", "utf8")
+    .then(JSON.parse)
+    .catch(() => null);
+  if (engine?.wasmEncoded) {
+    const wasm = `${engine.base}${engine.wasmEncoded}`;
+    for (const [name, accept, coding] of [
+      // Only br: wrangler dev's proxy encodes for the first coding a client
+      // lists, whatever the Worker returned, so "gzip, deflate, br" comes
+      // back gzip here.
+      ["engine wasm, brotli", "br", "br"],
+      ["engine wasm, gzip", "gzip", "gzip"],
+    ]) {
+      const res = await get(wasm, { "Accept-Encoding": accept });
+      // fetch unpacks the body, so a good one starts with "\0asm".
+      const reader = res.body.getReader();
+      const { value } = await reader.read();
+      await reader.cancel();
+      const magic =
+        value?.[0] === 0 &&
+        value?.[1] === 0x61 &&
+        value?.[2] === 0x73 &&
+        value?.[3] === 0x6d;
+      const got = res.headers.get("content-encoding");
+      const type = res.headers.get("content-type");
+      const cc = res.headers.get("cache-control") ?? "";
+      check(
+        name,
+        res.status === 200 &&
+          got === coding &&
+          type === "application/wasm" &&
+          cc.includes("immutable") &&
+          res.headers.get("vary") === "Accept-Encoding" &&
+          magic,
+        `${res.status}, ${got}, ${type}, ${cc}, ${magic ? "wasm" : "not wasm"}`,
+      );
+    }
+    const res = await get(wasm, { "Accept-Encoding": "identity" });
+    await res.arrayBuffer();
+    check("engine wasm, no encoding", res.status === 406, `${res.status}`);
   }
   {
     const res = await get("/");

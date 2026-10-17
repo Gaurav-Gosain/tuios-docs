@@ -22,10 +22,13 @@
  * media.ts), as are the community gallery's feed and images (see
  * gallery.ts). /r/<id> and /r/<id>.toml are the gallery's look links (see
  * look.ts), and /gallery/votes holds the hearts on its cards (see votes.ts).
+ * The /learn engine's wasm is served brotli or gzip encoded, whichever the
+ * browser accepts (see engine.ts).
  * A page request for its first bytes, which Next's link prefetch
  * sends, gets a 206 with just those bytes (see range.ts).
  */
 
+import { engineWasm, serveEngineWasm } from "./engine";
 import { galleryObject, serveGallery } from "./gallery";
 import { goImport } from "./goimport";
 import { lookRoute, serveLook } from "./look";
@@ -70,6 +73,8 @@ export default {
       target.pathname = moved;
       return Response.redirect(target.toString(), 301);
     }
+    const engine = engineWasm(url.pathname);
+    if (engine) return serveEngineWasm(request, env.ASSETS, engine);
     const key = mediaKey(url.pathname);
     if (key && env.MEDIA) return serveMedia(request, env.MEDIA, key);
     const gallery = galleryObject(url.pathname);
