@@ -8,11 +8,24 @@ const A =
 const B =
   "https://github.com/user-attachments/assets/bbbbbbbb-0000-4000-8000-000000000000";
 
-function comment(id: string, body: string): DiscussionComment {
+/** A stand-in for GitHub's rendering: each Markdown image as an img. */
+function rendered(body: string) {
+  return body.replace(
+    /!\[[^\]]*\]\(([^)\s]+)\)/g,
+    '<a href="$1"><img src="$1" alt="" style="max-width: 100%;"></a>',
+  );
+}
+
+function comment(
+  id: string,
+  body: string,
+  bodyHTML = rendered(body),
+): DiscussionComment {
   return {
     id,
     author: `user${id}`,
     body,
+    bodyHTML,
     createdAt: "2026-10-17T10:00:00Z",
     lastEditedAt: null,
     isMinimized: false,
@@ -129,5 +142,89 @@ describe("buildFeed", () => {
     expect(r.log.join("\n")).toMatch(/#1.*no image/);
     expect(r.log.join("\n")).toMatch(/#2.*not on a GitHub image host/);
     expect(r.log.join("\n")).toMatch(/#3.*does not decode/);
+  });
+
+  // Each body below makes GitHub show one image (or none) while a pattern
+  // read of the Markdown takes another. The HTML is what GitHub's renderer
+  // answered for the body. The sync must skip each one, and download nothing.
+  describe("an image the approver did not see is refused", () => {
+    const shown = (url: string) =>
+      `<a target="_blank" rel="noopener noreferrer" href="${url}"><img src="${url}" alt="" style="max-width: 100%;"></a>`;
+    const cases: [string, string, string, RegExp][] = [
+      [
+        "an image in another image's alt text",
+        `![a ![b](${A}) c](${B})`,
+        `<p dir="auto"><a target="_blank" rel="noopener noreferrer" href="${B}"><img src="${B}" alt="a b c" style="max-width: 100%;"></a></p>`,
+        /not the first one GitHub shows/,
+      ],
+      [
+        "a src inside an alt attribute",
+        `<img alt="x src=${A}" src="${B}">`,
+        `<p dir="auto"><a target="_blank" rel="noopener noreferrer" href="${B}"><img alt="x src=${A}" src="${B}" style="max-width: 100%;"></a></p>`,
+        /not the first one GitHub shows/,
+      ],
+      [
+        "Markdown inside an HTML block, shown as text",
+        `<div>\n![](${A})\n</div>\n\n![](${B})`,
+        `<div dir="auto">\n![](${A})\n</div>\n<p dir="auto">${shown(B)}</p>`,
+        /not the first one GitHub shows/,
+      ],
+      [
+        "an escaped bang, shown as an empty link",
+        `\\![](${A})`,
+        `<p dir="auto">!<a href="${A}"></a></p>`,
+        /GitHub shows no image/,
+      ],
+      [
+        "a picture element with a source per theme",
+        `<picture><source media="(prefers-color-scheme: dark)" srcset="${B}"><img src="${A}"></picture>`,
+        `<p dir="auto"><themed-picture data-catalyst-inline="true"><picture><source media="(prefers-color-scheme: dark)" srcset="${B}"><img src="${A}"></picture></themed-picture></p>`,
+        /picture element/,
+      ],
+      [
+        "an image drawn one pixel wide",
+        `<img width="1" height="1" src="${A}">\n![](${B})`,
+        `<p dir="auto"><a target="_blank" rel="noopener noreferrer" href="${A}"><img width="1" height="1" src="${A}" style="max-width: 100%; height: auto; max-height: 1px;" class="js-gh-image-fallback"></a></p>\n![](${B})`,
+        /too small/,
+      ],
+      [
+        "an image for the light theme only",
+        `![](${A}#gh-light-mode-only)![](${B}#gh-dark-mode-only)`,
+        `<p dir="auto">${shown(`${A}#gh-light-mode-only`)}${shown(`${B}#gh-dark-mode-only`)}</p>`,
+        /fragment/,
+      ],
+      [
+        "an image in a collapsed section",
+        `<details><summary>x</summary>\n\n![](${A})\n</details>`,
+        `<details><summary>x</summary>\n<p dir="auto">${shown(A)}</p>\n</details>`,
+        /collapsed/,
+      ],
+    ];
+    for (const [name, body, html, why] of cases) {
+      test(name, async () => {
+        const d = deps();
+        const r = await buildFeed([comment("1", body, html)], [], d.deps);
+        expect(r.feed.entries).toEqual([]);
+        expect(d.downloads).toEqual([]);
+        expect(r.log.join("\n")).toMatch(why);
+      });
+    }
+
+    test("the first image GitHub shows passes, with an emoji before it", async () => {
+      const d = deps();
+      const r = await buildFeed(
+        [
+          comment(
+            "1",
+            `:octocat: <img width="1920" height="1075" alt="image" src="${A}" />`,
+            `<p dir="auto"><img class="emoji" title=":octocat:" alt=":octocat:" src="https://github.githubassets.com/images/icons/emoji/octocat.png" height="20" width="20" align="absmiddle"> <a target="_blank" rel="noopener noreferrer" href="https://private-user-images.githubusercontent.com/1/676548387-aaaaaaaa-0000-4000-8000-000000000000.png?jwt=x"><img width="1920" height="1075" alt="image" src="https://private-user-images.githubusercontent.com/1/676548387-aaaaaaaa-0000-4000-8000-000000000000.png?jwt=x" style="max-width: 100%;"></a></p>`,
+          ),
+        ],
+        [],
+        d.deps,
+      );
+      expect(r.feed.entries).toHaveLength(1);
+      expect(d.downloads).toEqual([A]);
+    });
   });
 });

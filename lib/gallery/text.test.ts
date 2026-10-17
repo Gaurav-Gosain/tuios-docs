@@ -57,6 +57,12 @@ describe("isAllowedRedirect", () => {
     expect(isAllowedRedirect("https://evil.s3.amazonaws.com/x.png")).toBe(
       false,
     ));
+  test("an S3 bucket named like GitHub's", () =>
+    expect(
+      isAllowedRedirect(
+        "https://github-production-user-asset-0bad00.s3.amazonaws.com/1/2.png",
+      ),
+    ).toBe(false));
   test("another host", () =>
     expect(isAllowedRedirect("https://evil.com/x.png")).toBe(false));
 });
@@ -143,6 +149,10 @@ describe("cleanText", () => {
     ));
   test("strips bidirectional overrides", () =>
     expect(cleanText("a‮b⁦c‏d")).toBe("abcd"));
+  test("strips invisible characters that change a copied config", () =>
+    expect(cleanText("a\u200bb\u2060c\u{e0041}\u{e0042}d\u061ce\u2028f")).toBe(
+      "abcde\nf",
+    ));
   test(`caps at ${MAX_TEXT} characters`, () =>
     expect(cleanText("x".repeat(MAX_TEXT * 3)).length).toBe(MAX_TEXT));
   test("does not split a surrogate pair at the cap", () => {

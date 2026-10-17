@@ -37,10 +37,11 @@ export function isAllowedRedirect(raw: string): boolean {
   if (isAllowedImageUrl(raw)) return true;
   const url = parseHttps(raw);
   if (!url) return false;
+  // The one bucket github.com/user-attachments redirects to. Anyone can make
+  // an S3 bucket with a name of their choice, so no pattern is allowed here.
   return (
-    /^github-production-user-asset-[0-9a-f]+\.s3\.amazonaws\.com$/.test(
-      url.hostname,
-    ) || url.hostname === "objects.githubusercontent.com"
+    url.hostname === "github-production-user-asset-6210df.s3.amazonaws.com" ||
+    url.hostname === "objects.githubusercontent.com"
   );
 }
 
@@ -65,6 +66,84 @@ function parseHttps(raw: string): URL | null {
 export function normalizeImageUrl(raw: string): string {
   const url = new URL(raw);
   return `${url.origin}${url.pathname}`;
+}
+
+/** One HTML tag's attributes, lower-cased names, entities left as they are. */
+function attributes(tag: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const re =
+    /\s([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  for (const m of tag.matchAll(re)) {
+    const name = m[1].toLowerCase();
+    if (!out.has(name)) out.set(name, m[2] ?? m[3] ?? m[4] ?? "");
+  }
+  return out;
+}
+
+/** The asset ID in a GitHub image URL: the UUID, or the path when none. */
+function assetId(raw: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(raw.replaceAll("&amp;", "&"));
+  } catch {
+    return null;
+  }
+  const uuids = url.pathname
+    .toLowerCase()
+    .match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g);
+  return uuids ? uuids[uuids.length - 1] : `${url.hostname}${url.pathname}`;
+}
+
+/** The smallest size a shown image may be drawn at, in CSS pixels. */
+const MIN_SHOWN = 200;
+
+/**
+ * Why the image the sync took from a comment's Markdown might not be what the
+ * approver saw on GitHub, or null when it is the first image GitHub shows,
+ * in plain view. The Markdown is read with patterns, and GitHub's renderer
+ * reads it differently in places: an image in another image's alt text, a
+ * src inside an attribute value, Markdown in an HTML block. So the image is
+ * checked against the body GitHub rendered, and anything that could hide it
+ * fails the check:
+ *
+ * - a picture element, which shows a different source per theme;
+ * - an image for one theme only (#gh-dark-mode-only, #gh-light-mode-only);
+ * - an image inside a collapsed details element;
+ * - an image drawn smaller than MIN_SHOWN pixels on either side.
+ */
+export function shownImageProblem(
+  url: string,
+  bodyHTML: string,
+): string | null {
+  if (/<(?:picture|source|themed-picture)\b/i.test(bodyHTML)) {
+    return "the comment has a picture element, which shows another image per theme";
+  }
+  if (url.includes("#")) return "the image URL has a fragment";
+  const tags = [...bodyHTML.matchAll(/<img\b[^>]*>/gi)].filter((m) => {
+    // GitHub draws emoji shortcodes as small images of its own.
+    const cls = attributes(m[0]).get("class") ?? "";
+    return !/(?:^|\s)emoji(?:\s|$)/.test(cls);
+  });
+  const first = tags[0];
+  if (!first) return "GitHub shows no image in the comment";
+  const attrs = attributes(first[0]);
+  const src = attrs.get("src") ?? "";
+  const want = assetId(url);
+  if (!want || assetId(src) !== want) {
+    return "the image is not the first one GitHub shows";
+  }
+  if (src.includes("#")) return "the image shows for one theme only";
+  for (const side of ["width", "height"]) {
+    const value = attrs.get(side);
+    if (value !== undefined && !(Number.parseInt(value, 10) >= MIN_SHOWN)) {
+      return `the image is drawn ${side} ${value}, too small to review`;
+    }
+  }
+  const before = bodyHTML.slice(0, first.index);
+  const opened = (before.match(/<details\b/gi) ?? []).length;
+  const closed = (before.match(/<\/details>/gi) ?? []).length;
+  if (opened > closed) return "the image is inside a collapsed section";
+  return null;
 }
 
 type Fence = { start: number; end: number; info: string; body: string };
@@ -128,11 +207,12 @@ function fences(markdown: string): Fence[] {
 
 /**
  * Text made safe to show as plain text: no terminal escape sequences, no
- * control characters but newline and tab, no bidirectional overrides, and at
- * most MAX_TEXT characters.
+ * control characters but newline and tab, no bidirectional overrides, no
+ * invisible characters that change what a copied config does (zero-width
+ * spaces, word joiners, tag characters), and at most MAX_TEXT characters.
  */
 export function cleanText(raw: string): string {
-  let text = raw.replace(/\r\n?/g, "\n");
+  let text = raw.replace(/\r\n?|[\u2028\u2029]/g, "\n");
   // ESC sequences: CSI (ESC [ ... final), OSC and the other string
   // sequences (ESC ] ... BEL or ST), and two-byte escapes. The 8-bit C1 forms
   // go with the control characters below.
@@ -143,7 +223,7 @@ export function cleanText(raw: string): string {
   );
   text = text.replace(
     // biome-ignore lint/suspicious/noControlCharactersInRegex: matching controls is the point
-    /[\x00-\x08\x0b-\x1f\x7f-\x9f‎‏‪-‮⁦-⁩﻿]/g,
+    /[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u180e\u200b\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufff9-\ufffb\u{e0000}-\u{e007f}]/gu,
     "",
   );
   if (text.length > MAX_TEXT) {

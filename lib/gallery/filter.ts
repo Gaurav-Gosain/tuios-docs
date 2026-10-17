@@ -15,6 +15,11 @@ export type DiscussionComment = {
   /** The author's login, or null for a deleted account. */
   author: string | null;
   body: string;
+  /**
+   * The body as GitHub renders it. The sync checks that the image it takes
+   * is the first one GitHub shows, so the approver has seen it.
+   */
+  bodyHTML: string;
   createdAt: string;
   /** When the body last changed, or null when it never did. */
   lastEditedAt: string | null;
@@ -99,8 +104,16 @@ export function selectApproved(
       skip("on the denylist");
       continue;
     }
-    if (comment.lastEditedAt && Date.parse(comment.lastEditedAt) > approval) {
+    // GitHub gives both times to the second, so an edit in the same second
+    // as the rocket may have come after it, and counts as an edit after it.
+    if (comment.lastEditedAt && Date.parse(comment.lastEditedAt) >= approval) {
       skip("edited after the rocket; react again to approve the new text");
+      continue;
+    }
+    // An HTML comment does not show on GitHub, so it can hide an image or a
+    // code block from the approver that the sync would still take.
+    if (comment.body.includes("<!--")) {
+      skip("holds an HTML comment, which can hide text from the review");
       continue;
     }
     if (optsOut(comment.body)) {

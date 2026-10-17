@@ -19,6 +19,7 @@ query($owner: String!, $repo: String!, $number: Int!, $after: String) {
           id
           databaseId
           body
+          bodyHTML
           createdAt
           lastEditedAt
           isMinimized
@@ -54,6 +55,7 @@ type CommentNode = {
   id: string;
   databaseId: number;
   body: string;
+  bodyHTML: string;
   createdAt: string;
   lastEditedAt: string | null;
   isMinimized: boolean;
@@ -128,6 +130,7 @@ export async function fetchComments(
         id: String(node.databaseId),
         author: node.author?.login ?? null,
         body: node.body,
+        bodyHTML: node.bodyHTML,
         createdAt: node.createdAt,
         lastEditedAt: node.lastEditedAt,
         isMinimized: node.isMinimized,

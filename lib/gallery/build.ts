@@ -20,6 +20,7 @@ import {
   firstImageUrl,
   isAllowedImageUrl,
   normalizeImageUrl,
+  shownImageProblem,
 } from "./text";
 
 export function hash32(data: string | Uint8Array): string {
@@ -67,6 +68,11 @@ export async function buildFeed(
     }
     if (!isAllowedImageUrl(url)) {
       log.push(`skip ${who}: the first image is not on a GitHub image host`);
+      continue;
+    }
+    const hidden = shownImageProblem(url, comment.bodyHTML);
+    if (hidden) {
+      log.push(`skip ${who}: ${hidden}`);
       continue;
     }
     const src = hash32(normalizeImageUrl(url));
