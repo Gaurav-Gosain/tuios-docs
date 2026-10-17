@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -9,10 +9,23 @@ import {
   type GalleryLook,
 } from "@/lib/gallery/feed";
 import { type Plan, planLook } from "@/lib/gallery/try-plan";
+import {
+  type LookKey,
+  sceneAfter,
+  sceneBefore,
+  undoLook,
+} from "@/lib/gallery/try-scene";
+import { runSetup, type TuiosInstance } from "@/lib/learn/runtime";
 
 /**
  * The Try it dialog (see try-it.tsx). It is its own chunk, with the plan, the
  * stage and smol-toml behind it, so none of them loads before the press.
+ *
+ * The look goes on a small scene (lib/gallery/try-scene.ts) rather than an
+ * empty desktop. Next look puts the following entry's look on the same
+ * tuios: reset, the last look's keys back to their defaults, then the next
+ * look and its scene. One tuios for the whole dialog, so stepping through
+ * looks starts no new engine.
  */
 
 const LiveDemoStage = dynamic(
@@ -28,37 +41,104 @@ async function fetchLook(look: GalleryLook): Promise<Record<string, unknown>> {
   throw new Error("The look file is not there.");
 }
 
-/** The look key paths, the only paths the plan may set. */
-async function lookKeyPaths(): Promise<Set<string>> {
+/** The look keys, the only paths the plan may set, with their defaults. */
+async function lookKeys(): Promise<LookKey[]> {
   const { default: list } = await import("@/lib/gallery/look-keys.json");
-  return new Set(list.keys.map((k) => k.path));
+  return list.keys;
+}
+
+/** A phone-sized screen, which gets the compact scene and a taller stage. */
+function narrow() {
+  return typeof window !== "undefined" && window.innerWidth < 640;
+}
+
+/** A look's plan, with the scene around it. */
+type Staged = Plan & { title: string };
+
+async function stage(entry: GalleryEntry, look: GalleryLook): Promise<Staged> {
+  const [doc, keys] = await Promise.all([fetchLook(look), lookKeys()]);
+  const plan = planLook(doc, look, new Set(keys.map((k) => k.path)));
+  return {
+    title: entryTitle(entry),
+    skipped: plan.skipped,
+    setup: [
+      ...sceneBefore(keys),
+      ...plan.setup,
+      ...sceneAfter(doc, { compact: narrow() }),
+    ],
+  };
 }
 
 export function TryItDialog({
   entry,
   look,
+  entries = [],
   onClose,
 }: {
   entry: GalleryEntry;
   look: GalleryLook;
+  /** The entries Next look steps through, in the gallery's order. */
+  entries?: GalleryEntry[];
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const [plan, setPlan] = useState<Plan | null>(null);
+  // The first look's plan starts the stage. It stays as it is: the stage
+  // runs it once, and a later look goes on the running tuios instead.
+  const [first, setFirst] = useState<Staged | null>(null);
+  const [current, setCurrent] = useState<Staged | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const tuios = useRef<TuiosInstance | null>(null);
+  const [live, setLive] = useState(false);
+  const [at, setAt] = useState(entry.id);
 
   useEffect(() => {
     ref.current?.showModal();
-    let live = true;
-    Promise.all([fetchLook(look), lookKeyPaths()])
-      .then(([doc, keys]) => live && setPlan(planLook(doc, look, keys)))
+    let alive = true;
+    stage(entry, look)
+      .then((p) => {
+        if (!alive) return;
+        setFirst(p);
+        setCurrent(p);
+      })
       .catch(
-        () => live && setProblem("The look did not load. Try again later."),
+        () => alive && setProblem("The look did not load. Try again later."),
       );
     return () => {
-      live = false;
+      alive = false;
     };
-  }, [look]);
+  }, [entry, look]);
+
+  const withLooks = entries.filter((e) => e.look);
+  const index = withLooks.findIndex((e) => e.id === at);
+  const next =
+    withLooks.length > 1 ? withLooks[(index + 1) % withLooks.length] : null;
+
+  const onInstance = useCallback((t: TuiosInstance) => {
+    tuios.current = t;
+    setLive(true);
+  }, []);
+
+  const showNext = useCallback(async () => {
+    const t = tuios.current;
+    if (!t || !next?.look || !current || busy) return;
+    setBusy(true);
+    try {
+      const [p, keys] = await Promise.all([stage(next, next.look), lookKeys()]);
+      await runSetup(t, [
+        { command: "reset", wait: 60 },
+        ...undoLook(current.setup, keys),
+        ...p.setup,
+      ]);
+      setCurrent(p);
+      setAt(next.id);
+      t.term.focus();
+    } catch {
+      setProblem("The next look did not load. Try again later.");
+    } finally {
+      setBusy(false);
+    }
+  }, [next, current, busy]);
 
   const onClick = useCallback(
     (event: React.MouseEvent<HTMLDialogElement>) => {
@@ -70,6 +150,7 @@ export function TryItDialog({
   const [engine, setEngine] = useState<string[] | null>(null);
   const onCommands = useCallback((c: string[]) => setEngine(c), []);
   // The commands the engine does not have are listed with the rest.
+  const plan = current;
   const skipped = [
     ...(plan?.skipped ?? []),
     ...(engine
@@ -87,7 +168,7 @@ export function TryItDialog({
       : []),
   ];
 
-  const title = entryTitle(entry);
+  const title = current?.title ?? entryTitle(entry);
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes a modal dialog natively
@@ -114,15 +195,33 @@ export function TryItDialog({
       <div className="p-4">
         {problem ? (
           <p className="text-fd-muted-foreground text-sm">{problem}</p>
-        ) : plan ? (
+        ) : first ? (
           <>
             <LiveDemoStage
-              title={title}
-              setup={plan.setup}
+              title={first.title}
+              setup={first.setup}
               controls={[]}
               hint="The look applies to this tab only. Nothing is saved."
               onCommands={onCommands}
+              onInstance={onInstance}
+              stageClassName="aspect-[4/5] w-full sm:aspect-[16/10]"
             />
+            {next ? (
+              <div className="mt-3 flex items-center gap-2 text-sm">
+                <button
+                  type="button"
+                  disabled={!live || busy}
+                  onClick={showNext}
+                  className="inline-flex items-center gap-1 rounded-full border border-fd-border px-3 py-1 hover:bg-fd-accent focus-visible:outline-2 focus-visible:outline-fd-primary focus-visible:outline-offset-2 disabled:opacity-50"
+                >
+                  Next look
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                </button>
+                <span className="min-w-0 truncate text-fd-muted-foreground">
+                  {busy ? "Loading the look." : entryTitle(next)}
+                </span>
+              </div>
+            ) : null}
             {skipped.length > 0 ? (
               <p className="mt-2 text-fd-muted-foreground text-xs">
                 Not applied here: {skipped.join(", ")}.

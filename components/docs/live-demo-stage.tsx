@@ -19,6 +19,8 @@ export function LiveDemoStage({
   controls,
   hint,
   onCommands,
+  onInstance,
+  stageClassName = "aspect-[16/10] w-full",
 }: {
   title: string;
   setup: SetupCommand[];
@@ -26,6 +28,10 @@ export function LiveDemoStage({
   hint?: string;
   /** Called with the engine's page commands once it starts. */
   onCommands?: (commands: string[]) => void;
+  /** Called with the running tuios once the setup has run. */
+  onInstance?: (tuios: TuiosInstance) => void;
+  /** The terminal's size classes. */
+  stageClassName?: string;
 }) {
   const tuios = useRef<TuiosInstance | null>(null);
   const [ready, setReady] = useState(false);
@@ -46,9 +52,10 @@ export function LiveDemoStage({
       onCommands?.(t.api.commands());
       await runSetup(t, setup);
       setReady(true);
+      onInstance?.(t);
       t.term.focus();
     },
-    [setup, onCommands],
+    [setup, onCommands, onInstance],
   );
 
   // An engine built before a command existed ignores it, so a control whose
@@ -70,7 +77,7 @@ export function LiveDemoStage({
         fontSize={13}
         onReady={onReady}
         stageRef={stage}
-        className="aspect-[16/10] w-full"
+        className={stageClassName}
       />
       {usable.length > 0 || hint ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

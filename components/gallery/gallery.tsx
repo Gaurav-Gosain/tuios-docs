@@ -145,7 +145,12 @@ export function Gallery({
               {entry.look ? (
                 <ApplyCommand look={entry.look} badge={badge} />
               ) : null}
-              <VoteRow entry={entry} votes={votes} setCount={setCount} />
+              <VoteRow
+                entry={entry}
+                entries={entries}
+                votes={votes}
+                setCount={setCount}
+              />
             </div>
           </li>
         ))}
@@ -232,10 +237,12 @@ function SortToggle({
 
 function VoteRow({
   entry,
+  entries,
   votes,
   setCount,
 }: {
   entry: GalleryEntry;
+  entries?: GalleryEntry[];
   votes: SiteVotes;
   setCount: (id: string, count: number) => void;
 }) {
@@ -251,7 +258,7 @@ function VoteRow({
         </>
       ) : null}
       <span className="ms-auto pe-1.5">
-        <TryItButton entry={entry} />
+        <TryItButton entry={entry} entries={entries} />
       </span>
     </div>
   );

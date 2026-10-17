@@ -28,7 +28,14 @@ const TryItDialog = dynamic(
   { ssr: false },
 );
 
-export function TryItButton({ entry }: { entry: GalleryEntry }) {
+export function TryItButton({
+  entry,
+  entries,
+}: {
+  entry: GalleryEntry;
+  /** The entries the dialog's Next look steps through. */
+  entries?: GalleryEntry[];
+}) {
   const [open, setOpen] = useState(false);
   if (!entry.look) return null;
   return (
@@ -45,6 +52,7 @@ export function TryItButton({ entry }: { entry: GalleryEntry }) {
         <TryItDialog
           entry={entry}
           look={entry.look}
+          entries={entries}
           onClose={() => setOpen(false)}
         />
       ) : null}
