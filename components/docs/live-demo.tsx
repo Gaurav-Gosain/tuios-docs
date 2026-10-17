@@ -25,8 +25,10 @@ export type LiveDemoControl = {
  * The real tuios, compiled to WebAssembly, in a docs page. It is the engine
  * of /learn, with the fake shell in every pane.
  *
- * Nothing loads before the reader presses Start: no script of the stage, no
- * engine.json, no wasm. Until then the frame shows `poster`, a picture of
+ * The engine loads only after the reader presses Start: no engine.json, no
+ * wasm, no renderer. Next still preloads the stage's own chunk (about 9 KB
+ * gzipped) at low priority, as it does for any dynamic import a page can
+ * render; it does not run it. Until then the frame shows `poster`, a picture of
  * tuios made by scripts/docs-media.sh. The engine files are the ones /learn
  * loads, from the same content-hashed folder, so a reader who has been to
  * /learn has them in the browser cache already, and the other way round.
