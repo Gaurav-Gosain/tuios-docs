@@ -36,6 +36,7 @@ The PTY answers the queries a Bubble Tea program sends at start, so tuios
 sees a capable truecolor terminal and does not wait on silence.
 """
 
+import codecs
 import fcntl
 import glob
 import json
@@ -305,8 +306,14 @@ def main():
     finally:
         with open(os.path.join(build, "session.cast"), "w") as f:
             f.write(json.dumps({"version": 2, "width": cols, "height": rows}) + "\n")
+            # One decoder for the whole stream: a read can end inside a
+            # multibyte character, and decoding each read alone turns the two
+            # halves into replacement characters.
+            dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
             for t, data in events:
-                f.write(json.dumps([t, "o", data.decode("utf-8", errors="replace")]) + "\n")
+                text = dec.decode(data)
+                if text:
+                    f.write(json.dumps([t, "o", text]) + "\n")
         subprocess.run([tuios, "kill-server"], env=env, stdin=subprocess.DEVNULL,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
         try:
