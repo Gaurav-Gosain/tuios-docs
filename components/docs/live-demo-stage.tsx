@@ -18,11 +18,14 @@ export function LiveDemoStage({
   setup,
   controls,
   hint,
+  onCommands,
 }: {
   title: string;
   setup: SetupCommand[];
   controls: LiveDemoControl[];
   hint?: string;
+  /** Called with the engine's page commands once it starts. */
+  onCommands?: (commands: string[]) => void;
 }) {
   const tuios = useRef<TuiosInstance | null>(null);
   const [ready, setReady] = useState(false);
@@ -40,11 +43,12 @@ export function LiveDemoStage({
       tuios.current = t;
       await new Promise<void>((resolve) => t.onFirstFrame(resolve));
       setCommands(t.api.commands());
+      onCommands?.(t.api.commands());
       await runSetup(t, setup);
       setReady(true);
       t.term.focus();
     },
-    [setup],
+    [setup, onCommands],
   );
 
   // An engine built before a command existed ignores it, so a control whose

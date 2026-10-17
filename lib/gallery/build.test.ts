@@ -76,7 +76,13 @@ describe("buildFeed", () => {
       "https://github.com/Gaurav-Gosain/tuios/discussions/849#discussioncomment-1",
     );
     expect(e.thumb).toBe(`/gallery/img/${hash32("image-a")}/thumb`);
-    expect(e.files).toEqual([{ label: "toml", text: "a = 1" }]);
+    expect(e.files).toEqual([
+      {
+        label: "toml",
+        text: "a = 1",
+        notes: [{ line: 0, start: 0, end: 1, path: "a", kind: "unknown" }],
+      },
+    ]);
   });
 
   test("an image the previous feed has is not downloaded again", async () => {

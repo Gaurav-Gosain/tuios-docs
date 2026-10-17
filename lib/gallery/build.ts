@@ -6,6 +6,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { annotate } from "./annotate";
 import {
   DISCUSSION_URL,
   type GalleryEntry,
@@ -129,7 +130,10 @@ export async function buildFeed(
     }
     const files: GalleryFile[] = [];
     const block = firstCodeBlock(comment.body);
-    if (block) files.push(block);
+    if (block) {
+      const notes = block.label === "json" ? [] : annotate(block.text);
+      files.push(notes.length > 0 ? { ...block, notes } : block);
+    }
     const author = comment.author as string;
     const entry: GalleryEntry = {
       id: comment.id,

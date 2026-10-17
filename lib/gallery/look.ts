@@ -18,7 +18,12 @@
  */
 
 import { parse, stringify } from "smol-toml";
-import lookKeys from "./look-keys.json";
+import {
+  CONTROL,
+  checkLookValue,
+  LOOK_KEYS as KEYS,
+  MAX_STRING,
+} from "./look-check";
 
 /** The look format version the file is written in. */
 export const LOOK_VERSION = 1;
@@ -27,21 +32,6 @@ export const LOOK_VERSION = 1;
 const MAX_LEFT_NAME = 60;
 /** The most left-out key names an entry keeps. */
 const MAX_LEFT = 12;
-/** The longest string value a look keeps, in bytes, as tuios caps it. */
-const MAX_STRING = 512;
-
-type LookKey = {
-  path: string;
-  type: "bool" | "int" | "string";
-  accepted?: string[];
-  min?: number;
-  max?: number;
-  color?: boolean;
-};
-
-const KEYS = new Map<string, LookKey>(
-  (lookKeys.keys as LookKey[]).map((k) => [k.path, k]),
-);
 
 /** The tables that hold at least one look key, such as "appearance.sidebar". */
 const TABLES = new Set<string>();
@@ -70,9 +60,6 @@ export type Look = {
   leftCount: number;
 };
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching controls is the point
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
-
 function isTable(value: unknown): value is Record<string, unknown> {
   return (
     typeof value === "object" &&
@@ -88,30 +75,6 @@ function okString(value: unknown, max = MAX_STRING): value is string {
     !CONTROL.test(value) &&
     new TextEncoder().encode(value).length <= max
   );
-}
-
-/** The value as the look file keeps it, or undefined when it does not pass. */
-function checkValue(key: LookKey, value: unknown): unknown {
-  switch (key.type) {
-    case "bool":
-      return typeof value === "boolean" ? value : undefined;
-    case "int": {
-      if (typeof value !== "bigint") return undefined;
-      const n = Number(value);
-      if (!Number.isSafeInteger(n)) return undefined;
-      if (key.max !== undefined && (n < (key.min ?? 0) || n > key.max))
-        return undefined;
-      return n;
-    }
-    case "string": {
-      if (!okString(value)) return undefined;
-      // A colour option takes a literal as well as its keywords, and tuios
-      // checks the literal. A closed set is checked here.
-      if (key.accepted && !key.color && !key.accepted.includes(value))
-        return undefined;
-      return value;
-    }
-  }
 }
 
 /**
@@ -187,12 +150,12 @@ function walk(
       continue;
     }
     const key = KEYS.get(path);
-    const value = key ? checkValue(key, v) : undefined;
-    if (value === undefined) {
+    const checked = key ? checkLookValue(key, v) : null;
+    if (!checked?.ok) {
       left.push(path);
       continue;
     }
-    put(kept, path, value);
+    put(kept, path, checked.value);
     count++;
   }
   return count;
@@ -276,3 +239,8 @@ export function buildLook(source: LookSource): Look | null {
 export function lookKeyPaths(): string[] {
   return [...KEYS.keys()];
 }
+
+/** The tables that hold a look key, for the key notes (annotate.ts). */
+export const LOOK_TABLES: ReadonlySet<string> = TABLES;
+/** The top-level keys of a look file that are not options. */
+export const LOOK_META: ReadonlySet<string> = META;

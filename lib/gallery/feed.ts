@@ -24,7 +24,70 @@ export type GalleryFile = {
   /** A short label: "config", "theme", or the code block's language. */
   label: string;
   text: string;
+  /** Notes on the config's keys (see annotate.ts). */
+  notes?: GalleryNote[];
 };
+
+/**
+ * A note on one key of a config: where it is, by line and by UTF-16 offset
+ * in that line, and what it is. See annotate.ts.
+ */
+export type GalleryNote = {
+  line: number;
+  start: number;
+  end: number;
+  /** The key's dotted path. */
+  path: string;
+  kind: "doc" | "bad" | "left" | "unknown";
+  /** Why a bad value is bad. */
+  why?: string;
+  /** Where a bad value is on the line. */
+  valueStart?: number;
+  valueEnd?: number;
+};
+
+const NOTE_KINDS = new Set(["doc", "bad", "left", "unknown"]);
+const NOTE_PATH = /^[A-Za-z0-9_.-]{1,120}$/;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: refusing controls is the point
+const NOTE_WHY = /^[^\u0000-\u001f\u007f-\u009f]{1,300}$/;
+
+function isOffset(value: unknown, max: number): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= max
+  );
+}
+
+function parseNote(value: unknown, text: string[]): GalleryNote | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (!isOffset(v.line, text.length - 1)) return null;
+  const width = text[v.line].length;
+  if (!isOffset(v.start, width) || !isOffset(v.end, width) || v.end <= v.start)
+    return null;
+  if (typeof v.path !== "string" || !NOTE_PATH.test(v.path)) return null;
+  if (typeof v.kind !== "string" || !NOTE_KINDS.has(v.kind)) return null;
+  const note: GalleryNote = {
+    line: v.line,
+    start: v.start,
+    end: v.end,
+    path: v.path,
+    kind: v.kind as GalleryNote["kind"],
+  };
+  if (typeof v.why === "string" && NOTE_WHY.test(v.why)) note.why = v.why;
+  if (
+    isOffset(v.valueStart, width) &&
+    isOffset(v.valueEnd, width) &&
+    v.valueEnd > v.valueStart &&
+    v.valueStart >= v.end
+  ) {
+    note.valueStart = v.valueStart;
+    note.valueEnd = v.valueEnd;
+  }
+  return note;
+}
 
 export type GalleryEntry = {
   /** The comment's database ID, or "seed-<name>" for a seed entry. */
@@ -152,7 +215,17 @@ function parseFile(value: unknown): GalleryFile | null {
   const { label, text } = value as Record<string, unknown>;
   if (typeof label !== "string" || !LABEL.test(label)) return null;
   if (typeof text !== "string" || text.length > MAX_TEXT) return null;
-  return { label, text };
+  const file: GalleryFile = { label, text };
+  const notes = (value as Record<string, unknown>).notes;
+  if (Array.isArray(notes) && notes.length <= 200) {
+    const lines = text.split("\n");
+    const kept = notes.flatMap((n) => {
+      const note = parseNote(n, lines);
+      return note ? [note] : [];
+    });
+    if (kept.length > 0) file.notes = kept;
+  }
+  return file;
 }
 
 /** One entry checked field by field, or null when any field is wrong. */

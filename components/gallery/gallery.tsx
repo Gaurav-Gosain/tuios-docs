@@ -19,6 +19,7 @@ import {
 import { type SortMode, sortEntries } from "@/lib/gallery/votes";
 import { ApplyCommand } from "./apply";
 import { HighlightedCode } from "./highlight";
+import { TryItButton } from "./try-it";
 import {
   GithubVotes,
   HeartButton,
@@ -214,6 +215,9 @@ function VoteRow({
           <GithubVotes entry={entry} />
         </>
       ) : null}
+      <span className="ms-auto pe-1.5">
+        <TryItButton entry={entry} />
+      </span>
     </div>
   );
 }

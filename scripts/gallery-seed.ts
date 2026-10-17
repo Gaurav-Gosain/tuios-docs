@@ -22,6 +22,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { annotate } from "../lib/gallery/annotate";
 import { hash32 } from "../lib/gallery/build";
 import {
   DISCUSSION_URL,
@@ -40,6 +41,12 @@ const seedFile = path.join(root, "lib/gallery/gallery-seed.json");
 
 /** Writes the look file of a seed entry and records it on the entry. */
 async function writeLook(entry: GalleryEntry, name: string) {
+  for (const file of entry.files) {
+    delete file.notes;
+    if (file.label !== "config") continue;
+    const notes = annotate(file.text);
+    if (notes.length > 0) file.notes = notes;
+  }
   const look = buildLook({
     config: entry.files.find((f) => f.label === "config")?.text ?? "",
     theme: entry.files.find((f) => f.label === "theme")?.text,
