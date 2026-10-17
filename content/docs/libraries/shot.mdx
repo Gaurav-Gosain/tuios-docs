@@ -1,0 +1,106 @@
+---
+title: shot
+description: A Go library that renders a terminal screen to PNG, SVG, HTML, ANSI or text, with an optional window frame.
+icon: Camera
+---
+
+`tuios.dev/shot` renders a terminal screen to a picture. It takes a grid of cells and writes PNG, SVG, HTML, ANSI or plain text, with an optional window frame around it. tuios uses it for [screenshots](/docs/screenshots).
+
+```bash
+go get tuios.dev/shot
+```
+
+It needs Go 1.25 or later. It is pure Go and needs no cgo, no browser and no external tool. The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/shot).
+
+![A terminal window drawn by shot in GeistMono Nerd Font Mono: a prompt, go test output, a box corner and braille, on a gradient](/shots/shot-library.png)
+
+## Use it to
+
+- Save a picture of a screen when a terminal test fails.
+- Put real terminal output in a README or in docs.
+- Post the output of a command from a bot.
+
+## What it does
+
+- **PNG** is drawn in Go. Box drawing, block elements, braille and powerline glyphs are drawn as shapes, so borders join up in any font.
+- **SVG** uses real `<text>` and `<rect>` elements. Design tools and browsers open it, and the text stays selectable.
+- **HTML** is one file with inline styles. Links stay links.
+- **ANSI** and **text** write the screen back as escape sequences or as plain lines.
+- **mosaic**, a sub-package, does the opposite: it draws a picture as cells of block glyphs.
+
+## Example
+
+shot does not parse escape sequences. A terminal emulator does that, such as [vt](/docs/libraries/vt), and `FromScreen` reads its screen.
+
+```go
+package main
+
+import (
+	"log"
+	"os"
+
+	"tuios.dev/shot"
+	"tuios.dev/vt"
+)
+
+func main() {
+	// A terminal emulator reads what a program printed.
+	term := vt.NewEmulator(46, 6)
+	defer term.Close()
+	term.Write([]byte("\x1b[35m◆\x1b[0m \x1b[1mmain\x1b[0m \x1b[2m▸\x1b[0m ~/dev/tuios\r\n" +
+		"$ go test ./shot/...\r\n" +
+		"\x1b[32mok\x1b[0m  tuios.dev/shot         0.012s\r\n" +
+		"\x1b[32mok\x1b[0m  tuios.dev/shot/mosaic  0.004s\r\n" +
+		"\x1b[44;30m ▤ 2 packages \x1b[0m \x1b[33m╭─╮\x1b[0m \x1b[2m⣿⣶⣤⣀\x1b[0m\r\n$ "))
+
+	// The palette turns the basic and indexed colours into RGB.
+	p := shot.XTermPalette()
+	p.FG, p.BG = shot.RGB(0xcd, 0xd6, 0xf4), shot.RGB(0x1e, 0x1e, 0x2e)
+	p.ANSI[2], p.ANSI[3] = shot.RGB(0xa6, 0xe3, 0xa1), shot.RGB(0xf9, 0xe2, 0xaf)
+	p.ANSI[4], p.ANSI[5] = shot.RGB(0x89, 0xb4, 0xfa), shot.RGB(0xcb, 0xa6, 0xf7)
+
+	// FromScreen reads the screen into a grid of resolved cells.
+	grid := shot.FromScreen(term, p)
+
+	// BuildFrame dresses the grid as a window on a gradient.
+	frame := shot.BuildFrame(shot.FrameSpec{
+		Frame: "window", Title: "tuios", Padding: 24, Radius: 10, Shadow: true, Scale: 2,
+	}, shot.FrameInputs{Palette: p})
+
+	for _, format := range []shot.Format{shot.FormatPNG, shot.FormatSVG} {
+		out, err := shot.Render(format, grid, frame)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := os.WriteFile("screen."+format.Ext(), out, 0o644); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+```
+
+The picture above is this program, with `frame.Font` set to GeistMono Nerd Font Mono.
+
+A program with its own screen model fills a grid directly with `NewGrid`. Each cell holds its text, its colours as RGB and its attributes.
+
+## Fonts
+
+PNG looks for each glyph in this order, and the first face that has the glyph draws it:
+
+1. `Frame.Font`, and `Frame.BoldFont` for a bold cell. Without a font, Go Mono.
+2. Each face in `Frame.Fallback`, in order.
+3. Go Mono, which shot embeds.
+
+A glyph in no face draws as a dotted box, so a gap in the picture is never silent. `MissingGlyphs` lists those glyphs before you render, so you can find a font for each one and add it to `Frame.Fallback`. Geist Mono has no `◆`, `▸` or `▤`. In the picture above they come from Noto Sans Mono, a fallback face.
+
+shot reads a fallback face only when a glyph reaches it, and looks up each glyph once per render. tuios fills the fallback list from fontconfig.
+
+SVG and HTML name `Frame.FontFamily` and let the viewer pick the fonts. With `Frame.EmbedFont`, they also carry `Frame.Font` as an `@font-face`.
+
+## Versions
+
+The module is at v0. The API can change between minor versions. `Grid`, `Cell`, `Palette`, `Render`, the five formats and `FromScreen` are settled. The fields of `Frame` and `FrameSpec`, and the `mosaic` package, can still change.
+
+The pictures can change between versions. Do not compare PNG bytes in a test. Compare the grid, or the text and ANSI output.
+
+Its tags have the folder name as a prefix, such as `shot/v0.1.0`. The source is in the [shot folder](https://github.com/Gaurav-Gosain/tuios/tree/main/shot) of the tuios repository, under the MIT licence. The embedded Go Mono fonts are by Bigelow & Holmes, under the Go font licence.

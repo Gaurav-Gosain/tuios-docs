@@ -13,6 +13,9 @@ describe("libraryFor", () => {
     ["/swatch", "swatch"],
     ["/swatch/omarchy", "swatch"],
     ["/swatchx", null],
+    ["/shot", "shot"],
+    ["/shot/mosaic", "shot"],
+    ["/shotx", null],
     ["/docs/progstatus", null],
     ["/", null],
     ["/constructor", null],
@@ -50,6 +53,13 @@ describe("goImport", () => {
     );
     expect(await res?.text()).toContain(
       '<meta name="go-import" content="tuios.dev/swatch git https://github.com/Gaurav-Gosain/tuios swatch">',
+    );
+  });
+
+  test("shot names its own folder", async () => {
+    const res = goImport(new Request("https://tuios.dev/shot/mosaic?go-get=1"));
+    expect(await res?.text()).toContain(
+      '<meta name="go-import" content="tuios.dev/shot git https://github.com/Gaurav-Gosain/tuios shot">',
     );
   });
 
