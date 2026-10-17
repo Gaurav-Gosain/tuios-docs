@@ -26,9 +26,9 @@ and an account system or a CAPTCHA wall in front of all of it. Every one of
 those is a thing a bot can hit, and a thing I have to run.
 
 So the gallery has none of them. It launched today with 12 setups, which I
-posted to the discussion myself to start it off. The whole pipeline is a GitHub discussion, a scheduled Action, a Cloudflare
-Worker and a bucket. This post walks through it, including the parts review
-broke, so you can take the pattern for your own project.
+posted to the discussion myself to start it off. The whole pipeline is a
+GitHub discussion, a scheduled Action, a Cloudflare Worker and a bucket. Here
+is how it works, including the parts review broke.
 
 ## The queue is a discussion
 
@@ -54,12 +54,8 @@ if (approval === undefined) {
 }
 ```
 
-Logins are compared exactly. GitHub logins are unique without regard to case,
-but the API returns the account's own spelling, so an exact match can never
-let a different account through.
-
-An approval is for the text I saw, not for whatever the comment says later.
-So an edit after the rocket takes the entry down until I react again. GitHub
+An approval is for the text I saw. So an edit after the rocket takes the
+entry down until I react again. GitHub
 gives both times to the second, which leaves one gap: an edit in the same
 second as the rocket. That counts as after it.
 
@@ -70,12 +66,9 @@ if (comment.lastEditedAt && Date.parse(comment.lastEditedAt) >= approval) {
 }
 ```
 
-A few more ways out, all boring on purpose. Removing my rocket takes an
-entry down at the next sync. A comment that says "no gallery" (or "not for the
-gallery", or "keep me out of the gallery") stays out even with a rocket, and
-that match is deliberately wide, because a false match only keeps something
-off the page. A committed denylist names comment IDs and logins that never
-show.
+Removing my rocket takes an entry down at the next sync. A comment that says
+"no gallery", or something close to it, stays out even with a rocket. A
+committed denylist names comment IDs and logins that never show.
 
 The sync is a GitHub Action that runs every hour. It reads the discussion
 over GraphQL with the workflow's own `GITHUB_TOKEN`, since the discussion is
@@ -103,9 +96,9 @@ the sync published a different one:
 - **An image drawn one pixel wide**, or inside a collapsed `<details>`. It
   is technically shown. I would never notice it.
 
-Patching each of those in the Markdown reader would have been a losing game,
-because the next one is always the case you didn't think of. The fix was to
-stop guessing how GitHub renders the comment, and ask. The GraphQL query
+Patching each of those in the Markdown reader would have been a losing game.
+The fix was to stop guessing how GitHub renders the comment, and ask. The
+GraphQL query
 already returns `bodyHTML`, the comment as GitHub rendered it. The sync now
 takes an image only when it is the first `<img>` GitHub actually shows, in
 plain view:
@@ -130,7 +123,7 @@ export function shownImageProblem(url: string, bodyHTML: string): string | null 
       return `the image is drawn ${side} ${value}, too small to review`;
     }
   }
-  // ... and an image inside an open <details> fails too
+  // ... and an image inside a <details> fails too
 ```
 
 GitHub rewrites image URLs when it renders them, so the two are compared by
@@ -145,11 +138,9 @@ they do.
 
 ## Every image is re-encoded
 
-The image itself is the next boundary. Anyone with a GitHub account can
-upload bytes, and the sync is about to download them, decode them and serve
-them from my domain.
-
-First, where it comes from. The URL must be on one of GitHub's image hosts:
+Anyone with a GitHub account can upload bytes, and the sync downloads them,
+decodes them and serves them from my domain. First, where they come from.
+The URL must be on one of GitHub's image hosts:
 `github.com/user-attachments/assets/<uuid>`, `private-user-images` or
 `user-images.githubusercontent.com`. Those answer with a redirect to S3, and
 each redirect is checked before it is followed. Here review caught another
@@ -176,9 +167,7 @@ Then the bytes:
    JPEG, GIF and WebP pass, and only up to 25 megapixels. The test for this
    is a real decompression bomb: a 6000x6000 PNG of zeros that is under
    200 KB on disk and 36 megapixels in memory. It is refused from its header.
-3. sharp checks the pixel limit again from its own reading, and a truncated
-   file is an error instead of a half-grey picture.
-4. The image is decoded in full to raw pixels and encoded again as WebP,
+3. The image is decoded in full to raw pixels and encoded again as WebP,
    1600 px wide plus an 800 px thumbnail.
 
 ```ts
@@ -209,6 +198,7 @@ characters, bidi overrides, zero-width spaces, word joiners and Unicode tag
 characters all go, and it is cut at 4,000 characters. The invisible ones
 matter because people copy this config into their own file, and a zero-width
 character inside a key changes what it does without changing how it looks.
+Open a card and the config looks like this:
 
 <Shot
   name="blog-gallery-config"
@@ -218,29 +208,20 @@ character inside a key changes what it does without changing how it looks.
   alt="An open gallery entry, Mono by @Gaurav-Gosain. Its config is highlighted, and each key has a dotted underline that opens a note about the key."
 />
 
-The dialog highlights the config with Shiki, but Shiki only splits the
-cleaned text into tokens. Each token is drawn as a React text child with its
-colours in CSS variables, so nothing from a comment is ever parsed as HTML.
+Shiki highlights it, but each token is drawn as a React text child, so
+nothing from a comment is ever parsed as HTML.
 
 ## Votes without accounts
 
 Cards have two counts, shown apart, because they are not worth the same.
 
-**GitHub reactions** are the trusted one. The sync counts the people who
-reacted to a comment, each person once, whatever and however many reactions
-they gave. My approval rocket is the review, not a vote, so it does not count.
-The author's own reactions do not count either.
+**GitHub reactions** are the trusted one. The sync counts each person who
+reacted, once per person. My approval rocket and the author's own reactions do not count.
 
 **Hearts on the site** are cheap to fake by comparison, so they carry the
-most guards. A like is a POST to the Worker, and it must:
-
-- come from the gallery page itself (`Origin` and `Sec-Fetch-Site`), as JSON,
-  in a small body;
-- name an entry that is in the current feed, so a vote cannot create a key of
-  its own;
-- stay under 20 attempts per IP in 10 minutes;
-- carry a Cloudflare Turnstile token that siteverify accepts for this host and
-  the `like` action.
+most guards. A like must come from the gallery page itself, name an entry in
+the current feed, stay under a per-IP rate limit, and carry a Cloudflare
+Turnstile token that siteverify accepts for the `like` action.
 
 That last check had a hole too. The first version accepted a siteverify reply
 with no hostname in it. Now it must name this host:
@@ -251,12 +232,11 @@ return (
 );
 ```
 
-The likes live in one Durable Object with SQLite storage, and one object
-serializes every write, so a like and its count cannot race. No IP address
-is stored. The first design keyed a like by a SHA-256 of a daily random salt,
-the IP and the entry. That kept IPs out of storage, but a new salt every day
-meant a visitor could like the same entry again every day. The key is now an
-HMAC with a secret pepper that lives only in the Worker's secrets:
+The likes live in one Durable Object with SQLite storage, which serializes
+every write, so a like and its count cannot race. No IP address is stored.
+The first design keyed a like by a hash with a daily random salt, which let a
+visitor like the same entry again every day. The key is now an HMAC with a
+secret pepper that lives only in the Worker's secrets:
 
 ```ts
 const voter = this.pepper
@@ -300,31 +280,31 @@ dock cell, a session-start hook that pipes a download into `sh`, a keybinding,
 and a key whose name is an escape sequence. Everything bad is left out and
 named, and nothing is written until you say yes.
 
-**An allowlist, not a denylist.** A look is a small TOML file with `look = 1`.
+**A closed list.** A look is a small TOML file with `look = 1`.
 It may set only the keys on a closed list: theme, glyphs, colours, borders,
 gaps, titles, the dock, the rail, the scrollbar, selection colours, layout
-sizes. That list was 87 keys when `tuios look` landed and is 113 on main today. An option added to tuios later is not a look key until
-someone puts it on the list. Every other key is left out and named in the
+sizes. That list was 87 keys when `tuios look` landed and is 113 on main today. An
+option added to tuios later is not a look key until someone puts it on the
+list. Every other key is left out and named in the
 plan, as a whole table where nothing under it is allowed: `hooks`,
 `keybindings`, `include`, `hosts`, `daemon`, `plugins`, `preferred_shell`,
-`copy_command`, `osc52_write` and the rest. The browser demo at
-[/learn](/learn) refuses the same list from the same function,
-`config.ReachesHost`, so there are two locks on one door.
+`copy_command`, `osc52_write` and the rest. The options that run a program,
+name a file or write the clipboard are also on a second list,
+`config.ReachesHost`, which a look checks as well. The browser demo at
+[/learn](/learn) refuses those options through the same function, so there are
+two locks on one door.
 
 **Item by item where it matters.** A look can set the dock's cell lists and
 the rail's sections
-([#861](https://github.com/Gaurav-Gosain/tuios/pull/861)). It cannot set
-`custom/` cells, because a custom cell runs a command. A look cannot define
-that command, but your own config might already hold one that no list names
-yet, and a look that named it would start it. So `dock.right: custom/clock`
-is left out by name, and the other items apply.
+([#861](https://github.com/Gaurav-Gosain/tuios/pull/861)), but not `custom/`
+cells. A custom cell runs a command from your own config, and a look that
+named one would start it. So `dock.right: custom/clock` is left out by name,
+and the other items apply.
 
 **Every value checked.** Each value goes through the same check as
-`tuios set-config`, and the whole fragment through the full config
-validation. A bad value stops the whole look. A string with
-a control character or a bidi control is refused. Without that, an escape
-sequence in `window_title_format` would reach the frame, because lipgloss
-does not count it as width.
+`tuios set-config`, and a bad value stops the whole look. A string with a
+control character or a bidi control is refused, so an escape sequence in
+`window_title_format` cannot reach the frame.
 
 **The preview could write your clipboard.** This one is my favourite, and it
 was found in review before release. tuios shows you the plan before it asks,
@@ -352,53 +332,27 @@ written to its own file, `config.d/look.toml`, and its theme and glyph set go
 in as `look-<id>`, next to your own. `config.toml` still wins over
 `config.d`, and the plan names every look key your own config overrides, so
 you know why a key will not change. `tuios look remove` deletes that one file
-and the assets, and your config is exactly what it was. Two rules keep that
-exact:
+and the assets, and your config is exactly what it was. A settings change you
+make later goes to `config.toml`, never into `look.toml`, so the next apply
+or remove keeps it. And tuios will not replace a `look.toml` or a theme it
+did not write.
 
-- A settings change you make later never writes into `look.toml`. It goes to
-  `config.toml`, so the next apply or remove keeps it.
-  `TestLookApplyRemoveRoundTrip` applies a look over a config with comments,
-  saves a setting, swaps to a second look, removes it, and checks that
-  `config.toml` gained only the saved setting.
-- tuios will not replace a file it did not write. The `look.toml` it writes
-  starts with a marker line, and a `look-<id>` theme that the installed look
-  did not record is yours. In either case the command stops instead of
-  overwriting.
-
-**And the download.** https only, redirects only to https, a 15 second
-timeout, a 64 KiB cap, and 32 KiB per theme or glyph set. A config folder
-tuios cannot write, like a Nix store or a read-only mount, stops the command
-before the question.
+**And the download.** https only, a 15 second timeout, a 64 KiB cap, and
+32 KiB per theme or glyph set.
 
 The gallery and tuios share one list. `tuios look keys --json` prints the
-allowlist with each key's type, range and accepted values, and the docs site
-vendors that file. A test in tuios fails when the file drifts from the build,
-and the docs site has a test that compares its copy with the binary.
-So the card can tell you, before you run anything, which keys a look will
-leave out.
+allowlist, and the docs site vendors that file, with a test on each side
+that fails when the copies drift. So the card can tell you, before you run
+anything, which keys a look will leave out.
 
 ## Steal this
 
-If you want a community showcase for your own project, here is the short
-version:
-
-1. **Use an existing platform as the queue.** Discussions, issues, whatever
-   already has accounts and abuse tools. Do not build a form.
-2. **Make approval a single human action you can see**, and tie it to the
-   exact content: an edit undoes it.
-3. **Check what the reviewer saw**, from the platform's own rendering, not
-   your parse of the source.
-4. **Re-encode every image** through raw pixels, after a header check and
-   size limits.
-5. **Allowlist hosts by exact name.** A pattern on a name trusts whoever can
-   register that name.
-6. **Show text as text.** Never render user Markdown or HTML, and strip the
-   invisible characters.
-7. **Weight votes by what they cost to fake**, and key them with an HMAC
-   instead of storing addresses.
-8. **If you hand out config, allowlist it, layer it, and make it undoable.**
-   And remember that printing untrusted text to a terminal is already doing
-   something.
+If you want a showcase like this for your own project, borrow a platform
+that already has accounts and abuse tools, and make approval one human action
+that an edit undoes. Then check what the reviewer saw from the platform's own
+rendering, re-encode every image, and allowlist hosts by exact name. And if
+you hand out config, remember that printing untrusted text to a terminal is
+already doing something.
 
 The code is in the [tuios-docs](https://github.com/Gaurav-Gosain/tuios-docs)
 repository under `lib/gallery/`, `worker/` and
