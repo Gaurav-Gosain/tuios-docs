@@ -33,7 +33,7 @@ A person who never runs an agent is not shown any of this. Until an agent has be
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>o</kbd> | Go to the oldest item that needs you, switching session and workspace. <kbd>o</kbd> again goes to the next |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>O</kbd> | Go to the newest finished turn you have not seen. <kbd>O</kbd> again goes to the next older one |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>M</kbd> | Open the Inbox on its mail. <kbd>m</kbd> there opens the whole mailbox |
-| <kbd>Tab</kbd> in the Inbox | Show every agent in one list, with its conversation. See [The agents view](#the-agents-view) |
+| <kbd>Tab</kbd> in the Inbox <Since action="inbox_agents" /> | Show every agent in one list, with its conversation. See [The agents view](#the-agents-view) |
 
 The palette has them too: type `agent`.
 
@@ -315,7 +315,7 @@ Undo brings back a block that you removed or expanded.
 
 Before it sends, the editor removes invisible characters, such as Unicode tags, bidi controls and zero-width spaces. When it removes any, it does not send and says `Removed 3 invisible characters. Read the message and press enter to send.` Text from a web page can hide instructions in these characters.
 
-### Naming a pane, an agent or a file [#naming-a-pane-an-agent-or-a-file]
+### Naming a pane, an agent or a file <Since feature="reply-composer" /> [#naming-a-pane-an-agent-or-a-file]
 
 Type `@` at the start of the reply or after a space. A list opens under the editor: the agents and panes of every session on this machine, and the files in the folder of the pane that gets the reply. Type more to narrow the list.
 
@@ -346,15 +346,15 @@ While the draft holds an image, a strip above the draft shows a preview of each 
 
 <kbd>Ctrl</kbd>+<kbd>O</kbd> on a selected image shows it larger in place of the draft. There, <kbd>o</kbd> opens the image in the image viewer of your desktop, from a private copy. TUIOS removes the copy when you close the view. <kbd>Esc</kbd> goes back to the draft.
 
-A reply takes 8 images, each at most 8 MB, and 8 MB in total. The same image twice is refused: `Image #1 is already in the message.` A client that runs on another machine, such as `tuios ssh` or the browser, cannot read your clipboard image. There, <kbd>Ctrl</kbd>+<kbd>V</kbd> pastes the text.
+A reply takes 8 images, each at most 8 MB, and 8 MB in total. The editor refuses the same image twice: `Image #1 is already in the message.` A client that runs on another machine, such as `tuios ssh` or the browser, cannot read your clipboard image. There, <kbd>Ctrl</kbd>+<kbd>V</kbd> pastes the text.
 
 When TUIOS types the reply, the daemon writes each image to a file on the machine of the pane. The harness manifest tells where the path goes. Claude Code, Codex, OpenCode, Kilo and Crush get the path in a paste of its own, where the image was, so the agent attaches the image. See [How a reply is typed](/docs/agents#how-a-reply-is-typed). An agent that takes no images refuses the reply: `This agent cannot take images. Remove the image to send.`
 
-### Large pastes [#large-pastes]
+### Large pastes <Since feature="reply-composer" /> [#large-pastes]
 
 The daemon on the machine of the pane decides how each block gets to the agent when it types the reply:
 
-- A reply of 12 KB or less goes in one paste, with the text of each block in its place.
+- A reply of 12 KB or less, to a pane that takes a bracketed paste, goes in one paste, with the text of each block in its place.
 - In a larger reply, each block goes into a file, and a label in its place names the file.
 
 ```
@@ -364,15 +364,15 @@ make the backoff jitter configurable. The failing run:
 
 The agent reads the file with its own tools. The file is yours only, in the paste folder next to the daemon's socket. The daemon writes the file when it types the reply, so a reply that waits in the queue never names a file that is gone. The daemon keeps the file for 24 hours, and removes it when the daemon stops.
 
-The typed words without the blocks must fit in 16 KB, and the whole reply in 8 MB. A larger reply stays open and says why: `The message is larger than 16 KB. Make it shorter to send.` or `The message is larger than 8 MB. Remove a paste to send.`
+The typed text must fit in 16 KB. This count includes a label for each block. The whole reply must fit in 8 MB. A larger reply stays open and says why: `The typed text is larger than 16 KB. Make it shorter to send.` or `The message is larger than 8 MB. Remove a paste or an image to send.`
 
 A daemon from v0.10.0 or earlier takes a reply with blocks only when all of it fits in 16 KB. For a larger reply, the editor keeps the draft and tells you to restart the daemon with `tuios kill-server`.
 
-### History and your editor [#history-and-your-editor]
+### History and your editor <Since feature="reply-composer" /> [#history-and-your-editor]
 
 <kbd>↑</kbd> on the first row of the draft brings back what you sent to this agent before, newest first. <kbd>↓</kbd> on the last row goes the other way, back to your draft. <kbd>Ctrl</kbd>+<kbd>R</kbd> searches what you sent: type to narrow the list, select with the arrows, and press <kbd>Enter</kbd> to load the message. A draft that <kbd>Ctrl</kbd>+<kbd>C</kbd> cleared is in the history too.
 
-The daemon keeps the history in memory only, for each harness and folder. A pane that opens again in the same folder keeps its history. The history ends when the daemon stops. Only your attached client can read it. Each message keeps at most 256 KB of pastes and images. A larger block is not kept, and the editor tells you when the message comes back.
+The daemon keeps the history in memory only, for each harness and folder. A pane that opens again in the same folder keeps its history. The history ends when the daemon stops. Only you can read it, from a client outside every pane. Each message keeps at most 256 KB of pastes and images. The daemon does not keep a larger block, and the editor tells you when the message comes back.
 
 <kbd>Ctrl</kbd>+<kbd>G</kbd> opens the draft in `$VISUAL` or `$EDITOR`, with the text of each block in its place. When you save and quit, the file becomes the draft. An image is in the file as its label, such as `[Image #1 · 640×480 png]`. Keep the label to keep the image in its place. Remove the label to remove the image. TUIOS refuses a file that is too large for a draft, and the draft does not change. The file is yours only, and TUIOS removes it when the editor closes.
 
