@@ -13,8 +13,9 @@ import {
   type GalleryFile,
   imagePath,
 } from "./feed";
-import type { DiscussionComment } from "./filter";
+import { APPROVER, type DiscussionComment } from "./filter";
 import type { Encoded } from "./image";
+import { buildLook } from "./look";
 import {
   firstCodeBlock,
   firstImageUrl,
@@ -22,6 +23,7 @@ import {
   normalizeImageUrl,
   shownImageProblem,
 } from "./text";
+import { githubVotes } from "./votes";
 
 export function hash32(data: string | Uint8Array): string {
   return createHash("sha256").update(data).digest("hex").slice(0, 32);
@@ -30,11 +32,17 @@ export function hash32(data: string | Uint8Array): string {
 /** An image the sync must upload: both sizes, keyed by hash. */
 export type Upload = { hash: string; full: Buffer; thumb: Buffer };
 
+/** A look file the sync must upload: new, or changed since the last feed. */
+export type LookUpload = { id: string; text: string };
+
 export type BuildResult = {
   feed: GalleryFeed;
   uploads: Upload[];
   /** Hashes the previous feed had and this one does not. */
   orphans: string[];
+  looks: LookUpload[];
+  /** Look ids the previous feed had and this one does not. */
+  lookOrphans: string[];
   log: string[];
 };
 
@@ -57,8 +65,14 @@ export async function buildFeed(
     if (entry.hash) byHash.set(entry.hash, entry);
   }
 
+  const previousLooks = new Map<string, string>();
+  for (const entry of previous) {
+    if (entry.look) previousLooks.set(entry.look.id, entry.look.hash);
+  }
+
   const entries: GalleryEntry[] = [];
   const uploads = new Map<string, Upload>();
+  const looks: LookUpload[] = [];
   for (const comment of approved) {
     const who = `#${comment.id} by ${comment.author}`;
     const url = firstImageUrl(comment.body);
@@ -116,7 +130,8 @@ export async function buildFeed(
     const files: GalleryFile[] = [];
     const block = firstCodeBlock(comment.body);
     if (block) files.push(block);
-    entries.push({
+    const author = comment.author as string;
+    const entry: GalleryEntry = {
       id: comment.id,
       login: comment.author as string,
       url: `${DISCUSSION_URL}#discussioncomment-${comment.id}`,
@@ -128,11 +143,43 @@ export async function buildFeed(
       files,
       hash: image.hash,
       src,
-    });
+      github: githubVotes(comment.reactions, author, APPROVER),
+    };
+    // Only a code block that is TOML can be a look. A theme pasted as JSON
+    // first has none.
+    const look =
+      block && block.label !== "json"
+        ? buildLook({
+            config: block.text,
+            id: comment.id,
+            name: `@${author}'s setup`,
+            author,
+          })
+        : null;
+    if (look) {
+      const hash = hash32(look.text);
+      entry.look = {
+        id: comment.id,
+        left: look.left,
+        leftCount: look.leftCount,
+        hash,
+      };
+      if (previousLooks.get(comment.id) !== hash) {
+        looks.push({ id: comment.id, text: look.text });
+        log.push(`look ${who}: ${look.keys} keys, ${look.leftCount} left out`);
+      }
+    }
+    entries.push(entry);
   }
 
   const kept = new Set(entries.map((e) => e.hash));
   const orphans = [...byHash.keys()].filter((h) => !kept.has(h));
+  const keptLooks = new Set(
+    entries.flatMap((e) => (e.look ? [e.look.id] : [])),
+  );
+  const lookOrphans = [...previousLooks.keys()].filter(
+    (id) => !keptLooks.has(id),
+  );
   return {
     feed: {
       version: 1,
@@ -141,6 +188,8 @@ export async function buildFeed(
     },
     uploads: [...uploads.values()],
     orphans,
+    looks,
+    lookOrphans,
     log,
   };
 }

@@ -1,7 +1,14 @@
 "use client";
 
 import { Check, Copy, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   FEED_PATH,
   type GalleryEntry,
@@ -9,6 +16,15 @@ import {
   mergeEntries,
   parseFeed,
 } from "@/lib/gallery/feed";
+import { type SortMode, sortEntries } from "@/lib/gallery/votes";
+import { ApplyCommand } from "./apply";
+import { HighlightedCode } from "./highlight";
+import {
+  GithubVotes,
+  HeartButton,
+  type SiteVotes,
+  useSiteVotes,
+} from "./votes";
 
 /**
  * The gallery grid. The seed comes with the page. The synced feed is read
@@ -18,9 +34,18 @@ import {
  * Every string from a submission is drawn as a React text child, which
  * escapes it. Nothing here uses dangerouslySetInnerHTML.
  */
-export function Gallery({ seed }: { seed: GalleryEntry[] }) {
+export function Gallery({
+  seed,
+  badge,
+}: {
+  seed: GalleryEntry[];
+  /** The version badge of tuios look, made on the server. */
+  badge?: ReactNode;
+}) {
   const [synced, setSynced] = useState<GalleryEntry[]>([]);
   const [open, setOpen] = useState<GalleryEntry | null>(null);
+  const [sort, setSort] = useState<SortMode>("top");
+  const { votes, setCount } = useSiteVotes();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -41,7 +66,22 @@ export function Gallery({ seed }: { seed: GalleryEntry[] }) {
     return () => controller.abort();
   }, []);
 
-  const entries = useMemo(() => mergeEntries(synced, seed), [synced, seed]);
+  const merged = useMemo(() => mergeEntries(synced, seed), [synced, seed]);
+  const entries = useMemo(
+    () => sortEntries(merged, sort, votes.counts),
+    [merged, sort, votes.counts],
+  );
+
+  // tuios.dev/r/<id> lands on /gallery#look-<id>. The synced entries arrive
+  // after the page loads, so the card is looked for again when they do.
+  useEffect(() => {
+    const id = /^#look-([a-z0-9-]{1,40})$/.exec(window.location.hash)?.[1];
+    if (!id) return;
+    const entry = merged.find((e) => e.look?.id === id);
+    if (!entry) return;
+    document.getElementById(`look-${id}`)?.scrollIntoView({ block: "center" });
+    setOpen(entry);
+  }, [merged]);
 
   if (entries.length === 0) {
     return (
@@ -56,11 +96,13 @@ export function Gallery({ seed }: { seed: GalleryEntry[] }) {
 
   return (
     <>
+      <SortToggle sort={sort} setSort={setSort} />
       <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {entries.map((entry) => (
           <li
             key={entry.id}
-            className="flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-card"
+            id={entry.look ? `look-${entry.look.id}` : undefined}
+            className="flex scroll-mt-24 flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-card"
           >
             <button
               type="button"
@@ -81,17 +123,98 @@ export function Gallery({ seed }: { seed: GalleryEntry[] }) {
                 className="aspect-[16/10] w-full object-cover object-top transition-transform duration-300 group-hover:scale-[1.02]"
               />
             </button>
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <Byline entry={entry} />
-              {entry.files[0] ? (
-                <CopyFile file={entry.files[0]} compact />
+            <div className="flex flex-1 flex-col gap-3 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <Byline entry={entry} />
+                {entry.files[0] ? (
+                  <CopyFile file={entry.files[0]} compact />
+                ) : null}
+              </div>
+              {entry.look ? (
+                <ApplyCommand look={entry.look} badge={badge} />
               ) : null}
+              <VoteRow entry={entry} votes={votes} setCount={setCount} />
             </div>
           </li>
         ))}
       </ul>
-      <EntryDialog entry={open} onClose={() => setOpen(null)} />
+      <EntryDialog
+        entry={open}
+        onClose={() => setOpen(null)}
+        badge={badge}
+        votes={votes}
+        setCount={setCount}
+      />
     </>
+  );
+}
+
+/** Top (GitHub reactions weigh three hearts) or New. */
+function SortToggle({
+  sort,
+  setSort,
+}: {
+  sort: SortMode;
+  setSort: (mode: SortMode) => void;
+}) {
+  const modes: [SortMode, string, string][] = [
+    [
+      "top",
+      "Top",
+      "Most votes first. A GitHub reaction counts as three likes.",
+    ],
+    ["new", "New", "Newest first."],
+  ];
+  return (
+    <div className="mb-4 flex justify-end">
+      {/* biome-ignore lint/a11y/useSemanticElements: a pair of toggle buttons reads better than a radio group here */}
+      <div
+        role="group"
+        aria-label="Sort the setups"
+        className="inline-flex rounded-lg border border-fd-border p-0.5 text-sm"
+      >
+        {modes.map(([mode, label, hint]) => (
+          <button
+            key={mode}
+            type="button"
+            title={hint}
+            aria-pressed={sort === mode}
+            onClick={() => setSort(mode)}
+            className={`rounded-md px-3 py-1 transition-colors ${
+              sort === mode
+                ? "bg-fd-accent font-medium text-fd-foreground"
+                : "text-fd-muted-foreground hover:text-fd-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VoteRow({
+  entry,
+  votes,
+  setCount,
+}: {
+  entry: GalleryEntry;
+  votes: SiteVotes;
+  setCount: (id: string, count: number) => void;
+}) {
+  return (
+    <div className="-mx-1.5 mt-auto flex items-center gap-1">
+      <HeartButton entry={entry} votes={votes} setCount={setCount} />
+      {entry.github !== undefined ? (
+        <>
+          <span aria-hidden className="text-fd-muted-foreground text-xs">
+            ·
+          </span>
+          <GithubVotes entry={entry} />
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -174,9 +297,15 @@ function CopyFile({ file, compact }: { file: GalleryFile; compact?: boolean }) {
 function EntryDialog({
   entry,
   onClose,
+  badge,
+  votes,
+  setCount,
 }: {
   entry: GalleryEntry | null;
   onClose: () => void;
+  badge?: ReactNode;
+  votes: SiteVotes;
+  setCount: (id: string, count: number) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -234,6 +363,12 @@ function EntryDialog({
                 className="h-auto w-full"
               />
             </a>
+            <div className="flex flex-col gap-3 border-fd-border border-t px-4 py-3">
+              {entry.look ? (
+                <ApplyCommand look={entry.look} badge={badge} />
+              ) : null}
+              <VoteRow entry={entry} votes={votes} setCount={setCount} />
+            </div>
             {entry.files.map((file) => (
               <section key={file.label} className="border-fd-border border-t">
                 <div className="flex items-center justify-between gap-3 px-4 py-2">
@@ -242,9 +377,7 @@ function EntryDialog({
                   </h2>
                   <CopyFile file={file} />
                 </div>
-                <pre className="overflow-x-auto px-4 pb-4 font-mono text-[13px] leading-relaxed">
-                  {file.text}
-                </pre>
+                <HighlightedCode file={file} />
               </section>
             ))}
             {entry.files.length === 0 ? (

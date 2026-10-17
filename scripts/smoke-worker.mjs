@@ -176,6 +176,67 @@ try {
     );
   }
   {
+    const res = await get("/r/amber.toml");
+    const type = res.headers.get("content-type") ?? "";
+    const body = await res.text();
+    check(
+      "seed look file",
+      res.status === 200 &&
+        type === "text/plain; charset=utf-8" &&
+        body.includes("look = 1"),
+      `${res.status}, ${type || "no content-type"}, ${body.length} bytes`,
+    );
+  }
+  {
+    const res = await get("/r/amber");
+    const to = res.headers.get("location") ?? "";
+    check(
+      "look link to the card",
+      res.status === 302 && to.endsWith("/gallery#look-amber"),
+      `${res.status} ${to}`,
+    );
+  }
+  {
+    const res = await get("/r/../gallery/gallery.json");
+    await res.arrayBuffer();
+    check("look path check", res.status !== 200, `${res.status}`);
+  }
+  {
+    // No TURNSTILE_SECRET in wrangler dev: the hearts are read-only.
+    const res = await get("/gallery/votes", { Accept: "application/json" });
+    const json = await res.json().catch(() => null);
+    check(
+      "vote counts",
+      res.status === 200 && json?.writable === false,
+      `${res.status}, ${JSON.stringify(json)}`,
+    );
+  }
+  {
+    const res = await fetch(`${base}/gallery/votes`, {
+      method: "POST",
+      headers: { Origin: base, "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "seed-amber", like: true, token: "x" }),
+    });
+    const json = await res.json().catch(() => null);
+    check(
+      "read-only vote",
+      res.status === 503 && json?.readOnly === true,
+      `${res.status}, ${JSON.stringify(json)}`,
+    );
+  }
+  {
+    const res = await fetch(`${base}/gallery/votes`, {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.example",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: "seed-amber", like: true, token: "x" }),
+    });
+    await res.arrayBuffer();
+    check("cross-origin vote", res.status === 403, `${res.status}`);
+  }
+  {
     const res = await get("/gallery");
     const body = await res.text();
     check(
@@ -190,6 +251,12 @@ try {
     const csp = res.headers.get("content-security-policy") ?? "";
     const script = /script-src ([^;]*)/.exec(csp)?.[1] ?? "";
     const connect = /connect-src ([^;]*)/.exec(csp)?.[1] ?? "";
+    check(
+      "Turnstile allowed by CSP",
+      script.includes("https://challenges.cloudflare.com") &&
+        csp.includes("frame-src https://challenges.cloudflare.com"),
+      `script-src ${script}`,
+    );
     check(
       "analytics allowed by CSP",
       script.includes("https://static.cloudflareinsights.com") &&

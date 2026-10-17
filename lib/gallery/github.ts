@@ -24,9 +24,9 @@ query($owner: String!, $repo: String!, $number: Int!, $after: String) {
           lastEditedAt
           isMinimized
           author { login }
-          reactions(content: ROCKET, first: 100) {
+          reactions(first: 100) {
             pageInfo { hasNextPage endCursor }
-            nodes { createdAt user { login } }
+            nodes { content createdAt user { login } }
           }
         }
       }
@@ -34,13 +34,13 @@ query($owner: String!, $repo: String!, $number: Int!, $after: String) {
   }
 }`;
 
-const MORE_ROCKETS = `
+const MORE_REACTIONS = `
 query($id: ID!, $after: String) {
   node(id: $id) {
     ... on DiscussionComment {
-      reactions(content: ROCKET, first: 100, after: $after) {
+      reactions(first: 100, after: $after) {
         pageInfo { hasNextPage endCursor }
-        nodes { createdAt user { login } }
+        nodes { content createdAt user { login } }
       }
     }
   }
@@ -49,7 +49,11 @@ query($id: ID!, $after: String) {
 type PageInfo = { hasNextPage: boolean; endCursor: string | null };
 type Reactions = {
   pageInfo: PageInfo;
-  nodes: { createdAt: string; user: { login: string } | null }[];
+  nodes: {
+    content: string;
+    createdAt: string;
+    user: { login: string } | null;
+  }[];
 };
 type CommentNode = {
   id: string;
@@ -91,7 +95,7 @@ async function graphql<T>(
   return json.data;
 }
 
-/** Every top-level comment on the discussion, with its rocket reactions. */
+/** Every top-level comment on the discussion, with its reactions. */
 export async function fetchComments(
   token: string,
 ): Promise<DiscussionComment[]> {
@@ -115,15 +119,15 @@ export async function fetchComments(
       throw new Error(`discussion #${DISCUSSION_NUMBER} was not found`);
     }
     for (const node of discussion.comments.nodes) {
-      const rockets = [...node.reactions.nodes];
+      const reactions = [...node.reactions.nodes];
       let info = node.reactions.pageInfo;
       for (let more = 0; info.hasNextPage && more < 20; more++) {
         const extra: { node: { reactions: Reactions } } = await graphql(
           token,
-          MORE_ROCKETS,
+          MORE_REACTIONS,
           { id: node.id, after: info.endCursor },
         );
-        rockets.push(...extra.node.reactions.nodes);
+        reactions.push(...extra.node.reactions.nodes);
         info = extra.node.reactions.pageInfo;
       }
       out.push({
@@ -134,9 +138,15 @@ export async function fetchComments(
         createdAt: node.createdAt,
         lastEditedAt: node.lastEditedAt,
         isMinimized: node.isMinimized,
-        rockets: rockets.map((r) => ({
+        rockets: reactions
+          .filter((r) => r.content === "ROCKET")
+          .map((r) => ({
+            login: r.user?.login ?? null,
+            createdAt: r.createdAt,
+          })),
+        reactions: reactions.map((r) => ({
           login: r.user?.login ?? null,
-          createdAt: r.createdAt,
+          content: r.content,
         })),
       });
     }

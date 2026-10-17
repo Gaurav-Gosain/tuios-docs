@@ -20,12 +20,15 @@
  * goimport.ts). Then a page that moved gets a 301 to its new path (see
  * moved.ts), and a release clip is served from the MEDIA bucket (see
  * media.ts), as are the community gallery's feed and images (see
- * gallery.ts). A page request for its first bytes, which Next's link prefetch
+ * gallery.ts). /r/<id> and /r/<id>.toml are the gallery's look links (see
+ * look.ts), and /gallery/votes holds the hearts on its cards (see votes.ts).
+ * A page request for its first bytes, which Next's link prefetch
  * sends, gets a 206 with just those bytes (see range.ts).
  */
 
 import { galleryObject, serveGallery } from "./gallery";
 import { goImport } from "./goimport";
+import { lookRoute, serveLook } from "./look";
 import { mediaKey, serveMedia } from "./media";
 import { movedTo } from "./moved";
 import {
@@ -37,13 +40,23 @@ import {
 } from "./negotiate";
 import { answerPrefixRange } from "./range";
 import { hostRedirect } from "./redirect";
+import { handleVotes, VOTES_PATH, type VoteEnv } from "./votes";
+
+export { GalleryVotes } from "./votes";
 
 // MEDIA is optional: until the R2 bucket is bound, a clip path falls through
 // to the assets, which answer 404, and the page shows the clip's poster.
-type Env = { ASSETS: Fetcher; MEDIA?: R2Bucket };
+// VOTES is the GalleryVotes Durable Object. TURNSTILE_SITE_KEY is a public
+// var and TURNSTILE_SECRET a secret; until both are set the hearts are
+// read-only (see votes.ts).
+type Env = VoteEnv & { ASSETS: Fetcher; MEDIA?: R2Bucket };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx?: ExecutionContext,
+  ): Promise<Response> {
     const hostMoved = hostRedirect(request);
     if (hostMoved) return hostMoved;
 
@@ -61,6 +74,9 @@ export default {
     if (key && env.MEDIA) return serveMedia(request, env.MEDIA, key);
     const gallery = galleryObject(url.pathname);
     if (gallery && env.MEDIA) return serveGallery(request, env.MEDIA, gallery);
+    const look = lookRoute(url.pathname);
+    if (look) return serveLook(request, look, env);
+    if (url.pathname === VOTES_PATH) return handleVotes(request, env, ctx);
     if (
       (request.method !== "GET" && request.method !== "HEAD") ||
       !isPagePath(url.pathname)

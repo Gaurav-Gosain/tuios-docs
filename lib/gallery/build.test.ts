@@ -228,3 +228,52 @@ describe("buildFeed", () => {
     });
   });
 });
+
+describe("looks and votes", () => {
+  const body = `![x](${A})\n\`\`\`toml\n[appearance]\ngap = 1\n[hooks]\nx = "evil"\n\`\`\``;
+
+  test("an entry gets a look of the allowed keys and its GitHub votes", async () => {
+    const c = comment("7", body);
+    c.reactions = [
+      { login: "Gaurav-Gosain", content: "ROCKET" },
+      { login: "bob", content: "HEART" },
+      { login: "bob", content: "THUMBS_UP" },
+      { login: "user7", content: "HEART" },
+    ];
+    const r = await buildFeed([c], [], deps().deps);
+    const e = r.feed.entries[0];
+    expect(e.github).toBe(1);
+    expect(e.look?.id).toBe("7");
+    expect(e.look?.left).toEqual(["hooks"]);
+    expect(r.looks).toHaveLength(1);
+    expect(r.looks[0].text).toContain("gap = 1");
+    expect(r.looks[0].text).not.toContain("evil");
+    expect(e.look?.hash).toBe(hash32(r.looks[0].text));
+  });
+
+  test("an unchanged look is not uploaded again, a removed one is deleted", async () => {
+    const first = await buildFeed([comment("7", body)], [], deps().deps);
+    const again = await buildFeed(
+      [comment("7", body)],
+      first.feed.entries,
+      deps().deps,
+    );
+    expect(again.looks).toEqual([]);
+    expect(again.lookOrphans).toEqual([]);
+    const gone = await buildFeed([], first.feed.entries, deps().deps);
+    expect(gone.lookOrphans).toEqual(["7"]);
+  });
+
+  test("a JSON first block or a config with no look key has no look", async () => {
+    const r = await buildFeed(
+      [
+        comment("8", `![x](${A})\n\`\`\`json\n{"id": "x"}\n\`\`\``),
+        comment("9", `![x](${B})\n\`\`\`toml\n[hooks]\nx = 1\n\`\`\``),
+      ],
+      [],
+      deps().deps,
+    );
+    expect(r.feed.entries.map((e) => e.look)).toEqual([undefined, undefined]);
+    expect(r.looks).toEqual([]);
+  });
+});

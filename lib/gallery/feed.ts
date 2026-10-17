@@ -55,7 +55,49 @@ export type GalleryEntry = {
    * sync uses it to skip the download of an image it has already published.
    */
   src?: string;
+  /** The entry's look file, when its config sets a look key. */
+  look?: GalleryLook;
+  /**
+   * The people who reacted to the comment on GitHub, each counted once. The
+   * approver's rocket and the author's own reactions do not count. Seed
+   * entries have none.
+   */
+  github?: number;
 };
+
+/** An entry's look file, served at /r/<id>.toml. */
+export type GalleryLook = {
+  /** The id in tuios.dev/r/<id>: the comment ID, or the seed's name. */
+  id: string;
+  /** Left-out key names the card shows. */
+  left: string[];
+  /** How many keys the look left out in all. */
+  leftCount: number;
+  /** The first 32 hex digits of the SHA-256 of the look file. */
+  hash: string;
+};
+
+/** A look id: a comment ID or a seed name. */
+export const LOOK_ID = /^(?:\d{1,12}|[a-z][a-z0-9-]{0,39})$/;
+const LEFT_NAME = /^[A-Za-z0-9_.-]{1,60}$/;
+
+function parseLook(value: unknown): GalleryLook | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const { id, left, leftCount, hash } = value as Record<string, unknown>;
+  if (typeof id !== "string" || !LOOK_ID.test(id)) return undefined;
+  if (typeof hash !== "string" || !HEX32.test(hash)) return undefined;
+  if (!Array.isArray(left) || left.length > 12) return undefined;
+  if (!left.every((n) => typeof n === "string" && LEFT_NAME.test(n)))
+    return undefined;
+  if (
+    typeof leftCount !== "number" ||
+    !Number.isInteger(leftCount) ||
+    leftCount < left.length ||
+    leftCount > 10_000
+  )
+    return undefined;
+  return { id, left: left as string[], leftCount, hash };
+}
 
 export type GalleryFeed = {
   version: 1;
@@ -149,6 +191,15 @@ export function parseEntry(value: unknown): GalleryEntry | null {
     entry.title = v.title;
   if (typeof v.hash === "string" && HEX32.test(v.hash)) entry.hash = v.hash;
   if (typeof v.src === "string" && HEX32.test(v.src)) entry.src = v.src;
+  const look = parseLook(v.look);
+  if (look) entry.look = look;
+  if (
+    typeof v.github === "number" &&
+    Number.isInteger(v.github) &&
+    v.github >= 0 &&
+    v.github <= 1_000_000
+  )
+    entry.github = v.github;
   return entry;
 }
 

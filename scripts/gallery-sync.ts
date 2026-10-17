@@ -6,8 +6,11 @@
 // It reads every comment with GITHUB_TOKEN, keeps the ones the approver has
 // reacted to with a rocket (see lib/gallery/filter.ts), downloads and
 // re-encodes the first image of each (lib/gallery/image.ts), and builds the
-// feed. --publish uploads the new images, then gallery/gallery.json, then
-// deletes the images no entry uses any more. --dry-run prints what it would
+// feed. Each entry gets the count of people who reacted on GitHub
+// (lib/gallery/votes.ts), and, when its first code block sets a look key, a
+// look file of the allowed keys only (lib/gallery/look.ts). --publish uploads
+// the new images and the new or changed look files, then gallery/gallery.json,
+// then deletes the images and look files no entry uses any more. --dry-run prints what it would
 // publish, writes nothing to the bucket, and with --out also writes the feed
 // and the images to a folder to look at. Nothing is committed to git.
 //
@@ -32,6 +35,7 @@ const BUCKET = "tuios-media";
 const SITE = "https://tuios.dev";
 const IMAGE_CACHE = "public, max-age=31536000, immutable";
 const FEED_CACHE = "public, max-age=300";
+const LOOK_CACHE = "public, max-age=300";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(name);
@@ -107,7 +111,7 @@ for (const s of skipped) {
 }
 for (const line of result.log) console.log(line);
 console.log(
-  `The feed has ${result.feed.entries.length} entries, ${result.uploads.length} new images, ${result.orphans.length} images to delete.`,
+  `The feed has ${result.feed.entries.length} entries, ${result.uploads.length} new images, ${result.orphans.length} images to delete, ${result.looks.length} new looks, ${result.lookOrphans.length} looks to delete.`,
 );
 const feedJson = `${JSON.stringify(result.feed, null, 2)}\n`;
 
@@ -122,8 +126,12 @@ if (dryRun) {
       await writeFile(path.join(out, "img", `${u.hash}-full.webp`), u.full);
       await writeFile(path.join(out, "img", `${u.hash}-thumb.webp`), u.thumb);
     }
+    await mkdir(path.join(out, "look"), { recursive: true });
+    for (const l of result.looks) {
+      await writeFile(path.join(out, "look", `${l.id}.toml`), l.text);
+    }
     console.log(
-      `Wrote the feed and ${result.uploads.length * 2} images to ${out}.`,
+      `Wrote the feed, ${result.uploads.length * 2} images and ${result.looks.length} looks to ${out}.`,
     );
   }
   process.exit(0);
@@ -150,6 +158,22 @@ try {
       );
     }
   }
+  for (const l of result.looks) {
+    const file = path.join(scratch, `${l.id}.toml`);
+    await writeFile(file, l.text);
+    wrangler(
+      "r2",
+      "object",
+      "put",
+      `${BUCKET}/gallery/look/${l.id}.toml`,
+      "--file",
+      file,
+      "--content-type",
+      "text/plain; charset=utf-8",
+      "--cache-control",
+      LOOK_CACHE,
+    );
+  }
   const feedFile = path.join(scratch, "gallery.json");
   await writeFile(feedFile, feedJson);
   wrangler(
@@ -173,6 +197,9 @@ try {
         `${BUCKET}/gallery/img/${hash}-${size}.webp`,
       );
     }
+  }
+  for (const id of result.lookOrphans) {
+    wrangler("r2", "object", "delete", `${BUCKET}/gallery/look/${id}.toml`);
   }
 } finally {
   await rm(scratch, { recursive: true, force: true });

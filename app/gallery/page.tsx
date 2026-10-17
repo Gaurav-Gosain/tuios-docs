@@ -2,6 +2,7 @@ import { MessageSquarePlus } from "lucide-react";
 import type { Metadata } from "next";
 import { Gallery } from "@/components/gallery/gallery";
 import { breadcrumbLd, JsonLd } from "@/components/json-ld";
+import { Since } from "@/components/mdx/since";
 import { DISCUSSION_URL, parseFeed } from "@/lib/gallery/feed";
 import seed from "@/lib/gallery/gallery-seed.json";
 import { pageMetadata } from "@/lib/metadata";
@@ -47,7 +48,9 @@ export default function GalleryPage() {
           </h1>
           <p className="mt-4 text-fd-muted-foreground text-lg leading-relaxed">
             Setups that people share in the tuios discussions. Each entry has a
-            screenshot and its config. Copy a config to try the setup.
+            screenshot and its config. Run the command on an entry to try its
+            look. The command adds the look as a separate file and does not
+            change your config.toml.
           </p>
           <p className="mt-3 text-fd-muted-foreground text-sm leading-relaxed">
             Post a screenshot and your config as a comment. Your entry appears
@@ -68,7 +71,7 @@ export default function GalleryPage() {
           Show us your setup
         </a>
       </header>
-      <Gallery seed={entries} />
+      <Gallery seed={entries} badge={<Since feature="look-apply" />} />
     </div>
   );
 }

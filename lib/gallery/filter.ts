@@ -27,6 +27,11 @@ export type DiscussionComment = {
   isMinimized: boolean;
   /** Every rocket reaction on the comment. */
   rockets: { login: string | null; createdAt: string }[];
+  /**
+   * Every reaction on the comment, of any kind, for the vote count (see
+   * votes.ts). Absent in older test data, which counts as none.
+   */
+  reactions?: { login: string | null; content: string }[];
 };
 
 /** The committed denylist, gallery-deny.json. */

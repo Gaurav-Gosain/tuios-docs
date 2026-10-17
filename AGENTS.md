@@ -165,6 +165,12 @@ The Go libraries of tuios have import paths on this site, such as `tuios.dev/pro
 
 A page that moved is listed in `worker/moved.ts`, which answers its old path with a 301 to the new one. The unreleased `since-v0-7-0` page became the v0.8.0 notes that way.
 
+### Gallery looks and votes
+
+Each gallery entry can carry a look: the part of its config that `tuios look apply tuios.dev/r/<id>` installs. `lib/gallery/look.ts` keeps only the keys in `lib/gallery/look-keys.json`, the list tuios enforces. Refresh that file from a tuios checkout with `go run ./cmd/tuios look keys --json > lib/gallery/look-keys.json`, then run `bun scripts/gallery-seed.ts --looks-only`. The sync uploads a synced entry's look to `gallery/look/<id>.toml` in the MEDIA bucket. A seed's look is `public/gallery-seed/<name>.look.toml`. `worker/look.ts` serves both at `/r/<id>.toml`, and sends `/r/<id>` to the card.
+
+The hearts on the cards live in the `GalleryVotes` Durable Object (`worker/votes.ts`). Its migration in `wrangler.jsonc` creates it on deploy. The Turnstile site key is the public var `TURNSTILE_SITE_KEY`. The worker reads the secret as `TURNSTILE_SECRET` (`wrangler secret put TURNSTILE_SECRET`). Without the secret the hearts show counts and take no votes. The Top order is `github * 3 + site` (`lib/gallery/votes.ts`).
+
 ### Release clips
 
 The `<ReleaseClip>` videos are not in git and not in the static assets. They live in the `tuios-media` R2 bucket, bound to the Worker as `MEDIA`, and `worker/media.ts` serves `/releases/<version>/<name>.mp4` and `.webm` from it with Range support. The poster (`<name>.jpg`, `<name>-vertical.jpg`) and captions (`<name>.vtt`) of each clip stay in `public/releases/<version>/`. `.gitignore` keeps video files out of `public/releases/`.

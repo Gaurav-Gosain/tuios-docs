@@ -4,10 +4,16 @@
 interface __BaseEnv_Env {
 	MEDIA: R2Bucket;
 	ASSETS: Fetcher;
+	TURNSTILE_SITE_KEY: "0x4AAAAAAFZItIyugzY7iYaG";
+	VOTES: DurableObjectNamespace<import("./index").GalleryVotes>;
+	// A secret (wrangler secret put TURNSTILE_SECRET), so wrangler types
+	// cannot see it. Absent until it is set.
+	TURNSTILE_SECRET?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
 		mainModule: typeof import("./index");
+		durableNamespaces: "GalleryVotes";
 	}
 	interface Env extends __BaseEnv_Env {}
 }
