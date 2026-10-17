@@ -59,6 +59,39 @@ describe("planLook", () => {
     expect(plan.skipped).toEqual(["3 more", "glyphs (a glyph set)"]);
   });
 
+  test("a list is set as a JSON array", () => {
+    const plan = planLook(
+      {
+        look: 1,
+        startup: { tiled: true },
+        dock: {
+          left: ["mode", "workspaces"],
+          center: [],
+          tabs: { number_glyphs: ["一"] },
+        },
+        appearance: { sidebar: { sections: "sessions,files" } },
+      },
+      { ...look, left: ["dock.right: custom/clock"], leftCount: 1 },
+      KEYS,
+    );
+    expect(plan.setup).toEqual([
+      { command: "set", args: ["startup.tiled", "true"], wait: 30 },
+      {
+        command: "set",
+        args: ["dock.left", '["mode","workspaces"]'],
+        wait: 30,
+      },
+      { command: "set", args: ["dock.center", "[]"], wait: 30 },
+      { command: "set", args: ["dock.tabs.number_glyphs", '["一"]'], wait: 30 },
+      {
+        command: "set",
+        args: ["appearance.sidebar.sections", "sessions,files"],
+        wait: 30,
+      },
+    ]);
+    expect(plan.skipped).toEqual(["dock.right: custom/clock"]);
+  });
+
   test("a path that is not a look key is skipped, never set", () => {
     const plan = planLook(
       {

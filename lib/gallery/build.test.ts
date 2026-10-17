@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildFeed, hash32 } from "./build";
+import { entryTitle, parseFeed } from "./feed";
 import type { DiscussionComment } from "./filter";
 import { ImageRejected } from "./image";
 
@@ -255,6 +256,28 @@ describe("looks and votes", () => {
     expect(r.looks[0].text).toContain("gap = 1");
     expect(r.looks[0].text).not.toContain("evil");
     expect(e.look?.hash).toBe(hash32(r.looks[0].text));
+  });
+
+  test("an entry takes its title from the look's name line", async () => {
+    const named = `![x](${A})\n\`\`\`toml\nlook = 1\nname = "  Neon\\u001b[2J   84 "\n[appearance]\ngap = 1\n\`\`\``;
+    const long = `![x](${B})\n\`\`\`toml\nname = "${"x".repeat(61)}"\n[appearance]\ngap = 1\n\`\`\``;
+    const r = await buildFeed(
+      [comment("7", named), comment("8", long), comment("9", body)],
+      [],
+      deps().deps,
+    );
+    const [a, b, c] = r.feed.entries;
+    expect(a.title).toBe("Neon 84");
+    expect(entryTitle(a)).toBe("Neon 84 by @user7");
+    expect(r.looks[0].text).toContain('name = "Neon 84"');
+    expect(b.title).toBeUndefined();
+    expect(c.title).toBeUndefined();
+    expect(entryTitle(c)).toBe("@user9's setup");
+    expect(parseFeed(r.feed).map((e) => e.title)).toEqual([
+      "Neon 84",
+      undefined,
+      undefined,
+    ]);
   });
 
   test("an unchanged look is not uploaded again, a removed one is deleted", async () => {

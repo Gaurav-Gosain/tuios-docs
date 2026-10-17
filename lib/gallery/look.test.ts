@@ -96,6 +96,93 @@ border_focused_color = "#ff0000"
     ]);
   });
 
+  test("keeps the built-in items of a dock list and a rail layout, and names the rest", () => {
+    const l = must(
+      look(`
+[startup]
+tiled = true
+layout = "master-stack"
+daemon = false
+
+[appearance]
+master_position = "center"
+master_ratio = 46
+
+[appearance.sidebar]
+sections = "sessions,terminals,files,custom"
+
+[appearance.sidebar.custom]
+command = "evil"
+
+[dock]
+left = ["mode", "workspaces"]
+center = ["custom/np"]
+right = ["custom/weather", "clock", "session-controls"]
+
+[dock.tabs]
+style = "flat"
+number_glyphs = ["I", "II"]
+
+[dock.custom.np]
+command = "evil"
+`),
+    );
+    const doc = parse(l.text) as Record<string, Record<string, unknown>>;
+    expect(doc.startup).toEqual({ tiled: true, layout: "master-stack" });
+    expect(doc.dock.left).toEqual(["mode", "workspaces"]);
+    expect(doc.dock.center).toEqual([]);
+    expect(doc.dock.right).toEqual(["clock", "session-controls"]);
+    expect(doc.dock.tabs).toEqual({
+      style: "flat",
+      number_glyphs: ["I", "II"],
+    });
+    expect(doc.dock.custom).toBeUndefined();
+    expect((doc.appearance.sidebar as Record<string, unknown>).sections).toBe(
+      "sessions,terminals,files",
+    );
+    expect(l.text).not.toContain("evil");
+    expect(l.left.sort()).toEqual(
+      [
+        "appearance.sidebar.custom",
+        "appearance.sidebar.sections: custom",
+        "dock.center: custom/np",
+        "dock.custom",
+        "dock.right: custom/weather",
+        "startup.daemon",
+      ].sort(),
+    );
+  });
+
+  test("a rail layout of left-out sections only is left out", () => {
+    const l = must(
+      look(
+        `[appearance]\ngap = 1\n[appearance.sidebar]\nsections = "custom:30,spacer"`,
+      ),
+    );
+    expect(setKeys(l.text)).not.toContain("appearance.sidebar.sections");
+    expect(l.left.sort()).toEqual([
+      "appearance.sidebar.sections",
+      "appearance.sidebar.sections: custom:30",
+    ]);
+  });
+
+  test("leaves out a list with a bad item, or too many items", () => {
+    const l = must(
+      look(`[appearance]
+gap = 1
+[dock]
+left = "mode"
+right = ["\\u001b[2J"]
+[dock.tabs]
+number_glyphs = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]`),
+    );
+    expect(l.left.sort()).toEqual([
+      "dock.left",
+      "dock.right",
+      "dock.tabs.number_glyphs",
+    ]);
+  });
+
   test("a config with no look key and no theme has no look", () => {
     expect(look("[hooks]\nx = 'y'")).toBeNull();
     expect(look("not = [toml")).toBeNull();

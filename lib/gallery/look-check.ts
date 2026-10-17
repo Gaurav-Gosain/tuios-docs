@@ -9,13 +9,24 @@ import lookKeys from "./look-keys.json";
 
 export type LookKey = {
   path: string;
-  type: "bool" | "int" | "string";
+  type: "bool" | "int" | "string" | "list";
   description?: string;
   default?: string;
   accepted?: string[];
   min?: number;
   max?: number;
   color?: boolean;
+  /**
+   * The names one item may be: an item of a list, or of a string of items
+   * joined by split. An item may carry ":share" after the name. tuios leaves
+   * out any other item and keeps the rest, since such an item can start a
+   * command, such as custom/clock in a dock list.
+   */
+  items?: string[];
+  split?: string;
+  max_items?: number;
+  /** The most bytes of a string, or of one list item. */
+  max_bytes?: number;
 };
 
 export const LOOK_KEYS = new Map<string, LookKey>(
@@ -93,7 +104,69 @@ export function isColour(raw: string): boolean {
   return SLOTS.has(name.replace(/^bright_/, ""));
 }
 
-export type Checked = { ok: true; value: unknown } | { ok: false; why: string };
+export type Checked =
+  | {
+      ok: true;
+      value: unknown;
+      /** The items tuios leaves out. The value is null when none is left. */
+      dropped?: string[];
+    }
+  | { ok: false; why: string };
+
+function byteLength(s: string): number {
+  return new TextEncoder().encode(s).length;
+}
+
+/**
+ * Keeps the items of a string of items that name an allowed item, as tuios
+ * does for appearance.sidebar.sections. The value is null when no item but a
+ * spacer is left.
+ */
+function checkItemString(key: LookKey, value: string): Checked {
+  const items = key.items ?? [];
+  const keep: string[] = [];
+  const dropped: string[] = [];
+  let named = 0;
+  for (const raw of value.split(key.split ?? ",")) {
+    const field = raw.trim();
+    if (field === "") continue;
+    const name = field.split(":")[0].trim().toLowerCase();
+    if (!items.includes(name)) {
+      dropped.push(field);
+      continue;
+    }
+    if (name !== "spacer") named++;
+    keep.push(field);
+  }
+  return {
+    ok: true,
+    value: named > 0 ? keep.join(key.split ?? ",") : null,
+    dropped,
+  };
+}
+
+/** A list of one-line strings, with the items tuios leaves out dropped. */
+function checkList(key: LookKey, value: unknown): Checked {
+  if (!Array.isArray(value)) return { ok: false, why: "expected a list" };
+  if (key.max_items !== undefined && value.length > key.max_items)
+    return { ok: false, why: `more than ${key.max_items} items` };
+  const keep: string[] = [];
+  const dropped: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string")
+      return { ok: false, why: "expected a list of text" };
+    if (CONTROL.test(item))
+      return { ok: false, why: "an item has a control character" };
+    if (byteLength(item) > (key.max_bytes ?? MAX_STRING))
+      return {
+        ok: false,
+        why: `an item is longer than ${key.max_bytes ?? MAX_STRING} bytes`,
+      };
+    if (key.items && !key.items.includes(item.trim())) dropped.push(item);
+    else keep.push(key.items ? item.trim() : item);
+  }
+  return { ok: true, value: keep, dropped };
+}
 
 /** The value as a look keeps it, or why it cannot. */
 export function checkLookValue(key: LookKey, value: unknown): Checked {
@@ -117,12 +190,16 @@ export function checkLookValue(key: LookKey, value: unknown): Checked {
         };
       return { ok: true, value: n };
     }
+    case "list":
+      return checkList(key, value);
     case "string": {
       if (typeof value !== "string") return { ok: false, why: "expected text" };
       if (CONTROL.test(value))
         return { ok: false, why: "has a control character" };
-      if (new TextEncoder().encode(value).length > MAX_STRING)
-        return { ok: false, why: `longer than ${MAX_STRING} bytes` };
+      const max = key.max_bytes ?? MAX_STRING;
+      if (byteLength(value) > max)
+        return { ok: false, why: `longer than ${max} bytes` };
+      if (key.items) return checkItemString(key, value);
       if (key.color) {
         if (key.accepted?.includes(value) || isColour(value))
           return { ok: true, value };

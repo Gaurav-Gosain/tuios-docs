@@ -94,6 +94,8 @@ export type GalleryEntry = {
   id: string;
   /** The GitHub handle of the person who posted it. */
   login: string;
+  /** The look's name, from the name line of its code block. */
+  title?: string;
   /** The comment on GitHub. */
   url: string;
   /** When the comment was posted, as an ISO 8601 date. */
@@ -139,7 +141,8 @@ export type GalleryLook = {
 
 /** A look id: a comment ID. */
 export const LOOK_ID = /^\d{1,12}$/;
-const LEFT_NAME = /^[A-Za-z0-9_.-]{1,60}$/;
+/** A left-out name: a key, or a key and an item (see look.ts). */
+const LEFT_NAME = /^(?=.{1,60}$)[A-Za-z0-9_.-]+(?:: [A-Za-z0-9_.:/-]+)?$/;
 
 function parseLook(value: unknown): GalleryLook | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -165,6 +168,32 @@ export type GalleryFeed = {
   updated: string;
   entries: GalleryEntry[];
 };
+
+/** The longest title an entry keeps, in characters. */
+export const MAX_TITLE = 60;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching controls is the point
+const TITLE_BAD = /[\u0000-\u001f\u007f-\u009f]/;
+
+/** Whether a title is one an entry may carry. */
+export function isTitle(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim() === value &&
+    value.length > 0 &&
+    [...value].length <= MAX_TITLE &&
+    !TITLE_BAD.test(value)
+  );
+}
+
+/**
+ * What a card and the Try it dialog call an entry: "Neon 84 by @login", or
+ * "@login's setup" when the look has no name.
+ */
+export function entryTitle(entry: Pick<GalleryEntry, "login" | "title">) {
+  return entry.title
+    ? `${entry.title} by @${entry.login}`
+    : `@${entry.login}'s setup`;
+}
 
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 const HEX32 = /^[0-9a-f]{32}$/;
@@ -249,6 +278,7 @@ export function parseEntry(value: unknown): GalleryEntry | null {
     height: v.height,
     files,
   };
+  if (isTitle(v.title)) entry.title = v.title;
   if (typeof v.hash === "string" && HEX32.test(v.hash)) entry.hash = v.hash;
   if (typeof v.src === "string" && HEX32.test(v.src)) entry.src = v.src;
   const look = parseLook(v.look);

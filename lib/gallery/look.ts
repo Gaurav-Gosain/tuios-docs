@@ -18,12 +18,14 @@
  */
 
 import { parse, stringify } from "smol-toml";
+import { isTitle } from "./feed";
 import {
   CONTROL,
   checkLookValue,
   LOOK_KEYS as KEYS,
   MAX_STRING,
 } from "./look-check";
+import { cleanText } from "./text";
 
 /** The look format version the file is written in. */
 export const LOOK_VERSION = 1;
@@ -47,7 +49,11 @@ const META = new Set(["look", "name", "author", "description"]);
 /** A theme or glyph set id that tuios can install as look-<id>. */
 const ASSET_ID = /^[a-z0-9][a-z0-9_.-]{0,58}$/;
 const ASSET_KEY = /^[a-z0-9_]{1,40}$/;
-const SAFE_NAME = /^[A-Za-z0-9_.-]+$/;
+/**
+ * A left-out name the card may show: a key, or a key and one of its items,
+ * such as "dock.right: custom/clock".
+ */
+const SAFE_NAME = /^[A-Za-z0-9_.-]+(?:: [A-Za-z0-9_.:/-]+)?$/;
 
 export type Look = {
   /** The look file, ready to serve. */
@@ -155,6 +161,13 @@ function walk(
       left.push(path);
       continue;
     }
+    // An item tuios leaves out, such as a custom dock cell, is named with
+    // its key. The other items stay.
+    for (const item of checked.dropped ?? []) left.push(`${path}: ${item}`);
+    if (checked.value === null) {
+      left.push(path);
+      continue;
+    }
     put(kept, path, checked.value);
     count++;
   }
@@ -233,6 +246,28 @@ export function buildLook(source: LookSource): Look | null {
     left: [...new Set(safe)].slice(0, MAX_LEFT),
     leftCount: new Set(left).size,
   };
+}
+
+/**
+ * The name line of a look, such as name = "Neon 84", for the entry's title.
+ * It is cleaned as the rest of the text is, with each run of white space made
+ * one space. A name that is not text, is empty, or is longer than MAX_TITLE
+ * characters gives no title.
+ */
+export function lookName(config: string): string | undefined {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parse(config, {
+      integersAsBigInt: true,
+      unsafeKeyBehaviour: "throw",
+      maxDepth: 8,
+    }) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed.name !== "string") return undefined;
+  const name = cleanText(parsed.name).replace(/\s+/g, " ").trim();
+  return isTitle(name) ? name : undefined;
 }
 
 /** The look key paths, for tests and the card. */

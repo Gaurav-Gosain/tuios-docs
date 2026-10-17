@@ -2,7 +2,8 @@
  * The setup commands that put a look on the browser build of tuios, for the
  * gallery's Try it (components/gallery/try-it.tsx):
  *
- * - `set` for each key of the look, by its config path;
+ * - `set` for each key of the look, by its config path, with a list as a
+ *   JSON array, such as `["mode","workspaces"]`;
  * - `themeJSON` for a [theme] the look carries, last, so its theme wins.
  *
  * Only a look key goes to `set`: the caller passes the paths of
@@ -57,10 +58,14 @@ export function planLook(
       ? (theme as Record<string, unknown>)
       : null;
   for (const [path, value] of pairs) {
+    const list =
+      Array.isArray(value) && value.every((v) => typeof v === "string");
     if (
       !keys.has(path) ||
-      (typeof value !== "string" &&
+      (!list &&
+        typeof value !== "string" &&
         typeof value !== "number" &&
+        typeof value !== "bigint" &&
         typeof value !== "boolean")
     ) {
       skipped.push(path);
@@ -68,7 +73,8 @@ export function planLook(
     }
     // A theme the look carries is set by themeJSON below.
     if (path === "appearance.theme" && ownTheme) continue;
-    setup.push({ command: "set", args: [path, String(value)], wait: 30 });
+    const text = list ? JSON.stringify(value) : String(value);
+    setup.push({ command: "set", args: [path, text], wait: 30 });
   }
   if (ownTheme && typeof ownTheme.id === "string") {
     setup.push({

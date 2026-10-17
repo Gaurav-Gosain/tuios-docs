@@ -16,7 +16,7 @@ import {
 } from "./feed";
 import { APPROVER, type DiscussionComment } from "./filter";
 import type { Encoded } from "./image";
-import { buildLook } from "./look";
+import { buildLook, lookName } from "./look";
 import {
   firstCodeBlock,
   firstImageUrl,
@@ -135,9 +135,12 @@ export async function buildFeed(
       files.push(notes.length > 0 ? { ...block, notes } : block);
     }
     const author = comment.author as string;
+    const toml = block && block.label !== "json" ? block.text : null;
+    const title = toml ? lookName(toml) : undefined;
     const entry: GalleryEntry = {
       id: comment.id,
       login: comment.author as string,
+      ...(title ? { title } : {}),
       url: `${DISCUSSION_URL}#discussioncomment-${comment.id}`,
       date: comment.createdAt,
       thumb: imagePath(image.hash, "thumb"),
@@ -151,15 +154,14 @@ export async function buildFeed(
     };
     // Only a code block that is TOML can be a look. A theme pasted as JSON
     // first has none.
-    const look =
-      block && block.label !== "json"
-        ? buildLook({
-            config: block.text,
-            id: comment.id,
-            name: `@${author}'s setup`,
-            author,
-          })
-        : null;
+    const look = toml
+      ? buildLook({
+          config: toml,
+          id: comment.id,
+          name: title ?? `@${author}'s setup`,
+          author,
+        })
+      : null;
     if (look) {
       const hash = hash32(look.text);
       entry.look = {

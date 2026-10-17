@@ -3,7 +3,11 @@
 import { X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { GalleryEntry, GalleryLook } from "@/lib/gallery/feed";
+import {
+  entryTitle,
+  type GalleryEntry,
+  type GalleryLook,
+} from "@/lib/gallery/feed";
 import { type Plan, planLook } from "@/lib/gallery/try-plan";
 
 /**
@@ -83,7 +87,7 @@ export function TryItDialog({
       : []),
   ];
 
-  const title = `@${entry.login}'s setup`;
+  const title = entryTitle(entry);
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes a modal dialog natively

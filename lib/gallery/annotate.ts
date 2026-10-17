@@ -166,7 +166,9 @@ function classify(
   const key = LOOK_KEYS.get(dotted);
   if (key) {
     const checked = checkLookValue(key, value);
-    return checked.ok ? { kind: "doc" } : { kind: "bad", why: checked.why };
+    if (!checked.ok) return { kind: "bad", why: checked.why };
+    // A rail layout of left-out sections only, such as "custom".
+    return checked.value === null ? { kind: "left" } : { kind: "doc" };
   }
   if (isConfigKey(path)) return { kind: "left" };
   return { kind: "unknown" };

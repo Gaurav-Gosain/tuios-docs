@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import {
+  entryTitle,
   FEED_PATH,
   type GalleryEntry,
   type GalleryFile,
@@ -119,12 +120,12 @@ export function Gallery({
               type="button"
               onClick={() => setOpen(entry)}
               className="group block overflow-hidden bg-fd-muted focus-visible:outline-2 focus-visible:outline-fd-primary focus-visible:-outline-offset-2"
-              aria-label={`Open the setup by @${entry.login}`}
+              aria-label={`Open ${entryTitle(entry)}`}
             >
               {/* biome-ignore lint/performance/noImgElement: a static export has no image optimiser, and the stills are WebP already */}
               <img
                 src={entry.thumb}
-                alt={`The tuios setup of @${entry.login}`}
+                alt={`A screenshot of ${entryTitle(entry)}`}
                 width={Math.min(entry.width, 800)}
                 height={Math.round(
                   (entry.height * Math.min(entry.width, 800)) / entry.width,
@@ -258,14 +259,14 @@ function VoteRow({
 
 function Byline({ entry }: { entry: GalleryEntry }) {
   return (
-    <p className="min-w-0 text-sm">
+    <p className="min-w-0 truncate text-sm">
       <a
         href={entry.url}
         target="_blank"
         rel="nofollow ugc noopener"
         className="font-medium text-fd-foreground underline decoration-fd-primary/40 underline-offset-4 hover:decoration-fd-primary"
       >
-        @{entry.login}
+        {entryTitle(entry)}
       </a>
       <span className="text-fd-muted-foreground">
         {" · "}
@@ -362,7 +363,7 @@ function EntryDialog({
       ref={ref}
       onClose={onClose}
       onClick={onClick}
-      aria-label={entry ? `The setup by @${entry.login}` : undefined}
+      aria-label={entry ? entryTitle(entry) : undefined}
       className="m-auto max-h-[92dvh] w-[min(72rem,94vw)] overflow-hidden rounded-xl border border-fd-border bg-fd-background p-0 text-fd-foreground shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm"
     >
       {entry ? (
@@ -388,7 +389,7 @@ function EntryDialog({
               {/* biome-ignore lint/performance/noImgElement: see the grid */}
               <img
                 src={entry.full}
-                alt={`The tuios setup of @${entry.login}, full size`}
+                alt={`A screenshot of ${entryTitle(entry)}, full size`}
                 width={entry.width}
                 height={entry.height}
                 decoding="async"
