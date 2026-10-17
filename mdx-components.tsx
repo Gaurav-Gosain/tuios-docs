@@ -28,6 +28,7 @@ import {
   LayoutModes,
   LineDiscipline,
   LinkLanes,
+  LiveDemo,
   MailboxSandbox,
   MediumProbe,
   NegativeControlBench,
@@ -129,6 +130,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     KeptTestBar,
     ReleaseClip,
     DocsClip,
+    LiveDemo,
     Shot,
     ...components,
   };
