@@ -19,6 +19,9 @@ A scene is a folder under media/scenes/ with:
   config.toml  optional. Appended to media/base.toml.
   fixtures/    optional. Copied to the work folder, ~/project.
 
+  scene.json may also say "host": "kitty", to answer tuios's graphics probe
+  as a kitty terminal does. See KITTY_RESPONDERS.
+
 What it does:
 
   1. Builds a throwaway HOME and XDG tree under BUILD_DIR/env, and a short
@@ -71,6 +74,27 @@ def rgb(hexcolor):
     h = hexcolor.lstrip("#")
     return "rgb:" + "/".join(h[i : i + 2] * 2 for i in (0, 2, 4))
 
+
+# With "host": "kitty" in scene.json, the PTY also answers as a kitty graphics
+# terminal does, the way the e2e suite's fake host does: the pixel geometry,
+# and an OK for the direct-transmission probe (i=1). The file probe (i=2) and
+# the animation probe get no answer, so tuios sends images inline and claims
+# no animation. XTVERSION names kitty in place of xterm.js, because tuios
+# turns graphics off for xterm.js, which keeps images in its cells. tuios
+# then draws its own pictures, such as the reply editor's image previews, with
+# kitty graphics, and a screenshot holds them. tuios draws such a picture at
+# the host's cell size, and a screenshot takes its cell shape from the host's.
+# A 19x38 cell is about a screenshot cell at scale 2 in GeistMono Nerd Font
+# Mono, so the picture lands near pixel for pixel, and it keeps the shot the
+# shape it has without a kitty host.
+KITTY_CELL = (19, 38)
+KITTY_RESPONDERS = [
+    (re.compile(rb"\x1b\[>0?q"), lambda m: b"\x1bP>|kitty(0.42.0)\x1b\\"),
+    (re.compile(rb"\x1b_Gi=1,a=q[^\x1b]*\x1b\\"), lambda m: b"\x1b_Gi=1;OK\x1b\\"),
+    (re.compile(rb"\x1b\[14t"), lambda m: f"\x1b[4;{GEOMETRY['rows'] * KITTY_CELL[1]};{GEOMETRY['cols'] * KITTY_CELL[0]}t".encode()),
+    (re.compile(rb"\x1b\[16t"), lambda m: f"\x1b[6;{KITTY_CELL[1]};{KITTY_CELL[0]}t".encode()),
+]
+GEOMETRY = {"cols": 0, "rows": 0}
 
 RESPONDERS = [
     (re.compile(rb"\x1b\[0?c"), lambda m: b"\x1b[?62;22c"),
@@ -128,6 +152,13 @@ def main():
     PALETTE.update(fg=host["foreground"], bg=host["background"])
     scene = json.load(open(os.path.join(scene_dir, "scene.json")))
     cols, rows = scene.get("cols", 160), scene.get("rows", 45)
+    GEOMETRY.update(cols=cols, rows=rows)
+    # The kitty answers go first: DA1 closes tuios's probe, so an answer
+    # written after it is too late.
+    responders = RESPONDERS
+    if scene.get("host") == "kitty":
+        kitty = {rx.pattern for rx, _ in KITTY_RESPONDERS}
+        responders = KITTY_RESPONDERS + [r for r in RESPONDERS if r[0].pattern not in kitty]
     tuios = os.environ.get("TUIOS_BIN") or shutil.which("tuios")
     if not tuios:
         sys.exit("rig: set TUIOS_BIN or put tuios on PATH")
@@ -254,7 +285,7 @@ def main():
                 return
             events.append([round(now(), 6), data])
             scan = tail + data
-            for rx, reply in RESPONDERS:
+            for rx, reply in responders:
                 for m in rx.finditer(scan):
                     if m.end() > len(tail):
                         os.write(fd, reply(m))

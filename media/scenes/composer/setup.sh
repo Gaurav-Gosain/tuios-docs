@@ -13,10 +13,5 @@ source "$MEDIA/lib/project.sh"
   echo 'FAIL	example.com/notes/internal/store	2.318s'
 } >test.log
 
-# The image the reply attaches: a latency graph with a spike, bright enough
-# to read in a preview three rows high.
-magick -size 1280x720 xc:'#eff1f5' \
-  -stroke none -fill '#8caaee' \
-  -draw 'polygon 0,720 0,520 160,500 320,510 440,470 560,490 640,430 720,140 800,110 880,420 1040,450 1160,440 1280,450 1280,720' \
-  -fill '#e64553' -draw 'circle 800,110 840,110' \
-  latency.png
+# The image the reply attaches, latency.png, is in fixtures/. latency.py
+# draws it.
