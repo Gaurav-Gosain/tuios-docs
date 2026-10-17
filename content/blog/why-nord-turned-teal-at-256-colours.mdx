@@ -12,8 +12,9 @@ theme's own palette in the host terminal:
 
 ![tuios with the nord theme at 256 colours, before the fix. The pane grounds, the sidebar and the desktop are all a dark teal.](/blog/why-nord-turned-teal-at-256-colours/nord-before.webp)
 
-Nord's ground is `#2e3440`, a slate grey with a little blue in it. On this screen it is `#005f5f`, which is xterm index 23, and nobody
-would call that grey. Here is the same scene with the fix:
+Nord's ground is `#2e3440`, a slate grey with a little blue in it. On this
+screen it is `#005f5f`, which is xterm index 23, and nobody would call that
+grey. Here is the same scene with the fix:
 
 ![The same scene after the fix. The grounds are a neutral dark grey, index 236.](/blog/why-nord-turned-teal-at-256-colours/nord-after.webp)
 
@@ -230,9 +231,8 @@ became a colour. Solarized was one:
 ![solarized_dark___patched at 256 colours with the first version of the fix: every ground is navy, index 17.](/blog/why-nord-turned-teal-at-256-colours/solarized-first-version.webp)
 
 Solarized's ground is `#001e27`. Its chroma is 0.040, just over the line, so it
-had to be a colour, and the nearest one was navy 17. 5,861 cells of navy. django
-went to teal 23, and h4x0r's red theme, `#200101`, went to the dark red 52, with
-red text on it.
+had to be a colour, and the nearest one was navy 17. 5,861 cells of navy.
+h4x0r's red theme, `#200101`, went to the dark red 52, with red text on it.
 
 The problem is the dark end of the cube again. Its darkest colours are far more
 saturated than a dark theme's tinted ground: `#00005f` has a chroma of about
@@ -270,7 +270,7 @@ warning in the wrong shade of yellow.
 So [b83c496e](https://github.com/Gaurav-Gosain/tuios/commit/b83c496e) adds
 `WarningApart256`: when the warning sits within 35 degrees of the error, it
 moves to the amber entry, from orange to olive, nearest amber in hue that still
-reads on every row. seoulbones_light's warning is 94, `#875f00`, now.
+reads on every row. seoulbones_light's warning is amber now.
 
 ## What is still wrong
 
@@ -284,8 +284,8 @@ tokyo_night_light warning {122 79 16} -> 124 | error {135 65 78} -> 124
 
 `WarningApart256` sees the clash and looks for an amber. But on gruvbox_light's
 cursor row, no amber entry in the cube clears the contrast floor tuios holds
-marks to. So the function gives up and keeps the warning as it was, on purpose. The doc comment
-says why:
+marks to. So the function gives up and keeps the warning as it was, on
+purpose. The doc comment says why:
 
 ```go
 // It returns warning unchanged when the two are apart, when either is a
@@ -300,22 +300,20 @@ where both are the same red:
 
 ![Two crops of the agents list in the sidebar at 256 colours. Catppuccin Latte on the left shows the ▲ of a waiting agent in amber and the ✕ of a failed one in red. gruvbox_light on the right shows both in the same red.](/blog/why-nord-turned-teal-at-256-colours/warning-latte-vs-gruvbox-light.webp)
 
-The glyphs still differ, ▲ and ✕, so the state can be read. But the colour says
-nothing there, and I do not have a good answer for it yet. If you use
-gruvbox_light on a 256-colour terminal and have an opinion, I would like to hear
-it.
+The glyphs still differ, ▲ and ✕, so you can still tell the two apart. The
+colour just doesn't help there, and I haven't found a fix I like yet. If you
+run gruvbox_light on a 256-colour terminal, I'd love to hear what you would
+want that warning to look like. An issue is the best place for it.
 
-## What I take from it
+## The path the colours took
 
-The bug was never in the colour maths I wrote. It was in the path I did not know
-the colours took. The chrome went through `To256`, the panes went around it, and
-both ended at the same frame writer. The test that caught it checks what the
-terminal is sent, not what any one function returns, and that is the only
-reason it could see a step-down that happened after tuios was done with the
-colour.
+The colour maths I wrote was fine. The bug was in a path I did not know the
+colours took. The chrome went through `To256`, the panes went around it, and
+both ended at the same frame writer. The test that caught it checks the bytes
+the terminal is sent, after every step-down, and that is the only reason it
+could see one that happened after tuios was done with the colour.
 
-The other half is that the test was not enough. The 18 themes that got worse in
-the first version were found by looking at the renders, not by the test. A rule
-for 344 themes needs someone to look at 344 themes, and I was glad I did before
-it shipped. The fix is on main
-and goes out in the next release.
+The test was not enough on its own, though. It found none of the 18 themes the
+first version made worse. The renders did. A rule for 344 themes needs someone
+to look at 344 themes, and I was glad I did before it shipped. The fix is on
+main and goes out in the next release.
