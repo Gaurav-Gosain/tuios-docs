@@ -6,8 +6,8 @@ import { cn } from "@/lib/cn";
 
 /**
  * The landing page's picture of tuios: four whole-screen captures taken by
- * tuios itself (the screenshot_screen action, drawn by internal/shot) of one
- * demo session. A tab list switches between them.
+ * tuios itself (the screenshot_screen action, drawn by internal/shot). The
+ * scenes are media/scenes/landing-*, made by scripts/docs-media.sh. A tab list switches between them.
  */
 
 const SHOTS = [
@@ -15,7 +15,7 @@ const SHOTS = [
     id: "panes",
     label: "Panes",
     src: "/shots/overview.webp",
-    alt: "tuios with four tiled panes: a git diff, a Go file, test output and a build. The sidebar lists the session, its files and four agents with their states.",
+    alt: "tuios with four tiled panes: a Go file, a git diff and two agents. The sidebar lists the session, its files and the agents with their states.",
     text: "Tiled panes, a sidebar of sessions and files, and every agent's state at a glance: working, waiting on you, done or failed.",
     href: "/docs/layout-modes",
     more: "Layouts",
@@ -117,7 +117,7 @@ export function Showcase() {
             href={shot.src}
             target="_blank"
             rel="noopener"
-            className="relative block aspect-[1600/996] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary focus-visible:ring-inset"
+            className="relative block aspect-[1600/1006] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary focus-visible:ring-inset"
           >
             {SHOTS.map((s, i) =>
               // Only the shots someone has opened are in the page, so the
@@ -133,7 +133,7 @@ export function Showcase() {
                   alt={i === index ? s.alt : ""}
                   aria-hidden={i === index ? undefined : true}
                   width={1600}
-                  height={996}
+                  height={1006}
                   decoding="async"
                   fetchPriority={i === 0 ? "high" : "auto"}
                   className={cn(
