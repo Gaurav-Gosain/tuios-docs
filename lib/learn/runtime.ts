@@ -62,6 +62,8 @@ export type EngineStatus = {
 type WebTermInstance = {
   open(host: HTMLElement): Promise<void>;
   write(data: Uint8Array | string): void;
+  /** Writes what write is holding for the next animation frame now. */
+  flush?(): Promise<void>;
   attach(transport: {
     name: string;
     start(): void;
@@ -426,6 +428,10 @@ async function boot(
   api.onOutput((bytes) => {
     if (disposed) return;
     term.write(bytes);
+    // tuios sends one write per frame. webterm holds a write until the next
+    // animation frame and xterm paints it on the frame after, so without the
+    // flush every echo waits a frame more than it needs to.
+    void term.flush?.();
     if (!sawOutput) {
       sawOutput = true;
       requestAnimationFrame(() =>
