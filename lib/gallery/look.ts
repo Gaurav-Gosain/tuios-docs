@@ -1,8 +1,8 @@
 /**
  * The look file of a gallery entry: the part of its config that
  * `tuios look apply tuios.dev/r/<id>` can install. The sync makes one for each
- * approved entry from the first code block, and the seed script makes one for
- * each seed setup. The Worker serves it at /r/<id>.toml.
+ * approved entry from the first code block. The Worker serves it at
+ * /r/<id>.toml.
  *
  * A look may set only the keys in look-keys.json. That file is the list tuios
  * itself enforces, vendored here so the two cannot drift. Refresh it from a

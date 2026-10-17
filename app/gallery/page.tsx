@@ -3,8 +3,7 @@ import type { Metadata } from "next";
 import { Gallery } from "@/components/gallery/gallery";
 import { breadcrumbLd, JsonLd } from "@/components/json-ld";
 import { Since } from "@/components/mdx/since";
-import { DISCUSSION_URL, parseFeed } from "@/lib/gallery/feed";
-import seed from "@/lib/gallery/gallery-seed.json";
+import { DISCUSSION_URL } from "@/lib/gallery/feed";
 import { pageMetadata } from "@/lib/metadata";
 import { absoluteUrl } from "@/lib/site";
 
@@ -19,8 +18,6 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default function GalleryPage() {
-  const entries = parseFeed(seed);
-
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pt-14 pb-24 md:px-6 md:pt-20">
       <JsonLd
@@ -71,7 +68,7 @@ export default function GalleryPage() {
           Show us your setup
         </a>
       </header>
-      <Gallery seed={entries} badge={<Since feature="look-apply" />} />
+      <Gallery badge={<Since feature="look-apply" />} />
     </div>
   );
 }

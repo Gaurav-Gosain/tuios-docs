@@ -57,7 +57,7 @@ function rig(
       : { TURNSTILE_SECRET: "secret", TURNSTILE_SITE_KEY: "site" }),
   };
   const deps: VoteDeps = {
-    knownIds: async () => new Set(["123", "seed-amber"]),
+    knownIds: async () => new Set(["123", "456"]),
     fetch: (async (_url: RequestInfo | URL, init?: RequestInit) => {
       const form = init?.body as FormData;
       verified.push(String(form.get("response")));
@@ -201,10 +201,10 @@ describe("the vote handler", () => {
 
   test("an id the feed does not have is refused and makes no key", async () => {
     const r = rig();
-    for (const id of ["999", "seed-nope"]) {
+    for (const id of ["999"]) {
       expect((await vote(r, { id, like: true })).status).toBe(404);
     }
-    for (const id of ["../x", "abc", "1".repeat(13), ""]) {
+    for (const id of ["../x", "abc", "seed-amber", "1".repeat(13), ""]) {
       expect((await vote(r, { id, like: true })).status).toBe(400);
     }
     expect(r.votes.counts()).toEqual({});
@@ -297,11 +297,11 @@ describe("the vote handler", () => {
 
   test("GET lists the counts with a short edge cache", async () => {
     const r = rig();
-    await vote(r, { id: "seed-amber", like: true });
+    await vote(r, { id: "456", like: true });
     const res = await handleVotes(new Request(URL_), r.env, undefined, r.deps);
     expect(res.headers.get("cache-control")).toBe("public, max-age=60");
     expect(await res.json()).toEqual({
-      counts: { "seed-amber": 1 },
+      counts: { "456": 1 },
       siteKey: "site",
       writable: true,
     });

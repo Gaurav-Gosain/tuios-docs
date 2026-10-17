@@ -1,7 +1,7 @@
 /**
  * Notes on the keys of a shared config, for the gallery dialog: where each key
  * is, what it is, and what is wrong with its value. They are made where the
- * config is read, by the sync and the seed script, and travel in the feed as
+ * config is read, by the sync, and travel in the feed as
  * plain data. The page draws them over the highlighted text, so it needs no
  * TOML parser and no copy of the tuios key list beyond the descriptions of the
  * look keys, which load with the highlighter.

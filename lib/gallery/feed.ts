@@ -2,7 +2,7 @@
  * The gallery feed: the list of setups the /gallery page shows. The sync
  * (scripts/gallery-sync.ts) writes it to the MEDIA bucket as
  * gallery/gallery.json, and the Worker serves it at /gallery/feed. The page
- * merges it with the reviewed seed in gallery-seed.json.
+ * reads it after it loads.
  *
  * The page checks every entry again with parseFeed before it shows it. The
  * sync is the real boundary, but a feed that somehow carries a foreign URL or
@@ -90,11 +90,11 @@ function parseNote(value: unknown, text: string[]): GalleryNote | null {
 }
 
 export type GalleryEntry = {
-  /** The comment's database ID, or "seed-<name>" for a seed entry. */
+  /** The comment's database ID. */
   id: string;
   /** The GitHub handle of the person who posted it. */
   login: string;
-  /** The comment on GitHub, or the discussion for a seed entry. */
+  /** The comment on GitHub. */
   url: string;
   /** When the comment was posted, as an ISO 8601 date. */
   date: string;
@@ -106,8 +106,6 @@ export type GalleryEntry = {
   width: number;
   height: number;
   files: GalleryFile[];
-  /** The name of a seed setup, such as "amber". Synced entries have none. */
-  title?: string;
   /**
    * The first 32 hex digits of the SHA-256 of the image as it was
    * downloaded. The image URLs are built from it.
@@ -122,15 +120,14 @@ export type GalleryEntry = {
   look?: GalleryLook;
   /**
    * The people who reacted to the comment on GitHub, each counted once. The
-   * approver's rocket and the author's own reactions do not count. Seed
-   * entries have none.
+   * approver's rocket and the author's own reactions do not count.
    */
   github?: number;
 };
 
 /** An entry's look file, served at /r/<id>.toml. */
 export type GalleryLook = {
-  /** The id in tuios.dev/r/<id>: the comment ID, or the seed's name. */
+  /** The id in tuios.dev/r/<id>: the comment ID. */
   id: string;
   /** Left-out key names the card shows. */
   left: string[];
@@ -140,8 +137,8 @@ export type GalleryLook = {
   hash: string;
 };
 
-/** A look id: a comment ID or a seed name. */
-export const LOOK_ID = /^(?:\d{1,12}|[a-z][a-z0-9-]{0,39})$/;
+/** A look id: a comment ID. */
+export const LOOK_ID = /^\d{1,12}$/;
 const LEFT_NAME = /^[A-Za-z0-9_.-]{1,60}$/;
 
 function parseLook(value: unknown): GalleryLook | undefined {
@@ -172,7 +169,6 @@ export type GalleryFeed = {
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 const HEX32 = /^[0-9a-f]{32}$/;
 const SYNCED_IMAGE = /^\/gallery\/img\/[0-9a-f]{32}\/(?:full|thumb)$/;
-const SEED_IMAGE = /^\/gallery-seed\/[a-z0-9-]{1,40}(?:-thumb)?\.webp$/;
 const LABEL = /^[a-z0-9+#.-]{1,20}$/;
 
 /** The image path the Worker serves for a hash and a size. */
@@ -195,10 +191,7 @@ export function isDiscussionUrl(value: unknown): value is string {
 }
 
 function isImagePath(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    (SYNCED_IMAGE.test(value) || SEED_IMAGE.test(value))
-  );
+  return typeof value === "string" && SYNCED_IMAGE.test(value);
 }
 
 function isSize(value: unknown): value is number {
@@ -232,11 +225,7 @@ function parseFile(value: unknown): GalleryFile | null {
 export function parseEntry(value: unknown): GalleryEntry | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
-  if (
-    typeof v.id !== "string" ||
-    !/^(?:\d{1,12}|seed-[a-z0-9-]{1,40})$/.test(v.id)
-  )
-    return null;
+  if (typeof v.id !== "string" || !/^\d{1,12}$/.test(v.id)) return null;
   if (!isLogin(v.login) || !isDiscussionUrl(v.url)) return null;
   if (typeof v.date !== "string" || Number.isNaN(Date.parse(v.date)))
     return null;
@@ -260,8 +249,6 @@ export function parseEntry(value: unknown): GalleryEntry | null {
     height: v.height,
     files,
   };
-  if (typeof v.title === "string" && /^[a-z0-9-]{1,40}$/.test(v.title))
-    entry.title = v.title;
   if (typeof v.hash === "string" && HEX32.test(v.hash)) entry.hash = v.hash;
   if (typeof v.src === "string" && HEX32.test(v.src)) entry.src = v.src;
   const look = parseLook(v.look);
@@ -285,21 +272,4 @@ export function parseFeed(value: unknown): GalleryEntry[] {
     const entry = parseEntry(raw);
     return entry ? [entry] : [];
   });
-}
-
-/**
- * The synced entries and the seed as one list, newest first. A synced entry
- * wins over a seed entry with the same ID.
- */
-export function mergeEntries(
-  synced: GalleryEntry[],
-  seed: GalleryEntry[],
-): GalleryEntry[] {
-  const byId = new Map<string, GalleryEntry>();
-  for (const entry of seed) byId.set(entry.id, entry);
-  for (const entry of synced) byId.set(entry.id, entry);
-  return [...byId.values()].sort(
-    (a, b) =>
-      Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id),
-  );
 }

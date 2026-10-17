@@ -18,14 +18,9 @@ const LiveDemoStage = dynamic(
 );
 
 async function fetchLook(look: GalleryLook): Promise<Record<string, unknown>> {
-  const urls = [`/r/${look.id}.toml`];
-  // The dev server has no Worker; a seed's file is a static asset there.
-  if (!/^\d+$/.test(look.id)) urls.push(`/gallery-seed/${look.id}.look.toml`);
   const { parse } = await import("smol-toml");
-  for (const url of urls) {
-    const res = await fetch(url).catch(() => null);
-    if (res?.ok) return parse(await res.text()) as Record<string, unknown>;
-  }
+  const res = await fetch(`/r/${look.id}.toml`).catch(() => null);
+  if (res?.ok) return parse(await res.text()) as Record<string, unknown>;
   throw new Error("The look file is not there.");
 }
 
@@ -88,7 +83,7 @@ export function TryItDialog({
       : []),
   ];
 
-  const title = entry.title ?? `@${entry.login}'s setup`;
+  const title = `@${entry.login}'s setup`;
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes a modal dialog natively

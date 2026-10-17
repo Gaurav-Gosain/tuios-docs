@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { parse } from "smol-toml";
-import seed from "./gallery-seed.json";
 import { buildLook, lookKeyPaths } from "./look";
 import keys from "./look-keys.json";
 
@@ -194,27 +191,4 @@ describe("look-keys.json", () => {
       expect(k).not.toMatch(/command|shell|opener|editor|delete|osc52/);
     }
   });
-});
-
-describe("the seed looks", () => {
-  const root = path.join(import.meta.dir, "../..");
-  for (const entry of seed.entries) {
-    const name = entry.title;
-    test(name, () => {
-      const file = readFileSync(
-        path.join(root, "public/gallery-seed", `${name}.look.toml`),
-        "utf8",
-      );
-      const again = buildLook({
-        config: entry.files.find((f) => f.label === "config")?.text ?? "",
-        theme: entry.files.find((f) => f.label === "theme")?.text,
-        id: name,
-        name,
-        author: entry.login,
-      });
-      // The committed file is what the seed script makes now.
-      expect(file).toBe(must(again).text);
-      expect((entry as { look?: { id: string } }).look?.id).toBe(name);
-    });
-  }
 });

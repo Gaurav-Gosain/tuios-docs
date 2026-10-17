@@ -1,8 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { parse } from "smol-toml";
-import seed from "./gallery-seed.json";
 import lookKeys from "./look-keys.json";
 import { planLook } from "./try-plan";
 
@@ -80,19 +76,5 @@ describe("planLook", () => {
       "appearance.preferred_shell",
       "hooks.on_start",
     ]);
-  });
-
-  test("every seed look plans with no key skipped but its left-out ones", () => {
-    const root = path.join(import.meta.dir, "../..");
-    for (const entry of seed.entries) {
-      const text = readFileSync(
-        path.join(root, "public/gallery-seed", `${entry.title}.look.toml`),
-        "utf8",
-      );
-      const l = (entry as { look: typeof look }).look;
-      const plan = planLook(parse(text) as Record<string, unknown>, l, KEYS);
-      expect(plan.skipped).toEqual(l.left);
-      expect(plan.setup.length).toBeGreaterThan(0);
-    }
   });
 });

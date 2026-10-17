@@ -35,7 +35,7 @@
  *    small body.
  * 2. Read-only until TURNSTILE_SECRET (a secret) and TURNSTILE_SITE_KEY (a
  *    public var in wrangler.jsonc) are both set: 503.
- * 3. The id must name an entry of the current feed or the seed, so a vote
+ * 3. The id must name an entry of the current feed, so a vote
  *    cannot make a key of its own.
  * 4. At most RATE_LIMIT attempts per IP (hashed as above) per RATE_WINDOW_MS.
  * 5. A Cloudflare Turnstile token, checked with siteverify, for this host
@@ -44,7 +44,6 @@
  */
 
 import { parseFeed } from "../lib/gallery/feed";
-import seed from "../lib/gallery/gallery-seed.json";
 import type { MediaBucket } from "./media";
 
 export const VOTES_PATH = "/gallery/votes";
@@ -54,7 +53,7 @@ export const RATE_LIMIT = 20;
 export const RATE_WINDOW_MS = 10 * 60 * 1000;
 const MAX_BODY = 2048;
 const COUNTS_CACHE = "public, max-age=60";
-const ENTRY_ID = /^(?:\d{1,12}|seed-[a-z0-9-]{1,40})$/;
+const ENTRY_ID = /^\d{1,12}$/;
 const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
 /** The part of a Durable Object's SQL storage this code uses. */
@@ -251,17 +250,17 @@ export type VoteDeps = {
 
 let idCache: { at: number; ids: Set<string> } | null = null;
 
-/** The seed IDs and the current feed's IDs, kept for a minute. */
+/** The current feed's IDs, kept for a minute. */
 export async function knownEntryIds(env: VoteEnv): Promise<Set<string>> {
   if (idCache && Date.now() - idCache.at < 60_000) return idCache.ids;
-  const ids = new Set(parseFeed(seed).map((e) => e.id));
+  const ids = new Set<string>();
   const found = env.MEDIA ? await env.MEDIA.get("gallery/gallery.json") : null;
   if (found && "body" in found) {
     try {
       for (const e of parseFeed(await new Response(found.body).json()))
         ids.add(e.id);
     } catch {
-      // A broken feed leaves the seed.
+      // A broken feed leaves no IDs, so no vote counts.
     }
   }
   idCache = { at: Date.now(), ids };

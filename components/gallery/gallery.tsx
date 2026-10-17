@@ -15,7 +15,6 @@ import {
   FEED_PATH,
   type GalleryEntry,
   type GalleryFile,
-  mergeEntries,
   parseFeed,
 } from "@/lib/gallery/feed";
 import { type SortMode, sortEntries } from "@/lib/gallery/votes";
@@ -36,22 +35,21 @@ import {
 } from "./votes";
 
 /**
- * The gallery grid. The seed comes with the page. The synced feed is read
- * from the site itself after the page loads, so a visit costs no GitHub API
- * call, and the page works the same when the feed is missing.
+ * The gallery grid. The feed is read from the site itself after the page
+ * loads, so a visit costs no GitHub API call. Until it arrives the grid shows
+ * empty cards, and with no feed it shows the empty state.
  *
  * Every string from a submission is drawn as a React text child, which
  * escapes it. Nothing here uses dangerouslySetInnerHTML.
  */
 export function Gallery({
-  seed,
   badge,
 }: {
-  seed: GalleryEntry[];
   /** The version badge of tuios look, made on the server. */
   badge?: ReactNode;
 }) {
   const [synced, setSynced] = useState<GalleryEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState<GalleryEntry | null>(null);
   const [sort, setSort] = useState<SortMode>("top");
   const { votes, setCount } = useSiteVotes();
@@ -69,28 +67,32 @@ export function Gallery({
       )
       .then((json) => {
         if (json) setSynced(parseFeed(json));
+        setLoaded(true);
       })
-      // No feed yet, or offline: the seed is still shown.
-      .catch(() => {});
+      // No feed yet, or offline: the empty state shows.
+      .catch(() => {
+        if (!controller.signal.aborted) setLoaded(true);
+      });
     return () => controller.abort();
   }, []);
 
-  const merged = useMemo(() => mergeEntries(synced, seed), [synced, seed]);
   const entries = useMemo(
-    () => sortEntries(merged, sort, votes.counts),
-    [merged, sort, votes.counts],
+    () => sortEntries(synced, sort, votes.counts),
+    [synced, sort, votes.counts],
   );
 
   // tuios.dev/r/<id> lands on /gallery#look-<id>. The synced entries arrive
   // after the page loads, so the card is looked for again when they do.
   useEffect(() => {
-    const id = /^#look-([a-z0-9-]{1,40})$/.exec(window.location.hash)?.[1];
+    const id = /^#look-(\d{1,12})$/.exec(window.location.hash)?.[1];
     if (!id) return;
-    const entry = merged.find((e) => e.look?.id === id);
+    const entry = synced.find((e) => e.look?.id === id);
     if (!entry) return;
     document.getElementById(`look-${id}`)?.scrollIntoView({ block: "center" });
     setOpen(entry);
-  }, [merged]);
+  }, [synced]);
+
+  if (!loaded) return <LoadingGrid />;
 
   if (entries.length === 0) {
     return (
@@ -155,6 +157,30 @@ export function Gallery({
         setCount={setCount}
       />
     </>
+  );
+}
+
+/** Empty cards in the shape of the grid, while the feed loads. */
+function LoadingGrid() {
+  return (
+    <ul
+      aria-busy="true"
+      aria-label="Loading the setups"
+      className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+    >
+      {[0, 1, 2, 3, 4, 5].map((n) => (
+        <li
+          key={n}
+          className="flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-card"
+        >
+          <div className="aspect-[16/10] w-full animate-pulse bg-fd-muted" />
+          <div className="flex flex-col gap-3 px-4 py-3">
+            <div className="h-4 w-2/3 rounded bg-fd-muted" />
+            <div className="h-8 w-full rounded-md bg-fd-muted" />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -233,12 +259,6 @@ function VoteRow({
 function Byline({ entry }: { entry: GalleryEntry }) {
   return (
     <p className="min-w-0 text-sm">
-      {entry.title ? (
-        <span className="font-mono text-fd-foreground">
-          {entry.title}
-          <span className="text-fd-muted-foreground">{" · "}</span>
-        </span>
-      ) : null}
       <a
         href={entry.url}
         target="_blank"
