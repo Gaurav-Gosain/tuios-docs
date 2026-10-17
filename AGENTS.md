@@ -67,6 +67,9 @@ lib/
 public/                       favicons, web manifest, fonts, CNAME, _headers, _redirects
 public/shots/                 whole-screen captures of tuios for the landing page and docs, 1600
                               and 800 wide WebP (see "Screenshots" below)
+public/clips/                 short silent clips of tuios for the docs: AV1 WebM, H.264 MP4 and a
+                              WebP poster each, made by scripts/docs-media.sh
+media/                        the scenes and tools behind public/clips and the newer public/shots
 lib/keybindings/defaults.json the default bindings behind the keybinding explorer, written by
                               scripts/keybindings.mjs from `tuios keybinds doctor --json`
 lib/since/data.json           the first tuios tag of each config key, command, action and verb,
@@ -102,6 +105,8 @@ A widget that shows TUIOS behavior should match the code. Check it against the t
 ### Screenshots and generated data
 
 Pictures of tuios come from tuios's own renderer, never from a screen grab of a terminal. `public/shots/` holds whole-screen captures made with the `screenshot_screen` action (PNG at scale 2, frame `none`, theme `catppuccin_mocha`) from a client attached to a demo session in an isolated `HOME` and `XDG_RUNTIME_DIR`, then resized to WebP with `cwebp`. Look at each one at full size before you commit it: no personal paths, prompts or leftover notifications.
+
+`scripts/docs-media.sh` makes the newer shots and every clip from tuios tapes. Each scene is a folder in `media/scenes/` with a `scene.json` and a `scene.tape`. The script runs the tape against a real tuios and its own daemon in a throwaway `HOME`. A shot comes from the `screenshot_screen` action. A clip comes from the client's own output, drawn at 60 fps by xterm.js in headless Chromium, so a busy machine cannot drop a frame. When the UI changes, run the script again. `<Shot>` and `<DocsClip>` put the results on a page. Keep each clip under 1.5 MB, and keep it silent.
 
 The keybinding explorer reads `lib/keybindings/defaults.json`. Regenerate it after tuios changes its defaults; the header of `scripts/keybindings.mjs` has the commands, one report per platform because macOS binds `opt+` where the others bind `alt+`.
 

@@ -1,6 +1,7 @@
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
+import { Shot } from "@/components/docs/shot";
 import { VersionIndex } from "@/components/docs/version-index";
 import { BenchBars } from "@/components/mdx/bench-bars";
 import {
@@ -13,6 +14,7 @@ import {
   ClusterExplorer,
   DaemonTilePlacement,
   DividerCollide,
+  DocsClip,
   ExtentScan,
   HardTabHole,
   HeadlessTerm,
@@ -126,6 +128,8 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     TestPurgeStages,
     KeptTestBar,
     ReleaseClip,
+    DocsClip,
+    Shot,
     ...components,
   };
 }

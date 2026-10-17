@@ -13,6 +13,9 @@
  */
 import dynamic from "next/dynamic";
 
+export const DocsClip = dynamic(() =>
+  import("../docs/docs-clip").then((m) => m.DocsClip),
+);
 export const InboxDemo = dynamic(() =>
   import("../docs/inbox-demo").then((m) => m.InboxDemo),
 );

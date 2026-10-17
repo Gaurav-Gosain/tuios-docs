@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# agent-demo STATE "MESSAGE" [KIND]
+#
+# Stands in for a coding agent in a docs scene. It prints a short turn, then
+# reports its state to tuios with set-agent-state, the same call the harness
+# hooks make, and waits. STATE is working, needs_input, done or errored.
+set -u
+state=$1 msg=$2 kind=${3:-}
+dim=$'\e[2m' bold=$'\e[1m' acc=$'\e[38;5;141m' grn=$'\e[32m' red=$'\e[31m' yel=$'\e[33m' off=$'\e[0m'
+
+clear
+printf '%s* agent%s  %s\n\n' "$acc$bold" "$off" "$dim~/project$off"
+printf '%s>%s %s\n\n' "$bold" "$off" "$msg"
+case $state in
+working)
+  printf '  %sRead%s internal/store/store.go\n' "$grn" "$off"
+  printf '  %sRead%s cmd/api/main.go\n' "$grn" "$off"
+  printf '  %sEdit%s internal/store/store_test.go %s+42%s\n\n' "$grn" "$off" "$grn" "$off"
+  printf '  %s* Writing the tests...%s\n' "$acc" "$off"
+  ;;
+needs_input)
+  printf '  %sRead%s internal/store/store.go\n\n' "$grn" "$off"
+  printf '  %sAllow this command?%s\n' "$yel$bold" "$off"
+  printf '    go test ./internal/store/...\n\n'
+  printf '  %s1.%s Yes   %s2.%s Yes, always   %s3.%s No\n' "$bold" "$off" "$bold" "$off" "$bold" "$off"
+  ;;
+done)
+  printf '  %sEdit%s web/style.css %s+6 -2%s\n' "$grn" "$off" "$grn" "$off"
+  printf '  %sBash%s go build ./...\n\n' "$grn" "$off"
+  printf '  %sDone.%s The page now uses the system font.\n' "$grn" "$off"
+  ;;
+errored)
+  printf '  %sBash%s go vet ./...\n\n' "$grn" "$off"
+  printf '  %sError:%s the vet check failed in cmd/api.\n' "$red$bold" "$off"
+  ;;
+esac
+args=("$state" -m "$msg")
+[[ -n $kind ]] && args+=(--kind "$kind")
+tuios set-agent-state "${args[@]}" >/dev/null 2>&1
+# Hold the pane, so the shell prompt does not come back over the turn.
+exec sleep 100000
