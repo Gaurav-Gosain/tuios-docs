@@ -40,7 +40,9 @@ export function encodingQuality(header: string | null, coding: string) {
   if (!header) return 0;
   let star: number | null = null;
   for (const part of header.split(",")) {
-    const [name, ...params] = part.trim().toLowerCase().split(";");
+    const [raw, ...params] = part.toLowerCase().split(";");
+    // RFC 9110 allows white space before the ";", as in "br ;q=0.5".
+    const name = raw.trim();
     let q = 1;
     for (const p of params) {
       const [k, v] = p.trim().split("=");

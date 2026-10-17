@@ -200,7 +200,12 @@ async function fetchEncoded(manifest: EngineManifest) {
   const raw = manifest.wasmRawBytes;
   if (packed) setStatus({ total: packed });
   const scale = packed && raw ? packed / raw : 1;
-  return compile(res.body.pipeThrough(countBytes(scale)));
+  // A body that does not compile, such as one a proxy encoded twice, falls
+  // back to the gzip file rather than leaving the lesson without an engine.
+  return compile(res.body.pipeThrough(countBytes(scale))).catch((err) => {
+    console.warn("learn: the encoded wasm did not compile", err);
+    return null;
+  });
 }
 
 /** The gzip file, unpacked here unless the host already did. */

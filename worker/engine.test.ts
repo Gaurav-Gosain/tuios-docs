@@ -22,6 +22,7 @@ describe("encodingQuality", () => {
   test("listed codings", () => {
     expect(encodingQuality("gzip, deflate, br, zstd", "br")).toBe(1);
     expect(encodingQuality("gzip;q=0.8, br;q=0.5", "br")).toBe(0.5);
+    expect(encodingQuality("gzip ;q=0.8, br ;q=0.5", "br")).toBe(0.5);
   });
   test("a refused or missing coding", () => {
     expect(encodingQuality("gzip, br;q=0", "br")).toBe(0);
