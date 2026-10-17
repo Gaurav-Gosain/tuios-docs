@@ -314,6 +314,11 @@ def main():
                 text = dec.decode(data)
                 if text:
                     f.write(json.dumps([t, "o", text]) + "\n")
+            # A stream cut inside a character leaves its bytes in the
+            # decoder. Flush them, as a replacement character.
+            text = dec.decode(b"", final=True)
+            if text and events:
+                f.write(json.dumps([events[-1][0], "o", text]) + "\n")
         subprocess.run([tuios, "kill-server"], env=env, stdin=subprocess.DEVNULL,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
         try:
