@@ -1,6 +1,6 @@
 ---
 title: A terminal cannot paste an image, so tuios carries it to the agent
-description: Coding agents want screenshots and long logs, and a terminal paste is text. How the tuios reply editor turns a paste into a block, writes it to a 0600 file the agent can read, hands an image to six different harnesses, and the edges on the way. A named pipe called shot.png, a 160 KB PNG that wanted 138 MB, and a kitty size that divided by zero.
+description: Coding agents want screenshots and long logs, and a terminal paste is text. How the tuios reply editor hands a paste or an image to six different harnesses, and the edges on the way. A named pipe called shot.png, a 160 KB PNG that wanted 138 MB, and a kitty size that divided by zero.
 date: '2026-10-17'
 author: Gaurav Gosain
 tags: [agents, input]
@@ -17,13 +17,21 @@ went through `strings.Fields`, so a log lost its line breaks, and an image was
 not possible at all. A terminal paste is text. There is no escape sequence for
 "here is a PNG".
 
-This post is about the reply editor that replaced that field, and how a paste or
-an image gets from it to whatever harness is in the pane. It landed as a stack of
-PRs this week, from [#769](https://github.com/Gaurav-Gosain/tuios/pull/769) to
-[#835](https://github.com/Gaurav-Gosain/tuios/pull/835), plus the screenshot
-work around it. Most of the interesting parts turned out to be the edges.
+So I built a real reply editor, and a way to get a paste or an image from it
+to whatever harness is in the pane. It landed this week as a stack of PRs, from
+[#769](https://github.com/Gaurav-Gosain/tuios/pull/769) to
+[#835](https://github.com/Gaurav-Gosain/tuios/pull/835). Here it is with a log
+and a screenshot in the draft:
 
-![The Inbox reply editor under the agent list. The draft holds text, a paste block for a 23-line test log, and an image block, with a preview of a latency graph above the draft.](/shots/composer.webp)
+<Shot
+  name="composer"
+  light
+  width={1600}
+  height={777}
+  alt="The Inbox reply editor under the agent list. The draft holds text, a paste block for a 23-line test log, and an image block, with a preview of a latency graph above the draft."
+/>
+
+Most of the interesting parts turned out to be the edges.
 
 ## A paste is one thing
 
@@ -47,22 +55,14 @@ steps over it, backspace removes all of it, and undo brings it back whole. Its
 text travels with the cell, so a label you type by hand that happens to look
 like `[Pasted text #1 · 42 lines]` is never replaced by anything.
 
-With the cursor right after a block, `ctrl+o` opens its text read only,
-`ctrl+e` turns it back into editable text, and backspace removes it. The open
-view breaks long lines in one pass, so a 1 MB paste with no newline in it costs
-one scan, not one per row.
-
-The whole draft is bounded at 1 MiB. Typing one key in a 16 KiB draft,
-including the frame it draws, measured about 125 µs and 318 allocations. An
-unchanged frame went from 55 µs and 275 allocations to 0.19 µs and none once the
-editor kept its last frame
-([91e84e96](https://github.com/Gaurav-Gosain/tuios/commit/91e84e96)).
+With the cursor right after a block, `ctrl+o` opens its text read only, and
+`ctrl+e` turns it back into editable text. Typing one key in a 16 KiB draft,
+including the frame it draws, measured about 125 µs.
 
 Two smaller rules came with it. On send, the editor strips invisible
-characters (tags, bidi controls, zero-width characters, keeping ZWJ and ZWNJ)
-and stops once, so you read the cleaned draft before it goes. And a draft that
-`send-keys` typed into is marked, so a script cannot write a reply and have it
-sent as you.
+characters and stops once, so you read the cleaned draft before it goes. And a
+draft that `send-keys` typed into is marked, so a script cannot write a reply
+and have it sent as you.
 
 ## Getting a long paste into the pane
 
@@ -89,13 +89,9 @@ label in its place:
 [Pasted text #1: /…/paste/tuios-paste-reply-….txt, 2,048 lines]
 ```
 
-The agent opens the file with its own tools, when and if it wants to. I made it
-every block above the line and not just the largest one, so the rule fits in one
-sentence.
+The agent opens the file with its own tools, when and if it wants to.
 
-A message holds at most 64 parts and 8 MB. The 8 MB is not a design number. One
-control request is one line, the line cap is 12 MiB, and base64 and JSON need
-room.
+A message holds at most 64 parts and 8 MB.
 
 ### The files
 
@@ -264,8 +260,8 @@ Here is the same draft on a 256-colour terminal with no image protocol, and on a
 ![The reply editor at 16 colours: the preview is the line "Image #1 · 1280×720 png · 59 KB" above the draft.](/blog/pasting-images-into-a-coding-agent/reply-preview-16.webp)
 
 The block-glyph one does not tell you much about a dark chart with a thin line,
-I know. It does tell you the shape and the brightness, which is enough to see
-that you attached a graph and not a photo of your cat.
+I know. But it is enough to see that you attached a graph and not a photo of
+your cat.
 
 ### 160 KB, 138 MB
 
@@ -298,48 +294,33 @@ link, parts and images included, and this is where the security edges stack up.
 
 The local daemon checks that the reply comes from the person and not from a
 pane, and refuses anything that itself arrived over a link. The far daemon sees
-only the link, so a pane's grants here would otherwise be bypassed there. The
-person's nonce is checked here and not sent on, since the far daemon could not
-verify it anyway. The far daemon queues the reply as from the link, and holds it
-to its own `[hosts]` policy for this machine: `write`, and `files` for a block
-or an image, at queue time and again when it types the reply. It writes the
-files on its own machine, under its own rules.
+only the link, so without that check a pane's grants here would be bypassed
+there. The far daemon then holds the reply to its own `[hosts]` policy for this
+machine: `write`, and `files` for a block or an image, at queue time and again
+when it types the reply.
 
-A client on another machine (`tuios ssh`, the browser) has the same problem in
-the other direction. It runs on the daemon's machine on behalf of someone
-elsewhere, so it cannot read that person's clipboard image, and `ctrl+v` pastes
-text there. The `@` list, which names a pane, an agent or a file, offers no files
-on such a client
-([f493b19e](https://github.com/Gaurav-Gosain/tuios/commit/f493b19e)), because
-it would be listing the server's folders to a guest.
+A client on another machine (`tuios ssh`, the browser) has the opposite
+problem. It runs on the daemon's machine for someone elsewhere, so `ctrl+v`
+pastes text there, and the `@` list offers no files
+([f493b19e](https://github.com/Gaurav-Gosain/tuios/commit/f493b19e)). It would
+otherwise list the server's folders to a guest.
 
-## Images in screenshots, and what they cost
+## Images in screenshots
 
 Right next to this, [#855](https://github.com/Gaurav-Gosain/tuios/pull/855)
-made tuios screenshots show the kitty and sixel images a pane shows. Before, a
-capture had blank cells where each picture was. To draw them, the client keeps
-the last payload of each kitty image it forwards. It keeps a reference to the
-buffer the passthrough already holds, so there is no copy and no work per frame.
-
-The first bound was 32 MiB per connection, and that was too much for a
-screenshot that may never be taken. An `icat` loop of 300 PNGs left the client
-at 85 MB of RSS, against 52 MB on main. The bound is now 8 MiB, which still holds
-a screen of PNGs, and the same loop settles at 60 to 63 MB
-([fc6f94d4](https://github.com/Gaurav-Gosain/tuios/commit/fc6f94d4)). When it is
-full, the images with no placement on screen go first, then the oldest, and the
-image just sent is never the one dropped.
+made tuios screenshots show the kitty and sixel images a pane shows. To draw
+them, the client keeps the last payload of each kitty image it forwards. The
+first bound was 32 MiB per connection, and an `icat` loop of 300 PNGs left the
+client at 85 MB of RSS, against 52 MB on main. The bound is now 8 MiB, and the
+same loop settles at 60 to 63 MB
+([fc6f94d4](https://github.com/Gaurav-Gosain/tuios/commit/fc6f94d4)).
 
 The same commit met the named pipe again. A kitty image sent with `t=f` is a
 file path, and the client reads it when a screenshot asks, long after the first
-check. So the read resolves the path again, needs a file the pane owns, follows
-no symlink in the last part, and does not wait for a writer. Without that, a
-pipe put in place of the temporary file would have blocked the PTY reader, which
-is a lot worse than a stuck background task.
-
-Then [#863](https://github.com/Gaurav-Gosain/tuios/pull/863) made the reply
-previews show up in a capture too. They are placed on the host by the editor,
-beside the passthrough, so the capture never saw them. The shot at the top of
-this post was taken with that fix.
+check. A pipe put in place of that file would have blocked the PTY reader. So
+the read checks the path again and does not wait for a writer.
+[#863](https://github.com/Gaurav-Gosain/tuios/pull/863) then made the reply
+previews show up in a capture too, which is how the shot at the top was taken.
 
 ## A contribution: one axis, and a division by zero
 
@@ -350,7 +331,7 @@ one side. `c=12` with no `r=` asks the host to fit the height to the picture.
 tuios took it from the bitmap's pixels, so a 512 px cover asked for in 12 columns
 got 12 rows on a 21x46 pixel cell, where the aspect gives 6, and the box overran
 the pane. The PR came with an e2e test where five of its seven cases fail on
-main, and the negative control recorded. It made reviewing it really easy.
+main, which made reviewing it really easy.
 
 When I checked it against kitty, I found two more things and pushed them on top
 ([41d13cf3](https://github.com/Gaurav-Gosain/tuios/commit/41d13cf3)). kitty fits
@@ -369,14 +350,12 @@ floats, treats a negative `c` or `r` as unstated, and holds each side to 65536
 cells. A test, `TestKittyBoxFromHostileSizes`, lists the ways it could fail
 before it checks them.
 
-## What I take from it
+## One step too long
 
-The features were the easy part. The editor, the blocks and the previews are a
-few days of normal work. Every bug in this post is the same bug, though: a
-number or a name that came from outside, trusted one step too long. A header
-that says 12000x12000. A path that turns out to be a pipe. A folder that turns
-out to be a link. A size that multiplies to zero. A cap that counted files and
-not messages.
+The editor, the blocks and the previews were a few days of normal work. Every
+bug in this post is the same bug, though: a number or a name that came from
+outside, trusted one step too long. A header that says 12000x12000, or a path
+that turns out to be a pipe.
 
 All of this is on main and goes out in the next release. If your harness takes
 images some other way, the manifest is a small TOML file, and
