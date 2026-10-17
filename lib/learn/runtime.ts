@@ -472,11 +472,9 @@ async function boot(
 
   // The newest instance, for poking at from the console and for the
   // Playwright checks.
-  (window as unknown as { tuiosLearn?: unknown }).tuiosLearn = {
-    api,
-    term,
-    log,
-  };
+  const handle = { api, term, log };
+  const page = window as unknown as { tuiosLearn?: unknown };
+  page.tuiosLearn = handle;
 
   return {
     api,
@@ -495,14 +493,16 @@ async function boot(
       disposed = true;
       listeners.clear();
       stopDebug();
-      // q in window mode quits tuios, which ends the Go program and frees
-      // its memory.
+      log.length = 0;
+      frameListeners.length = 0;
+      if (page.tuiosLearn === handle) page.tuiosLearn = undefined;
+      // Learn mode turns every quit into a note, so stop is the only way to
+      // end the program. Once it has ended and nothing here holds the api,
+      // the browser frees its memory. An engine without stop keeps running
+      // until the page closes.
       if (!hasExited) {
         try {
-          api.command("mode", "window");
-          setTimeout(() => {
-            if (!hasExited) api.input("q");
-          }, 60);
+          api.stop?.();
         } catch {
           // The program already stopped.
         }

@@ -95,6 +95,11 @@ export type TuiosApi = {
   unavailable(): Record<string, string>;
   /** The command names `command` accepts. */
   commands(): string[];
+  /**
+   * Ends the program, so its memory can be freed. An engine built before it
+   * existed does not have it.
+   */
+  stop?(): void;
 };
 
 /**
