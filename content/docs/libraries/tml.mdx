@@ -15,18 +15,18 @@ go get tuios.dev/tml
 The library uses only the standard library. The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/tml).
 
 <Callout>
-tuios does not show TML surfaces yet. The renderer and the tuios commands come in later releases. You can use the library and the `tml` command now.
+tuios does not show TML surfaces yet. The renderer, the tuios commands and the standalone `tml` command come in later releases.
 </Callout>
 
 ## What is in it
 
-- **Two encodings.** TML text is a strict XML subset for files and people. TML JSON is for the wire and for agents. Each has a parser and a printer, and the two map one to one.
+- **Two encodings.** TML text is a strict XML subset for files and people. TML JSON is for the wire and for agents. Each has a parser and a printer. Both parsers give the same canonical tree, and a canonical tree prints and reads back unchanged in either encoding. The first parse normalizes some input: it types attributes by the catalog, joins adjacent text and moves the state to the end of the root.
 - **The validator.** It checks the full catalog: attributes and their types, required attributes, allowed children, theme roles, bindings, actions and limits. Each problem names the fix.
 - **The JSON Schema** of TML JSON, generated from the catalog. An agent can use it for constrained output.
 - **State and bindings.** A JSON store, `{state.path}` bindings, and a small expression language with a step budget. Expressions cannot loop, assign or call out.
-- **Local actions.** `set`, `toggle`, `tab`, `sort`, `filter`, `fold` and `focus` run without the owner. `emit`, `close`, `copy`, `open` and `pane` come back as effects for the host.
-- **JSON Patch.** RFC 6902, atomic, applied to the state.
-- **Dependency tracking.** It records which nodes read which state paths, so a renderer redraws only the nodes a patch touches.
+- **Actions.** The parser checks the action attributes, such as `on-press="emit('save', form)"`. The renderer runs them.
+- **JSON Patch.** RFC 6902, atomic, applied to the state. The size limit is checked after every operation.
+- **Dependencies.** Each expression records the state paths it reads, so a renderer can redraw only what a patch touches.
 
 ## A document
 
@@ -75,25 +75,27 @@ Each problem has a JSON Pointer to the node, a line and a column, a code, and th
 ## Apply a patch
 
 ```go
-store, _ := tml.StoreFor(doc, tml.DefaultLimits())
-deps := tml.BuildDeps(doc)
-
-ops, _ := tml.DecodePatch([]byte(`[{"op":"replace","path":"/pct","value":80}]`), tml.DefaultLimits())
-changed, _ := store.Apply(ops)
-fmt.Println(deps.Affected(changed)) // [/children/0/children/1], the progress bar
+store, err := tml.StoreFor(doc, tml.DefaultLimits())
+if err != nil {
+	panic(err)
+}
+ops, err := tml.DecodePatch([]byte(`[{"op":"replace","path":"/pct","value":80}]`), tml.DefaultLimits())
+if err != nil {
+	panic(err)
+}
+changed, err := store.Apply(ops)
+fmt.Println(changed, err) // [/pct] <nil>
 ```
 
-## The tml command
+## Notes for a host
 
-```bash
-go install tuios.dev/tml/cmd/tml@latest
+- **Set a budget.** Give `Env.Budget` one `tml.NewBudget()` for all the bindings of a frame. Every node, value and 32 bytes of text an expression reads costs steps. Past the budget a binding renders `!`. A nil budget gets a fresh one for each call, which bounds one binding but not a frame.
+- **The store sanitizes state.** The store removes control, bidi and invisible characters from every string and key it takes in: the document's state, patch values and `Set`. Evaluated bindings are sanitized too. A renderer that reads the store directly, such as for table rows, gets clean strings.
+- **Spend an expansion budget.** A patch can grow an array after validation. Take nodes from `tml.NewExpansion(limits)` as you expand `each` and `list`.
 
-tml validate report.tml          # one problem per line; exit 1 on an error
-tml validate --json report.tml   # the problems as JSON
-tml fmt --json report.tml        # convert TML text to JSON
-tml fmt --xml report.json        # convert JSON to TML text
-tml schema                       # the JSON Schema of TML JSON
-```
+## Validate, format and describe
+
+`tml.Check` validates a document in either encoding. `tml.Format` prints it in canonical TML text or JSON. `tml.Schema` returns the JSON Schema of TML JSON. The standalone `tml` command will come with the renderer.
 
 The [README](https://github.com/Gaurav-Gosain/tuios/tree/main/tml#readme) lists every component, attribute, function, action and limit.
 
