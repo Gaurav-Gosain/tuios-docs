@@ -75,11 +75,11 @@ Each problem has a JSON Pointer to the node, a line and a column, a code, and th
 ## Apply a patch
 
 ```go
-store, err := tml.StoreFor(doc, tml.DefaultLimits())
+store, err := tml.StoreFor(doc, nil) // nil means the default limits
 if err != nil {
 	panic(err)
 }
-ops, err := tml.DecodePatch([]byte(`[{"op":"replace","path":"/pct","value":80}]`), tml.DefaultLimits())
+ops, err := tml.DecodePatch([]byte(`[{"op":"replace","path":"/pct","value":80}]`), nil)
 if err != nil {
 	panic(err)
 }
@@ -90,8 +90,8 @@ fmt.Println(changed, err) // [/pct] <nil>
 ## Notes for a host
 
 - **Set a budget.** Give `Env.Budget` one `tml.NewBudget()` for all the bindings of a frame. Every node, value and 32 bytes of text an expression reads costs steps. Past the budget a binding renders `!`. A nil budget gets a fresh one for each call, which bounds one binding but not a frame.
-- **The store sanitizes state.** The store removes control, bidi and invisible characters from every string and key it takes in: the document's state, patch values and `Set`. Evaluated bindings are sanitized too. A renderer that reads the store directly, such as for table rows, gets clean strings.
-- **Spend an expansion budget.** A patch can grow an array after validation. Take nodes from `tml.NewExpansion(limits)` as you expand `each` and `list`.
+- **The store sanitizes state.** The store removes control, bidi and invisible characters from every string and key it takes in: the document's state, patch values and `Set`. It refuses keys that become one after this, and Go values outside the JSON model. Literal data arrays are sanitized when the document is parsed. Evaluated bindings are sanitized too. A renderer that reads the store directly, such as for table rows, gets clean strings.
+- **Make the store with StoreFor.** It keeps the tree, and refuses a patch that grows `each`, `list`, the images or the rows of tables and charts past their limits.
 
 ## Validate, format and describe
 
