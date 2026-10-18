@@ -29,6 +29,7 @@ export const LIBRARIES: Readonly<Record<string, { dir: string }>> = {
   progstatus: { dir: "progstatus" },
   shot: { dir: "shot" },
   swatch: { dir: "swatch" },
+  tml: { dir: "tml" },
   vt: { dir: "vt" },
 };
 

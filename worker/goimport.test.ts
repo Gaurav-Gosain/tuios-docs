@@ -16,6 +16,9 @@ describe("libraryFor", () => {
     ["/shot", "shot"],
     ["/shot/mosaic", "shot"],
     ["/shotx", null],
+    ["/tml", "tml"],
+    ["/tml/cmd/tml", "tml"],
+    ["/tmlx", null],
     ["/docs/progstatus", null],
     ["/", null],
     ["/constructor", null],
@@ -60,6 +63,15 @@ describe("goImport", () => {
     const res = goImport(new Request("https://tuios.dev/shot/mosaic?go-get=1"));
     expect(await res?.text()).toContain(
       '<meta name="go-import" content="tuios.dev/shot git https://github.com/Gaurav-Gosain/tuios shot">',
+    );
+  });
+
+  test("tml names its own folder", async () => {
+    const res = goImport(
+      new Request("https://tuios.dev/tml/cmd/tml?go-get=1"),
+    );
+    expect(await res?.text()).toContain(
+      '<meta name="go-import" content="tuios.dev/tml git https://github.com/Gaurav-Gosain/tuios tml">',
     );
   });
 
