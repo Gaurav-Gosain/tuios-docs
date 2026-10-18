@@ -220,6 +220,33 @@ With no theme and no pane background, TUIOS asks each client's terminal for its 
 
 A program that turns on mode 2031 gets a report when the background of its pane changes between dark and light: `CSI ? 997 ; 1 n` for dark and `CSI ? 997 ; 2 n` for light. The report comes when your terminal changes its colour scheme, and when the theme changes, such as an [Omarchy](/docs/omarchy) theme switch. TUIOS sends no SIGWINCH.
 
+### Neovim: follow your look [#neovim-look-sync]
+
+Neovim gets `'background'` right from these reports, but your colorscheme keeps its own palette. The community plugin [tuios-look-sync.nvim](https://github.com/nkapila6/tuios-look-sync.nvim) builds a base16 colorscheme from the theme that TUIOS shows. When you apply a look from the [gallery](/gallery) with `tuios look apply`, Neovim repaints to match. `tuios look remove` puts your fallback colorscheme back.
+
+It needs Neovim 0.10 or later and [mini.base16](https://github.com/nvim-mini/mini.base16). With lazy.nvim:
+
+```lua
+{
+  "nkapila6/tuios-look-sync.nvim",
+  lazy = false,
+  priority = 1000,
+  dependencies = { "nvim-mini/mini.base16" },
+  opts = { fallback = "tokyonight" },
+  config = function(_, opts)
+    require("tuios-look-sync").setup(opts)
+    vim.cmd.colorscheme("tuios")
+  end,
+}
+```
+
+<Callout title="Limits">
+- The plugin reads theme files. A built-in theme such as `dracula` is not a file, so Neovim uses the fallback colorscheme.
+- Neovim must run on the machine that has the TUIOS config. Over SSH from a pane, you get the fallback colorscheme.
+</Callout>
+
+[nkapila6](https://github.com/nkapila6) wrote and maintains [tuios-look-sync.nvim](https://github.com/nkapila6/tuios-look-sync.nvim). Report problems with the plugin in its repository.
+
 ## Cursor colour <Since feature="cursor-colour" /> [#cursor-colour]
 
 A program in a pane can set the cursor colour with OSC 12. TUIOS sends the colour of the focused pane to your terminal. When the program resets the colour with OSC 112, your terminal's own cursor colour comes back. It also comes back when the focus moves to a pane that set no colour. This works in a native terminal and in `tuios-web`.

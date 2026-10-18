@@ -1,5 +1,6 @@
 import { MessageSquarePlus } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Gallery } from "@/components/gallery/gallery";
 import { breadcrumbLd, JsonLd } from "@/components/json-ld";
 import { Since } from "@/components/mdx/since";
@@ -56,6 +57,16 @@ export default function GalleryPage() {
               no gallery
             </code>{" "}
             in your comment.
+          </p>
+          <p className="mt-3 text-fd-muted-foreground text-sm leading-relaxed">
+            Use Neovim?{" "}
+            <Link
+              href="/docs/themes#neovim-look-sync"
+              className="text-fd-foreground underline underline-offset-2"
+            >
+              tuios-look-sync.nvim
+            </Link>{" "}
+            repaints it to match the look you apply.
           </p>
         </div>
         <a
