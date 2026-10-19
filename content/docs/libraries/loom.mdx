@@ -79,7 +79,7 @@ At 16 colours there are no grounds. The cursor row and a primary button use reve
 The surface keeps its tree between frames.
 
 - A state patch marks only the boxes whose bindings read the changed paths.
-- The next `Render` evaluates those boxes again, and repaints only the area that changed. `Damage` returns the rectangles.
+- The next `Render` evaluates those boxes again, and repaints only the area that changed. `Damage` returns the rectangles repainted since its last call, including renders that input caused.
 - A `Render` with nothing changed does no work.
 
 ```go
@@ -114,7 +114,7 @@ for _, e := range res.Effects {
 - Every number that sizes something, such as `bins`, is clamped to its range. NaN and infinities take the default.
 - It drops control characters at the cell.
 - The store comes from `tml.StoreFor`, so a patch cannot grow `each`, `list` or the rows past the document limits.
-- Each box has its own step budget, so a box shows the same values in a full render and when it is built again alone.
+- One frame has a budget of 1,000,000 expression steps. Each box gets an equal share: 1,000,000 divided by the most boxes the document can build (its components, plus its each limit when it repeats anything), and at least 100 steps. The share depends only on the document, so a box shows the same values in a full render and when it is built again alone, and the bindings of a frame never spend more than the budget. A table's column sampling and its rows in view each get one more share.
 
 ## Links and time
 
