@@ -19,6 +19,10 @@
  * A browser that accepts neither gets 406, and the page falls back to the
  * gzip file it unpacks itself (see lib/learn/runtime.ts). So does every host
  * without this Worker, such as next dev.
+ *
+ * /in-the-wild runs a second engine the same way: hearsay, the mentions
+ * viewer, as /in-the-wild/engine/<hash>/hearsay.wasm (see
+ * scripts/in-the-wild-engine.mjs).
  */
 
 /** The engine folder is named by the hash of its wasm, so it never changes. */
@@ -29,10 +33,26 @@ const CACHE_CONTROL = "public, max-age=31536000, immutable";
  * path is not an engine's wasm.
  */
 export function engineWasm(pathname: string): string | null {
-  const match = /^\/learn\/engine\/([0-9a-f]{6,64})\/tuios\.wasm$/.exec(
-    pathname,
-  );
-  return match ? `/learn/engine/${match[1]}/` : null;
+  for (const engine of ENGINES) {
+    if (!pathname.startsWith(engine.prefix)) continue;
+    const rest = pathname.slice(engine.prefix.length);
+    const match = /^([0-9a-f]{6,64})\/([a-z]+\.wasm)$/.exec(rest);
+    if (match && match[2] === engine.wasm) {
+      return `${engine.prefix}${match[1]}/`;
+    }
+  }
+  return null;
+}
+
+/** Each engine folder and the name its page asks for. */
+const ENGINES = [
+  { prefix: "/learn/engine/", wasm: "tuios.wasm" },
+  { prefix: "/in-the-wild/engine/", wasm: "hearsay.wasm" },
+] as const;
+
+/** The wasm name in an engine folder that engineWasm returned. */
+function wasmName(folder: string) {
+  return ENGINES.find((e) => folder.startsWith(e.prefix))?.wasm ?? "tuios.wasm";
 }
 
 /** The quality Accept-Encoding gives a coding, 0 when it refuses it. */
@@ -86,7 +106,7 @@ export async function serveEngineWasm(
   const base = new URL(request.url);
   for (const twin of TWINS) {
     if (encodingQuality(accept, twin.coding) <= 0) continue;
-    const url = new URL(`${folder}tuios.wasm${twin.suffix}`, base);
+    const url = new URL(`${folder}${wasmName(folder)}${twin.suffix}`, base);
     const headers = new Headers();
     // The file is already compressed: asked for as it is, so nothing on the
     // way packs it again or unpacks it before it is passed on.

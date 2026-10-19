@@ -12,6 +12,14 @@ describe("engineWasm", () => {
     ["/learn/engine/XYZ/tuios.wasm", null],
     ["/learn/engine/3103a9fcf896/sub/tuios.wasm", null],
     ["/tuios.wasm", null],
+    // The /in-the-wild engine is hearsay, and each folder has only its own.
+    [
+      "/in-the-wild/engine/3103a9fcf896/hearsay.wasm",
+      "/in-the-wild/engine/3103a9fcf896/",
+    ],
+    ["/in-the-wild/engine/3103a9fcf896/tuios.wasm", null],
+    ["/learn/engine/3103a9fcf896/hearsay.wasm", null],
+    ["/in-the-wild/engine/3103a9fcf896/hearsay.wasm.gz", null],
   ];
   for (const [path, want] of cases) {
     test(path, () => expect(engineWasm(path)).toBe(want));
@@ -170,5 +178,23 @@ describe("serveEngineWasm", () => {
       folder,
     );
     expect(res.status).toBe(405);
+  });
+});
+
+describe("serveEngineWasm for /in-the-wild", () => {
+  test("serves hearsay's twin from its own folder", async () => {
+    const wild = "/in-the-wild/engine/abc123/";
+    const { assets, asked } = fakeAssets({
+      [`${wild}hearsay.wasm.br`]: "HBROTLI",
+      [`${wild}hearsay.wasm.gz`]: "HGZIP",
+    });
+    const req = new Request(`https://tuios.dev${wild}hearsay.wasm`, {
+      headers: { "Accept-Encoding": "gzip, br" },
+    });
+    const res = await serveEngineWasm(req, assets, wild);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-encoding")).toBe("br");
+    expect(await res.text()).toBe("HBROTLI");
+    expect(new URL(asked[0].url).pathname).toBe(`${wild}hearsay.wasm.br`);
   });
 });

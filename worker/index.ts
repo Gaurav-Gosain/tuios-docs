@@ -22,8 +22,9 @@
  * media.ts), as are the community gallery's feed and images (see
  * gallery.ts). /r/<id> and /r/<id>.toml are the gallery's look links (see
  * look.ts), and /gallery/votes holds the hearts on its cards (see votes.ts).
- * The /learn engine's wasm is served brotli or gzip encoded, whichever the
- * browser accepts (see engine.ts).
+ * The /learn and /in-the-wild engines' wasm is served brotli or gzip encoded,
+ * whichever the browser accepts (see engine.ts). /in-the-wild/feed, the
+ * featured mentions, comes from the MEDIA bucket (see wild.ts).
  * A page request for its first bytes, which Next's link prefetch
  * sends, gets a 206 with just those bytes (see range.ts).
  */
@@ -44,6 +45,7 @@ import {
 import { answerPrefixRange } from "./range";
 import { hostRedirect } from "./redirect";
 import { handleVotes, VOTES_PATH, type VoteEnv } from "./votes";
+import { wildObject } from "./wild";
 
 export { GalleryVotes } from "./votes";
 
@@ -79,6 +81,8 @@ export default {
     if (key && env.MEDIA) return serveMedia(request, env.MEDIA, key);
     const gallery = galleryObject(url.pathname);
     if (gallery && env.MEDIA) return serveGallery(request, env.MEDIA, gallery);
+    const wild = wildObject(url.pathname);
+    if (wild && env.MEDIA) return serveGallery(request, env.MEDIA, wild);
     const look = lookRoute(url.pathname);
     if (look) return serveLook(request, look, env);
     if (url.pathname === VOTES_PATH) return handleVotes(request, env, ctx);

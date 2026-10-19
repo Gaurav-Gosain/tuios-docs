@@ -193,6 +193,15 @@ scripts/upload-release-media.sh v0.8.0 ~/dev/tuios-media/releases/v0.8.0/site
 - Deploy builds tuios at the commit in `learn/TUIOS_REF`. Bump that file to teach a newer tuios.
 - Only a gzipped wasm ships, because the raw file is over the 25 MiB asset limit. The page unpacks it with `DecompressionStream`, so it needs no special headers on any host.
 
+## In the wild page
+
+`/in-the-wild` shows the mentions of tuios that the maintainer featured. The list is [hearsay](https://github.com/Gaurav-Gosain/hearsay), a terminal mentions viewer, compiled to WebAssembly and drawn by sip's WebTerm, as on `/learn`.
+
+- `app/in-the-wild/` is the page, and `components/in-the-wild/wild-viewer.tsx` loads and starts the viewer. With no feed or an empty feed, the page says that nothing is featured and starts nothing.
+- The engine files are not in git. `bun scripts/in-the-wild-engine.mjs <dir>` copies a hearsay browser build (what `wasm/build.sh` in hearsay writes) into `public/in-the-wild/engine/<hash>/` and writes `public/in-the-wild/engine.json`. Deploy builds hearsay at the commit in `in-the-wild/HEARSAY_REF`.
+- The feed is not in git either. `worker/wild.ts` serves `/in-the-wild/feed` from `mentions/featured.json` in the MEDIA bucket, cached for five minutes. Make it with `hearsay publish` on the tracker's machine, then upload it with `scripts/upload-in-the-wild.sh <public.json>`. The script refuses a file with private fields in it.
+- Triage in the viewer stays in the visitor's localStorage. Nothing goes back to the site.
+
 ## Notes
 
 1. **Static export**: there is no server at runtime. Route handlers must be static (search uses `staticGET`, and every route sets `revalidate = false`).

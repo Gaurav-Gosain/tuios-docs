@@ -96,6 +96,45 @@ jobs:
       - name: Copy the engine into public/learn
         run: bun scripts/learn-engine.mjs .learn-build
 
+      # /in-the-wild runs hearsay, the mentions viewer, compiled to
+      # WebAssembly. It is built from the hearsay commit pinned in
+      # in-the-wild/HEARSAY_REF, the same way as the /learn engine.
+      - name: Read the pinned hearsay ref
+        id: hearsay
+        run: echo "ref=$(tr -d '[:space:]' < in-the-wild/HEARSAY_REF)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout hearsay
+        uses: actions/checkout@v7
+        with:
+          repository: Gaurav-Gosain/hearsay
+          ref: ${{ steps.hearsay.outputs.ref }}
+          path: .hearsay
+
+      - name: Restore the /in-the-wild engine build
+        id: wild
+        uses: actions/cache@v6
+        with:
+          path: .wild-build
+          key: wild-engine-v1-${{ runner.os }}-${{ steps.hearsay.outputs.ref }}
+
+      - name: Setup Go for hearsay
+        if: steps.wild.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: .hearsay/go.mod
+          cache-dependency-path: .hearsay/go.sum
+
+      - name: Build the hearsay engine for /in-the-wild
+        if: steps.wild.outputs.cache-hit != 'true'
+        run: |
+          command -v brotli >/dev/null || sudo apt-get install -y brotli
+          .hearsay/wasm/build.sh "$PWD/.wild-build"
+
+      - name: Copy the engine into public/in-the-wild
+        env:
+          HEARSAY_REF: ${{ steps.hearsay.outputs.ref }}
+        run: bun scripts/in-the-wild-engine.mjs .wild-build
+
       # next build warned on every run that it found no build cache.
       - name: Cache the Next.js build
         uses: actions/cache@v6

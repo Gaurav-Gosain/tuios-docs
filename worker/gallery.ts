@@ -18,7 +18,7 @@
 
 import type { MediaBucket } from "./media";
 
-type GalleryObject = { key: string; type: string; cache: string };
+export type GalleryObject = { key: string; type: string; cache: string };
 
 const IMAGE_CACHE = "public, max-age=31536000, immutable";
 const FEED_CACHE = "public, max-age=300";
