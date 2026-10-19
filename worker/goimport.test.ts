@@ -21,6 +21,8 @@ describe("libraryFor", () => {
     ["/loom", "loom"],
     ["/plot", "plot"],
     ["/plotx", null],
+    ["/sketch", "sketch"],
+    ["/sketch/raster", "sketch"],
     ["/docs/progstatus", null],
     ["/", null],
     ["/constructor", null],
@@ -75,8 +77,8 @@ describe("goImport", () => {
     );
   });
 
-  test("loom and plot name their own folders", async () => {
-    for (const lib of ["loom", "plot"]) {
+  test("loom, plot and sketch name their own folders", async () => {
+    for (const lib of ["loom", "plot", "sketch"]) {
       const res = goImport(new Request(`https://tuios.dev/${lib}?go-get=1`));
       expect(await res?.text()).toContain(
         `<meta name="go-import" content="tuios.dev/${lib} git https://github.com/Gaurav-Gosain/tuios ${lib}">`,

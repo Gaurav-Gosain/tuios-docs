@@ -30,6 +30,7 @@ export const LIBRARIES: Readonly<Record<string, { dir: string }>> = {
   plot: { dir: "plot" },
   progstatus: { dir: "progstatus" },
   shot: { dir: "shot" },
+  sketch: { dir: "sketch" },
   swatch: { dir: "swatch" },
   tml: { dir: "tml" },
   vt: { dir: "vt" },
