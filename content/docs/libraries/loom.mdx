@@ -1,0 +1,118 @@
+---
+title: loom
+description: Draw TML documents into terminal cells. Flex layout, theme roles at every colour depth, redraws of only what a patch changed, and local keys and clicks.
+icon: LayoutDashboard
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+`tuios.dev/loom` draws [TML](/docs/libraries/tml) documents. You give it a document and a size. It gives you a cell buffer, which renders to ANSI text or to plain text. Charts come from [plot](/docs/libraries/plot).
+
+```bash
+go get tuios.dev/loom
+```
+
+The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/loom).
+
+<Callout>
+tuios does not show TML surfaces yet. The tuios commands, popups and panes that use loom come in a later release.
+</Callout>
+
+![A test-run dashboard drawn by loom at 148 by 34 cells: tabs, stat tiles with sparklines, a pass-rate gauge, a bar chart by package, a line chart of past runs, a failures table with a cursor row and a row of buttons](/shots/loom-test-run.png)
+
+## Draw a document
+
+```go
+doc, _, err := tml.Check(src, nil)
+if err != nil {
+	return err
+}
+s, err := loom.New(doc, &loom.Options{Palette: loom.DefaultPalette(loom.Color256)})
+if err != nil {
+	return err
+}
+buf := s.Render(80, 24)
+fmt.Print(buf.Render()) // ANSI text; buf.String() gives plain text
+```
+
+The buffer belongs to the surface. The next `Render` reuses it.
+
+## Components
+
+| Group | Components |
+| --- | --- |
+| Layout | `row`, `col`, `grid`, `stack`, `spacer`, `scroll`, `split` |
+| Text | `text` with `b`, `i`, `u`, `s`, `code`, `c`, `kbd` and `a`; `heading`; `code` |
+| Data | `table` (sort, select, scroll), `list`, `kv`, `stat`, `tree` |
+| Charts | `bar`, `line`, `area`, `sparkline`, `gauge`, `progress`, `histogram` |
+| Containers | `card`, `tabs`, `modal`, `toast` |
+| Status | `badge`, `status`, `spinner`, `button` |
+
+Form fields show their label and value. Editing comes in a later release. `markdown`, `diff` and `mermaid` show their source. `image` shows its alt text. `heatmap` and `pie` show their name.
+
+## Layout
+
+The layout works like flex boxes for cells.
+
+- `w` and `h` take cells, a percentage, `fill` or `fill:N`.
+- `min-w`, `max-w`, `min-h`, `max-h`, `pad`, `gap`, `grow`, `align` and `justify` work as their names say.
+- When a column is too short, tables, lists, text, cards and tabs give rows back first.
+- A box never draws outside its parent.
+
+A binding can read `view.width`, `view.height` and `view.band`. The band is `narrow` below 72 cells, `medium` below 120 and `wide` from 120. Use it to change the layout with the width:
+
+```xml
+<row gap="2" if="view.band == 'wide'">...</row>
+<row gap="3" if="view.band != 'wide'">...</row>
+```
+
+## Colour
+
+Every colour is a role, such as `success`, `mute` or `series2`. You give the surface a palette at the depth of the terminal: `TrueColor`, `Color256`, `Color16` or `ASCII`. `DefaultPalette` gives the tuios palette at each depth. `NewPalette` builds one from your theme.
+
+At 16 colours there are no grounds. The cursor row and a primary button use reverse video. In ASCII, loom also draws its own marks in ASCII.
+
+![The same dashboard at 100 by 30 cells and 16 colours: the stats are on one row, and the cursor row is in reverse video](/shots/loom-test-run-16.png)
+
+## Updates
+
+The surface keeps its tree between frames.
+
+- A state patch marks only the boxes whose bindings read the changed paths.
+- The next `Render` evaluates those boxes again, and repaints only the area that changed. `Damage` returns the rectangles.
+- A `Render` with nothing changed does no work.
+
+```go
+err := s.Patch(ops)   // a JSON Patch from the owner
+err = s.Set("state.cpu", 43)
+buf := s.Render(80, 24)
+```
+
+On a 200-row table at 200 by 55 cells, a full render takes about 0.6 ms. The redraw after a patch to one binding takes about 15 µs.
+
+## Input
+
+`Key` and `Mouse` take input. Tabs, sorting, the cursor, folding, scrolling, `set` and `toggle` run at once, with no round trip to the owner. `emit`, `close`, `copy`, `open` and `pane` come back to your program as `Effects`:
+
+```go
+res, err := s.Key("r")
+for _, e := range res.Effects {
+	if e.Action == "emit" {
+		send(e.Name, e.Value) // to the owner of the surface
+	}
+}
+```
+
+- A button's `key` works from anywhere on the surface.
+- `tab` and `shift+tab` move the focus.
+- The focused table or list takes the arrow keys, `enter`, and `s` to sort by the next column.
+- A click opens a tab, sorts a column, moves the cursor, folds a card or presses a button. The wheel scrolls. A drag moves a split.
+
+## Limits
+
+- loom draws any tree, valid or not, at any size, without a panic.
+- It drops control characters at the cell.
+- The store comes from `tml.StoreFor`, so a patch cannot grow `each`, `list` or the rows past the document limits.
+- All bindings of one frame share one step budget.
+
+The package imports [tml](/docs/libraries/tml), [plot](/docs/libraries/plot), ultraviolet and `charmbracelet/x/ansi`. It imports no tuios package.

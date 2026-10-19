@@ -26,6 +26,8 @@ export const importHost = "tuios.dev";
  * published, so an entry is never renamed or removed.
  */
 export const LIBRARIES: Readonly<Record<string, { dir: string }>> = {
+  loom: { dir: "loom" },
+  plot: { dir: "plot" },
   progstatus: { dir: "progstatus" },
   shot: { dir: "shot" },
   swatch: { dir: "swatch" },

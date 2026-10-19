@@ -18,6 +18,9 @@ describe("libraryFor", () => {
     ["/shotx", null],
     ["/tml", "tml"],
     ["/tmlx", null],
+    ["/loom", "loom"],
+    ["/plot", "plot"],
+    ["/plotx", null],
     ["/docs/progstatus", null],
     ["/", null],
     ["/constructor", null],
@@ -70,6 +73,15 @@ describe("goImport", () => {
     expect(await res?.text()).toContain(
       '<meta name="go-import" content="tuios.dev/tml git https://github.com/Gaurav-Gosain/tuios tml">',
     );
+  });
+
+  test("loom and plot name their own folders", async () => {
+    for (const lib of ["loom", "plot"]) {
+      const res = goImport(new Request(`https://tuios.dev/${lib}?go-get=1`));
+      expect(await res?.text()).toContain(
+        `<meta name="go-import" content="tuios.dev/${lib} git https://github.com/Gaurav-Gosain/tuios ${lib}">`,
+      );
+    }
   });
 
   test("a person is sent to the docs page", () => {
