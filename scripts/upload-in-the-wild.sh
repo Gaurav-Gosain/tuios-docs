@@ -9,6 +9,10 @@
 # The script refuses a file that still carries private fields (relevance,
 # reason, files, first_seen, last_seen), so a full feed cannot go up by
 # mistake. Uploading again replaces the file.
+#
+# wrangler must reach the account that owns the tuios-media bucket. When
+# CLOUDFLARE_API_TOKEN in the shell belongs to another account, run it with
+# that variable unset so wrangler uses its own login.
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
