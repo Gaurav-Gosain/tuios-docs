@@ -110,9 +110,15 @@ for _, e := range res.Effects {
 
 ## Limits
 
-- loom draws any tree, valid or not, at any size, without a panic.
+- loom draws any tree, valid or not, at any size up to 4096 by 4096 cells, without a panic. Layout measures each box once per width, so deep nesting stays cheap.
+- Every number that sizes something, such as `bins`, is clamped to its range. NaN and infinities take the default.
 - It drops control characters at the cell.
 - The store comes from `tml.StoreFor`, so a patch cannot grow `each`, `list` or the rows past the document limits.
-- All bindings of one frame share one step budget.
+- Each box has its own step budget, so a box shows the same values in a full render and when it is built again alone.
+
+## Links and time
+
+- A click on a link comes back as a `link` effect. Your program asks the person, then opens it. loom writes no OSC 8 link unless you set `Options.Hyperlinks`.
+- A binding that calls `ago()` changes with the clock. When `NeedsClock()` is true, call `Tick()` about once a minute. Only those boxes are evaluated again.
 
 The package imports [tml](/docs/libraries/tml), [plot](/docs/libraries/plot), ultraviolet and `charmbracelet/x/ansi`. It imports no tuios package.
