@@ -31,6 +31,9 @@ export const LayoutModes = dynamic(() =>
 export const ReviewWalkthrough = dynamic(() =>
   import("../docs/review-walkthrough").then((m) => m.ReviewWalkthrough),
 );
+export const SketchPlayground = dynamic(() =>
+  import("../docs/sketch-playground").then((m) => m.SketchPlayground),
+);
 export const SessionDiagram = dynamic(() =>
   import("../docs/session-diagram").then((m) => m.SessionDiagram),
 );

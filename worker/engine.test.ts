@@ -20,6 +20,13 @@ describe("engineWasm", () => {
     ["/in-the-wild/engine/3103a9fcf896/tuios.wasm", null],
     ["/learn/engine/3103a9fcf896/hearsay.wasm", null],
     ["/in-the-wild/engine/3103a9fcf896/hearsay.wasm.gz", null],
+    // The sketch playground's engine.
+    [
+      "/sketch-playground/engine/3103a9fcf896/sketch.wasm",
+      "/sketch-playground/engine/3103a9fcf896/",
+    ],
+    ["/sketch-playground/engine/3103a9fcf896/tuios.wasm", null],
+    ["/sketch/engine/3103a9fcf896/sketch.wasm", null],
   ];
   for (const [path, want] of cases) {
     test(path, () => expect(engineWasm(path)).toBe(want));

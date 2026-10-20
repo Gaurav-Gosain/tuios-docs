@@ -135,6 +135,49 @@ jobs:
           HEARSAY_REF: ${{ steps.hearsay.outputs.ref }}
         run: bun scripts/in-the-wild-engine.mjs .wild-build
 
+      # The sketch playground (/docs/libraries/sketch/playground) runs
+      # tuios.dev/sketch compiled to WebAssembly. It is built from the tuios
+      # commit pinned in sketch-playground/TUIOS_REF, the same way as the
+      # /learn engine. The pin is its own, so the playground can move without
+      # /learn.
+      - name: Read the pinned tuios ref for the sketch playground
+        id: sketch
+        run: echo "ref=$(tr -d '[:space:]' < sketch-playground/TUIOS_REF)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tuios for the sketch playground
+        uses: actions/checkout@v7
+        with:
+          repository: Gaurav-Gosain/tuios
+          ref: ${{ steps.sketch.outputs.ref }}
+          path: .tuios-sketch
+
+      - name: Resolve the sketch playground's tuios commit
+        id: sketch_commit
+        run: echo "sha=$(git -C .tuios-sketch rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the sketch playground engine build
+        id: sketch_build
+        uses: actions/cache@v6
+        with:
+          path: .sketch-build
+          key: sketch-engine-v1-${{ runner.os }}-${{ steps.sketch_commit.outputs.sha }}
+
+      - name: Setup Go for the sketch playground
+        if: steps.sketch_build.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: .tuios-sketch/go.mod
+          cache-dependency-path: .tuios-sketch/go.sum
+
+      - name: Build the sketch playground engine
+        if: steps.sketch_build.outputs.cache-hit != 'true'
+        run: |
+          command -v brotli >/dev/null || sudo apt-get install -y brotli
+          .tuios-sketch/cmd/sketch-wasm/build.sh "$PWD/.sketch-build"
+
+      - name: Copy the engine into public/sketch-playground
+        run: bun scripts/sketch-engine.mjs .sketch-build
+
       # next build warned on every run that it found no build cache.
       - name: Cache the Next.js build
         uses: actions/cache@v6

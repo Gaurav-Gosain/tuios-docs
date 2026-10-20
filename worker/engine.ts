@@ -22,7 +22,8 @@
  *
  * /in-the-wild runs a second engine the same way: hearsay, the mentions
  * viewer, as /in-the-wild/engine/<hash>/hearsay.wasm (see
- * scripts/in-the-wild-engine.mjs).
+ * scripts/in-the-wild-engine.mjs). The sketch playground runs a third:
+ * /sketch-playground/engine/<hash>/sketch.wasm (see scripts/sketch-engine.mjs).
  */
 
 /** The engine folder is named by the hash of its wasm, so it never changes. */
@@ -48,6 +49,7 @@ export function engineWasm(pathname: string): string | null {
 const ENGINES = [
   { prefix: "/learn/engine/", wasm: "tuios.wasm" },
   { prefix: "/in-the-wild/engine/", wasm: "hearsay.wasm" },
+  { prefix: "/sketch-playground/engine/", wasm: "sketch.wasm" },
 ] as const;
 
 /** The wasm name in an engine folder that engineWasm returned. */

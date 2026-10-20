@@ -80,6 +80,9 @@ components/brand.tsx          the header and footer logo (mark and outlined word
 components/tilly-3d/          the 3D Tilly: scene.ts (three.js, loaded with a dynamic import) and the
                               hero and /brand viewer components, with the 2D figure as placeholder and fallback
 lib/tilly-3d/                 the 3D Tilly's face drawing and motion math, tested by bun test lib/
+lib/sketch/                   the sketch playground: the Web Worker that runs tuios.dev/sketch as wasm,
+                              the morph between two drawings, the examples and the share link.
+                              scripts/sketch-engine.mjs copies the wasm built at sketch-playground/TUIOS_REF
 assets/tilly-3d/              tilly.py (Blender) and build.sh, which rebuild public/tilly/tilly.glb
 mdx-components.tsx            registers the MDX widgets
 source.config.ts              the docs, blog and releases collections
