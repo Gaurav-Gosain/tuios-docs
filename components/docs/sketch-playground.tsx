@@ -7,7 +7,7 @@
  * morphs from the last one (lib/sketch/morph.ts). An error keeps the last
  * good drawing on screen and marks its line in the editor.
  */
-import { Check, Copy, Download, Link2 } from "lucide-react";
+import { Check, Copy, Download, Image as ImageIcon, Link2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -108,7 +108,7 @@ export function SketchPlayground() {
   const [drawn, setDrawn] = useState<Drawn | null>(null);
   const [ms, setMs] = useState(0);
   const [bytes, setBytes] = useState(0);
-  const [copied, setCopied] = useState<"" | "link" | "svg">("");
+  const [copied, setCopied] = useState<"" | "link" | "svg" | "png">("");
   const [restored, setRestored] = useState(false);
   const [stageWidth, setStageWidth] = useState(0);
   const [note, setNote] = useState("");
@@ -340,7 +340,7 @@ export function SketchPlayground() {
     return new XMLSerializer().serializeToString(root);
   }, [drawn, vars]);
 
-  const flash = (what: "link" | "svg") => {
+  const flash = (what: "link" | "svg" | "png") => {
     setCopied(what);
     window.setTimeout(() => setCopied(""), 1600);
   };
@@ -359,44 +359,61 @@ export function SketchPlayground() {
     flash("svg");
   };
 
-  const downloadPng = async () => {
-    if (!drawn) return;
+  // The SVG goes through a data: URL, not a blob: one: the site's CSP allows
+  // data: images and blocks blob: ones.
+  const renderPng = async (): Promise<Blob | null> => {
+    if (!drawn) return null;
     const scale = 2;
     const pad = 16;
-    const url = URL.createObjectURL(
-      new Blob([exported()], { type: "image/svg+xml" }),
-    );
-    try {
-      const img = new Image();
-      img.decoding = "async";
-      img.src = url;
-      await img.decode();
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.ceil((drawn.width + pad * 2) * scale);
-      canvas.height = Math.ceil((drawn.height + pad * 2) * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.fillStyle = vars["--pele-bg"] ?? "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(
-        img,
-        pad * scale,
-        pad * scale,
-        drawn.width * scale,
-        drawn.height * scale,
-      );
-      const blob = await new Promise<Blob | null>((r) =>
-        canvas.toBlob(r, "image/png"),
-      );
-      if (!blob) return;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${drawn.type || "diagram"}.png`;
-      a.click();
-      window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    } finally {
-      URL.revokeObjectURL(url);
+    const bytes = new TextEncoder().encode(exported());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     }
+    const img = new Image();
+    img.decoding = "async";
+    img.src = `data:image/svg+xml;base64,${btoa(bin)}`;
+    await img.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil((drawn.width + pad * 2) * scale);
+    canvas.height = Math.ceil((drawn.height + pad * 2) * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = vars["--pele-bg"] ?? "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(
+      img,
+      pad * scale,
+      pad * scale,
+      drawn.width * scale,
+      drawn.height * scale,
+    );
+    return new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
+  };
+
+  const downloadPng = async () => {
+    const blob = await renderPng();
+    if (!blob) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${drawn?.type || "diagram"}.png`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
+  const copyPng = async () => {
+    if (!drawn) return;
+    // Safari needs the ClipboardItem to be made inside the click, with the
+    // image still a promise.
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "image/png": renderPng().then((b) => {
+          if (!b) throw new Error("no image");
+          return b;
+        }),
+      }),
+    ]);
+    flash("png");
   };
 
   const exampleId = EXAMPLES.find((e) => e.source === code)?.id ?? "";
@@ -464,12 +481,25 @@ export function SketchPlayground() {
           </button>
           <button
             type="button"
+            onClick={copyPng}
+            className="sp-button"
+            disabled={!drawn}
+          >
+            {copied === "png" ? (
+              <Check aria-hidden />
+            ) : (
+              <ImageIcon aria-hidden />
+            )}
+            <span>{copied === "png" ? "PNG copied" : "Copy PNG"}</span>
+          </button>
+          <button
+            type="button"
             onClick={downloadPng}
             className="sp-button"
             disabled={!drawn}
           >
             <Download aria-hidden />
-            <span>PNG</span>
+            <span>Download PNG</span>
           </button>
         </div>
       </div>
