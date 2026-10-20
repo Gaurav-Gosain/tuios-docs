@@ -6,13 +6,13 @@ icon: Camera
 
 `tuios.dev/shot` renders a terminal screen to a picture. It takes a grid of cells and writes PNG, SVG, HTML, ANSI or plain text, with an optional window frame around it. tuios uses it for [screenshots](/docs/screenshots).
 
-```bash
-go get tuios.dev/shot
-```
-
 It needs Go 1.25 or later. It is pure Go and needs no cgo, no browser and no external tool. The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/shot).
 
-![A terminal window drawn by shot in GeistMono Nerd Font Mono: a prompt, go test output, a box corner and braille, on a gradient](/shots/shot-library.png)
+<LibShot
+  name="shot/quickstart"
+  alt="A terminal window drawn by shot on a gradient: a prompt, go test output, a coloured label, a box corner and braille"
+  caption="The PNG that the quickstart program below writes, as it wrote it."
+/>
 
 ## Use it to
 
@@ -28,58 +28,19 @@ It needs Go 1.25 or later. It is pure Go and needs no cgo, no browser and no ext
 - **ANSI** and **text** write the screen back as escape sequences or as plain lines.
 - **mosaic**, a sub-package, does the opposite: it draws a picture as cells of block glyphs.
 
-## Example
+## Quickstart
 
-shot does not parse escape sequences. A terminal emulator does that, such as [vt](/docs/libraries/vt), and `FromScreen` reads its screen.
-
-```go
-package main
-
-import (
-	"log"
-	"os"
-
-	"tuios.dev/shot"
-	"tuios.dev/vt"
-)
-
-func main() {
-	// A terminal emulator reads what a program printed.
-	term := vt.NewEmulator(46, 6)
-	defer term.Close()
-	term.Write([]byte("\x1b[35m◆\x1b[0m \x1b[1mmain\x1b[0m \x1b[2m▸\x1b[0m ~/dev/tuios\r\n" +
-		"$ go test ./shot/...\r\n" +
-		"\x1b[32mok\x1b[0m  tuios.dev/shot         0.012s\r\n" +
-		"\x1b[32mok\x1b[0m  tuios.dev/shot/mosaic  0.004s\r\n" +
-		"\x1b[44;30m ▤ 2 packages \x1b[0m \x1b[33m╭─╮\x1b[0m \x1b[2m⣿⣶⣤⣀\x1b[0m\r\n$ "))
-
-	// The palette turns the basic and indexed colours into RGB.
-	p := shot.XTermPalette()
-	p.FG, p.BG = shot.RGB(0xcd, 0xd6, 0xf4), shot.RGB(0x1e, 0x1e, 0x2e)
-	p.ANSI[2], p.ANSI[3] = shot.RGB(0xa6, 0xe3, 0xa1), shot.RGB(0xf9, 0xe2, 0xaf)
-	p.ANSI[4], p.ANSI[5] = shot.RGB(0x89, 0xb4, 0xfa), shot.RGB(0xcb, 0xa6, 0xf7)
-
-	// FromScreen reads the screen into a grid of resolved cells.
-	grid := shot.FromScreen(term, p)
-
-	// BuildFrame dresses the grid as a window on a gradient.
-	frame := shot.BuildFrame(shot.FrameSpec{
-		Frame: "window", Title: "tuios", Padding: 24, Radius: 10, Shadow: true, Scale: 2,
-	}, shot.FrameInputs{Palette: p})
-
-	for _, format := range []shot.Format{shot.FormatPNG, shot.FormatSVG} {
-		out, err := shot.Render(format, grid, frame)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err := os.WriteFile("screen."+format.Ext(), out, 0o644); err != nil {
-			log.Fatal(err)
-		}
-	}
-}
+```bash
+go get tuios.dev/shot tuios.dev/vt
 ```
 
-The picture above is this program, with GeistMono Nerd Font Mono in `frame.Font` and `frame.BoldFont`.
+shot does not parse escape sequences. A terminal emulator does that, such as [vt](/docs/libraries/vt), and `FromScreen` reads its screen. This code writes `screen.png` and `screen.svg`:
+
+<include cwd lang="go">tools/libshots/snippets/shot-quickstart.txt</include>
+
+The picture at the top of this page is its `screen.png`. It uses no font of its own, so shot draws the text in Go Mono. This is its `screen.svg`, which your browser draws with its own monospace font:
+
+![The same terminal window as SVG: text and rectangles that the browser draws](/libs/shot/quickstart.svg)
 
 A program with its own screen model fills a grid directly with `NewGrid`. Each cell holds its text, its colours as RGB and its attributes.
 
@@ -91,11 +52,47 @@ PNG looks for each glyph in this order, and the first face that has the glyph dr
 2. Each face in `Frame.Fallback`, in order.
 3. Go Mono, which shot embeds.
 
-A glyph in no face draws as a dotted box. `MissingGlyphs` lists those glyphs before you render, so you can find a font for each one and add it to `Frame.Fallback`. Geist Mono has no `◆`, `▸` or `▤`. In the picture above they come from Noto Sans Mono, a fallback face.
+A glyph in no face draws as a dotted box. `MissingGlyphs` lists those glyphs before you render, so you can find a font for each one and add it to `Frame.Fallback`.
 
 shot parses a fallback face only when a glyph needs it, and looks up each glyph once per render. A glyph wider than its cell is centred on the cell. tuios fills the fallback list from fontconfig.
 
 SVG and HTML name `Frame.FontFamily` and let the viewer pick the fonts. With `Frame.EmbedFont`, they also carry `Frame.Font` as an `@font-face`.
+
+## Pictures as cells: mosaic
+
+`tuios.dev/shot/mosaic` does the opposite of shot. It draws a picture as cells of block glyphs, each with a foreground and a background colour. tuios uses it for an image when the terminal shows no graphics.
+
+<LibGallery>
+<LibShot name="shot/mosaic-half" alt="The tuios mascot drawn as 32 by 16 cells of half blocks" caption="mosaic.Half: 1 by 2 sub-pixels a cell" />
+<LibShot name="shot/mosaic-quadrant" alt="The tuios mascot drawn as 32 by 16 cells of quadrant blocks, with finer edges" caption="mosaic.Quadrant: 2 by 2 sub-pixels a cell" />
+</LibGallery>
+
+`Sextant` and `Octant` use 2 by 3 and 2 by 4 sub-pixels, for a font that has those glyphs. At 256 colours the cells are dithered. At 16 colours they are always half blocks.
+
+## How do I
+
+- **Save a picture when a terminal test fails?** Keep the vt emulator of the test, then `shot.Render(shot.FormatPNG, shot.FromScreen(term, palette), nil)`.
+- **Use my own font?** Set `Frame.Font` and `Frame.BoldFont`, and add faces for missing glyphs to `Frame.Fallback`.
+- **Get a picture with no window?** Use `Frame: "none"` in the `FrameSpec`, or a nil frame.
+- **Put real output in a README?** Write SVG. Its text stays selectable.
+- **Fill a grid from my own screen model?** Use `NewGrid`, and set each cell's text, colours and attributes.
+
+## API overview
+
+| Name | Does |
+| --- | --- |
+| [`Grid`](https://pkg.go.dev/tuios.dev/shot#Grid), [`Cell`](https://pkg.go.dev/tuios.dev/shot#Cell), [`NewGrid`](https://pkg.go.dev/tuios.dev/shot#NewGrid) | A screen of resolved cells. |
+| [`FromScreen`](https://pkg.go.dev/tuios.dev/shot#FromScreen), [`Palette`](https://pkg.go.dev/tuios.dev/shot#Palette) | Read a terminal screen, with its colours made RGB. |
+| [`Render`](https://pkg.go.dev/tuios.dev/shot#Render), [`Format`](https://pkg.go.dev/tuios.dev/shot#Format) | Write PNG, SVG, HTML, ANSI or text. |
+| [`BuildFrame`](https://pkg.go.dev/tuios.dev/shot#BuildFrame), [`Frame`](https://pkg.go.dev/tuios.dev/shot#Frame) | The window, padding, gradient and shadow. |
+| [`MissingGlyphs`](https://pkg.go.dev/tuios.dev/shot#MissingGlyphs), [`Font`](https://pkg.go.dev/tuios.dev/shot#Font) | Pick the faces. |
+| [`mosaic`](https://pkg.go.dev/tuios.dev/shot/mosaic) | Draw a picture as cells. |
+
+## Where it fits
+
+- tuios uses shot for `tuios screenshot` and the screenshot keys, and mosaic for images on a terminal with no graphics.
+- shot reads [vt](/docs/libraries/vt) screens through `FromScreen`.
+- The pictures of loom, plot and vt output on these library pages are PNG files from shot.
 
 ## Versions
 

@@ -8,6 +8,16 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 `tuios.dev/progstatus` is a Go package for the Program Status Protocol, OSC 7501. A program writes one escape sequence to say what it does: idle, working, done, blocked or error. A terminal reads the sequence and shows the state. tuios uses this package for its [program status](/docs/program-status) support.
 
+<Shot
+  name="progstatus-rail"
+  light
+  width={1600}
+  height={823}
+  alt="Three tuios panes, each with a program that reported its state: a build at 40 percent, a deploy that waits for permission, and tests that are done. The rail lists each program with its state and message."
+/>
+
+Each pane runs a program that sent one report with `tuios status`, which writes the sequence with this package. tuios read each report with the parser and the store of this package, and shows it in the rail and the pane title.
+
 ```bash
 go get tuios.dev/progstatus
 ```
@@ -87,7 +97,34 @@ func paneStatus() (progstatus.Record, bool) {
 }
 ```
 
+Three reports through the encoder, the parser and the store, and the record that `Summary` picks for the pane:
+
+<LibShot name="progstatus/records" alt="Three OSC 7501 sequences as bytes, the three records the store keeps with their ids, states, apps and messages, and the summary: blocked, from deploy" />
+
 `SequenceLen` gives the length of a sequence from the length of its payload. Call `Store.DropTransient` when a shell prompt appears (OSC 133 A) or the process exits. Call `Store.Reset` on a full reset (RIS).
+
+## How do I
+
+- **Report from a shell script?** Run `tuios status`, which writes the same sequence. It needs no daemon.
+- **Report progress?** Set `Progress` from 0 to 100 on a `Working` or `Blocked` report. Use `NoProgress` for none.
+- **Report several tasks?** Give each one an `ID`, such as `build` and `build/test`. The ids make a tree under the root record.
+- **Clear a record?** Send a report with `State: progstatus.Clear` and its `ID`.
+- **Show one state for a pane?** Call `Summary(store.Records())`.
+
+## API overview
+
+| Name | Does |
+| --- | --- |
+| [`Report`](https://pkg.go.dev/tuios.dev/progstatus#Report), [`Sequence`](https://pkg.go.dev/tuios.dev/progstatus#Sequence) | Write a report. |
+| [`FitText`](https://pkg.go.dev/tuios.dev/progstatus#FitText), [`FitSegment`](https://pkg.go.dev/tuios.dev/progstatus#FitSegment) | Cut outside input to the limits. |
+| [`Parse`](https://pkg.go.dev/tuios.dev/progstatus#Parse), [`IsQuery`](https://pkg.go.dev/tuios.dev/progstatus#IsQuery) | Read a sequence, with every discard rule. |
+| [`Store`](https://pkg.go.dev/tuios.dev/progstatus#Store), [`Record`](https://pkg.go.dev/tuios.dev/progstatus#Record) | The records of one terminal. |
+| [`Summary`](https://pkg.go.dev/tuios.dev/progstatus#Summary) | The record that a pane shows. |
+
+## Where it fits
+
+- [vt](/docs/libraries/vt) parses OSC 7501 with this package, so every tuios pane reads reports.
+- `tuios status` writes reports with it. tuios shows them in the [rail](/docs/session-rail#agent-rows), the [Inbox](/docs/agent-inbox) and the pane title. See [Program Status](/docs/program-status).
 
 ## Versions
 

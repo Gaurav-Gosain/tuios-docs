@@ -44,12 +44,14 @@ func (g *gen) terminal(name, text string, cols int, title string) error {
 // terminalIn is terminal in each of ts.
 func (g *gen) terminalIn(name, text string, cols int, title string, ts []theme) error {
 	text = strings.TrimRight(text, "\n")
-	rows := strings.Count(text, "\n") + 1
+	// Room for lines that wrap; the blank rows at the bottom go after.
+	rows := 2*(strings.Count(text, "\n")+1) + 4
 	for _, t := range ts {
 		term := vt.NewEmulator(cols, rows)
 		term.Write([]byte(strings.ReplaceAll(text, "\n", "\r\n")))
 		grid := shot.FromScreen(term, t.term)
 		term.Close()
+		trim(grid)
 		if err := g.write(name, t, grid, pic{look: window, title: title}); err != nil {
 			return err
 		}

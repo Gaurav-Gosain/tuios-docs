@@ -1,0 +1,32 @@
+// A terminal emulator reads what a program printed.
+term := vt.NewEmulator(46, 6)
+defer term.Close()
+term.Write([]byte("\x1b[35m>\x1b[0m \x1b[1mmain\x1b[0m \x1b[2mon\x1b[0m ~/dev/tuios\r\n" +
+	"$ go test ./shot/...\r\n" +
+	"\x1b[32mok\x1b[0m  tuios.dev/shot         0.012s\r\n" +
+	"\x1b[32mok\x1b[0m  tuios.dev/shot/mosaic  0.004s\r\n" +
+	"\x1b[44;30m 2 packages \x1b[0m \x1b[33m╭─╮\x1b[0m \x1b[2m⣿⣶⣤⣀\x1b[0m\r\n$ "))
+
+// The palette turns the basic and indexed colours into RGB.
+p := shot.XTermPalette()
+p.FG, p.BG = shot.RGB(0xcd, 0xd6, 0xf4), shot.RGB(0x1e, 0x1e, 0x2e)
+p.ANSI[2], p.ANSI[3] = shot.RGB(0xa6, 0xe3, 0xa1), shot.RGB(0xf9, 0xe2, 0xaf)
+p.ANSI[4], p.ANSI[5] = shot.RGB(0x89, 0xb4, 0xfa), shot.RGB(0xcb, 0xa6, 0xf7)
+
+// FromScreen reads the screen into a grid of resolved cells.
+grid := shot.FromScreen(term, p)
+
+// BuildFrame dresses the grid as a window on a gradient.
+frame := shot.BuildFrame(shot.FrameSpec{
+	Frame: "window", Title: "tuios", Padding: 24, Radius: 10, Shadow: true, Scale: 2,
+}, shot.FrameInputs{Palette: p})
+
+for _, format := range []shot.Format{shot.FormatPNG, shot.FormatSVG} {
+	out, err := shot.Render(format, grid, frame)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "screen."+format.Ext()), out, 0o644); err != nil {
+		log.Fatal(err)
+	}
+}

@@ -46,6 +46,12 @@ find "$work/png" -name '*.png' -print0 | while IFS= read -r -d '' png; do
   mkdir -p "$(dirname "$dst")"
   magick "$png" -define webp:lossless=true -define webp:method=6 "$dst"
 done
+# An SVG that a library wrote itself goes as it is.
+find "$work/png" -name '*.svg' -print0 | while IFS= read -r -d '' svg; do
+  rel=${svg#"$work/png/"}
+  mkdir -p "$(dirname "public/libs/$rel")"
+  cp "$svg" "public/libs/$rel"
+done
 echo "gen-library-shots: wrote $(find "$work/png" -name '*.png' | wc -l) files under public/libs"
 
 # The manifest in the style the lint step checks.

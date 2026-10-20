@@ -12,6 +12,18 @@ go get tuios.dev/swatch
 
 The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/swatch).
 
+## Quickstart
+
+Read the colour scheme of a terminal config file. `termconfig.Parse` finds the format itself:
+
+<include cwd lang="go">tools/libshots/snippets/swatch-termconfig.txt</include>
+
+Each picture below is the `Palette` that this call returned for a theme file in one of the formats, drawn on the theme's own background:
+
+<LibShotSet prefix="swatch/" cols={2} />
+
+The sources are the files in `tools/libshots/scenes/swatch/` of the docs repository. Every role of the palette is set, also when the file does not name its colour.
+
 ## What is in it
 
 - **swatch**: the `Palette`, the `Source` interface, and `Watch`, which follows a source.
@@ -72,3 +84,32 @@ The watcher holds one inotify handle and two goroutines. It runs no timer and re
 | `Light` | `mode = "light"`, a `light.mode` file, or a light background |
 
 `Raw` holds every other key the theme defines or Omarchy derives, such as `orange` or `dark_background`.
+
+## How do I
+
+- **Follow the theme while my program runs?** Call `swatch.Watch(source)`, and listen with `teaswatch.Listen` in Bubble Tea.
+- **Read a terminal's config file?** Call `termconfig.Load(path)`, or use `termconfig.Source(path)` to watch it.
+- **List every installed Omarchy theme?** Call `omarchy.Themes()`.
+- **Get a colour as hex?** Call `swatch.Hex(c)`.
+- **Use a colour Omarchy defines but the palette has no role for?** Read `p.Raw`, such as `p.Raw["orange"]`.
+- **Ask the terminal for its own colours?** In Bubble Tea, use `teaswatch`: it reads OSC 10, 11 and 4 and mode 2031.
+
+## API overview
+
+| Name | Does |
+| --- | --- |
+| [`Palette`](https://pkg.go.dev/tuios.dev/swatch#Palette) | The roles, the ANSI colours and the raw keys. |
+| [`Source`](https://pkg.go.dev/tuios.dev/swatch#Source), [`Static`](https://pkg.go.dev/tuios.dev/swatch#Static) | Where a palette comes from. |
+| [`Watch`](https://pkg.go.dev/tuios.dev/swatch#Watch), [`Watcher`](https://pkg.go.dev/tuios.dev/swatch#Watcher) | Follow a source. |
+| [`omarchy`](https://pkg.go.dev/tuios.dev/swatch/omarchy) | The Omarchy theme in force, and every installed one. |
+| [`termconfig`](https://pkg.go.dev/tuios.dev/swatch/termconfig) | kitty, ghostty, alacritty and wezterm colour schemes. |
+| [`teaswatch`](https://pkg.go.dev/tuios.dev/swatch/teaswatch) | Bubble Tea v2 messages. |
+
+## Where it fits
+
+- tuios follows the [Omarchy](/docs/omarchy) theme with swatch, and turns the palette into its own theme.
+- swatch gives colours. [loom](/docs/libraries/loom) and [shot](/docs/libraries/shot) take colours from your program, so a palette from swatch can feed either one.
+
+## Versions
+
+The module is at v0. The API can change between minor versions. Its tags have the folder name as a prefix, such as `swatch/v0.1.0`. The source is in the [swatch folder](https://github.com/Gaurav-Gosain/tuios/tree/main/swatch) of the tuios repository, under the MIT licence.
