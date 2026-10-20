@@ -16,7 +16,7 @@ import {
   type RenderError,
   SketchEngine,
 } from "@/lib/sketch/engine";
-import { DEFAULT_EXAMPLE, EXAMPLES } from "@/lib/sketch/examples";
+import { DEFAULT_EXAMPLE, EXAMPLES, GROUPS } from "@/lib/sketch/examples";
 import { type Motion, morph, snapshot } from "@/lib/sketch/morph";
 import { sanitizeSvg } from "@/lib/sketch/sanitize";
 import { decodeHash, encodeHash } from "@/lib/sketch/share";
@@ -419,10 +419,14 @@ export function SketchPlayground() {
             }}
           >
             {exampleId === "" && <option value="">Your diagram</option>}
-            {EXAMPLES.map((ex) => (
-              <option key={ex.id} value={ex.id}>
-                {ex.title}
-              </option>
+            {GROUPS.map((group) => (
+              <optgroup key={group} label={group}>
+                {EXAMPLES.filter((ex) => ex.group === group).map((ex) => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.title}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
