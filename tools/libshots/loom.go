@@ -70,9 +70,10 @@ func drawLoom(g *gen) error {
 		}
 	}
 
-	// Damage: after a patch to one value, the cells loom repainted.
+	// Damage: after a patch in which a skipped test ran and passed, the
+	// cells loom repainted. The failures, and so the table, stay the same.
 	ops, err := tml.DecodePatch([]byte(`[{"op": "replace", "path": "/passed", "value": 413},
-		{"op": "replace", "path": "/failed", "value": 2}]`), nil)
+		{"op": "replace", "path": "/skipped", "value": 8}]`), nil)
 	if err != nil {
 		return err
 	}
