@@ -105,8 +105,11 @@ const STYLE_PROPERTIES = new Set([
 const UNSAFE_VALUE =
   /url\s*\(|expression\s*\(|javascript:|vbscript:|data:|@import|\\|<|>|image-set|-moz-binding|behavior/i;
 
-/** A presentation attribute value that names something to fetch. */
-const UNSAFE_ATTR = /url\s*\(|javascript:|data:/i;
+/**
+ * A presentation attribute value that names something to fetch. A backslash
+ * is refused too: a CSS escape such as \75 rl( spells url(.
+ */
+const UNSAFE_ATTR = /url\s*\(|javascript:|data:|\\/i;
 
 function cleanStyle(style: string): string {
   const out: string[] = [];
@@ -190,6 +193,14 @@ export function sanitizeSvg(
   }
   const svg = doc.createElementNS(SVG_NS, "svg") as SVGSVGElement;
   copyAttributes(root, svg);
+  // The root's classes reach the page's own stylesheet. Keep only sketch's
+  // (pele, pele-flowchart), so a site class such as "fixed inset-0" cannot
+  // land there.
+  const classes = (svg.getAttribute("class") ?? "")
+    .split(/\s+/)
+    .filter((c) => /^pele(-[a-z0-9-]+)?$/.test(c));
+  if (classes.length) svg.setAttribute("class", classes.join(" "));
+  else svg.removeAttribute("class");
   copy(root, svg, doc, 0);
   return svg;
 }

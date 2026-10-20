@@ -130,6 +130,10 @@ async function poke(tab, seen, label, expectDrawing) {
   await tab.waitForTimeout(600);
   const drawn = await tab.$(".sp-stage svg[data-current]");
   if (expectDrawing && !drawn) seen.push("no drawing");
+  if (drawn) {
+    const cls = (await drawn.getAttribute("class")) ?? "";
+    if (/(^|\s)(?!pele)\S/.test(cls)) seen.push(`root class "${cls}"`);
+  }
   // The cleaner must keep what a drawing needs, too.
   if (drawn && !(await drawn.getAttribute("viewBox"))) {
     seen.push("drawing lost its viewBox");

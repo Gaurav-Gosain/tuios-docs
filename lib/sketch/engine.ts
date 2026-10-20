@@ -48,6 +48,19 @@ type Pending = (r: RenderResult) => void;
 
 const MANIFEST = "/sketch-playground/engine.json";
 
+/** The longest a render may take, in ms. The slowest known one takes 200. */
+const RENDER_TIMEOUT = 5000;
+
+const TOO_LONG: RenderError = {
+  message: "The drawing took too long. Make the diagram smaller and try again.",
+  code: "timeout",
+};
+
+const STOPPED: RenderError = {
+  message: "The renderer stopped. Edit the diagram to try again.",
+  code: "crash",
+};
+
 export class SketchEngine {
   private worker: Worker | null = null;
   private ready: Promise<NamedTheme[]> | null = null;
@@ -112,18 +125,17 @@ export class SketchEngine {
       });
   }
 
-  private restart() {
+  /**
+   * Replaces the worker. Every render still waiting gets error, so a render
+   * queued behind a slow one reports the same thing.
+   */
+  private restart(error: RenderError = STOPPED) {
     this.worker?.terminate();
     this.worker = null;
     this.ready = null;
-    for (const done of this.pending.values()) {
-      done({
-        ok: false,
-        error: { message: "The renderer stopped.", code: "crash" },
-        ms: 0,
-      });
-    }
+    const waiting = [...this.pending.values()];
     this.pending.clear();
+    for (const done of waiting) done({ ok: false, error, ms: 0 });
   }
 
   /** Draws a diagram. */
@@ -134,7 +146,17 @@ export class SketchEngine {
     await this.start();
     const id = this.next++;
     return new Promise<RenderResult>((resolve) => {
-      this.pending.set(id, resolve);
+      // sketch has no time budget. A layout that runs too long would leave
+      // the preview dead, so the worker is replaced after RENDER_TIMEOUT.
+      const timer = window.setTimeout(() => {
+        this.pending.delete(id);
+        this.restart(TOO_LONG);
+        resolve({ ok: false, error: TOO_LONG, ms: RENDER_TIMEOUT });
+      }, RENDER_TIMEOUT);
+      this.pending.set(id, (r) => {
+        window.clearTimeout(timer);
+        resolve(r);
+      });
       this.worker?.postMessage({ type: "render", id, source, options });
     });
   }

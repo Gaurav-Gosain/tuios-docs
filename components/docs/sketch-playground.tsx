@@ -41,13 +41,23 @@ const DEBOUNCE = 90;
 /** The wait before an error shows, so typing does not flash errors. */
 const ERROR_DELAY = 450;
 
+/**
+ * The morph runs on the main thread and measures every object. Above these
+ * sizes a new drawing replaces the old one at once, as with reduced motion.
+ */
+const MORPH_MAX_OBJECTS = 300;
+const MORPH_MAX_BYTES = 200_000;
+
+/** The wait after the last resize step before a drawing is redrawn. */
+const RESIZE_DELAY = 250;
+
+/** What a visitor sees when the renderer does not start. */
+const LOAD_FAILED =
+  "The diagram renderer did not load. Reload the page to try again.";
+
 type Drawn = { svg: string; width: number; height: number; type: string };
 
-type Status =
-  | { phase: "loading" }
-  | { phase: "missing" }
-  | { phase: "failed"; message: string }
-  | { phase: "ready" };
+type Status = { phase: "loading" } | { phase: "failed" } | { phase: "ready" };
 
 const TYPE_NAMES: Record<string, string> = {
   flowchart: "Flowchart",
@@ -101,6 +111,7 @@ export function SketchPlayground() {
   const [copied, setCopied] = useState<"" | "link" | "svg">("");
   const [restored, setRestored] = useState(false);
   const [stageWidth, setStageWidth] = useState(0);
+  const [note, setNote] = useState("");
   const { resolvedTheme } = useTheme();
 
   const engine = useRef<SketchEngine | null>(null);
@@ -125,7 +136,10 @@ export function SketchPlayground() {
         const e = await SketchEngine.load();
         if (!live) return;
         if (!e) {
-          setStatus({ phase: "missing" });
+          console.error(
+            "sketch playground: this build has no engine. Build it with cmd/sketch-wasm/build.sh in tuios, then run bun scripts/sketch-engine.mjs <build-dir>.",
+          );
+          setStatus({ phase: "failed" });
           return;
         }
         engine.current = e;
@@ -133,13 +147,17 @@ export function SketchPlayground() {
         const list = await e.start();
         if (!live) return;
         setThemes(list);
+        // A link can name a theme that does not exist.
+        if (shared?.theme && !list.some((t) => t.name === shared.theme)) {
+          setThemeName(SITE);
+          setNote(
+            "This link names a theme that does not exist. The drawing uses the site theme.",
+          );
+        }
         setStatus({ phase: "ready" });
       } catch (err) {
-        if (live)
-          setStatus({
-            phase: "failed",
-            message: err instanceof Error ? err.message : String(err),
-          });
+        console.error("sketch playground: the renderer did not start:", err);
+        if (live) setStatus({ phase: "failed" });
       }
     })();
     return () => {
@@ -164,29 +182,48 @@ export function SketchPlayground() {
   useEffect(() => {
     const el = stage.current;
     if (!el) return;
+    // The drawing is fitted at once, which is cheap. A new layout for the new
+    // width waits for the resize to stop.
+    let t = 0;
     const ro = new ResizeObserver(() => {
-      setStageWidth(Math.floor(el.clientWidth / 40) * 40);
       if (last.current)
         fit(el.querySelector("svg[data-current]"), last.current);
+      window.clearTimeout(t);
+      t = window.setTimeout(
+        () => setStageWidth(Math.floor(el.clientWidth / 40) * 40),
+        RESIZE_DELAY,
+      );
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(t);
+    };
   }, [fit]);
 
-  /** Puts a new drawing on the stage, morphing from the one there. */
+  /**
+   * Puts a new drawing on the stage, morphing from the one there. False when
+   * the SVG did not survive the cleaner.
+   */
   const show = useCallback(
-    (d: Drawn) => {
+    (d: Drawn): boolean => {
       const el = stage.current;
-      if (!el) return;
+      if (!el) return true;
       // A shared link puts someone else's diagram here: only a cleaned copy
       // of the SVG goes into the page.
       const svg = sanitizeSvg(d.svg);
-      if (!svg) return;
+      if (!svg) return false;
       svg.setAttribute("data-current", "");
       svg.setAttribute("aria-label", "Diagram preview");
 
       const old = el.querySelector<SVGSVGElement>("svg[data-current]");
-      const still = reducedMotion();
+      const big = (s: Element | null) =>
+        !!s && s.querySelectorAll("g[data-id]").length > MORPH_MAX_OBJECTS;
+      const still =
+        reducedMotion() ||
+        d.svg.length > MORPH_MAX_BYTES ||
+        big(svg) ||
+        big(old);
       const from = old && !still ? snapshot(old) : new Map();
       motion.current?.stop();
       motion.current = null;
@@ -218,6 +255,7 @@ export function SketchPlayground() {
       if (old && !still) {
         motion.current = morph(svg, from, old);
       }
+      return true;
     },
     [fit],
   );
@@ -242,8 +280,13 @@ export function SketchPlayground() {
           height: r.height,
           type: r.type,
         };
-        setDrawn(d);
-        show(d);
+        if (show(d)) {
+          setDrawn(d);
+        } else {
+          setError({ message: "This drawing cannot be shown.", code: "clean" });
+        }
+      } else if (r.error.code === "timeout" || r.error.code === "crash") {
+        setError(r.error);
       } else {
         // A line half typed is an error for a moment. Wait before it shows.
         // sketch counts the newline it adds at the end as a line. An error
@@ -387,7 +430,10 @@ export function SketchPlayground() {
           <span>Theme</span>
           <select
             value={themeName}
-            onChange={(e) => setThemeName(e.target.value)}
+            onChange={(e) => {
+              setThemeName(e.target.value);
+              setNote("");
+            }}
             disabled={themes.length === 0}
           >
             <option value={SITE}>Match the site</option>
@@ -423,6 +469,8 @@ export function SketchPlayground() {
           </button>
         </div>
       </div>
+
+      {note && <output className="sp-note">{note}</output>}
 
       <div className="sp-panes">
         <div className="sp-editor">
@@ -469,16 +517,7 @@ export function SketchPlayground() {
                   {bytes > 0 && ` (${(bytes / 1e6).toFixed(1)} MB)`}
                 </p>
               )}
-              {status.phase === "missing" && (
-                <p>
-                  This build of the site has no renderer. Run{" "}
-                  <code>bun scripts/sketch-engine.mjs</code> on a build from{" "}
-                  <code>cmd/sketch-wasm/build.sh</code>.
-                </p>
-              )}
-              {status.phase === "failed" && (
-                <p>The renderer did not start: {status.message}</p>
-              )}
+              {status.phase === "failed" && <p>{LOAD_FAILED}</p>}
             </div>
           )}
           {err && drawn && <p className="sp-stale-note">Last good drawing</p>}

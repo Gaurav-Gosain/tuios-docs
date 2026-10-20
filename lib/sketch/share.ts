@@ -14,9 +14,41 @@ function fromBase64Url(s: string) {
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
-async function pipe(bytes: Uint8Array, stream: GenericTransformStream) {
-  const body = new Blob([bytes as BlobPart]).stream().pipeThrough(stream);
-  return new Uint8Array(await new Response(body).arrayBuffer());
+/** The most text a link may carry: the renderer takes no more. */
+const MAX_BYTES = 20_000;
+
+/**
+ * Runs bytes through a stream. Stops and returns null once the output passes
+ * limit, so a small link cannot inflate to gigabytes first.
+ */
+async function pipe(
+  bytes: Uint8Array,
+  stream: GenericTransformStream,
+  limit = Number.POSITIVE_INFINITY,
+): Promise<Uint8Array | null> {
+  const reader = new Blob([bytes as BlobPart])
+    .stream()
+    .pipeThrough(stream)
+    .getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.byteLength;
+  }
+  return out;
 }
 
 /** The hash for a diagram and a theme. */
@@ -26,7 +58,7 @@ export async function encodeHash(code: string, theme: string) {
     new CompressionStream("deflate-raw"),
   );
   const p = new URLSearchParams();
-  p.set("code", toBase64Url(packed));
+  p.set("code", toBase64Url(packed ?? new Uint8Array()));
   if (theme) p.set("theme", theme);
   return `#${p.toString()}`;
 }
@@ -42,9 +74,9 @@ export async function decodeHash(
     const bytes = await pipe(
       fromBase64Url(code),
       new DecompressionStream("deflate-raw"),
+      MAX_BYTES,
     );
-    // A link cannot ask for more text than the renderer takes.
-    if (bytes.length > 20_000) return null;
+    if (!bytes) return null;
     return {
       code: new TextDecoder().decode(bytes),
       theme: p.get("theme") ?? "",
