@@ -1,0 +1,35 @@
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"tuios.dev/loom"
+	"tuios.dev/tml"
+)
+
+const src = `<tml version="1">
+  <state>{"passed": 412, "failed": 3, "runs": [41, 39, 44, 40, 52, 47, 38, 45, 49, 43]}</state>
+  <col gap="1">
+    <row gap="3">
+      <stat label="passed" value="{state.passed}" role="success"/>
+      <stat label="failed" value="{state.failed}" role="error"/>
+      <spacer/>
+      <gauge value="{pct(state.passed, state.passed + state.failed)}" w="16" role="success"/>
+    </row>
+    <bar data="state.runs" title="Seconds per run" h="5"/>
+  </col>
+</tml>`
+
+func main() {
+	doc, problems, err := tml.Check([]byte(src), nil)
+	if err != nil {
+		log.Fatal(problems)
+	}
+	s, err := loom.New(doc, &loom.Options{Palette: loom.DefaultPalette(loom.TrueColor)})
+	if err != nil {
+		log.Fatal(err)
+	}
+	buf := s.Render(56, 7)
+	fmt.Println(buf.Render()) // ANSI text; buf.String() gives plain text
+}

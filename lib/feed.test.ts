@@ -94,3 +94,19 @@ describe("version badges in the markdown twin", () => {
     expect(md).not.toContain("Added in");
   });
 });
+
+describe("pictures in the markdown twin", () => {
+  const url = "https://tuios.dev/docs/libraries/tml";
+
+  test("a library picture is an image with its caption", () => {
+    const md = markdownForAgents(
+      '<LibGallery>\n<LibShot name="tml/stat" alt="Three stats" caption="Before" />\n</LibGallery>\n',
+      url,
+    );
+    expect(md).toContain(
+      "![Three stats](https://tuios.dev/libs/tml/stat.webp)",
+    );
+    expect(md).toContain("*Before*");
+    expect(md).not.toContain("interactive figure");
+  });
+});

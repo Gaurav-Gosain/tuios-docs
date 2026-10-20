@@ -1,0 +1,44 @@
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"tuios.dev/loom"
+	"tuios.dev/tml"
+)
+
+const src = `<tml version="1" title="Build">
+  <state>{"pct": 40, "step": "Compiling"}</state>
+  <card title="Build">
+    <text>Step: <b>{state.step}</b></text>
+    <progress value="{state.pct / 100}"/>
+  </card>
+</tml>`
+
+func main() {
+	// Check parses and validates the document.
+	doc, problems, err := tml.Check([]byte(src), nil)
+	if err != nil {
+		log.Fatal(problems)
+	}
+
+	// tml draws nothing. loom draws the document into cells.
+	s, err := loom.New(doc, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(s.Render(40, 3).Render())
+
+	// The owner changes the state with a JSON Patch.
+	ops, err := tml.DecodePatch([]byte(`[
+	  {"op": "replace", "path": "/pct", "value": 80},
+	  {"op": "replace", "path": "/step", "value": "Linking"}]`), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := s.Patch(ops); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(s.Render(40, 3).Render())
+}

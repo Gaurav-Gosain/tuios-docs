@@ -127,6 +127,18 @@ function forReaders(mdast: MdastRoot, pageUrl: string): MdastRoot {
       parent.children.splice(index, 1, ...(replacement as never[]));
       return [SKIP, index + replacement.length];
     }
+    if (node.type === "mdxJsxFlowElement" && node.name === "LibGallery") {
+      // A gallery is its pictures, one after the other.
+      parent.children.splice(index, 1, ...(node.children as never[]));
+      return index;
+    }
+    if (
+      node.type === "mdxJsxFlowElement" &&
+      (node.name === "LibShot" || node.name === "Shot")
+    ) {
+      parent.children.splice(index, 1, ...(picture(node, pageUrl) as never[]));
+      return [SKIP, index + 1];
+    }
     if (node.type === "mdxJsxFlowElement" && node.name === "ReleaseClip") {
       parent.children.splice(
         index,
@@ -220,6 +232,44 @@ const proseContainers = new Set([
 ]);
 
 type JsxFlowElement = Extract<RootContent, { type: "mdxJsxFlowElement" }>;
+
+/**
+ * A LibShot or a Shot as a Markdown image: the dark picture, which reads on
+ * any page, and its caption below it when it has one in text.
+ */
+function picture(node: JsxFlowElement, pageUrl: string): RootContent[] {
+  const attribute = (name: string) => {
+    const value = node.attributes.find(
+      (entry) => entry.type === "mdxJsxAttribute" && entry.name === name,
+    )?.value;
+    return typeof value === "string" ? value : undefined;
+  };
+  const name = attribute("name");
+  if (!name) return [];
+  const folder = node.name === "LibShot" ? "libs" : "shots";
+  const out: RootContent[] = [
+    {
+      type: "paragraph",
+      children: [
+        {
+          type: "image",
+          url: new URL(`/${folder}/${name}.webp`, pageUrl).toString(),
+          alt: attribute("alt") ?? "",
+        },
+      ],
+    },
+  ];
+  const caption = attribute("caption");
+  if (caption) {
+    out.push({
+      type: "paragraph",
+      children: [
+        { type: "emphasis", children: [{ type: "text", value: caption }] },
+      ],
+    });
+  }
+  return out;
+}
 
 /**
  * A ReleaseClip for a reader that cannot play it: the poster, linked to the
