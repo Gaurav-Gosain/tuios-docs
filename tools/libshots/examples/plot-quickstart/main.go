@@ -1,0 +1,39 @@
+// snippet:begin plot-quickstart
+package main
+
+import (
+	"fmt"
+
+	"tuios.dev/plot"
+)
+
+func main() {
+	bar := plot.Bar{
+		Values:     []float64{6.2, 4.8, 3.1},
+		Labels:     []string{"session", "app", "vt"},
+		Horizontal: true,
+	}
+	g := bar.Draw(30, 3, plot.Blocks)
+
+	// plot holds no colour. Your program maps each role to one, here an
+	// ANSI colour, so the chart follows the terminal's theme.
+	sgr := map[plot.Role]string{plot.Series1: "34", plot.Mute: "90"}
+	for y := 0; y < g.H; y++ {
+		for x := 0; x < g.W; x++ {
+			c := g.At(x, y)
+			if c.Width == 0 {
+				continue // the second cell of a wide glyph
+			}
+			text := c.Text
+			if text == "" {
+				text = " "
+			}
+			if code, ok := sgr[c.Role]; ok {
+				text = "\x1b[" + code + "m" + text + "\x1b[0m"
+			}
+			fmt.Print(text)
+		}
+		fmt.Println()
+	}
+}
+// snippet:end

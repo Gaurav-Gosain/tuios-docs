@@ -2,7 +2,13 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import shots from "@/lib/libshots.json";
 
-type Entry = { w: number; h: number; light: boolean };
+type Entry = {
+  w: number;
+  h: number;
+  light: boolean;
+  title?: string;
+  alt?: string;
+};
 
 /**
  * A picture of a library page, drawn from real code by
@@ -94,5 +100,40 @@ export function LibGallery({
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * Every picture whose name starts with prefix, in name order, with its title
+ * from lib/libshots.json as the caption. A new picture under the prefix joins
+ * the set when scripts/gen-library-shots.sh runs, with no change to the page.
+ */
+export function LibShotSet({
+  prefix,
+  cols = 2,
+}: {
+  prefix: string;
+  cols?: 2 | 3;
+}) {
+  const names = Object.keys(shots as Record<string, Entry>)
+    .filter((name) => name.startsWith(prefix))
+    .sort();
+  if (names.length === 0) {
+    throw new Error(`<LibShotSet prefix="${prefix}" />: no pictures.`);
+  }
+  return (
+    <LibGallery cols={cols}>
+      {names.map((name) => {
+        const entry = (shots as Record<string, Entry>)[name];
+        return (
+          <LibShot
+            key={name}
+            name={name}
+            alt={entry.alt ?? entry.title ?? name}
+            caption={entry.title}
+          />
+        );
+      })}
+    </LibGallery>
   );
 }

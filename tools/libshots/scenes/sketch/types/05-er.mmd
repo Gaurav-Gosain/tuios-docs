@@ -1,0 +1,53 @@
+%% title: ER
+%% alt: An ER diagram of hosts, users, sessions, agents, approvals, checkpoints and panes, with keys and crow's foot links
+erDiagram
+  HOST ||--o{ SESSION : runs
+  USER ||--o{ SESSION : "attaches to"
+  SESSION ||--|{ PANE : holds
+  AGENT |o--|| PANE : "runs in"
+  AGENT ||--o{ APPROVAL : asks
+  USER ||--o{ APPROVAL : answers
+  AGENT ||--o{ CHECKPOINT : saves
+
+  HOST {
+    string name PK
+    string address UK
+    string version
+  }
+  SESSION {
+    string name PK
+    string host FK
+    datetime started
+  }
+  PANE {
+    int id PK
+    string cwd
+    string program
+  }
+  AGENT {
+    int pane FK
+    string harness "claude or codex"
+    string state "working, waiting, done"
+  }
+  APPROVAL {
+    int id PK
+    string command
+    bool allowed
+  }
+  CHECKPOINT {
+    string id PK
+    string commit
+  }
+  USER {
+    string login PK
+    string theme
+  }
+
+  classDef machine fill:#3b82f62e,stroke:#3b82f6
+  classDef live fill:#22c55e2e,stroke:#22c55e
+  classDef agent fill:#f973162e,stroke:#f97316
+  classDef person fill:#a855f72e,stroke:#a855f7
+  class HOST,SESSION machine
+  class PANE live
+  class USER person
+  class AGENT,APPROVAL,CHECKPOINT agent

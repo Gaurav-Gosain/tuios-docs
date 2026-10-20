@@ -4,37 +4,108 @@ description: Bar, line, area, sparkline, gauge, histogram, heatmap and pie chart
 icon: ChartColumn
 ---
 
-`tuios.dev/plot` draws charts as terminal cells. It has eight chart kinds: bar (horizontal and vertical), line, area, sparkline, gauge, histogram, heatmap and pie (a donut or a full disc).
+`tuios.dev/plot` draws charts as terminal cells. It has eight chart kinds: bar (horizontal and vertical), line, area, sparkline, gauge, histogram, heatmap and pie (a donut or a full disc). It holds no colour and writes no escape sequence. Each cell has a role, and your program picks the colour.
+
+<LibShot
+  name="plot/hero"
+  alt="Every chart kind drawn by plot through loom: stat tiles with sparklines, gauges, horizontal bars with values, columns with an axis and a legend, a two-series line, an area, a heatmap, a donut with its legend, a histogram and sparklines"
+  caption="Every chart kind in one TML document, drawn through loom. Click to open it at full size."
+/>
+
+The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/plot).
+
+## Quickstart
 
 ```bash
 go get tuios.dev/plot
 ```
 
-The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/plot).
+<include cwd lang="go" meta='title="main.go"'>tools/libshots/snippets/plot-quickstart.txt</include>
 
-![Every chart kind drawn by plot through loom at 200 by 55 cells: KPI tiles with sparklines, gauges, horizontal bars with values, columns with an axis, a two-series line with a legend, an area, a heatmap, a donut with its legend, a histogram and sparklines](/shots/plot-charts.png)
+<LibShot name="plot/quickstart" alt="The output of the program: three horizontal bars for session, app and vt with their values, in the terminal's blue" />
 
-## Draw a chart
+The program maps two roles to ANSI colours, so the chart takes the colours of the terminal's theme.
 
-A chart draws into a grid of the size you give it. Each cell holds one grapheme and a role, such as `series1`, `mute` or `track`. Your program maps each role to a colour at the colour depth of the terminal. The package holds no colour and writes no escape sequence.
+## How it works
 
-```go
-bar := plot.Bar{
-	Values:     []float64{6.2, 4.8, 3.1},
-	Labels:     []string{"session", "app", "vt"},
-	Horizontal: true,
-}
-g := bar.Draw(30, 3, plot.Blocks)
-fmt.Println(g.String())
-```
+- A chart draws into a grid of the size you give it. The grid is always that size, and each row is exactly that wide.
+- Each cell holds one grapheme, its width, a role such as `series1` or `mute`, and a background role for half blocks.
+- `g.At(x, y)` gives one cell. `g.String()` gives the text with no colours.
+- Your program maps each role to a colour at the colour depth of the terminal. [loom](/docs/libraries/loom) does this with its `Palette`.
 
-```text
-session ██████████████████ 6.2
-app     █████████████▉     4.8
-vt      █████████          3.1
-```
+## Chart kinds
 
-`g.At(x, y)` gives a cell with its text, width and role.
+Each picture is the code above it. `m` is the mode, such as `plot.Braille`. Helpers such as `wave` make the sample data. The pictures colour the roles with the theme of this site.
+
+### Bar
+
+<include cwd lang="go">tools/libshots/snippets/plot-bar.txt</include>
+
+<LibShot name="plot/bar" alt="Five horizontal bars with labels at the left, dotted guides and values at the right" />
+
+Horizontal bars keep a value column that never clips. The labels give way first.
+
+### Columns
+
+<include cwd lang="go">tools/libshots/snippets/plot-columns.txt</include>
+
+<LibShot name="plot/columns" alt="Twelve columns, one per month, with tick labels at the left and the first, middle and last month under the base line" />
+
+Columns whose values all sit far above zero start from a round base under the smallest value. The axis labels that base, so the chart says where it starts.
+
+### Line
+
+<include cwd lang="go">tools/libshots/snippets/plot-line.txt</include>
+
+<LibShot name="plot/line" alt="Two lines of braille dots, p50 and p95, with a legend above, tick labels at the left and times under the axis" />
+
+A line with more values than cells is reduced with largest triangle three buckets, which keeps the peaks. `Line.Legend` returns the legend items, and `DrawLegend` draws them.
+
+### Area
+
+<include cwd lang="go">tools/libshots/snippets/plot-area.txt</include>
+
+<LibShot name="plot/area" alt="A filled area chart of memory with an axis from 0 to 200" />
+
+### Sparkline
+
+<include cwd lang="go">tools/libshots/snippets/plot-sparkline.txt</include>
+
+<LibShot name="plot/sparkline" alt="A one-row trend of sixteen values in eighth blocks, rising from left to right" />
+
+On more than one row, a sparkline is a column chart with no axis.
+
+### Gauge
+
+<include cwd lang="go">tools/libshots/snippets/plot-gauge.txt</include>
+
+<LibShot name="plot/gauge" alt="A thin line gauge at 43 percent, and a thick green block gauge at 98.8 percent" />
+
+### Histogram
+
+<include cwd lang="go">tools/libshots/snippets/plot-histogram.txt</include>
+
+<LibShot name="plot/histogram" alt="A histogram of request times with most values near 100 ms and a long tail to the right, with counts at the left and the range under it" />
+
+A histogram has at most one bin per cell and 1000 bins.
+
+### Heatmap
+
+<include cwd lang="go">tools/libshots/snippets/plot-heatmap.txt</include>
+
+<LibShot name="plot/heatmap" alt="A heatmap of a week of commits by hour, busy in the afternoon on weekdays, with day labels, hour labels and a five-step scale" />
+
+The heat roles `heat1` to `heat5` are a ramp from low to high. A heatmap uses whole cells, or half blocks when the rows do not fit.
+
+### Pie
+
+<include cwd lang="go">tools/libshots/snippets/plot-pie.txt</include>
+
+<LibShot name="plot/pie" alt="A donut of four languages with a legend of their shares: Go 68 percent, Shell 18, TOML 9 and Nix 5" />
+
+A pie is a disc of half-block pixels. Set `Aspect` to the height of a cell over its width, and the disc is round. A pie draws 12 slices, and folds the rest into one called "other".
+
+{/* TODO: add the mirrored bars (tuios #940), the one-row inline bars (tuios #942) and the world map (tuios #943) when those pull requests merge. Each one is a chart function in tools/libshots/plot.go and a section here. */}
 
 ## Modes
 
@@ -46,21 +117,58 @@ A mode sets the glyphs a chart can use. Use the best mode that the terminal and 
 | `Blocks` | Eighth blocks | Eighth blocks |
 | `ASCII` | `*` and `:` | `#`, `-` and `[ ]` |
 
-Heatmaps use whole cells, or half blocks when the rows do not fit. A pie is a disc of half-block pixels. In ASCII, each series, slice and heat level has its own mark, so they stay apart without colour.
+The same line chart, sparkline and gauge in each mode:
 
-## Axes and legends
+<LibGallery cols={3}>
+<LibShot name="plot/mode-braille" alt="In braille: two smooth dotted lines, a sparkline and a thin gauge" caption="Braille" />
+<LibShot name="plot/mode-blocks" alt="In blocks: two lines drawn as stepped eighth blocks, a sparkline and a thin gauge" caption="Blocks" />
+<LibShot name="plot/mode-ascii" alt="In ASCII: one line drawn with asterisks and one with plus signs, a sparkline of ASCII marks, and a gauge of hash signs in brackets" caption="ASCII" />
+</LibGallery>
 
-- Columns, lines, areas and histograms can have a y axis with round tick labels, a base line, and the first, middle and last x label.
-- Columns whose values all sit far above zero start from a round base under the smallest value. The axis labels that base.
-- Horizontal bars keep a value column that never clips. Labels give way first.
-- `Line.Legend` and `Pie.Legend` return legend items, and `DrawLegend` draws them.
+In ASCII, each series, slice and heat level has its own mark, so they stay apart without colour.
+
+## Theme roles
+
+A role names a colour. The names are the TML roles, plus `track` for the empty part of a gauge or a bar, and `heat1` to `heat5`. `plot.SeriesRole(i)` gives the role of series i, and cycles after six.
+
+<LibShot name="plot/roles" alt="Every role a chart uses, each written in its own colour: fg, dim, mute, edge, track, the accent and status roles, series1 to series6, and heat1 to heat5" />
+
+## How do I
+
+- **Fix the range of a chart?** Set `Min` and `Max`. Both 0 means automatic.
+- **Format the values?** Set `Format`, such as `plot.Compact` or your own function.
+- **Draw a legend?** Call `DrawLegend(grid, x, y, chart.Legend(), mode)`, and give it a row of its own.
+- **Colour one bar?** Set `Roles`, one role per bar.
+- **Draw a chart in a TML document?** Use the chart components through [loom](/docs/libraries/loom), such as `<bar data="state.rows" x="pkg" y="secs"/>`.
+- **Print a chart with no colour?** Call `grid.String()`.
+
+## API overview
+
+| Name | Does |
+| --- | --- |
+| [`Bar`](https://pkg.go.dev/tuios.dev/plot#Bar) | Horizontal bars or columns. |
+| [`Line`](https://pkg.go.dev/tuios.dev/plot#Line), [`Series`](https://pkg.go.dev/tuios.dev/plot#Series) | A line chart, or an area chart with `Fill`. |
+| [`Sparkline`](https://pkg.go.dev/tuios.dev/plot#Sparkline) | A one-row trend. |
+| [`Gauge`](https://pkg.go.dev/tuios.dev/plot#Gauge) | A value against a maximum. |
+| [`Histogram`](https://pkg.go.dev/tuios.dev/plot#Histogram) | Counts of values in bins. |
+| [`Heatmap`](https://pkg.go.dev/tuios.dev/plot#Heatmap) | A grid of values as shades. |
+| [`Pie`](https://pkg.go.dev/tuios.dev/plot#Pie) | Shares of a whole, as a donut or a disc. |
+| [`Grid`](https://pkg.go.dev/tuios.dev/plot#Grid), [`Cell`](https://pkg.go.dev/tuios.dev/plot#Cell), [`Role`](https://pkg.go.dev/tuios.dev/plot#Role) | The output of a chart. |
+| [`Mode`](https://pkg.go.dev/tuios.dev/plot#Mode) | `Braille`, `Blocks` or `ASCII`. |
+| [`DrawLegend`](https://pkg.go.dev/tuios.dev/plot#DrawLegend), [`Compact`](https://pkg.go.dev/tuios.dev/plot#Compact), [`Downsample`](https://pkg.go.dev/tuios.dev/plot#Downsample) | Helpers. |
 
 ## Rules
 
 - Every chart is total. NaN and infinite values count as missing. Empty data draws an empty grid.
-- A grid is always the size you ask for, and each row is exactly that wide.
-- Sizes that a caller could pass unchecked are bounded: a grid is at most 4096 cells a side, a histogram has at most one bin per cell and 1000 bins, a line draws at most 64 series, and a pie draws 12 slices, the rest folded into one called "other".
+- Sizes that a caller could pass unchecked are bounded: a grid is at most 4096 cells a side, and a line draws at most 64 series.
 - Labels are cut with an ellipsis to fit. Control characters are dropped, and invalid UTF-8 shows as `?`.
-- A line chart with more values than cells is reduced with largest triangle three buckets, which keeps the peaks.
 
-Widths come from `charmbracelet/x/ansi`, the same width functions that tuios uses. [loom](/docs/libraries/loom) uses plot to draw the TML chart components.
+## Where it fits
+
+- [loom](/docs/libraries/loom) uses plot to draw the TML chart components, and maps the roles with its palette.
+- tuios draws the charts of `tuios tml show` surfaces with it.
+- Widths come from `charmbracelet/x/ansi`, the same width functions that tuios uses. The package imports nothing else outside the standard library.
+
+## Versions
+
+The module is at v0. The API can change between minor versions. Its tags have the folder name as a prefix, such as `plot/v0.1.0`. The source is in the [plot folder](https://github.com/Gaurav-Gosain/tuios/tree/main/plot) of the tuios repository, under the MIT licence.

@@ -1,0 +1,35 @@
+%% title: Sequence
+%% alt: A sequence diagram with numbered messages: you start an agent, the daemon spawns it, and a loop with an optional approval and an alt block for allow or deny, inside two coloured boxes
+sequenceDiagram
+  autonumber
+  box rgba(168,85,247,0.12) You
+    actor You
+    participant Inbox
+  end
+  box rgba(59,130,246,0.12) Laptop
+    participant Daemon
+    participant Agent as claude
+    participant Repo as git
+  end
+
+  You->>Daemon: Start an agent in a worktree
+  Daemon->>+Agent: Spawn in a new pane
+  loop Until the task is done
+    Agent->>Repo: Read and edit files
+    opt A risky command
+      Agent->>Daemon: Ask to run rm -rf build/
+      Daemon->>Inbox: Add an approval
+      Inbox->>You: Notify
+      alt You approve
+        You->>Inbox: Allow once
+        Inbox-->>Agent: Allowed
+      else You refuse
+        You->>Inbox: Deny, with a note
+        Inbox-->>Agent: Denied
+      end
+    end
+  end
+  Agent->>Repo: Commit
+  Agent-->>-Daemon: Done
+  Note over Daemon,Repo: The worktree keeps the diff for review
+  Daemon->>You: Show the diff

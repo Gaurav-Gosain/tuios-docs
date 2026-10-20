@@ -1,7 +1,7 @@
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
-import { LibGallery, LibShot } from "@/components/docs/lib-shot";
+import { LibGallery, LibShot, LibShotSet } from "@/components/docs/lib-shot";
 import { Shot } from "@/components/docs/shot";
 import { VersionIndex } from "@/components/docs/version-index";
 import { BenchBars } from "@/components/mdx/bench-bars";
@@ -137,6 +137,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Shot,
     LibShot,
     LibGallery,
+    LibShotSet,
     ...components,
   };
 }

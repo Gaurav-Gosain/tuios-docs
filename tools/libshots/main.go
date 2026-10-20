@@ -101,7 +101,9 @@ func known(name string) bool {
 type size struct {
 	W     int  `json:"w"`
 	H     int  `json:"h"`
-	Light bool `json:"light"` // a -light twin exists
+	Light bool   `json:"light"` // a -light twin exists
+	Title string `json:"title,omitempty"`
+	Alt   string `json:"alt,omitempty"`
 }
 
 // writeManifest merges sizes into the manifest, so a run for one library
@@ -136,7 +138,15 @@ func writeManifest(path string, drawn []string, sizes map[string]size) error {
 		if i == len(keys)-1 {
 			sep = ""
 		}
-		fmt.Fprintf(&b, "  %q: { \"w\": %d, \"h\": %d, \"light\": %t }%s\n", k, all[k].W, all[k].H, all[k].Light, sep)
+		e := all[k]
+		extra := ""
+		if e.Title != "" {
+			extra += fmt.Sprintf(", \"title\": %q", e.Title)
+		}
+		if e.Alt != "" {
+			extra += fmt.Sprintf(", \"alt\": %q", e.Alt)
+		}
+		fmt.Fprintf(&b, "  %q: { \"w\": %d, \"h\": %d, \"light\": %t%s }%s\n", k, e.W, e.H, e.Light, extra, sep)
 	}
 	b.WriteString("}\n")
 	return os.WriteFile(path, []byte(b.String()), 0o644)

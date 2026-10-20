@@ -47,3 +47,8 @@ find "$work/png" -name '*.png' -print0 | while IFS= read -r -d '' png; do
   magick "$png" -define webp:lossless=true -define webp:method=6 "$dst"
 done
 echo "gen-library-shots: wrote $(find "$work/png" -name '*.png' | wc -l) files under public/libs"
+
+# The manifest in the style the lint step checks.
+if [[ -x node_modules/.bin/biome ]]; then
+  node_modules/.bin/biome format --write lib/libshots.json >/dev/null
+fi

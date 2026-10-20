@@ -1,0 +1,57 @@
+%% title: Class
+%% alt: A class diagram of the agent interface, its two implementations, an enumeration, and the daemon, session, pane and host classes with their links and multiplicities
+classDiagram
+  direction TB
+  class Daemon {
+    <<service>>
+    -sessions map~string, Session~
+    -hosts List~Host~
+    +Attach(client Client) error
+    +Upgrade(binary string) error
+  }
+  class Session {
+    +Name string
+    +Workspaces [9]Workspace
+    +Panes() List~Pane~
+  }
+  class Pane {
+    +ID int
+    +Title string
+    -pty PTY
+    +Write(data []byte)
+    +Snapshot() Screen
+  }
+  class Agent {
+    <<interface>>
+    +State() AgentState
+    +Reply(text string)
+  }
+  class ClaudeCode
+  class Codex
+  class AgentState {
+    <<enumeration>>
+    Working
+    Waiting
+    Done
+  }
+  class Host {
+    +Name string
+    +Link() Link$
+  }
+
+  Daemon "1" *-- "*" Session : owns
+  Daemon "1" o-- "*" Host : links to
+  Session "1" *-- "*" Pane : holds
+  Agent "0..1" <-- "1" Pane : runs
+  Agent <|.. ClaudeCode
+  Agent <|.. Codex
+  Agent ..> AgentState : reports
+
+  note for Daemon "One per machine.<br/>Panes live here."
+
+  classDef core fill:var(--pele-series-6),fill-opacity:0.18,stroke:var(--pele-series-6),stroke-width:2px
+  classDef agent fill:var(--pele-series-2),fill-opacity:0.18,stroke:var(--pele-series-2),stroke-width:2px
+  classDef data fill:var(--pele-series-4),fill-opacity:0.18,stroke:var(--pele-series-4),stroke-width:2px
+  cssClass "Daemon,Session,Pane" core
+  cssClass "Agent,ClaudeCode,Codex" agent
+  cssClass "AgentState,Host" data

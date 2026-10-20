@@ -4,21 +4,41 @@ description: Mermaid diagrams as SVG, PNG and box-drawing text, in pure Go. A po
 icon: Workflow
 ---
 
+import { Card } from 'fumadocs-ui/components/card';
+
 `tuios.dev/sketch` draws Mermaid diagrams in pure Go. It writes SVG, and its two packages turn a diagram into a picture (`sketch/raster`) or into box-drawing text for a terminal (`sketch/text`). It needs no browser, no JavaScript runtime and no cgo.
+
+<Card title="Try it in the playground" href="/docs/libraries/sketch/playground">
+  Type Mermaid and see sketch draw it as you type. sketch runs in your browser as WebAssembly and sends nothing to a server.
+</Card>
+
+![tuios mermaid in a tuios window: a flowchart with client, services and storage groups drawn as a kitty picture in the tuios theme, and below it the same flowchart drawn with box-drawing characters](/shots/sketch-hero.png)
+
+The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/sketch).
+
+## Quickstart
 
 ```bash
 go get tuios.dev/sketch
 ```
 
-The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/sketch).
+<include cwd lang="go">tools/libshots/snippets/sketch-quickstart.txt</include>
 
-Try it in the [playground](/docs/libraries/sketch/playground): type Mermaid and see sketch draw it as you type, in your browser.
+<LibShot name="sketch/quickstart" alt="A flowchart from left to right: TML document, loom, cell buffer, shot and a PNG cylinder, in the theme of this site" />
 
-![tuios mermaid in a tuios window: a flowchart with client, services and storage groups drawn as a kitty picture in the tuios theme, and below it the same flowchart drawn with box-drawing characters](/shots/sketch-hero.png)
+Write `svg.Data` to a file for the SVG, or encode `img` with `image/png` for the picture.
+
+## Gallery
+
+Each diagram type that sketch draws today, drawn by `sketch/raster` in the theme that matches this site. The sources are the examples of the [playground](/docs/libraries/sketch/playground). Click a picture to open it at full size.
+
+<LibShotSet prefix="sketch/types/" />
+
+{/* A new diagram type is one file: add tools/libshots/scenes/sketch/types/NN-name.mmd with "%% title:" and "%% alt:" lines at the top, run scripts/gen-library-shots.sh sketch, and it joins this gallery. Then add its row to the table below. */}
 
 ## Credit
 
-sketch is a port of [pele](https://github.com/obsidianmd/pele), the Mermaid renderer by [kepano](https://github.com/kepano) of [Obsidian](https://obsidian.md). pele is under the MIT licence, and so is the port. The port follows pele v1.6.0 (commit `458322a`). Each Go file is the port of one pele file and keeps its names and comments, so a change upstream maps to a change in sketch. The pele layout, the shapes, the themes and the timing of the typing demo are pele's work.
+sketch is a port of [pele](https://github.com/obsidianmd/pele), the Mermaid renderer by [kepano](https://github.com/kepano) of [Obsidian](https://obsidian.md). pele is under the MIT licence, and so is the port. The port follows pele v1.7.0 (commit `8603bf3`). Each Go file is the port of one pele file and keeps its names and comments, so a change upstream maps to a change in sketch. The pele layout, the shapes, the themes and the timing of the typing demo are pele's work.
 
 The pictures use subsets of [Arimo](https://github.com/googlefonts/Arimo) (SIL Open Font License 1.1) and Go Mono. The licence notices are in `sketch/LICENSE` and `sketch/raster/fonts/NOTICE`.
 
@@ -63,6 +83,8 @@ d, _ := sketch.Parse(src, sketch.ParseOptions{})
 lines, err := text.Draw(d, text.Options{Cols: 100})
 ```
 
+<LibShot name="sketch/text" alt="A flowchart drawn with box-drawing characters in a terminal: git push, a CI passes decision, then tag a release or fix the build, with a loop back to git push" />
+
 `text.ErrTooWide` says that the drawing does not fit in the columns. Before it gives up, the package asks for a narrower layout, which turns a flowchart that runs across into one that runs down.
 
 ## Themes
@@ -76,11 +98,9 @@ pele takes its colours from the page. sketch keeps that in `--pele-*` tokens, an
 | `nord`, `everforest`, `gruvbox`, `rose-pine` | pele's launch video |
 | `catppuccin-mocha`, `catppuccin-latte`, `tokyo-night`, `dracula`, `solarized-light`, `kanagawa` | Those terminal themes |
 
-![A build state machine with a nested Building state, drawn by sketch/raster in the nord theme](/shots/sketch-state-nord.png)
+One flowchart in eight of the themes:
 
-![An order schema with customer, order, product and line item tables, drawn by sketch/raster in the flexoki theme](/shots/sketch-er-flexoki.png)
-
-![A dashboard request as a sequence diagram with numbered messages, a cache alt block and notes, drawn by sketch/raster in the flexoki theme](/shots/sketch-sequence-flexoki.png)
+<LibShotSet prefix="sketch/theme-" />
 
 With `raster.Options.Readable`, text in a theme colour that sits on a fill the diagram sets itself changes to the theme's text or background colour, where that reads better.
 
@@ -116,3 +136,32 @@ The colours come from your tuios theme by default. `--theme NAME`, or `theme` in
 `--watch` fills the terminal with the diagram and draws it again each time the file is saved. With kitty graphics, the diagram moves to its new layout: boxes slide and grow, new parts fade in and removed parts fade out. `--split` shows the source beside the diagram, or above it on a tall terminal. `--demo` types a diagram one character at a time: the diagram of FILE, or a built-in flowchart. Press <kbd>r</kbd> to start again and <kbd>q</kbd> to quit. The live view sends no frames while nothing moves.
 
 The [CLI reference](/docs/cli-reference#mermaid) lists every flag.
+
+## How do I
+
+- **Check the type of a source before I draw it?** Call `sketch.Detect(src)`, or `sketch.Supports(src)` for a yes or no.
+- **Draw in my own colours?** Fill a `sketch.Theme` with your colours, such as `Bg`, `Fg`, `Accent` and `Series`, and pass it to `raster.Draw`.
+- **Get a transparent picture?** Leave `raster.Options.Background` off.
+- **Fit a terminal?** Call `text.Draw` with the terminal's columns in `Cols`, and fall back to the source on `text.ErrTooWide`.
+- **Handle a bad source?** The error is a `*sketch.Error`. Its code is `syntax`, `semantic`, `limit` or `unsupported-diagram`.
+
+## API overview
+
+| Name | Does |
+| --- | --- |
+| [`Render`](https://pkg.go.dev/tuios.dev/sketch#Render), [`SVG`](https://pkg.go.dev/tuios.dev/sketch#SVG) | Draws a source as SVG. |
+| [`Parse`](https://pkg.go.dev/tuios.dev/sketch#Parse), [`Diagram`](https://pkg.go.dev/tuios.dev/sketch#Diagram) | Parses a source, for `sketch/text`. |
+| [`Detect`](https://pkg.go.dev/tuios.dev/sketch#Detect), [`Supports`](https://pkg.go.dev/tuios.dev/sketch#Supports) | The diagram type of a source. |
+| [`Themes`](https://pkg.go.dev/tuios.dev/sketch#Themes), [`ThemeNamed`](https://pkg.go.dev/tuios.dev/sketch#ThemeNamed) | The named themes. |
+| [`raster.Draw`](https://pkg.go.dev/tuios.dev/sketch/raster#Draw) | Draws SVG from sketch as an image. |
+| [`text.Draw`](https://pkg.go.dev/tuios.dev/sketch/text#Draw) | Draws a diagram with box-drawing characters. |
+
+## Where it fits
+
+- tuios draws `tuios mermaid` with sketch: a picture through kitty graphics, or text.
+- The [playground](/docs/libraries/sketch/playground) is sketch compiled to WebAssembly.
+- sketch imports no other library of tuios and no tuios package.
+
+## Versions
+
+The module is at v0. The API can change between minor versions. Its tags have the folder name as a prefix, such as `sketch/v0.1.1`. The source is in the [sketch folder](https://github.com/Gaurav-Gosain/tuios/tree/main/sketch) of the tuios repository, under the MIT licence.
