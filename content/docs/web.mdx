@@ -85,11 +85,14 @@ tuios-web --host 0.0.0.0 --auto-tls --random-password
 tuios-web --host 0.0.0.0 --cert cert.pem --key key.pem \
   --password-file ~/.config/tuios/web-password
 
-# Plain HTTP and no password, only on a network you trust
-tuios-web --host 0.0.0.0 --insecure --no-auth
+# Plain HTTP and no password, only on a network you trust.
+# --no-auth needs the address of one interface.
+tuios-web --host 192.168.1.20 --insecure --no-auth
 ```
 
-An empty `--host` listens on every interface. `tuios-web` applies the same rules to it as to `0.0.0.0`.
+`tuios-web` refuses `--no-auth` on `0.0.0.0` and `::`. These addresses also listen on this machine. `tuios-web` checks the Host header only on a loopback address, so a web page in your browser could open a shell there (DNS rebinding). Give `--no-auth` the address of one interface, or set a password.
+
+An empty `--host` listens on every interface. It needs TLS and a password, as `0.0.0.0` does.
 
 With `--auto-tls`, each browser shows a certificate warning on its first visit, because the certificate is self-signed. `tuios-web cert info` explains what the warning looks like and how to make it go away. The other `cert` subcommands are `new` (replace the certificate), `path` (print its path) and `rm` (delete it and the key).
 
@@ -116,9 +119,9 @@ On phones and tablets, `tuios-web` adds a key bar with the prefix key and button
 | `--cert-host` | | Extra DNS name or IP for the `--auto-tls` certificate. Repeatable. |
 | `--insecure` | off | Allow plain HTTP on a non-loopback address |
 | `--random-password` | off | Make a new password at start and print it |
-| `--password-file` | | Read the password from the first line of this file. The file must be yours, with mode 600 or 400. |
+| `--password-file` | | Read the password from the first line of this file. The file must be yours, with mode 600 or 400. On Windows, only you, SYSTEM and Administrators may read it. |
 | `--user` | `tuios` | User name that the browser must give with the password |
-| `--no-auth` | off | Serve a non-loopback address with no password |
+| `--no-auth` | off | Serve a non-loopback address with no password. Not with `0.0.0.0` or `::` |
 | `--allow-host` | | On a loopback `--host`, also accept this host name in the Host header. Give the name with no port. Repeatable. |
 | `--read-only` | off | Ignore all input from browsers |
 | `--max-connections` | `0` | Maximum concurrent connections. `0` means no limit. |
@@ -194,7 +197,7 @@ Every browser that opens `tuios-web` gets a shell on this machine. The session s
 `tuios-web` reads the password from one of these:
 
 - `--random-password`: `tuios-web` makes a new password at each start. It prints the password and a URL that holds it.
-- `--password-file <path>`: `tuios-web` reads the first line of the file. The file must belong to you, with mode 600 or 400. `tuios-web` does not check the file mode on Windows.
+- `--password-file <path>`: `tuios-web` reads the first line of the file. The file must belong to you, with mode 600 or 400. On Windows, only you, SYSTEM and Administrators may read or change it.
 - `TUIOS_WEB_PASSWORD`: `tuios-web` reads this environment variable. It does not pass the variable to panes. Your own processes can still read it from `/proc`, so use `--password-file` if you can.
 
 No flag takes the password itself, because other users can see command line arguments in `ps`. Give only one password source. A password and `--no-auth` do not go together.
@@ -211,6 +214,7 @@ What `tuios-web` needs depends on the address:
 | `--host` | Password | What happens |
 |---|---|---|
 | `localhost` or another loopback address | Optional | With no password, other users on this machine can connect. `tuios-web` prints one line at start to say so. |
+| `0.0.0.0` or `::` | Required | `tuios-web` does not start without a password. `--no-auth` is refused. |
 | Any other address, or an empty `--host` | Required | `tuios-web` does not start without a password or `--no-auth`. |
 
 With a password, sessions use WebSocket. A WebTransport connection carries no password, so `tuios-web` refuses it and the browser falls back to WebSocket.
@@ -366,12 +370,10 @@ services:
       - "traefik.http.routers.tuios.rule=Host(`tuios.example.com`)"
       - "traefik.http.routers.tuios.entrypoints=websecure"
       - "traefik.http.routers.tuios.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.tuios.middlewares=tuios-auth"
-      - "traefik.http.middlewares.tuios-auth.basicauth.usersfile=/etc/traefik/htpasswd"
       - "traefik.http.services.tuios.loadbalancer.server.port=7681"
 ```
 
-The `basicauth` middleware is the only access control here, because the container runs `tuios-web` with `--no-auth`. Without the middleware, this publishes a shell to the internet.
+Traefik adds TLS. `tuios-web` in the container asks for the password (see [Docker](#docker)). Do not add a Traefik `basicauth` middleware as well. The browser sends only one login.
 
 ## Running as a service
 
@@ -388,10 +390,14 @@ RUN go build -o /out/tuios-web ./cmd/tuios-web
 FROM debian:bookworm-slim
 COPY --from=build /out/tuios-web /usr/local/bin/tuios-web
 EXPOSE 7681
-# Plain HTTP and no password inside the container: a proxy in front of it
-# must add TLS and a login. Or replace --no-auth with --password-file.
-ENTRYPOINT ["tuios-web", "--host", "0.0.0.0", "--insecure", "--no-auth"]
+# Plain HTTP inside the container: a proxy in front of it must add TLS.
+# tuios-web makes a new password at each start and prints it to the log.
+ENTRYPOINT ["tuios-web", "--host", "0.0.0.0", "--insecure", "--random-password"]
 ```
+
+A published port needs `--host 0.0.0.0`, and `tuios-web` refuses `--no-auth` there. So the container always needs a password. Read the password with `docker logs`.
+
+For a fixed password, use `--password-file` with a file that you mount into the container. The file must belong to the user that the container runs as, with mode 600 or 400.
 
 ### systemd
 
