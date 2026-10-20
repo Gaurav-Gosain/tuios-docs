@@ -67,6 +67,7 @@ const manifest = {
   base: `/sketch-playground/engine/${hash}/`,
   worker: "worker.js",
   wasm: "sketch.wasm",
+  wasmEncoded: "sketch.wasm",
   gz: "sketch.wasm.gz",
   gzipBytes: sizes["sketch.wasm.gz"],
   brotliBytes: sizes["sketch.wasm.br"],

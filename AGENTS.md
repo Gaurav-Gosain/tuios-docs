@@ -83,6 +83,8 @@ lib/tilly-3d/                 the 3D Tilly's face drawing and motion math, teste
 lib/sketch/                   the sketch playground: the Web Worker that runs tuios.dev/sketch as wasm,
                               the morph between two drawings, the examples and the share link.
                               scripts/sketch-engine.mjs copies the wasm built at sketch-playground/TUIOS_REF
+                              tests/sketch/xss.mjs drives the page with hostile share links; run it before
+                              changing lib/sketch/sanitize.ts or the engine pin
 assets/tilly-3d/              tilly.py (Blender) and build.sh, which rebuild public/tilly/tilly.glb
 mdx-components.tsx            registers the MDX widgets
 source.config.ts              the docs, blog and releases collections

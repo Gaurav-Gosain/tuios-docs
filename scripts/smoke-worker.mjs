@@ -1,7 +1,7 @@
 // Serves out/ through the Worker with `wrangler dev` and checks the responses
 // that only the deployed setup gives: the Worker's answer to Next's prefetch
 // range, and what public/_headers and public/_redirects do to static assets.
-// When the export has a /learn or /in-the-wild engine, it also checks that
+// When the export has a /learn, /in-the-wild or sketch playground engine, it also checks that
 // the Worker serves the engine's wasm brotli or gzip encoded. The check build
 // has no engine.
 // Run it after `bun run build`: bun scripts/smoke-worker.mjs
@@ -263,9 +263,9 @@ try {
       `${res.status}, ${body.length} bytes`,
     );
   }
-  // /learn runs tuios and /in-the-wild runs hearsay. Each engine is checked
-  // when the export has it.
-  for (const page of ["learn", "in-the-wild"]) {
+  // /learn runs tuios, /in-the-wild runs hearsay and the sketch playground
+  // runs sketch. Each engine is checked when the export has it.
+  for (const page of ["learn", "in-the-wild", "sketch-playground"]) {
     const engine = await readFile(`out/${page}/engine.json`, "utf8")
       .then(JSON.parse)
       .catch(() => null);

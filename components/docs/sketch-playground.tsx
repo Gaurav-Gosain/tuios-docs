@@ -18,6 +18,7 @@ import {
 } from "@/lib/sketch/engine";
 import { DEFAULT_EXAMPLE, EXAMPLES } from "@/lib/sketch/examples";
 import { type Motion, morph, snapshot } from "@/lib/sketch/morph";
+import { sanitizeSvg } from "@/lib/sketch/sanitize";
 import { decodeHash, encodeHash } from "@/lib/sketch/share";
 import "./sketch-playground.css";
 
@@ -70,10 +71,22 @@ function reducedMotion() {
   );
 }
 
-/** The first line of an error, and the rest, which shows where it is. */
+/**
+ * The first line of an error, and the rest, which shows where it is. pele
+ * writes the source line with a caret under it. At the end of the text the
+ * source line is empty, and a caret under nothing says nothing, so it goes.
+ */
 function splitError(e: RenderError) {
   const [head, ...rest] = e.message.split("\n");
-  return { head, detail: rest.join("\n").trim() };
+  const lines: string[] = [];
+  for (const line of rest) {
+    if (/^-*\^$/.test(line) && !lines.at(-1)?.trim()) {
+      lines.pop();
+      continue;
+    }
+    lines.push(line);
+  }
+  return { head, detail: lines.join("\n").trim() };
 }
 
 export function SketchPlayground() {
@@ -165,10 +178,10 @@ export function SketchPlayground() {
     (d: Drawn) => {
       const el = stage.current;
       if (!el) return;
-      const tpl = document.createElement("template");
-      tpl.innerHTML = d.svg;
-      const svg = tpl.content.firstElementChild;
-      if (!(svg instanceof SVGSVGElement)) return;
+      // A shared link puts someone else's diagram here: only a cleaned copy
+      // of the SVG goes into the page.
+      const svg = sanitizeSvg(d.svg);
+      if (!svg) return;
       svg.setAttribute("data-current", "");
       svg.setAttribute("aria-label", "Diagram preview");
 
@@ -277,8 +290,9 @@ export function SketchPlayground() {
   /** The SVG with the theme written in, for copy and download. */
   const exported = useCallback(() => {
     if (!drawn) return "";
-    const doc = new DOMParser().parseFromString(drawn.svg, "image/svg+xml");
-    const root = doc.documentElement as unknown as SVGSVGElement;
+    const root = sanitizeSvg(drawn.svg);
+    if (!root) return "";
+    root.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
     return new XMLSerializer().serializeToString(root);
   }, [drawn, vars]);

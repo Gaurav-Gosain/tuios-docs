@@ -5,7 +5,7 @@ export const EXAMPLES: Example[] = [
   {
     id: "flowchart",
     title: "Flowchart",
-    source: `flowchart LR
+    source: `flowchart TB
   subgraph Make
     Idea --> Build
     Build --> Review{Ready?}
