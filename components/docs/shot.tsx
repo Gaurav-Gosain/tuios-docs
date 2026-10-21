@@ -40,8 +40,8 @@ export function Shot({
   caption?: string;
   sizes?: string;
 }) {
-  // A shot made before the lossless pipeline is 1600 wide, with an 800 wide
-  // file beside it. Drop this once every scene is shot again.
+  // A picture made outside scripts/docs-media.sh, such as a blog post's chart
+  // or a page of the site, is 1600 wide with an 800 wide file beside it.
   const legacy = width === 1600;
   const img = (base: string, className?: string) => (
     // biome-ignore lint/performance/noImgElement: a static export has no image optimizer, and these are already sized WebP files
