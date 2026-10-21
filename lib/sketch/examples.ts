@@ -893,7 +893,7 @@ Approve ..> : include Ask
   },
   {
     id: "agentflow",
-    title: "Agentflow",
+    title: "Agent flow",
     group: "Diagram types",
     source: `agentflow-beta TB
   issue["Bug report"]@{ shape: input }
