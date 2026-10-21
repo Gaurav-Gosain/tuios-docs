@@ -43,7 +43,7 @@ func drawTML(g *gen) error {
 		return err
 	}
 	if err := g.tmlSource("tml/hero", hero, 148, 34, pic{look: window, title: "tuios tml show test-run.tml"},
-		opts{frame: true, title: "Test run", owner: "from pane 3f2a91c0 (api)"}); err != nil {
+		opts{frame: true, title: "Test run", owner: "from api"}); err != nil {
 		return err
 	}
 

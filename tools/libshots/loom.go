@@ -23,7 +23,7 @@ func drawLoom(g *gen) error {
 		return err
 	}
 	if err := g.tmlSource("loom/hero", dash, 72, 17, pic{look: window, title: "loom"},
-		opts{frame: true, title: "go test ./...", owner: "from pane 3f2a91c0 (api)"}); err != nil {
+		opts{frame: true, title: "go test ./...", owner: "from api"}); err != nil {
 		return err
 	}
 	if err := g.runExample("loom/quickstart", "loom-quickstart", 58); err != nil {
