@@ -1,6 +1,6 @@
 // render.mjs: turn a take's session.cast into 60 fps video frames.
 //
-// Usage: node render.mjs BUILD_DIR OUT.mkv [--pre 0.6] [--font 15] [--max 12]
+// Usage: node render.mjs BUILD_DIR OUT.mkv [--pre 0.6] [--font 32] [--max 12]
 //
 // The cast is the real output of a tuios client, with the time each byte
 // arrived. This feeds it to xterm.js (WebGL, the renderer tuios-web and the
@@ -26,7 +26,14 @@ const opt = (name, def) => {
   return i >= 0 ? Number(rest[i + 1]) : def;
 };
 const pre = opt("pre", 0.6);
-const fontSize = opt("font", 15);
+// The font size in pixels. xterm.js rounds the cell width down from the
+// font's advance, which squeezes the glyphs into the cell. At 32 px,
+// JetBrains Mono's advance of 19.2 px gets a 19 by 43 cell: within 1 percent
+// of the font's own shape, and sharp on a 2x screen. (At 30 px the cell is
+// 17 by 40, 7 percent too narrow.) A device scale of 2 at half the size would
+// give the same pixels, but the WebGL renderer then draws only the top left
+// quarter of the terminal.
+const fontSize = opt("font", 32);
 // The font files, from scripts/docs-media.sh (DOCS_MEDIA_FONT and
 // DOCS_MEDIA_FONT_BOLD). They load by path, so the frames use exactly these
 // files and never a font the system substitutes.
@@ -97,7 +104,7 @@ const browser = await puppeteer.launch({
   ],
 });
 const page = await browser.newPage();
-await page.setViewport({ width: 2400, height: 1600, deviceScaleFactor: 1 });
+await page.setViewport({ width: 4000, height: 3000, deviceScaleFactor: 1 });
 await page.goto(`file://${pagePath}`);
 const box = await page.evaluate(
   async ({ cols, rows, fontSize, palette }) => {

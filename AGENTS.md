@@ -65,8 +65,8 @@ lib/
   feed.ts, feeds.ts           RSS and Atom rendering, markdown to HTML for feeds
   layout.shared.tsx           nav title and top links (Docs, Blog, Releases)
 public/                       favicons, web manifest, fonts, CNAME, _headers, _redirects
-public/shots/                 whole-screen captures of tuios for the landing page and docs, 1600
-                              and 800 wide WebP (see "Screenshots" below)
+public/shots/                 whole-screen captures of tuios for the landing page and docs:
+                              lossless WebP at scale 2 and at the page's width (see "Screenshots")
 public/clips/                 short silent clips of tuios for the docs: AV1 WebM, H.264 MP4 and a
                               WebP poster each, made by scripts/docs-media.sh
 media/                        the scenes and tools behind public/clips and the newer public/shots
@@ -109,7 +109,13 @@ A widget that shows TUIOS behavior should match the code. Check it against the t
 
 ### Screenshots and generated data
 
-Pictures of tuios come from tuios's own renderer, never from a screen grab of a terminal. `public/shots/` holds whole-screen captures made with the `screenshot_screen` action (PNG at scale 2, frame `none`, theme `catppuccin_mocha`) from a client attached to a demo session in an isolated `HOME` and `XDG_RUNTIME_DIR`, then resized to WebP with `cwebp`. Look at each one at full size before you commit it: no personal paths, prompts or leftover notifications.
+Pictures of tuios come from tuios's own renderer, never from a screen grab of a terminal. `public/shots/` holds whole-screen captures made with the `screenshot_screen` action (PNG at scale 2, frame `none`, theme `catppuccin_mocha`) from a client attached to a demo session in an isolated `HOME` and `XDG_RUNTIME_DIR`. Look at each one at full size before you commit it: no personal paths, prompts or leftover notifications.
+
+Keep the text readable at the size a reader sees it:
+
+- Shoot a docs scene at about 100 columns. The docs column is 768 CSS pixels wide, so a cell is then about 7.5 CSS pixels. Past about 110 columns the text is too small to read on a 1x screen. Show less of the screen before you add columns.
+- A shot is lossless WebP. `NAME.webp` is the shot at scale 2, with a cell 17 pixels wide. `NAME-768.webp` is the shot at the column's width, for a 1x screen. The landing scenes set `"display": 1024`, the width the landing page shows them at.
+- Never resize a frame in one direction only. The rig reports the font's own cell to tuios, so a shot keeps the font's shape. A clip draws the font at 32 px, where the xterm.js cell is within 1 percent of the font's shape.
 
 `scripts/docs-media.sh` makes the newer shots and every clip from tuios tapes. Each scene is a folder in `media/scenes/` with a `scene.json` and a `scene.tape`. The script runs the tape against a real tuios and its own daemon in a throwaway `HOME`. A shot comes from the `screenshot_screen` action. A clip comes from the client's own output, drawn at 60 fps by xterm.js in headless Chromium, so a busy machine cannot drop a frame. When the UI changes, run the script again. `<Shot>` and `<DocsClip>` put the results on a page. Keep each clip under 1.5 MB, and keep it silent.
 

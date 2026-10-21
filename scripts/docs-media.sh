@@ -5,7 +5,7 @@
 #   scripts/docs-media.sh layouts agents  # the named scenes
 #
 # Needs: a tuios build that knows [tape] show_status (TUIOS_BIN, else the
-# tuios on PATH), python3, node, ffmpeg with libsvtav1 and libx264, ImageMagick
+# tuios on PATH), python3 with fontTools, node, ffmpeg with libsvtav1 and libx264, ImageMagick
 # and Chromium (CHROMIUM, else /usr/bin/chromium). Run `bun install` in media/
 # once for the renderer.
 #
@@ -15,9 +15,11 @@
 # again, and the media follow.
 #
 #   "kind": "shot"  The tape ends with `Action screenshot_screen`. Each name
-#                   in "shots" becomes public/shots/NAME.webp (1600 wide) and
-#                   NAME-800.webp. With "themes" naming a second, light theme,
-#                   the scene runs again in it, and the files get -light.
+#                   in "shots" becomes public/shots/NAME.webp, lossless at
+#                   scale 2, and NAME-702.webp and NAME-834.webp for a 1x
+#                   screen. "display" in scene.json names other widths. With
+#                   "themes" naming a second, light theme, the scene runs
+#                   again in it, and the files get -light.
 #   "kind": "clip"  The take is drawn at 60 fps by media/render.mjs and
 #                   encoded by media/encode.sh to public/clips/NAME.webm (AV1),
 #                   NAME.mp4 (H.264) and the poster NAME.webp.
@@ -90,21 +92,46 @@ rig() {
   rmdir "$stage"
 }
 
-webp() { # SRC.png DEST.webp WIDTH
-  run magick "$1" -resize "$3x" -strip -define webp:method=6 -quality 82 "$2"
+# shot_files SRC.png DEST WIDTH...: the files a page loads for one shot.
+#
+#   DEST.webp        the shot as drawn, at scale 2: one cell is 17 pixels
+#                    wide in JetBrains Mono. A 2x screen gets this one.
+#   DEST-WIDTH.webp  the shot at a width a page shows it at, for a 1x screen.
+#                    The browser then shows it pixel for pixel, or shrinks it
+#                    a little. A 1x file the browser has to enlarge is soft.
+#                    The widths are the widest a picture is drawn: 834 in a
+#                    docs page, 702 in a blog post, 974 on the landing page.
+#
+# Both are lossless WebP. A shot is flat colour and text, and lossy WebP
+# smears the edges of the glyphs. Lossless WebP of a shot is smaller than
+# PNG. The resize adds the shades of antialiasing, which almost double a
+# lossless file, so the small one keeps the 256 most used colours, without
+# dither: 50 dB PSNR against the full palette, and about half the bytes. A
+# resize names a width only, so it keeps the shot's aspect ratio.
+shot_files() {
+  local src=$1 dest=$2 width
+  shift 2
+  run magick "$src" -strip -define webp:lossless=true -define webp:method=6 "$dest.webp"
+  for width in "$@"; do
+    run magick "$src" -strip -filter Lanczos -resize "${width}x" +dither -colors 256 \
+      -define webp:lossless=true -define webp:method=6 "$dest-$width.webp"
+  done
 }
+
+# widths SCENE_DIR: the widths of the 1x files, from "display" in scene.json.
+widths() { jq -r '.display // [702, 834] | .[]' "$1/scene.json"; }
 
 shot_scene() { # NAME
   local name=$1 dir=$media/scenes/$1 theme suffix shot
-  local themes
+  local themes display
+  mapfile -t display < <(widths "$dir")
   mapfile -t themes < <(jq -r '.themes // ["catppuccin_mocha"] | .[]' "$dir/scene.json")
   for theme in "${themes[@]}"; do
     suffix=
     [[ $theme == *latte* || $theme == *light* || $theme == *day* ]] && suffix=-light
     rig "$dir" "$build/$name$suffix" --theme "$theme"
     for shot in $(jq -r '.shots[]' "$dir/scene.json"); do
-      webp "$build/$name$suffix/$shot.png" "$root/public/shots/$shot$suffix.webp" 1600
-      webp "$build/$name$suffix/$shot.png" "$root/public/shots/$shot$suffix-800.webp" 800
+      shot_files "$build/$name$suffix/$shot.png" "$root/public/shots/$shot$suffix" "${display[@]}"
       echo "shot: public/shots/$shot$suffix.webp"
     done
   done
@@ -113,7 +140,7 @@ shot_scene() { # NAME
 clip_scene() { # NAME
   local name=$1 dir=$media/scenes/$1
   local font max
-  font=$(jq -r '.font // 18' "$dir/scene.json")
+  font=$(jq -r '.font // 32' "$dir/scene.json")
   max=$(jq -r '.max // 12' "$dir/scene.json")
   rig "$dir" "$build/$name"
   node "$media/render.mjs" "$build/$name" "$build/$name/master.mkv" --font "$font" --max "$max"
@@ -127,13 +154,14 @@ still_scene() { # NAME
   # xterm.js. Use it when the screen has a glyph the font lacks, because
   # Chromium falls back to a system font for it and screenshot_screen does not.
   local name=$1 dir=$media/scenes/$1 shot font
-  font=$(jq -r '.font // 28' "$dir/scene.json")
+  font=$(jq -r '.font // 32' "$dir/scene.json")
   shot=$(jq -r '.still' "$dir/scene.json")
   rig "$dir" "$build/$name"
   node "$media/render.mjs" "$build/$name" "$build/$name/master.mkv" --font "$font" --pre 0 --max 60
   run ffmpeg -v error -y -sseof -0.1 -i "$build/$name/master.mkv" -frames:v 1 -update 1 "$build/$name/$shot.png"
-  webp "$build/$name/$shot.png" "$root/public/shots/$shot.webp" 1600
-  webp "$build/$name/$shot.png" "$root/public/shots/$shot-800.webp" 800
+  local display
+  mapfile -t display < <(widths "$dir")
+  shot_files "$build/$name/$shot.png" "$root/public/shots/$shot" "${display[@]}"
   echo "shot: public/shots/$shot.webp"
 }
 

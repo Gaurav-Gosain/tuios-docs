@@ -47,7 +47,13 @@ fit webm encode_av1 "$out.webm" 28 34 40
 fit mp4 encode_h264 "$out.mp4" 20 24 28
 
 # The poster is the last frame: the clip ends on the state the page is about.
-run ffmpeg -v error -y -sseof -0.1 -i "$master" -frames:v 1 -c:v libwebp -quality 85 "$out.webp"
+# It is lossless WebP of the frame's 256 most used colours, as a shot's small
+# file is: lossy WebP smears the text, and the full palette costs five times
+# the bytes.
+run ffmpeg -v error -y -sseof -0.1 -i "$master" -frames:v 1 -update 1 "$out.poster.png"
+run magick "$out.poster.png" -strip +dither -colors 256 -define webp:lossless=true \
+  -define webp:method=6 "$out.webp"
+rm "$out.poster.png"
 
 # Every encoded frame must be 1/60 s after the one before it.
 for f in "$out.webm" "$out.mp4"; do

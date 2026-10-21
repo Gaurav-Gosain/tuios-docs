@@ -78,24 +78,45 @@ def rgb(hexcolor):
     return "rgb:" + "/".join(h[i : i + 2] * 2 for i in (0, 2, 4))
 
 
+# The cell of the screenshot raster, in pixels: the advance and line height of
+# the font at the size internal/shot draws a scale 2 shot in (14 px times 2).
+# The PTY reports this cell as the host terminal's (TIOCGWINSZ, XTWINOPS 14
+# and 16). tuios shapes a screenshot's cell to the host's, and a host that
+# reports nothing gets a 10 by 20 guess. That guess is wider than any
+# monospace font, so every shot came out with wide, short cells. With the
+# font's own cell reported, the shot keeps the font's true shape.
+SHOT_FONT_PX = 28
+
+
+def font_cell(path, px):
+    from fontTools.ttLib import TTFont
+
+    f = TTFont(path, lazy=True)
+    upm = f["head"].unitsPerEm
+    hhea = f["hhea"]
+    adv = f["hmtx"][f.getBestCmap()[ord("M")]][0]
+    height = hhea.ascent - hhea.descent + hhea.lineGap
+    return round(adv * px / upm), round(height * px / upm)
+
+
+CELL = font_cell(
+    os.environ.get("DOCS_MEDIA_FONT") or "/usr/share/fonts/TTF/JetBrainsMonoNerdFontMono-Regular.ttf",
+    SHOT_FONT_PX,
+)
+
 # With "host": "kitty" in scene.json, the PTY also answers as a kitty graphics
-# terminal does, the way the e2e suite's fake host does: the pixel geometry,
-# and an OK for the direct-transmission probe (i=1). The file probe (i=2) and
-# the animation probe get no answer, so tuios sends images inline and claims
-# no animation. XTVERSION names kitty in place of xterm.js, because tuios
-# turns graphics off for xterm.js, which keeps images in its cells. tuios
-# then draws its own pictures, such as the reply editor's image previews, with
-# kitty graphics, and a screenshot holds them. tuios draws such a picture at
-# the host's cell size, and a screenshot takes its cell shape from the host's.
-# A 19x38 cell is about a screenshot cell at scale 2 in GeistMono Nerd Font
-# Mono, so the picture lands near pixel for pixel, and it keeps the shot the
-# shape it has without a kitty host.
-KITTY_CELL = (19, 38)
+# terminal does, the way the e2e suite's fake host does: an OK for the
+# direct-transmission probe (i=1). The file probe (i=2) and the animation
+# probe get no answer, so tuios sends images inline and claims no animation.
+# XTVERSION names kitty in place of xterm.js, because tuios turns graphics off
+# for xterm.js, which keeps images in its cells. tuios then draws its own
+# pictures, such as the reply editor's image previews, with kitty graphics,
+# and a screenshot holds them. tuios draws such a picture at the host's cell
+# size, which is CELL, the screenshot's own cell, so the picture lands pixel
+# for pixel.
 KITTY_RESPONDERS = [
     (re.compile(rb"\x1b\[>0?q"), lambda m: b"\x1bP>|kitty(0.42.0)\x1b\\"),
     (re.compile(rb"\x1b_Gi=1,a=q[^\x1b]*\x1b\\"), lambda m: b"\x1b_Gi=1;OK\x1b\\"),
-    (re.compile(rb"\x1b\[14t"), lambda m: f"\x1b[4;{GEOMETRY['rows'] * KITTY_CELL[1]};{GEOMETRY['cols'] * KITTY_CELL[0]}t".encode()),
-    (re.compile(rb"\x1b\[16t"), lambda m: f"\x1b[6;{KITTY_CELL[1]};{KITTY_CELL[0]}t".encode()),
 ]
 GEOMETRY = {"cols": 0, "rows": 0}
 
@@ -104,6 +125,8 @@ RESPONDERS = [
     (re.compile(rb"\x1b\[>0?q"), lambda m: b"\x1bP>|xterm.js(docs)\x1b\\"),
     (re.compile(rb"\x1b\]10;\?(\x07|\x1b\\)"), lambda m: f"\x1b]10;{rgb(PALETTE['fg'])}\x1b\\".encode()),
     (re.compile(rb"\x1b\]11;\?(\x07|\x1b\\)"), lambda m: f"\x1b]11;{rgb(PALETTE['bg'])}\x1b\\".encode()),
+    (re.compile(rb"\x1b\[14t"), lambda m: f"\x1b[4;{GEOMETRY['rows'] * CELL[1]};{GEOMETRY['cols'] * CELL[0]}t".encode()),
+    (re.compile(rb"\x1b\[16t"), lambda m: f"\x1b[6;{CELL[1]};{CELL[0]}t".encode()),
 ]
 
 
@@ -156,8 +179,7 @@ def main():
     scene = json.load(open(os.path.join(scene_dir, "scene.json")))
     cols, rows = scene.get("cols", 160), scene.get("rows", 45)
     GEOMETRY.update(cols=cols, rows=rows)
-    # The kitty answers go first: DA1 closes tuios's probe, so an answer
-    # written after it is too late.
+    # The kitty XTVERSION answer replaces the xterm.js one.
     responders = RESPONDERS
     if scene.get("host") == "kitty":
         kitty = {rx.pattern for rx, _ in KITTY_RESPONDERS}
@@ -283,7 +305,7 @@ def main():
     if pid == 0:
         os.chdir(work)
         os.execve(tuios, [tuios, "new", scene.get("session", "demo")], env)
-    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, cols * CELL[0], rows * CELL[1]))
     os.kill(pid, signal.SIGWINCH)
 
     t0 = time.monotonic()
@@ -309,13 +331,21 @@ def main():
                 return
             events.append([round(now(), 6), data])
             scan = tail + data
-            for rx, reply in responders:
-                for m in rx.finditer(scan):
-                    if m.end() > len(tail):
-                        os.write(fd, reply(m))
-            for m in re.finditer(rb"\x1b\[6n", scan):
-                if m.end() > len(tail):
-                    os.write(fd, f"\x1b[{rows};{cols}R".encode())
+            # Answer in the order the queries came. DA1 closes tuios's
+            # probe, so an answer written after it is too late.
+            answers = [
+                (m.start(), reply(m))
+                for rx, reply in responders
+                for m in rx.finditer(scan)
+                if m.end() > len(tail)
+            ]
+            answers += [
+                (m.start(), f"\x1b[{rows};{cols}R".encode())
+                for m in re.finditer(rb"\x1b\[6n", scan)
+                if m.end() > len(tail)
+            ]
+            for _, answer in sorted(answers, key=lambda a: a[0]):
+                os.write(fd, answer)
             tail = scan[-64:]
 
     def run_tape(name, limit):

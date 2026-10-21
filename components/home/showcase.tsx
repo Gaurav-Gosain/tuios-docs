@@ -7,7 +7,9 @@ import { cn } from "@/lib/cn";
 /**
  * The landing page's picture of tuios: four whole-screen captures taken by
  * tuios itself (the screenshot_screen action, drawn by internal/shot). The
- * scenes are media/scenes/landing-*, made by scripts/docs-media.sh. A tab list switches between them.
+ * scenes are media/scenes/landing-*, made by scripts/docs-media.sh: NAME.webp
+ * at scale 2 and NAME-974.webp at the width the page shows it at. A tab
+ * list switches between them.
  */
 
 const SHOTS = [
@@ -117,7 +119,7 @@ export function Showcase() {
             href={shot.src}
             target="_blank"
             rel="noopener"
-            className="relative block aspect-[1600/1006] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary focus-visible:ring-inset"
+            className="relative block aspect-[2380/1628] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary focus-visible:ring-inset"
           >
             {SHOTS.map((s, i) =>
               // Only the shots someone has opened are in the page, so the
@@ -128,12 +130,12 @@ export function Showcase() {
                 <img
                   key={s.id}
                   src={s.src}
-                  srcSet={`${s.src.replace(".webp", "-800.webp")} 800w, ${s.src} 1600w`}
-                  sizes="(min-width: 1024px) 1024px, 100vw"
+                  srcSet={`${s.src.replace(".webp", "-974.webp")} 974w, ${s.src} 2380w`}
+                  sizes="(min-width: 1024px) 974px, calc(100vw - 34px)"
                   alt={i === index ? s.alt : ""}
                   aria-hidden={i === index ? undefined : true}
-                  width={1600}
-                  height={1006}
+                  width={2380}
+                  height={1628}
                   decoding="async"
                   fetchPriority={i === 0 ? "high" : "auto"}
                   className={cn(

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArticleLayout } from "@/components/article/article-layout";
 import { postTopics } from "@/components/article/post-list";
+import { SHOT_SIZES, Shot } from "@/components/docs/shot";
 import {
   breadcrumbLd,
   JsonLd,
@@ -128,7 +129,14 @@ export default async function Page(props: {
           ]),
         ]}
       />
-      <MDX components={getMDXComponents()} />
+      <MDX
+        components={getMDXComponents({
+          // A post's column is narrower than a docs page's.
+          Shot: (props: React.ComponentProps<typeof Shot>) => (
+            <Shot {...props} sizes={SHOT_SIZES.blog} />
+          ),
+        })}
+      />
     </ArticleLayout>
   );
 }
