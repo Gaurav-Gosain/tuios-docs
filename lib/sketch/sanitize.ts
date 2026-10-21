@@ -9,7 +9,7 @@
  * its children; an attribute not on the list; an event attribute; a link; an
  * image; a style value that loads or runs anything.
  *
- * The lists are what sketch writes for the eight types it draws. They come
+ * The lists are what sketch writes for the types it draws. They come
  * from pele's documentation corpus as sketch draws it
  * (sketch/testdata/golden) and from the element and attribute names in the
  * sketch source. sketch draws no links or images in the playground

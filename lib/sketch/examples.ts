@@ -10,6 +10,7 @@
  *   var(--pele-series-N) at fill-opacity 0.18, so it follows the theme.
  * - Sequence boxes and rects take rgba() with a low alpha. Where they
  *   overlap the colours mix, so a rect stays rare.
+ * - The other types set no colours. They take every colour from the theme.
  */
 export const GROUPS = ["Showcase", "Diagram types"] as const;
 
@@ -512,6 +513,140 @@ export const EXAMPLES: Example[] = [
     Release candidate   :crit, s1, after b3, 4d
     Docs and videos     :s2, after b4, 5d
     1.0 release         :milestone, m3, after s1, 0d
+`,
+  },
+  {
+    id: "xychart",
+    title: "XY chart",
+    group: "Diagram types",
+    source: `xychart
+  title "Idle CPU of a session, by release"
+  x-axis [v0.4, v0.5, v0.6, v0.7, v0.8, v0.9]
+  y-axis "Wakeups per minute" 0 --> 1400
+  bar [1200, 960, 610, 340, 120, 45]
+  line [1200, 960, 610, 340, 120, 45]
+`,
+  },
+  {
+    id: "quadrant",
+    title: "Quadrant chart",
+    group: "Diagram types",
+    source: `quadrantChart
+  title Which bug to fix first
+  x-axis Rare --> Common
+  y-axis Small harm --> Large harm
+  quadrant-1 Fix now
+  quadrant-2 Plan a fix
+  quadrant-3 Leave it
+  quadrant-4 Quick win
+  Lost scrollback on upgrade: [0.35, 0.9]
+  Flaky attach test: [0.8, 0.55]
+  Wrong glyph width: [0.7, 0.25]
+  Slow first frame: [0.9, 0.7]
+  Mouse drag in nvim: [0.66, 0.38]
+  Theme flicker: [0.25, 0.15]
+  Dead pane on resize: [0.15, 0.75]
+  Typo in help: [0.6, 0.08]
+`,
+  },
+  {
+    id: "sankey",
+    title: "Sankey",
+    group: "Diagram types",
+    source: `sankey
+
+Key presses,Shell,47
+Key presses,Agent,35
+Key presses,Leader key,18
+Shell,Pane redraw,47
+Agent,Pane redraw,30
+Agent,Inbox,5
+Leader key,Layout change,11
+Leader key,Copy mode,7
+`,
+  },
+  {
+    id: "timeline",
+    title: "Timeline",
+    group: "Diagram types",
+    source: `timeline
+  title A release week
+  section Freeze
+    Monday : Cut the release branch
+           : Move the library pins
+    Tuesday : Run the full E2E suite
+            : Fuzz overnight
+  section Check
+    Wednesday : Fix what the fuzzer found
+    Thursday : Release candidate on every platform
+             : Write the release notes
+  section Ship
+    Friday : Tag the release
+           : Homebrew, AUR and Docker
+           : Post the clips
+`,
+  },
+  {
+    id: "journey",
+    title: "User journey",
+    group: "Diagram types",
+    source: `journey
+  title Your first hour with tuios
+  section Install
+    Run the install script: 5: You
+  section Panes
+    Split and tile panes: 5: You
+    Learn the leader key: 3: You
+  section Agents
+    Start an agent: 5: You, Agent
+    Wait for an approval: 2: You, Agent
+    Approve from the Inbox: 5: You, Agent
+  section Away
+    Detach and close the laptop: 4: You
+    Attach from the phone: 5: You, Agent
+`,
+  },
+  {
+    id: "gitgraph",
+    title: "Git graph",
+    group: "Diagram types",
+    source: `gitGraph
+  commit id: "v0.8.0" tag: "v0.8.0"
+  commit id: "fix scrollback"
+  branch feat/inbox
+  checkout feat/inbox
+  commit id: "inbox model"
+  commit id: "reply composer"
+  checkout main
+  branch fix/attach-race
+  checkout fix/attach-race
+  commit id: "fix the race" type: HIGHLIGHT
+  checkout main
+  merge fix/attach-race
+  checkout feat/inbox
+  commit id: "paste chips"
+  checkout main
+  merge feat/inbox
+  commit id: "release notes"
+  commit id: "v0.9.0" tag: "v0.9.0"
+`,
+  },
+  {
+    id: "kanban",
+    title: "Kanban",
+    group: "Diagram types",
+    source: `kanban
+  todo[To do]
+    t1[Plugin registry]@{ priority: 'Low' }
+    t2[Sixel in copy mode]@{ priority: 'Very Low' }
+  doing[In progress]
+    t3[Live daemon upgrade]@{ assigned: 'claude', priority: 'Very High' }
+    t4[Phone client]@{ assigned: 'codex', priority: 'High' }
+  review[In review]
+    t5[Inbox reply composer]@{ assigned: 'claude' }
+  done[Done]
+    t6[Sketch draws sankey diagrams]
+    t7[Omarchy themes]
 `,
   },
 ];

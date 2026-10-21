@@ -72,6 +72,13 @@ const TYPE_NAMES: Record<string, string> = {
   pie: "Pie chart",
   mindmap: "Mindmap",
   gantt: "Gantt chart",
+  xychart: "XY chart",
+  timeline: "Timeline",
+  quadrantChart: "Quadrant chart",
+  journey: "User journey",
+  kanban: "Kanban board",
+  gitGraph: "Git graph",
+  sankey: "Sankey diagram",
 };
 
 function reducedMotion() {
