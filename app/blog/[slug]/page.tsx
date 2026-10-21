@@ -128,11 +128,7 @@ export default async function Page(props: {
           ]),
         ]}
       />
-      {/* Long test and function names in inline code must wrap on a phone
-          rather than widen the page. */}
-      <div className="contents [&_:not(pre)>code]:[overflow-wrap:anywhere]">
-        <MDX components={getMDXComponents()} />
-      </div>
+      <MDX components={getMDXComponents()} />
     </ArticleLayout>
   );
 }

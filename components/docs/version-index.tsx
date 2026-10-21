@@ -106,13 +106,13 @@ export function VersionIndex() {
                       }
                     >
                       {ids.sort().map((id) => (
-                        <li key={id}>
+                        <li key={id} className="min-w-0 max-w-full">
                           {kind === "feature" ? (
                             <span className="text-fd-foreground text-sm">
                               {format(id)}
                             </span>
                           ) : (
-                            <code className="rounded border border-fd-border bg-fd-muted px-1.5 py-0.5 font-mono text-[0.8125rem] text-fd-foreground">
+                            <code className="inline-block max-w-full rounded border border-fd-border bg-fd-muted px-1.5 py-0.5 font-mono text-[0.8125rem] text-fd-foreground">
                               {format(id)}
                             </code>
                           )}

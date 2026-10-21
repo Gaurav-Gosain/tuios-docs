@@ -58,7 +58,7 @@ export function LibShot({
     </a>
   );
   return (
-    <figure className={cn("not-prose my-6", className)}>
+    <figure className={cn("not-prose my-6 min-w-0", className)}>
       <div
         className="w-fit max-w-full overflow-hidden rounded-xl border border-fd-border"
         style={{ width: entry.w }}
@@ -94,7 +94,7 @@ export function LibGallery({
   return (
     <div
       className={cn(
-        "not-prose my-6 grid items-start gap-x-6 gap-y-2 [&>figure]:my-0",
+        "not-prose my-6 grid grid-cols-1 items-start gap-x-6 gap-y-2 [&>*]:min-w-0 [&>figure]:my-0",
         cols === 3 ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2",
       )}
     >
