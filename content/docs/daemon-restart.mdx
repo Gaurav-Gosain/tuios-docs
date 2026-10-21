@@ -8,7 +8,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Since } from '@/components/mdx/since';
 
-The daemon runs the tuios build it started with until it stops. After you update tuios, restart the daemon to move your sessions to the new build. `tuios restart-server` <Since command="restart-server" /> does that in one step. It shows what stops and what comes back, asks you, then stops the daemon, starts the newest tuios you have installed, and waits until it answers.
+The daemon runs the tuios build it started with until it stops. After you update tuios, restart the daemon to move your sessions to the new build. `tuios restart-server` <Since command="restart-server" /> does that in one step. First it shows what stops and what comes back, and asks you. Then it stops the daemon and starts the newest tuios you have installed. It waits until the new daemon answers.
 
 <Shot
   name="restart-dialog"
@@ -104,7 +104,7 @@ The dialog shows the plan. Press <kbd>r</kbd> to restart, or <kbd>Esc</kbd> to c
   caption="After r: the same session on the new daemon, with the pane history and new shells."
 />
 
-If a program started or stopped after you read the plan, the restart does not run, and the dialog asks you to read the new plan. If your session did not come back, tuios does not attach to it. The dialog says so and points to `tuios resurrect`.
+A program can start or stop after you read the plan. Then the restart does not run, and the dialog asks you to read the new plan. If your session did not come back, tuios does not attach to it. The dialog says so and points to `tuios resurrect`.
 
 The action is `restart_daemon`. It has no default key. To bind one:
 
@@ -125,7 +125,7 @@ Before it stops, the daemon tells each attached client why:
 | A plain `kill-server` | Quits at once |
 | Nothing: the daemon crashed | Waits up to 6 seconds for a new daemon |
 
-While a client waits, the dock says "Waiting for the daemon. Keys are not sent." Keys you type then are dropped. The panes are new after a restart, so a held key could land in a different shell. When no daemon comes back, or the new daemon does not hold the session, the client quits with "The connection to the TUIOS daemon was lost."
+While a client waits, the dock says "Waiting for the daemon. Keys are not sent." Keys you type then are dropped. The panes are new after a restart, so a held key could land in a different shell. Sometimes no daemon comes back, or the new daemon does not hold the session. Then the client quits with "The connection to the TUIOS daemon was lost."
 
 Only a client on the same machine waits and reattaches. A client of a daemon older than v0.11.0 gets no reason, so it waits 6 seconds and then quits. Attach again after that.
 
@@ -147,7 +147,7 @@ tuios restart-server --last             # the steps of the last restart
 - `--expect DIGEST` refuses the restart unless the plan has that digest. The app passes the digest of the plan you agreed to.
 - When no daemon runs, the command starts one.
 
-The stop and the start run in a process of their own, in a session of its own, so a restart that you start from a pane of the daemon it stops still finishes. Each step goes to `restart.log` beside the daemon log. One restart runs at a time. A second one refuses with "Another restart of the daemon is running."
+The stop and the start run in a process of their own, in a session of its own. So a restart still finishes when you start it from a pane of the daemon it stops. Each step goes to `restart.log` beside the daemon log. One restart runs at a time. A second one refuses with "Another restart of the daemon is running."
 
 | Error | What to do |
 | --- | --- |

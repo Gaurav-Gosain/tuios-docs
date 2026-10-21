@@ -53,7 +53,10 @@ tuios gets the source into a new folder, then shows the plan and asks:
 ```
 Install example.panes 0.2.0 (tuios plugin)
   from    https://github.com/example/panes @ v0.2.0 = 6e30e96b68fb
-  folder  /home/you/.local/share/tuios/plugins/example.panes/6e30e96b68fb-dma6hbj1j76h
+  folder  ~/.local/share/tuios/plugins/example.panes/6e30e96b68fb-dma6hbj1j76h
+
+Build commands (run now, in that folder, with your rights):
+  go build -o bin/panes .
 
 Runs when enabled, outside every pane, with your rights:
   panes    list (popup) (1)
@@ -85,12 +88,13 @@ version = 1
 id = 'example.panes'
 format = 'tuios'
 source = 'https://github.com/example/panes'
+ref = 'v0.2.0'
 commit = '6e30e96b68fb6c1b2d0d6a1e0e7f2c7e3b9a1d4f'
 approved = 'sha256:f05d82adf886ed12f6833850faaa3c346da854c73547f4517081a43a9f5669fe'
 grants = ['read']
 ```
 
-`approved` is a hash of what the plugin runs and asks for. The folder that runs on this machine is in a state file in the data folder, not in the lock, so you can keep `plugins.lock` in your dotfiles and share it between machines.
+`approved` is a hash of what the plugin runs and asks for. A state file in the data folder names the folder that runs on this machine. The lock does not, so you can keep `plugins.lock` in your dotfiles and share it between machines.
 
 On a new machine with your config folder, install everything the lock pins:
 
@@ -160,7 +164,7 @@ A native plugin is a folder with `tuios-plugin.toml`:
 schema = 1
 id = "example.panes"
 name = "Panes"
-version = "0.1.0"
+version = "0.2.0"
 description = "List the panes of every session."
 min_tuios = "0.11.0"             # optional
 platforms = ["linux", "macos"]
@@ -182,7 +186,7 @@ command = ["bin/panes"]
 ```
 
 - `run = "action"` and `run = "pane"` take the keys of herdr's `[[actions]]` and `[[panes]]`: `title`, `description`, `contexts`, `placement`, `width` and `height`.
-- tuios refuses a key it does not know. `[[wasm]]` and `run = "event"` are refused with "a later tuios runs these".
+- tuios refuses a key it does not know. tuios refuses `[[wasm]]` and `run = "event"`. They fail with `plugin_requires_newer_tuios`.
 - `tuios plugins info ID` shows the grants the plugin asks for and the ones it holds.
 
 <Shot
@@ -190,7 +194,7 @@ command = ["bin/panes"]
   width={1600}
   height={823}
   light
-  alt="tuios plugins list shows example.panes as on and managed, at version 0.1.0. tuios plugins info example.panes shows its manifest, name, platforms, the grants it asks for and holds (read), and its popup pane."
+  alt="tuios plugins list shows example.panes as on and managed, at version 0.2.0. tuios plugins info example.panes shows its manifest, name, platforms, the grants it asks for and holds (read), and its popup pane."
   caption="plugins list and plugins info for an installed native plugin."
 />
 
@@ -246,7 +250,7 @@ The approval covers the manifest and the files that the plugin's commands name a
 Grants keep a plugin's mistakes, and a tool that a prompt misled, inside what you approved. They do not make a plugin safe to run. A plugin runs with your rights.
 
 - The build and the plugin's commands run as your user. They can read and write your files, like any program you run.
-- The `admin` approval does not cover files that the named files load, such as a sourced `lib.sh`, a Python module or `node_modules`. It does not cover an argument that is not a plain file name, such as `sh -c "./probe.sh"` or `go run .`, programs on your `PATH`, data files, or a command that already runs.
+- The `admin` approval does not cover files that the named files load, such as a sourced `lib.sh`, a Python module or `node_modules`. It does not cover an argument that is not a plain file name, such as `sh -c "./probe.sh"` or `go run .`. It does not cover programs on your `PATH`, data files, or a command that already runs.
 - tuios knows a plugin's process by its process session. A process that starts a new session with `setsid` leaves the plugin. So does a command run over `ssh`, or a process that points `XDG_RUNTIME_DIR` somewhere else.
 - Any program that runs as you can write the approval file, as it can write `config.toml`.
 
@@ -254,7 +258,7 @@ Install plugins that you trust, from sources you trust.
 
 ### Platforms
 
-tuios runs each command of a native plugin under a small tuios process that leads its process session and waits until nothing the command started is left. On Linux this costs about 2.7 MB of memory for each running command, and it wakes only when a process ends. macOS has no subreaper, so after the command ends while something it started still runs, the process checks once a second.
+tuios runs each command of a native plugin under a small tuios process. That process leads the command's process session, and it waits until nothing the command started is left. On Linux this costs about 2.7 MB of memory for each running command, and it wakes only when a process ends. macOS has no subreaper. There, when the command has ended and something it started still runs, the process checks once a second.
 
 On Windows and the BSDs, tuios cannot tell which process calls, so it does not run the commands of a native plugin yet. They fail with `plugin_unsupported_platform`. herdr plugins run there as before.
 
