@@ -1,10 +1,10 @@
 ---
 title: plot
-description: Bar, line, area, sparkline, gauge, histogram, heatmap and pie charts as terminal cells, in braille, block elements or ASCII, with theme roles in place of colours.
+description: Bar, line, area, sparkline, gauge, histogram, heatmap, pie, mirrored and inline bar charts and a world map as terminal cells, in braille, block elements or ASCII, with theme roles in place of colours.
 icon: ChartColumn
 ---
 
-`tuios.dev/plot` draws charts as terminal cells. It has eight chart kinds: bar (horizontal and vertical), line, area, sparkline, gauge, histogram, heatmap and pie (a donut or a full disc). It holds no colour and writes no escape sequence. Each cell has a role, and your program picks the colour.
+`tuios.dev/plot` draws charts as terminal cells. It has eleven chart kinds: bar (horizontal and vertical), line, area, sparkline, gauge, histogram, heatmap, pie (a donut or a full disc), mirrored bars, inline bars for table cells, and a world map. It holds no colour and writes no escape sequence. Each cell has a role, and your program picks the colour.
 
 <LibShot
   name="plot/hero"
@@ -105,7 +105,43 @@ The heat roles `heat1` to `heat5` are a ramp from low to high. A heatmap uses wh
 
 A pie is a disc of half-block pixels. Set `Aspect` to the height of a cell over its width, and the disc is round. A pie draws 12 slices, and folds the rest into one called "other".
 
-{/* TODO: add the mirrored bars (tuios #940), the one-row inline bars (tuios #942) and the world map (tuios #943) when those pull requests merge. Each one is a chart function in tools/libshots/plot.go and a section here. */}
+### Mirrored bars
+
+<include cwd lang="go">tools/libshots/snippets/plot-mirror.txt</include>
+
+<LibShot name="plot/mirror" alt="Download as green dot columns above a baseline and upload as pink dot columns below it, a peak marker with its value over each half, and peak, average and total in the corners" />
+
+`Mirror` draws two series around one baseline, such as download and upload, tokens in and out, or reads and writes. Each value is one column of braille dots, and the newest value is at the right edge. Each half scales to its own peak, and `Shared` gives both one scale. The columns are graded by height with faded roles, such as `series3/2`. A column with no value shows a dotted track on the baseline.
+
+Credit: the idea and the look come from [iptop](https://github.com/franlol/iptop) by franlol (MIT).
+
+### Inline bars
+
+<include cwd lang="go">tools/libshots/snippets/plot-inline.txt</include>
+
+<LibShot name="plot/inline" alt="Four hosts in a table, each with a thin share bar on a track and its rate at the right" />
+
+`InlineBar` is a bar one row high for a table cell. It draws no label, so the cell next to it can hold the value. By default it is a lower half block, exact to half a cell, so the bars of a table stay apart. `Style: plot.BarBlocks` fills the row with eighth blocks. Give every row the same `Max`, so the bars compare.
+
+<include cwd lang="go">tools/libshots/snippets/plot-diverging.txt</include>
+
+<LibShot name="plot/diverging" alt="Five services, each with a download bar growing left and an upload bar growing right from a dotted centre mark" />
+
+`DivergingBar` grows left from a centre mark for `Left` and right for `Right`.
+
+Credit: the idea and the look come from [iptop](https://github.com/franlol/iptop) by franlol (MIT).
+
+### World map
+
+<include cwd lang="go">tools/libshots/snippets/plot-map.txt</include>
+
+<LibShot name="plot/map" alt="A world map in braille dots, with thirteen countries shaded by traffic on a log scale, two host markers, and a legend of five shades right under the map" />
+
+`Map` draws the land in the `track` role, and fills each country with a value with a shade of `Ramp`, `heat1` to `heat5` by default. Countries are ISO 3166-1 alpha-2 codes. The projection is equirectangular, from 180° W to 180° E and from 84° N to 60° S. The map keeps its true shape and is centred, and fills a box at most a tenth past that shape. `Fit` returns the cells it takes, so the legend can go right under it. Codes are case-blind, and when two keys name one country the larger value counts. A country that is the larger part of no cell, such as Singapore, takes the cell it covers most, or the nearest free cell, and shows only when it has a value. `Legend` writes `>=` in ASCII. A program that draws no map does not link the map data.
+
+Credit: the idea and the look come from [iptop](https://github.com/franlol/iptop) by franlol (MIT).
+
+Map data: [Natural Earth](https://www.naturalearthdata.com/) 1:50m Admin 0 Countries, version 5.1.1, which is in the public domain.
 
 ## Modes
 
@@ -129,7 +165,7 @@ In ASCII, each series, slice and heat level has its own mark, so they stay apart
 
 ## Theme roles
 
-A role names a colour. The names are the TML roles, plus `track` for the empty part of a gauge or a bar, and `heat1` to `heat5`. `plot.SeriesRole(i)` gives the role of series i, and cycles after six.
+A role names a colour. The names are the TML roles, plus `track` for the empty part of a gauge or a bar, and `heat1` to `heat5`. `plot.Fade(role, k)` names a role faded `k` steps toward the ground, such as `series1/2`, and `Role.Faded` splits it. Draw fade `k` as the base colour mixed about `k` fifths toward the ground. `plot.SeriesRole(i)` gives the role of series i, and cycles after six.
 
 <LibShot name="plot/roles" alt="Every role a chart uses, each written in its own colour: fg, dim, mute, edge, track, the accent and status roles, series1 to series6, and heat1 to heat5" />
 
@@ -153,7 +189,11 @@ A role names a colour. The names are the TML roles, plus `track` for the empty p
 | [`Histogram`](https://pkg.go.dev/tuios.dev/plot#Histogram) | Counts of values in bins. |
 | [`Heatmap`](https://pkg.go.dev/tuios.dev/plot#Heatmap) | A grid of values as shades. |
 | [`Pie`](https://pkg.go.dev/tuios.dev/plot#Pie) | Shares of a whole, as a donut or a disc. |
+| [`Mirror`](https://pkg.go.dev/tuios.dev/plot#Mirror) | Two series above and below one baseline. |
+| [`InlineBar`](https://pkg.go.dev/tuios.dev/plot#InlineBar), [`DivergingBar`](https://pkg.go.dev/tuios.dev/plot#DivergingBar) | One-row bars for a table cell. |
+| [`Map`](https://pkg.go.dev/tuios.dev/plot#Map), [`Marker`](https://pkg.go.dev/tuios.dev/plot#Marker) | A world map with countries shaded by value. |
 | [`Grid`](https://pkg.go.dev/tuios.dev/plot#Grid), [`Cell`](https://pkg.go.dev/tuios.dev/plot#Cell), [`Role`](https://pkg.go.dev/tuios.dev/plot#Role) | The output of a chart. |
+| [`Fade`](https://pkg.go.dev/tuios.dev/plot#Fade) | A role faded toward the ground, such as `series1/2`. |
 | [`Mode`](https://pkg.go.dev/tuios.dev/plot#Mode) | `Braille`, `Blocks` or `ASCII`. |
 | [`DrawLegend`](https://pkg.go.dev/tuios.dev/plot#DrawLegend), [`Compact`](https://pkg.go.dev/tuios.dev/plot#Compact), [`Downsample`](https://pkg.go.dev/tuios.dev/plot#Downsample) | Helpers. |
 

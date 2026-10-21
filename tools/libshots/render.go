@@ -267,8 +267,11 @@ func plotGrid(pg *plot.Grid, pal *loom.Palette, p *shot.Palette) *shot.Grid {
 		for x := 0; x < pg.W; x++ {
 			c := pg.At(x, y)
 			cell := shot.Cell{Cluster: c.Text, Width: c.Width, FG: p.FG, BG: bg, BGDefault: true, Bold: c.Bold}
-			if col := pal.Color(string(c.Role)); col != nil {
-				cell.FG = p.Resolve(col, p.FG)
+			// A faded role, such as series1/2, is its base role mixed a fifth
+			// of the way toward the ground for each step.
+			base, k := c.Role.Faded()
+			if col := pal.Color(string(base)); col != nil {
+				cell.FG = blend(p.Resolve(col, p.FG), bg, 0.2*float64(k))
 			}
 			if c.Bg != plot.None {
 				if col := pal.Color(string(c.Bg)); col != nil {

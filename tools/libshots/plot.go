@@ -26,6 +26,10 @@ var plotCharts = []struct {
 	{"histogram", histogramChart},
 	{"heatmap", heatmapChart},
 	{"pie", pieChart},
+	{"mirror", mirrorChart},
+	{"inline", inlineChart},
+	{"diverging", divergingChart},
+	{"map", mapChart},
 }
 
 func drawPlot(g *gen) error {
@@ -175,6 +179,99 @@ func pieChart(m plot.Mode) *plot.Grid {
 	grid := pie.Draw(40, 9, m)
 	// snippet:end
 	return grid
+}
+
+func mirrorChart(m plot.Mode) *plot.Grid {
+	rx, tx := traffic(112) // download and upload, bytes a second
+	// snippet:begin plot-mirror
+	net := plot.Mirror{
+		Up:     plot.Series{Name: "▼ download", Values: rx, Role: plot.Series3},
+		Down:   plot.Series{Name: "▲ upload", Values: tx, Role: plot.Series5},
+		Peaks:  true, // • 120M over the highest column of each half
+		Stats:  true, // peak · avg · Σ in each corner row
+		Format: plot.Compact,
+	}
+	grid := net.Draw(56, 10, m)
+	// snippet:end
+	return grid
+}
+
+func inlineChart(m plot.Mode) *plot.Grid {
+	// snippet:begin plot-inline
+	hosts := []string{"fra1.example.net", "ams3.example.net", "nyc2.example.net", "sgp1.example.net"}
+	rates := []float64{30e6, 12.4e6, 3.1e6, 840e3}
+	grid := plot.NewGrid(44, len(hosts))
+	for i, h := range hosts {
+		grid.Text(0, i, h, plot.Fg, false)
+		bar := plot.InlineBar{Value: rates[i], Max: rates[0], Track: true}
+		paste(grid, bar.Draw(16, 1, m), 18, i) // the bar column
+		grid.TextRight(44, i, plot.Compact(rates[i]), plot.Info, false)
+	}
+	// snippet:end
+	return grid
+}
+
+func divergingChart(m plot.Mode) *plot.Grid {
+	// snippet:begin plot-diverging
+	services := []string{"https", "quic", "ssh", "dns", "http"}
+	down := []float64{24e6, 6e6, 40e3, 900, 1.2e6}
+	up := []float64{1.1e6, 3.2e6, 220e3, 2.4e3, 9e6}
+	grid := plot.NewGrid(30, len(services))
+	for i, s := range services {
+		grid.Text(0, i, s, plot.Fg, false)
+		bar := plot.DivergingBar{
+			Left: down[i], Right: up[i], Max: 24e6, // one Max for every row
+			LeftRole: plot.Series3, RightRole: plot.Series5, Track: true,
+		}
+		paste(grid, bar.Draw(23, 1, m), 7, i)
+	}
+	// snippet:end
+	return grid
+}
+
+func mapChart(m plot.Mode) *plot.Grid {
+	// snippet:begin plot-map
+	world := plot.Map{
+		Values: map[string]float64{ // by ISO 3166-1 alpha-2 code
+			"US": 410e6, "DE": 120e6, "NL": 95e6, "GB": 60e6, "CA": 35e6,
+			"FR": 22e6, "JP": 18e6, "SG": 14e6, "IN": 9e6, "BR": 6e6,
+			"AU": 2.5e6, "CN": 1.2e6, "ZA": 400e3,
+		},
+		Log:     true, // spread values that span orders of magnitude
+		Markers: []plot.Marker{{Lat: 52.37, Lon: 4.9}, {Lat: 1.35, Lon: 103.82}},
+	}
+	_, rows := world.Fit(72, 40, m) // the rows the map takes at this width
+	grid := plot.NewGrid(72, rows+1)
+	paste(grid, world.Draw(72, rows, m), 0, 0)
+	plot.DrawLegend(grid, 0, rows, world.Legend(m), m) // right under the map
+	// snippet:end
+	return grid
+}
+
+// traffic is a download and an upload history: a quiet line, a burst and
+// a long download plateau with an upload spike in it, the same on every
+// run.
+func traffic(n int) (rx, tx []float64) {
+	for i := 0; i < n; i++ {
+		f := float64(i)
+		d := 20e3 + 8e3*math.Sin(f*0.7)
+		u := 6e3 + 2e3*math.Cos(f*0.5)
+		switch {
+		case i > n*30/100 && i < n*34/100:
+			d, u = 30e6+4e6*math.Sin(f), 90e3
+		case i > n*50/100 && i < n*80/100:
+			d = 95e6 + 18e6*math.Abs(math.Sin(f*0.9)) + 7e6*math.Sin(f*2.3)
+			u = 60e3 + 50e3*math.Abs(math.Sin(f*1.7))
+		}
+		if i == n*70/100 {
+			d, u = 120e6, 964e3
+		}
+		if i == n*70/100+1 {
+			u = 520e3
+		}
+		rx, tx = append(rx, d), append(tx, u)
+	}
+	return rx, tx
 }
 
 // modeChart is one line chart and one sparkline in a mode, for the modes
