@@ -7,6 +7,10 @@ Sleep 400ms
 Run "./release.sh"
 Sleep 5500ms
 Action next_window
-Sleep 600ms
+Sleep 300ms
 Press "r"
+Sleep 200ms
+# Focus goes back to the shell. A focused surface shows the host cursor at
+# the left edge of its pane, which is a tuios bug, not part of the surface.
+Action next_window
 Sleep 5500ms

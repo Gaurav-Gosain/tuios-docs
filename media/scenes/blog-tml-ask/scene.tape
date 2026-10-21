@@ -1,5 +1,4 @@
-# The agent pane opens a surface. Its button types into the shell pane, so
-# tuios asks the person first. After y, the command runs there.
+# The question tuios asks before an agent's surface types into a pane.
 WaitFor panes 1 10s
 RenameWindow "agent"
 Run "clear"
@@ -12,12 +11,12 @@ Sleep 600ms
 Action next_window
 Sleep 400ms
 Run "tuios tml show review.tml --pane"
-Sleep 2000ms
+Sleep 4800ms
 Action next_window
 Sleep 300ms
 Action next_window
 Sleep 800ms
 Press "l"
-Sleep 2500ms
-Press "y"
-Sleep 3000ms
+Sleep 1500ms
+Action screenshot_screen
+Sleep 1500ms
