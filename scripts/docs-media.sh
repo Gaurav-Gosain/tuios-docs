@@ -42,32 +42,52 @@ export TUIOS_BIN=$tuios
 
 run() { nice -n 19 taskset -c 0-3 "$@"; }
 
-# The font every shot, poster and frame is drawn in. GeistMono Nerd Font Mono
-# when it is installed, else JetBrainsMono Nerd Font Mono. Both are OFL.
+# The font every shot, poster and frame is drawn in. JetBrainsMono Nerd Font
+# Mono when it is installed, else GeistMono Nerd Font Mono. Both are OFL.
 # Set DOCS_MEDIA_FONT and DOCS_MEDIA_FONT_BOLD to other files to change it.
 pick() { for f in "$@"; do [[ -f $f ]] && { echo "$f"; return; }; done; }
 geist=$HOME/.local/share/fonts/GeistMonoNerdFont
 jb=/usr/share/fonts/TTF
-export DOCS_MEDIA_FONT=${DOCS_MEDIA_FONT:-$(pick "$geist/GeistMonoNerdFontMono-Regular.otf" "$jb/JetBrainsMonoNerdFontMono-Regular.ttf")}
-export DOCS_MEDIA_FONT_BOLD=${DOCS_MEDIA_FONT_BOLD:-$(pick "$geist/GeistMonoNerdFontMono-Bold.otf" "$jb/JetBrainsMonoNerdFontMono-Bold.ttf")}
+export DOCS_MEDIA_FONT=${DOCS_MEDIA_FONT:-$(pick "$jb/JetBrainsMonoNerdFontMono-Regular.ttf" "$geist/GeistMonoNerdFontMono-Regular.otf")}
+export DOCS_MEDIA_FONT_BOLD=${DOCS_MEDIA_FONT_BOLD:-$(pick "$jb/JetBrainsMonoNerdFontMono-Bold.ttf" "$geist/GeistMonoNerdFontMono-Bold.otf")}
 [[ -f $DOCS_MEDIA_FONT ]] || { echo "docs-media: no font file; set DOCS_MEDIA_FONT" >&2; exit 1; }
 echo "docs-media: font $DOCS_MEDIA_FONT"
 
-# rig SCENE_DIR ARGS...: run media/rig.py on one scene. With "hostname" in
-# scene.json, the take runs in a UTS namespace with that host name, so a
-# screen that names the machine does not show yours. The outer user
-# namespace maps you to root, which may set the name. The inner one maps
-# you back to your own uid, so tuios sees the same user as outside.
+# rig SCENE_DIR ARGS...: run media/rig.py on one scene.
+#
+# With "hostname" or "short_home" in scene.json, the take runs in its own
+# user, UTS and mount namespaces:
+#
+# - The host name is the scene's "hostname", or demo, so a screen that
+#   names the machine does not show yours.
+# - A tmpfs covers /home, with your own home moved back in place, and the
+#   take's HOME is /home/demo. A path on the screen, such as the restore
+#   divider, then reads /home/demo/project and names no folder of yours.
+#
+# The outer user namespace maps you to root, which may set the name and
+# mount. The inner one maps you back to your own uid, so tuios sees the same
+# user as outside.
 rig() {
-  local host
+  local host short
   host=$(jq -r '.hostname // empty' "$1/scene.json")
-  if [[ -z $host ]]; then
+  short=$(jq -r '.short_home // false' "$1/scene.json")
+  if [[ -z $host && $short != true ]]; then
     python3 "$media/rig.py" "$@"
     return
   fi
-  unshare --user --map-root-user --uts bash -c \
-    'hostname "$0" && exec unshare --user --map-user="$1" --map-group="$2" python3 "$3/rig.py" "${@:4}"' \
-    "$host" "$(id -u)" "$(id -g)" "$media" "$@"
+  local stage
+  stage=$(mktemp -d)
+  unshare --user --map-root-user --uts --mount bash -c '
+    set -e
+    mount --make-rprivate /
+    mount --bind "$HOME" "$4"
+    mount -t tmpfs -o mode=755 tmpfs /home
+    mkdir -p "$HOME" /home/demo
+    mount --move "$4" "$HOME"
+    hostname "$0"
+    exec unshare --user --map-user="$1" --map-group="$2" env RIG_HOME=/home/demo python3 "$3/rig.py" "${@:5}"' \
+    "${host:-demo}" "$(id -u)" "$(id -g)" "$media" "$stage" "$@"
+  rmdir "$stage"
 }
 
 webp() { # SRC.png DEST.webp WIDTH

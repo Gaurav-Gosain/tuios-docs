@@ -169,26 +169,36 @@ def main():
 
     shutil.rmtree(build, ignore_errors=True)
     env_root = os.path.join(build, "env")
-    # "short_home": true puts the throwaway HOME under /tmp and runs a copy
-    # of tuios from ~/.local/bin in it. A screen that prints a path, such as
-    # the restore divider or the binary a restart runs, then names no folder
-    # of yours.
+    # "short_home": true runs the take with HOME at RIG_HOME (/home/demo,
+    # which scripts/docs-media.sh mounts) and a copy of tuios in
+    # ~/.local/bin there. A path on the screen, such as the restore divider
+    # or the binary a restart runs, then names no folder of yours.
     short_home = scene.get("short_home", False)
     if short_home:
-        env_root = tempfile.mkdtemp(prefix="tdm-env-", dir="/tmp")
-    dirs = {
-        k: os.path.join(env_root, v)
-        for k, v in {
-            "HOME": "home",
-            "XDG_CONFIG_HOME": "config",
-            "XDG_STATE_HOME": "state",
-            "XDG_DATA_HOME": "data",
-            "XDG_CACHE_HOME": "cache",
-            "TMPDIR": "tmp",
-        }.items()
+        env_root = os.environ.get("RIG_HOME")
+        if not env_root or not os.path.isdir(env_root) or os.listdir(env_root):
+            sys.exit("rig: short_home needs RIG_HOME, an empty folder. Run the scene with scripts/docs-media.sh")
+    layout = {
+        "HOME": "home",
+        "XDG_CONFIG_HOME": "config",
+        "XDG_STATE_HOME": "state",
+        "XDG_DATA_HOME": "data",
+        "XDG_CACHE_HOME": "cache",
+        "TMPDIR": "tmp",
     }
+    if short_home:
+        # HOME is the folder itself, with the usual XDG folders in it.
+        layout = {
+            "HOME": ".",
+            "XDG_CONFIG_HOME": ".config",
+            "XDG_STATE_HOME": ".local/state",
+            "XDG_DATA_HOME": ".local/share",
+            "XDG_CACHE_HOME": ".cache",
+            "TMPDIR": ".tmp",
+        }
+    dirs = {k: os.path.normpath(os.path.join(env_root, v)) for k, v in layout.items()}
     for d in dirs.values():
-        os.makedirs(d, mode=0o700)
+        os.makedirs(d, mode=0o700, exist_ok=True)
     if short_home:
         local_bin = os.path.join(dirs["HOME"], ".local", "bin")
         os.makedirs(local_bin)
