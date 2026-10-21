@@ -53,6 +53,23 @@ export DOCS_MEDIA_FONT_BOLD=${DOCS_MEDIA_FONT_BOLD:-$(pick "$geist/GeistMonoNerd
 [[ -f $DOCS_MEDIA_FONT ]] || { echo "docs-media: no font file; set DOCS_MEDIA_FONT" >&2; exit 1; }
 echo "docs-media: font $DOCS_MEDIA_FONT"
 
+# rig SCENE_DIR ARGS...: run media/rig.py on one scene. With "hostname" in
+# scene.json, the take runs in a UTS namespace with that host name, so a
+# screen that names the machine does not show yours. The outer user
+# namespace maps you to root, which may set the name. The inner one maps
+# you back to your own uid, so tuios sees the same user as outside.
+rig() {
+  local host
+  host=$(jq -r '.hostname // empty' "$1/scene.json")
+  if [[ -z $host ]]; then
+    python3 "$media/rig.py" "$@"
+    return
+  fi
+  unshare --user --map-root-user --uts bash -c \
+    'hostname "$0" && exec unshare --user --map-user="$1" --map-group="$2" python3 "$3/rig.py" "${@:4}"' \
+    "$host" "$(id -u)" "$(id -g)" "$media" "$@"
+}
+
 webp() { # SRC.png DEST.webp WIDTH
   run magick "$1" -resize "$3x" -strip -define webp:method=6 -quality 82 "$2"
 }
@@ -64,7 +81,7 @@ shot_scene() { # NAME
   for theme in "${themes[@]}"; do
     suffix=
     [[ $theme == *latte* || $theme == *light* || $theme == *day* ]] && suffix=-light
-    python3 "$media/rig.py" "$dir" "$build/$name$suffix" --theme "$theme"
+    rig "$dir" "$build/$name$suffix" --theme "$theme"
     for shot in $(jq -r '.shots[]' "$dir/scene.json"); do
       webp "$build/$name$suffix/$shot.png" "$root/public/shots/$shot$suffix.webp" 1600
       webp "$build/$name$suffix/$shot.png" "$root/public/shots/$shot$suffix-800.webp" 800
@@ -78,7 +95,7 @@ clip_scene() { # NAME
   local font max
   font=$(jq -r '.font // 18' "$dir/scene.json")
   max=$(jq -r '.max // 12' "$dir/scene.json")
-  python3 "$media/rig.py" "$dir" "$build/$name"
+  rig "$dir" "$build/$name"
   node "$media/render.mjs" "$build/$name" "$build/$name/master.mkv" --font "$font" --max "$max"
   mkdir -p "$root/public/clips"
   bash "$media/encode.sh" "$build/$name/master.mkv" "$root/public/clips/$name"
@@ -92,7 +109,7 @@ still_scene() { # NAME
   local name=$1 dir=$media/scenes/$1 shot font
   font=$(jq -r '.font // 28' "$dir/scene.json")
   shot=$(jq -r '.still' "$dir/scene.json")
-  python3 "$media/rig.py" "$dir" "$build/$name"
+  rig "$dir" "$build/$name"
   node "$media/render.mjs" "$build/$name" "$build/$name/master.mkv" --font "$font" --pre 0 --max 60
   run ffmpeg -v error -y -sseof -0.1 -i "$build/$name/master.mkv" -frames:v 1 -update 1 "$build/$name/$shot.png"
   webp "$build/$name/$shot.png" "$root/public/shots/$shot.webp" 1600

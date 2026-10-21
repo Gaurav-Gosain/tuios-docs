@@ -19,6 +19,9 @@ A scene is a folder under media/scenes/ with:
   config.toml  optional. Appended to media/base.toml.
   fixtures/    optional. Copied to the work folder, ~/project.
 
+  scene.json may also say "short_home": true, to keep paths of yours off
+  the screen. See below.
+
   scene.json may also say "host": "kitty", to answer tuios's graphics probe
   as a kitty terminal does. See KITTY_RESPONDERS.
 
@@ -166,6 +169,13 @@ def main():
 
     shutil.rmtree(build, ignore_errors=True)
     env_root = os.path.join(build, "env")
+    # "short_home": true puts the throwaway HOME under /tmp and runs a copy
+    # of tuios from ~/.local/bin in it. A screen that prints a path, such as
+    # the restore divider or the binary a restart runs, then names no folder
+    # of yours.
+    short_home = scene.get("short_home", False)
+    if short_home:
+        env_root = tempfile.mkdtemp(prefix="tdm-env-", dir="/tmp")
     dirs = {
         k: os.path.join(env_root, v)
         for k, v in {
@@ -179,6 +189,10 @@ def main():
     }
     for d in dirs.values():
         os.makedirs(d, mode=0o700)
+    if short_home:
+        local_bin = os.path.join(dirs["HOME"], ".local", "bin")
+        os.makedirs(local_bin)
+        tuios = shutil.copy2(tuios, os.path.join(local_bin, "tuios"))
     runtime = tempfile.mkdtemp(prefix="tdm-", dir="/tmp")
     dirs["XDG_RUNTIME_DIR"] = runtime
     socket = os.path.realpath(os.path.join(runtime, "tuios", "tuios.sock"))
@@ -361,6 +375,8 @@ def main():
         except ChildProcessError:
             pass
         shutil.rmtree(runtime, ignore_errors=True)
+        if short_home:
+            shutil.rmtree(env_root, ignore_errors=True)
 
     taken = sorted(glob.glob(os.path.join(shots_dir, "*.png")), key=os.path.getmtime)
     names = scene.get("shots", [])
