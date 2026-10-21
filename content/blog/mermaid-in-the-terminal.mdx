@@ -33,7 +33,7 @@ move to its new layout. Nothing goes to a server.
 
 <SketchPlayground />
 
-The engine is about a 1.8 MB download, once. In a quick Node run it drew a
+The engine is a download of under 2 MB, once. In a quick Node run it drew a
 flowchart in about 30 ms cold. The [full-page playground](/docs/libraries/sketch/playground) has
 more room and a share link.
 
@@ -47,8 +47,9 @@ Chinese and Japanese labels between characters.
 
 The test that keeps me honest is pele's own documentation corpus: 522 Mermaid
 sources, each with the SVG pele drew. sketch has to produce the identical SVG.
-Today 288 of the 522 match, which is every source of
-every type sketch draws so far. Changing one layout constant fails 14 of the
+On main today 335 of the 522 match, which is every source of the 15 types
+sketch draws so far. The rest of the types are in review, and with them all 522
+match, on plain amd64 and at `GOAMD64=v3`. Changing one layout constant fails 14 of the
 114 flowcharts, so the test notices small things.
 
 Matching pele exactly meant matching JavaScript in a few odd places. pele runs
@@ -73,7 +74,9 @@ It started with flowcharts and sequence diagrams.
 [#951](https://github.com/Gaurav-Gosain/tuios/pull/951) added state, class, ER,
 pie, mindmap and gantt diagrams, and
 [#948](https://github.com/Gaurav-Gosain/tuios/pull/948) added XY charts,
-timelines and quadrant charts. Here are four of them, drawn by
+timelines and quadrant charts, and
+[#949](https://github.com/Gaurav-Gosain/tuios/pull/949) added user journeys,
+kanban boards, git graphs and sankey diagrams. Here are four of them, drawn by
 `tuios mermaid -f text` in tuios panes:
 
 <Shot
@@ -82,7 +85,7 @@ timelines and quadrant charts. Here are four of them, drawn by
   width={1600}
   height={725}
   alt="Two tuios panes. On the left, tuios mermaid -f text state.mmd draws a state diagram with a start dot, Idle, Working, NeedsYou and Done boxes, labelled transitions and an end mark. On the right, tuios mermaid -f text xy.mmd draws an XY chart of render time per diagram in microseconds: before, after and ondine, as block columns on an axis from 0 to 50."
-  caption="A state diagram, and an XY chart of the render times further down this post."
+  caption={'A state diagram, and an XY chart of the warm render medians from the perf pass below, in µs per diagram: "sketch old" is sketch before the pass, "sketch new" is sketch after it, then ondine, all measured in one harness on one core. Lower is faster, and ondine is the fastest of the three.'}
 />
 
 <Shot
@@ -112,8 +115,8 @@ invalid UTF-8 into U+FFFD.
 The picture side had its own fun. `style A stroke-width:1e20` wrapped an int
 and cost about a minute of CPU per node. The rasterizer now sums its work
 budget in float64 and holds strokes to four image diagonals, and that test went
-from 56 s per case to under 10 ms. pele's own inert-output tests are ported
-too, 261 templates of them, and every type is fuzzed.
+from 56 s per case to under 10 ms. pele's own tests for inert output are
+ported for each type, and every type is fuzzed.
 
 ## The perf pass against ondine
 
@@ -123,8 +126,9 @@ process drawing one diagram took about 2 ms with sketch and about 60 ms with
 pele, since Node has to start first.
 
 Then [ondine](https://github.com/wevm/ondine) came along, a Rust port of
-pele, and it was about 1.85x faster than sketch warm and 3x faster cold. That
-was a fun challenge :) [#928](https://github.com/Gaurav-Gosain/tuios/pull/928)
+pele. I ran both on the same 421 diagrams, same machine, same settings, and
+ondine was about 1.9x faster warm and about 3x faster cold. That was a fun
+challenge :) [#928](https://github.com/Gaurav-Gosain/tuios/pull/928)
 was the result, measured on one core over a 421-diagram corpus, median of 300
 renders each:
 
@@ -138,7 +142,7 @@ renders each:
   unit="µs"
   groupLabel="per diagram"
   scale="group"
-  caption="Intel i7-10700, one core, three alternating runs. Bars are scaled within each group. The CLI row is 2.12 ms, 1.12 ms and 0.72 ms."
+  caption="Lower is faster. sketch before and after the perf pass, and ondine, in one harness: Intel i7-10700, one core, three alternating runs, the same 421 diagrams of the eight types both draw. Bars are scaled within each group. The CLI row is 2.12 ms, 1.12 ms and 0.72 ms. ondine is faster on both."
 />
 
 The biggest single win was start-up. About 1.4 ms of every sketch start went
@@ -157,7 +161,9 @@ The output did not change at all. 842 of 842 SVGs from the corpus, with two
 different text measurers, came out the same as before, checked after every
 commit.
 
-ondine is still faster: 1.28x warm per diagram, and the cold gap is 0.4 ms now.
+ondine is still faster than sketch on all three things I measured: warm,
+cold and memory. Warm, it is 1.28x faster per diagram. Cold, the gap is 0.4 ms
+now. It uses about half the memory.
 On four cores the corpus sums are 20.3 ms for sketch and 19.3 ms for ondine.
 On one core the garbage collector is about 19% of sketch's render time, so
 that's where the next round would go.
@@ -178,9 +184,9 @@ tuios binary when it first landed, and the size ceiling went from 40 MB to
 now that tuios has [native plugins](/docs/plugins), and bring the ceiling
 back down.
 
-sketch draws 11 of pele's types on main today. The other 22, from git graphs
-and sankey diagrams to C4 and railroad diagrams, are in open pull requests and
-come next. Everything here goes out in v0.11.0. Until then, the
+sketch draws 15 of pele's types on main today. The other 18, from block and C4
+diagrams to railroad and use case diagrams, are in open pull requests and come
+next. Everything here goes out in v0.11.0. Until then, the
 [sketch page](/docs/libraries/sketch) has the Go API, and
 `go get tuios.dev/sketch` works today.
 
