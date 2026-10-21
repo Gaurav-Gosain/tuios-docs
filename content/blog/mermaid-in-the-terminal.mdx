@@ -1,0 +1,187 @@
+---
+title: Mermaid diagrams in the terminal
+description: tuios mermaid draws Mermaid diagrams right in your terminal, as a picture or as text. It runs on sketch, a pure Go port of pele by kepano. Here is how the port stays faithful to pele, how the text drawings work, and what a perf pass against ondine bought.
+date: '2026-10-21'
+author: Gaurav Gosain
+tags: [rendering, performance]
+---
+
+Agents love Mermaid. Every plan, every design note, every README an agent
+writes for me seems to have a flowchart in it. And in a terminal I could never
+actually see one. I'd read the source, squint, and imagine the boxes.
+
+Then [kepano](https://github.com/kepano) released
+[pele](https://github.com/obsidianmd/pele), a Mermaid renderer from the
+Obsidian folks that draws diagrams without a browser, fast, with output that's
+safe to put in a page. I read the code and thought, this would port to Go
+really well. So I ported it. It's called `tuios.dev/sketch`, and `tuios
+mermaid` uses it:
+
+![tuios mermaid in a tuios window: a flowchart with client, services and storage groups drawn as a kitty picture in the tuios theme, and below it the same flowchart drawn with box-drawing characters](/shots/sketch-hero.png)
+
+Where the terminal shows images, you get a real picture in your tuios theme.
+Everywhere else, over SSH, in a plain terminal, in a log, you get the same
+diagram drawn with box-drawing characters, from the same layout. All the credit
+for the design, the layout engine, the shapes and the test corpus goes to pele
+and kepano. I just moved it to another language.
+
+## Try it right here
+
+sketch also compiles to WebAssembly, so the playground below is the same Go
+code running in a worker in this tab. Type in the editor and watch the diagram
+move to its new layout. Nothing goes to a server.
+
+<SketchPlayground />
+
+The engine is about a 1.8 MB download, once. In a quick Node run it drew a
+flowchart in about 30 ms cold. The [full-page playground](/docs/libraries/sketch/playground) has
+more room and a share link.
+
+## A port, file by file
+
+I wanted the port to be boring to keep up to date. Each Go file is the port of
+one pele file and keeps its names and comments, so when pele changes upstream,
+I can find the matching Go and change it the same way. A script lists the pele
+commits after the pin. sketch follows pele v1.7.0 now, which taught it to wrap
+Chinese and Japanese labels between characters.
+
+The test that keeps me honest is pele's own documentation corpus: 522 Mermaid
+sources, each with the SVG pele drew. sketch has to produce the identical SVG.
+Today 288 of the 522 match, which is every source of
+every type sketch draws so far. Changing one layout constant fails 14 of the
+114 flowcharts, so the test notices small things.
+
+Matching pele exactly meant matching JavaScript in a few odd places. pele runs
+on V8, so sketch carries its own copies of JavaScript's number formatting,
+`Math.round`, V8's `sin` and `cos`, and `Date.parse`. The XY chart picks its
+tick steps with `Math.log10`, and Go's `math.Log10` differs from V8 in the last
+bit on 258,678 of 1,086,347 inputs I tried. So sketch has `log10` ported from
+fdlibm, as V8 does, and that one matches on all of them.
+
+Then arm64 showed up. Go may fuse `x*y+z` into one FMA instruction, and on
+arm64 it does, which rounds once instead of twice. A CI job now runs the
+goldens on an arm64 runner and at `GOAMD64=v3`, and the products that matter
+are wrapped in `float64()` so the compiler leaves them alone.
+
+## Diagrams as text
+
+The text drawing was the part I was most excited about, honestly. A picture
+needs a terminal that shows images. Text works everywhere, and an agent can
+read it too.
+
+It started with flowcharts and sequence diagrams.
+[#951](https://github.com/Gaurav-Gosain/tuios/pull/951) added state, class, ER,
+pie, mindmap and gantt diagrams, and
+[#948](https://github.com/Gaurav-Gosain/tuios/pull/948) added XY charts,
+timelines and quadrant charts. Here are four of them, drawn by
+`tuios mermaid -f text` in tuios panes:
+
+<Shot
+  name="blog-mermaid-text-state"
+  light
+  width={1600}
+  height={725}
+  alt="Two tuios panes. On the left, tuios mermaid -f text state.mmd draws a state diagram with a start dot, Idle, Working, NeedsYou and Done boxes, labelled transitions and an end mark. On the right, tuios mermaid -f text xy.mmd draws an XY chart of render time per diagram in microseconds: before, after and ondine, as block columns on an axis from 0 to 50."
+  caption="A state diagram, and an XY chart of the render times further down this post."
+/>
+
+<Shot
+  name="blog-mermaid-text-gantt"
+  light
+  width={1600}
+  height={896}
+  alt="Two tuios panes. On top, a gantt chart titled Port a diagram type with sections Port, Check and Ship, tasks as bars on a date axis in different shades for done, active and critical, and a milestone. Below, a pie chart of pele's corpus drawn as labelled bars: flowchart 114, sequence 38, class 38, ER 25 and state 22."
+  caption="A gantt chart with done, active and critical tasks, and a pie drawn as labelled bars."
+/>
+
+State, class and ER diagrams go through the same compound layout as
+flowcharts, with a small hook for box sizes, node shapes and end marks. A class
+relation gets real UML ends: △ for inheritance, ◆ for composition, ◇ for
+aggregation. The XY chart borrows from [plot](/docs/libraries/plot), so bars
+are eighth blocks and lines are braille. A text drawing costs 18 to 85 µs per
+corpus diagram at 120 columns, layout included.
+
+## Safe to show
+
+A diagram's labels come from whoever wrote the file, and a terminal takes
+escape sequences. During review, a node labelled `A["#27;]2;pwned#7;"]` set the window
+title, since Mermaid turns `#27;` into an escape character. Every text drawing and every string `tuios mermaid` prints now
+goes through a filter that turns C0 and C1 controls, DEL, bidi overrides and
+invalid UTF-8 into U+FFFD.
+
+The picture side had its own fun. `style A stroke-width:1e20` wrapped an int
+and cost about a minute of CPU per node. The rasterizer now sums its work
+budget in float64 and holds strokes to four image diagonals, and that test went
+from 56 s per case to under 10 ms. pele's own inert-output tests are ported
+too, 261 templates of them, and every type is fuzzed.
+
+## The perf pass against ondine
+
+The first version already beat pele, which runs on Node, on all 152 flowchart
+and sequence sources I timed: a median of 21.8 µs against 43.6 µs warm. A fresh
+process drawing one diagram took about 2 ms with sketch and about 60 ms with
+pele, since Node has to start first.
+
+Then [ondine](https://github.com/wevm/ondine) came along, a Rust port of
+pele, and it was about 1.85x faster than sketch warm and 3x faster cold. That
+was a fun challenge :) [#928](https://github.com/Gaurav-Gosain/tuios/pull/928)
+was the result, measured on one core over a 421-diagram corpus, median of 300
+renders each:
+
+<BenchBars
+  groups={["median render,", "one-shot CLI, median flowchart,"]}
+  series={[
+    { label: "sketch before", values: [46.1, 2120], tone: "baseline" },
+    { label: "sketch after", values: [32.7, 1120], tone: "subject" },
+    { label: "ondine", values: [23.0, 720], tone: "baseline" }
+  ]}
+  unit="µs"
+  groupLabel="per diagram"
+  scale="group"
+  caption="Intel i7-10700, one core, three alternating runs. Bars are scaled within each group. The CLI row is 2.12 ms, 1.12 ms and 0.72 ms."
+/>
+
+The biggest single win was start-up. About 1.4 ms of every sketch start went
+to package init, mostly some 100 package-level `regexp.MustCompile` calls. They
+compile on first use now, and the hot ones (flowchart links, label markup,
+class names) are hand-written matchers. Each matcher has a fuzz target that
+compares it with the regexp it replaced. Init of sketch's packages went from
+0.94 ms to 0.08 ms.
+
+The rest was the usual: SVG written by appending to buffers instead of
+building strings, layout slices sized up front, and fewer allocations per
+render, 336 down to 234. A test now fails if a render goes over 260
+allocations, so it can't creep back.
+
+The output did not change at all. 842 of 842 SVGs from the corpus, with two
+different text measurers, came out the same as before, checked after every
+commit.
+
+ondine is still faster: 1.28x warm per diagram, and the cold gap is 0.4 ms now.
+On four cores the corpus sums are 20.3 ms for sketch and 19.3 ms for ondine.
+On one core the garbage collector is about 19% of sketch's render time, so
+that's where the next round would go.
+
+## Watching a file
+
+`tuios mermaid --watch notes.mmd` fills the terminal with the diagram and
+draws it again each time you save. The shapes slide and grow to their new
+places over 260 ms, new parts fade in, and edges morph. `--split` shows the
+source next to it. Between changes there is no timer and no frame: 0 CPU ticks
+and 0 context switches in 5 seconds.
+
+## What it cost, and what is next
+
+Mermaid with its fonts, themes and text drawings added about 2.2 MB to the
+tuios binary when it first landed, and the size ceiling went from 40 MB to
+45 MB for it. My plan is to move heavy optional parts like this into plugins,
+now that tuios has [native plugins](/docs/plugins), and bring the ceiling
+back down.
+
+sketch draws 11 of pele's types on main today. The other 22, from git graphs
+and sankey diagrams to C4 and railroad diagrams, are in open pull requests and
+come next. Everything here goes out in v0.11.0. Until then, the
+[sketch page](/docs/libraries/sketch) has the Go API, and
+`go get tuios.dev/sketch` works today.
+
+Thanks again to kepano for pele. It's a lovely piece of code to read.
