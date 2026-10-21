@@ -87,7 +87,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 
 | Group | Commands |
 |-------|----------|
-| [Sessions](#sessions) | `new`, `attach`, `ls`, `list-clients`, `detach-client`, `ssh-agent-path`, `resurrect`, `rename-session`, `kill-session`, `kill-server`, `daemon`, `logs` |
+| [Sessions](#sessions) | `new`, `attach`, `ls`, `list-clients`, `detach-client`, `ssh-agent-path`, `resurrect`, `rename-session`, `kill-session`, `kill-server`, `restart-server`, `daemon`, `logs` |
 | [Worktrees](#worktrees) | `worktree`, `fan`, `ship` |
 | [Windows and workspaces](#windows-and-workspaces) | `new-window`, `split-window`, `popup`, `xpanes`, `close-workspace`, `focus-window`, `pip`, `move-window`, `set-window`, `set-layout`, `select-workspace`, `list-workspaces`, `set-workspace-name`, `set-session-name`, `set-session-accent`, `set-session-space` |
 | [Input and output](#input-and-output) | `send-keys`, `send-text`, `run`, `capture-pane`, `screenshot`, `wait-for`, `subscribe` |
@@ -101,7 +101,8 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 | [Agent setup](#agent-setup) | `integration`, `doctor`, `pane-grants`, `set-pane-grants`, `mcp`, `tmux-shim`, `tmux` |
 | [Remote hosts](#remote-hosts) | `hosts`, `pair` |
 | [Tapes and layouts](#tapes-and-layouts) | `tape`, `layout` |
-| [Other](#other-commands) | `ssh`, `notify`, `update`, `completion`, `help` |
+| [Plugins](#plugins) | `plugins` |
+| [Other](#other-commands) | `ssh`, `notify`, `mermaid`, `tml`, `update`, `completion`, `help` |
 
 `agent-hook`, `agent-statusline` and `agent-proto` are run by the harness integrations and by `start-agent --protocol`, not by hand. Their `--help` says what they do.
 
@@ -380,7 +381,7 @@ The new name is what `tuios ls`, `attach` and `-s` use, and what new panes get a
 A name that another running or saved session has is refused, and so is an empty name or one with a slash or a control character.
 
 <Callout type="warn" title="Older daemon">
-A daemon older than this command does not know it, and refuses. Run `tuios kill-server` and start TUIOS again.
+A daemon older than this command does not know it, and refuses. Run `tuios restart-server` to move the daemon to your build.
 </Callout>
 
 ### kill-session <Since command="kill-session" /> [#kill-session]
@@ -404,6 +405,27 @@ tuios kill-server
 ```
 
 The command waits until the daemon has saved every session and removed its socket, so you can start a new daemon as soon as it returns. It fails if the daemon has not stopped within 10 seconds. Sessions are restored when the next daemon starts. To start clean, use `tuios daemon --no-restore`. With no daemon running, it removes a stale socket if there is one and exits `0`.
+
+`--restart` tells the attached clients that a new daemon follows, so they wait for it and attach again. Without it the clients quit at once. `restart-server` passes it.
+
+### restart-server <Since command="restart-server" /> [#restart-server]
+
+Stop the daemon and start it again with the newest tuios installed. Use it after an update.
+
+```bash
+tuios restart-server             # show what stops, ask, then restart
+tuios restart-server --dry-run   # show what stops, and change nothing
+tuios restart-server --yes       # restart without a question
+tuios restart-server --last      # show the steps of the last restart
+```
+
+- It lists the programs that stop, by pane and session, and the agents that can resume, then asks. Without a terminal it refuses unless you give `--yes`.
+- The new daemon runs the newer of two binaries by `--version`: the tuios at this command's path, and the `tuios` on `PATH`.
+- `--json` writes one object per step: `plan`, `stopping`, `starting` and `done`. It needs `--yes`.
+- `--expect DIGEST` refuses the restart unless the plan has that digest.
+- Attached clients on this machine wait up to 15 seconds and attach again by themselves.
+
+See [Restarting the Daemon](/docs/daemon-restart).
 
 ### daemon <Since command="daemon" /> [#daemon]
 
@@ -2182,6 +2204,23 @@ tuios layout export dev > dev.tape
 tuios tape exec dev.tape
 ```
 
+## Plugins
+
+Install, run and inspect plugins. Run the commands that change a plugin from a terminal outside tuios. The daemon refuses them from a pane. See [Plugins](/docs/plugins).
+
+| Command | What it does |
+|---------|--------------|
+| `tuios plugins install SOURCE` <Since command="plugins install" /> | Get a plugin with git, show the plan, build it, pin its commit in `plugins.lock` and enable it. `SOURCE` is `owner/repo[/dir][@ref]` on github.com, a git URL with an optional `@ref`, or a local folder. Flags: `--ref`, `--subdir`, `--yes`, `--no-enable`, `--no-build`, `--replace`, `--grant admin` |
+| `tuios plugins install` | With no source: install each plugin in `plugins.lock` at its commit. It enables nothing |
+| `tuios plugins list [--json]` | List the plugins tuios finds, with the state of each. An installed one shows `managed`, its source and its commit |
+| `tuios plugins info ID [--json]` | Show what a plugin runs, and the grants a native plugin asks for and holds |
+| `tuios plugins enable ID`, `disable ID` | Add the plugin to `[plugins] enabled` and start it, or remove it and stop its processes |
+| `tuios plugins link DIR [--enable]`, `unlink ID` | Use a plugin folder in place, or stop using it |
+| `tuios plugins build ID` | Run the plugin's build commands. Each one is shown first |
+| `tuios plugins run ID ACTION [--wait]` | Run an action of an enabled plugin |
+| `tuios plugins open ID PANE [--placement P]` | Open a pane of an enabled plugin: `overlay`, `popup`, `split`, `tab` or `zoomed` |
+| `tuios plugins log [ID] [--limit N] [--json]` | Show the last runs of plugin commands, with their exit codes and output |
+
 ## Other commands
 
 ### ssh <Since command="ssh" /> [#ssh]
@@ -2288,7 +2327,27 @@ FILE is a Mermaid source (`.mmd`), a Markdown file, or `-` for stdin. A Markdown
 - `--demo`: type the diagram of FILE, or a built-in flowchart, one character at a time, for a recording. A Markdown file is typed one `mermaid` block after the other.
 - `--loop`: with `--demo`, start again 2 seconds after the end.
 
-In the live view, press <kbd>r</kbd> to start the demo again and <kbd>q</kbd> to quit. The text drawing covers flowcharts and sequence diagrams. Another type, or a drawing too wide for the terminal, is written as its source. The command exits `1` when a diagram cannot be drawn. [sketch](/docs/libraries/sketch) draws the diagrams.
+In the live view, press <kbd>r</kbd> to start the demo again and <kbd>q</kbd> to quit. The text drawing covers flowcharts, sequence diagrams, state diagrams, class diagrams, ER diagrams, pie charts, mindmaps and gantt charts. Another type is written as its source, with a note on stderr. A drawing wider than the terminal is written at its full width, with a note on stderr. The command exits `1` when a diagram cannot be drawn. [sketch](/docs/libraries/sketch) draws the diagrams.
+
+### tml <Since command="tml" /> [#tml]
+
+Show a TML document in tuios as a popup or a pane, and talk to it from a script.
+
+```bash
+tuios tml show FILE|- [--pane] [--wait] [--events] [--width N] [--height N]
+tuios tml close SURFACE [VALUE]
+tuios tml patch SURFACE OPS          # a JSON Patch (RFC 6902) on the state
+tuios tml replace SURFACE FILE [--keep-state]
+tuios tml get SURFACE
+tuios tml list
+tuios tml validate FILE
+```
+
+- `show` prints the surface id. `--wait` prints the value the document closed with, or `null` with exit status `1` when you dismissed it. `--events` prints the surface's events as JSON lines until it closes.
+- A pane may patch, replace and close only the surfaces it opened. These need the `write` grant.
+- `validate` prints each problem with its place and the fix.
+
+See [tml](/docs/libraries/tml#show-a-document-in-tuios).
 
 ### update <Since command="update" /> [#update]
 
@@ -2302,7 +2361,7 @@ tuios update --check --pre  # include prereleases
 
 It only updates a binary installed from a release archive, which is what the install script uses. For Homebrew, a system package, Nix or `go install`, it refuses and prints the command that updates that install. It also updates `tuios-web` when it sits next to `tuios`. Every download is checked against the release checksums.
 
-The running daemon keeps the old version. To switch, detach, run `tuios kill-server`, and start TUIOS again. Set `GITHUB_TOKEN` or `GH_TOKEN` to raise the GitHub API rate limit.
+The running daemon keeps the old version. Run `tuios restart-server` to move it to the new build. See [Restarting the Daemon](/docs/daemon-restart). Set `GITHUB_TOKEN` or `GH_TOKEN` to raise the GitHub API rate limit.
 
 ### completion
 
