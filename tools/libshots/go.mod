@@ -6,7 +6,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.8
 	golang.org/x/image v0.45.0
 	tuios.dev/loom v0.1.1-0.20261021135526-b956b69e576d
-	tuios.dev/plot v0.1.1-0.20261021160832-0e94bb515461
+	tuios.dev/plot v0.1.1-0.20261021163928-0b9f16190301
 	tuios.dev/progstatus v0.1.1-0.20261020202737-da3567151be6
 	tuios.dev/shot v0.2.1-0.20261020202737-da3567151be6
 	tuios.dev/sketch v0.1.2-0.20261021152429-d60c774a4079
