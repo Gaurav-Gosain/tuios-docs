@@ -29,19 +29,18 @@ A person who never runs an agent is not shown any of this. Until an agent has be
 
 | Key | Does |
 |-----|------|
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> | Open the Inbox |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> | Open the [agents view](#the-agents-view). The Inbox is its Needs you group |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>o</kbd> | Go to the oldest item that needs you, switching session and workspace. <kbd>o</kbd> again goes to the next |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>O</kbd> | Go to the newest finished turn you have not seen. <kbd>O</kbd> again goes to the next older one |
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>M</kbd> | Open the Inbox on its mail. <kbd>m</kbd> there opens the whole mailbox |
-| <kbd>Tab</kbd> in the Inbox <Since action="inbox_agents" /> | Show every agent in one list, with its conversation. See [The agents view](#the-agents-view) |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>M</kbd> | Open the agents view on the mail for you. <kbd>m</kbd> there opens the whole mailbox |
 
 The palette has them too: type `agent`.
 
-Rows are grouped under Approvals, Plans, Questions, Mail, Errored, Resume and Done, oldest first in each group. Mail to another machine whose link is down waits under Waiting to send. A row shows its kind's glyph, the pane's name, what it said, its session and how long it has waited. The footer offers only the keys that act on the row under the cursor, the one that answers it first. An item closes by itself when what opened it stops being true: the agent leaves `needs_input`, the mail is read, or someone looks at the pane that finished.
+The Inbox items are the Needs you group at the top of the agents view: approvals, questions, plans, mail for you, errors and conversations to resume. Mail to another machine whose link is down waits under Waiting to send. A row shows the pane's name, what it asks, its session and how long it has waited. The footer offers only the keys that act on the row under the cursor. An item closes by itself when what opened it stops being true: the agent leaves `needs_input`, the mail is read, or someone looks at the pane that finished.
 
-<kbd>f</kbd> shows one kind at a time. <kbd>/</kbd> narrows the list with a selector, such as `harness:codex needs:you` or `session:api-fan-*`. See [Selectors](#selectors).
+<kbd>f</kbd> shows only the items, then one kind at a time, then every agent again. <kbd>/</kbd> narrows the list with a selector, such as `harness:codex needs:you` or `session:api-fan-*`. See [Selectors](#selectors).
 
-Every key in the Inbox is rebindable. The full list is on the [Keybindings](/docs/keybindings#inbox-and-mailbox) page.
+Every key in the agents view is rebindable. The full list is on the [Keybindings](/docs/keybindings#inbox-and-mailbox) page.
 
 From a shell:
 
@@ -118,14 +117,14 @@ hold_seconds = 120
 
 Then run `tuios integration install claude-code` (or `opencode`, `kilo`, `qwen`) again, so its hook is the version that waits.
 
-While a prompt is held, the harness shows nothing in its pane. The Approvals row shows the request, such as `approve Bash: go test ./...`, and the whole line is under the list:
+While a prompt is held, the harness shows nothing in its pane. The row under Needs you shows the request, such as `approve Bash: go test ./...`, and its card beside the list shows the whole line:
 
 | Key | Does |
 |-----|------|
-| <kbd>1</kbd> | Allow once |
-| <kbd>2</kbd> | Always allow. Offered only when every rule it adds can be shown, and the rules are shown |
-| <kbd>3</kbd> | Deny |
-| <kbd>n</kbd> | Deny with a reason you type, which the model reads |
+| <kbd>a</kbd>, <kbd>1</kbd> | Allow once |
+| <kbd>A</kbd>, <kbd>2</kbd> | Always allow. Offered only when every rule it adds can be shown, and the rules are shown |
+| <kbd>r</kbd>, <kbd>3</kbd> | Deny |
+| <kbd>R</kbd> | Deny with a reason you type, which the model reads |
 
 A key answers only what you have read: the digits do nothing until the item has been on screen, unchanged, for 0.4 seconds. Only a request that fits on one line whole is held, such as a shell command or a file read. An edit, an MCP tool call or a long command is answered in the pane as before.
 
@@ -170,14 +169,14 @@ A command written to hide what it does (a variable holding `rm`, an alias, a scr
 
 ### Plans
 
-With approvals on for Claude Code, a plan it asks you to approve when it leaves plan mode is held too, under Plans. The row is the plan's title and length, and the whole plan is under the list. <kbd>J</kbd> and <kbd>K</kbd> scroll it.
+With approvals on for Claude Code, a plan it asks you to approve when it leaves plan mode is held too. The row is the plan's title and length, and its card beside the list shows the whole plan. <kbd>J</kbd> and <kbd>K</kbd> scroll it.
 
 | Key | Does |
 |-----|------|
 | <kbd>1</kbd> | Approve. Claude Code leaves plan mode and still asks before each edit |
 | <kbd>2</kbd> | Approve and accept edits for this session, when Claude Code offers that |
 | <kbd>3</kbd> | Keep planning |
-| <kbd>n</kbd> | Keep planning, with a reason you type |
+| <kbd>R</kbd> | Keep planning, with a reason you type |
 
 <kbd>1</kbd> and <kbd>2</kbd> work only once the plan's last line has been on screen. <kbd>1</kbd> is the safest answer, which differs from Claude Code's own menu on purpose. Set `hold_plans = false` under `[agents.approvals]` to answer plans in the pane.
 
@@ -206,62 +205,88 @@ Try the keys on a pretend Inbox. Focus the list, then allow the risky command, s
 
 <InboxDemo />
 
-## The agents view <Since action="inbox_agents" /> [#the-agents-view]
+## The agents view [#the-agents-view]
 
-<kbd>Tab</kbd> in the Inbox shows every agent in one list: the agents of this session, of the other sessions, and of linked machines. <kbd>Tab</kbd> again goes back to the attention list. The Inbox opens on the view you used last.
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> opens one full-screen view of every agent: the agents of this session, of the other sessions, and of linked machines. The agents are grouped by what each one needs from you:
+
+| Group | Holds |
+|-------|-------|
+| Needs you | The Inbox items: approvals, questions, plans, mail for you, errors and conversations to resume |
+| Ready for review | A finished turn you have not looked at |
+| Working | Agents in the middle of a turn |
+| Idle | Agents at rest |
+| Earlier | Agents at rest for more than an hour |
 
 <Shot
   name="agents-view"
   width={1600}
   height={823}
-  alt="The Inbox's agents view. The list shows four agents with their state and session. Beside it, the thread of a Claude Code agent shows the prompt, its tool calls and its last answer."
+  light
+  alt="The agents view. Agents are grouped under Needs you, Working and Idle. Beside the list, the thread of the Claude Code agent api shows its answer, an edit to retry.go as a diff with line numbers, a test run and its last answer. The reply area is at the foot."
 />
 
-Each row shows the agent's state mark, its name, its session, what it does and how long it has done it. The row also shows what waits for the agent: queued replies, unread mail and subagents. An agent on another machine has the machine's name before its session. The rows come from the rail's agents section, so the two lists always agree.
+On a wide screen each row has two lines. The first has the state mark, the name, the harness, the session (or the machine, for an agent on another one) and how long the agent has been in its state. The second says the one thing worth reading: what a Needs you row asks, what a working agent does now, or the branch of one ready for review. Subagents hang under their agent. The rows come from the rail's agents section, so the two lists always agree.
+
+Beside the list, the focus shows the selected agent: its name, harness and state, its thread, and at the bottom the card of what it asks. A held approval's card shows the whole command and the buttons that answer it. At 170 columns and wider, a side column shows the agent's live pane, the files its last turn changed, and its [checkpoints](/docs/checkpoints). On a narrower screen these are tabs after Thread and Changes. <kbd>[</kbd> and <kbd>]</kbd> switch the tab.
 
 | Key | Does |
 |-----|------|
 | <kbd>j</kbd>, <kbd>k</kbd> | Move |
-| <kbd>f</kbd> | Show one group: all, needs you, working, done, error |
-| <kbd>s</kbd> | Sort: needs you first, name, most recent change, session |
+| <kbd>Enter</kbd> | Go to the agent's pane and close the view. On mail, open the thread |
+| <kbd>a</kbd> <kbd>A</kbd> <kbd>r</kbd> <kbd>R</kbd> | On a held approval: allow once, always allow, reject, reject and say why. <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> still work |
+| <kbd>r</kbd>, <kbd>i</kbd>, <kbd>Tab</kbd> | With no approval waiting: write a reply. See [Replying and the queue](#replying-and-the-queue) |
+| <kbd>Space</kbd> | Read an approval's or a question's prompt and answer it here |
+| <kbd>n</kbd> <Since action="inbox_new_agent" /> | Start a new agent. See [Starting an Agent](/docs/new-agent) |
+| <kbd>f</kbd> | Show only what needs you, then each kind of item, then every agent |
+| <kbd>s</kbd> | Step the order inside each group: needs you first, name, most recent change, session |
 | <kbd>/</kbd> | Search. A `key:value` term is a [selector](#selectors). Other words match the name, the session and the agent's last message |
-| <kbd>Enter</kbd> | Go to the agent's pane |
-| <kbd>r</kbd> | Reply to the agent. See [Replying and the queue](#replying-and-the-queue) |
+| <kbd>v</kbd> | Review the agent's changes |
+| <kbd>e</kbd> | Show every line of every card in the thread |
 | <kbd>Ctrl</kbd>+<kbd>]</kbd> | Look at the agent's own screen. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> comes back |
-| <kbd>Tab</kbd> | Go back to the attention list |
-| <kbd>Esc</kbd> | Close |
+| <kbd>?</kbd> | All keys |
+| <kbd>Esc</kbd>, <kbd>q</kbd> | Close |
+
+The mouse works too. A click on a row selects it, and a double-click goes to its pane. A click on a group heading folds the group. The buttons on an approval card answer it, and `+ New agent` opens the [New agent sheet](/docs/new-agent).
+
+The layout follows the screen. From 120 columns the rows have two lines. From 80 columns they have one. Under 80 columns the list fills the screen, and <kbd>Enter</kbd>, <kbd>→</kbd> or a click opens the focus in its place.
 
 ### The thread <Since feature="agent-thread" /> [#the-thread]
 
-On a screen 110 columns wide or more, the thread of the selected agent is next to the list. On a narrower screen, <kbd>Enter</kbd> opens the thread in place of the list. <kbd>Enter</kbd> there goes to the pane, and <kbd>Esc</kbd> goes back.
+The thread shows what the agent said and did, read from its own transcript. It works for Claude Code, Codex, Gemini CLI, Qwen Code, Copilot CLI, Amp, opencode and Cursor Agent. For other agents, the thread shows the recap of their turns, their last message and their last mail.
 
-For Claude Code, the thread is the conversation from its transcript: your prompts, its answers, its tool calls and their result, plans and todo lists. The thread grows while the agent works. For other agents, the thread shows the recap of their turns, their last message and their last mail. A gutter mark is in front of all text that an agent wrote. Nothing in that text is a link or a key.
+- Your prompts sit in a panel with an accent bar. The agent's answers are drawn as Markdown: headings, lists, tables, links and highlighted code.
+- Reads and searches fold to one line.
+- An edit shows its diff, with line numbers and the changed part of each line lit. <kbd>e</kbd> shows every line of every card.
+- A command that failed shows the end of its output and a `failed` mark.
+- A todo list is a plan, with done rows struck through.
 
-When the agent waits on an approval that the Inbox holds, the whole approval is at the bottom of the thread. <kbd>1</kbd> allows it once, <kbd>2</kbd> always allows it, and <kbd>3</kbd> denies it. The [same rules](#approvals-the-inbox-holds) apply as in the attention list. <kbd>r</kbd> or <kbd>i</kbd> opens the reply editor under the thread.
+The newest card is at the bottom. The wheel, or <kbd>J</kbd> and <kbd>K</kbd>, scrolls the thread. The thread grows while the agent works. A gutter mark is in front of all text that an agent wrote. Nothing in that text is a link or a key.
 
-<kbd>Ctrl</kbd>+<kbd>]</kbd> closes the Inbox, focuses the agent's pane and zooms it. The dock shows `Press ctrl+b i to go back to the agents.` The Inbox then opens on the same agent, at the same scroll, with every draft kept. The key also works while the reply editor is open.
+<kbd>Ctrl</kbd>+<kbd>]</kbd> closes the view, focuses the agent's pane and zooms it. The dock shows `Press ctrl+b i to go back to the agents.` The view then opens on the same agent, with every draft kept.
 
 <DocsClip
   src="/clips/agents-thread"
   width={1200}
   height={828}
-  alt="The Inbox opens on the agents view. The cursor moves through four agents, and the thread next to the list changes. Ctrl+] shows the api agent's own pane, and Ctrl+B i comes back to the same agent."
+  alt="The agents view opens. The cursor moves to the api agent, whose thread shows an edit as a diff, then through review and web and back. Ctrl+] shows the api agent's own pane, and Ctrl+B i comes back to the same agent."
   caption="Move through the agents, look at one pane with Ctrl+], and come back with Ctrl+B i."
 />
 
-The view does not poll. The list changes when the state of an agent changes. The times move on once a minute while the view is on the screen.
+The view does not poll. The list changes when the state of an agent changes.
 
 ### Many agents at once <Since feature="inbox-bulk" /> [#many-agents-at-once]
 
-<kbd>Space</kbd> marks the selected agent. <kbd>\*</kbd> marks every agent in the list, or clears the marks when all are marked. The title shows how many agents have a mark. With marks:
+<kbd>x</kbd> marks the selected agent. <kbd>\*</kbd> marks every agent shown, or clears the marks when all are marked. The title shows how many agents have a mark. With marks:
 
 | Key | Does |
 |-----|------|
 | <kbd>r</kbd> | Write one reply. <kbd>Enter</kbd> queues it for each marked agent, at most 32. An agent that waits on a prompt, or that runs on another machine, does not get it. The dock names those agents |
 | <kbd>1</kbd> | List each approval that the marked agents wait on. <kbd>Enter</kbd> allows all of them |
-| <kbd>3</kbd> | Deny each approval that the marked agents wait on |
-| <kbd>d</kbd> | Dismiss the Inbox items of the marked agents |
-| <kbd>z</kbd> | Snooze the Inbox items of the marked agents. Then select the time |
+| <kbd>3</kbd> | Reject each approval that the marked agents wait on |
+| <kbd>d</kbd> | Dismiss what the marked agents have in Needs you |
+| <kbd>z</kbd> | Snooze what the marked agents have in Needs you. Then select the time |
+
+A bulk key acts only on the marked agents the list shows. An agent in a folded group, or one the search hides, is left out. Closing the view clears the marks.
 
 The list that <kbd>1</kbd> opens shows each approval whole. <kbd>Enter</kbd> does nothing until the list has been on the screen for a moment. A risky approval, a plan, and an approval that the screen cannot show whole are not in the list. The list says `2 need a second look. Allow them one by one.` An approval that changed after the list showed it is not allowed. <kbd>2</kbd>, always allow, does not work on many agents at once.
 
@@ -367,7 +392,7 @@ The agent reads the file with its own tools. The file is yours only, in the past
 
 The typed text must fit in 16 KB. This count includes a label for each block. The whole reply must fit in 8 MB. A larger reply stays open and says why: `The typed text is larger than 16 KB. Make it shorter to send.` or `The message is larger than 8 MB. Remove a paste or an image to send.`
 
-A daemon from v0.10.0 or earlier takes a reply with blocks only when all of it fits in 16 KB. For a larger reply, the editor keeps the draft and tells you to restart the daemon with `tuios kill-server`.
+A daemon from v0.10.0 or earlier takes a reply with blocks only when all of it fits in 16 KB. For a larger reply, the editor keeps the draft and tells you to [restart the daemon](/docs/daemon-restart).
 
 ### History and your editor <Since feature="reply-composer" /> [#history-and-your-editor]
 

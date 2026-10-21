@@ -1,0 +1,107 @@
+---
+title: Starting an Agent
+description: The New agent sheet in the agents view starts an agent with a task. Pick the agent, the model, the machine and where it works, and ask for up to 8 attempts.
+icon: SquarePlus
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
+
+The New agent sheet <Since action="inbox_new_agent" /> starts a coding agent with a task, without leaving the agents view. Write the task, pick the agent and where it works, and press <kbd>Enter</kbd>. In a git repository the agent gets a new worktree on its own branch by default, so it never touches your working tree.
+
+<Shot
+  name="spawn-sheet"
+  width={1600}
+  height={768}
+  light
+  alt="The New agent sheet over the agents view. The task reads: Make the LRU cache safe for concurrent reads. claude is the picked agent, with codex and crush beside it. Where it works is New worktree, the branch is agent/lru-cache-safe from the task, the base is main, the machine is this one, and there is one attempt."
+/>
+
+## Quickstart
+
+1. Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> to open the agents view.
+2. Press <kbd>n</kbd>, or click `+ New agent`.
+3. Type the task.
+4. Press <kbd>Enter</kbd>.
+
+tuios makes the worktree and its branch, starts the agent in a new pane, and types the task once the agent is ready. The new agent shows up in the agents view as it starts.
+
+## The fields
+
+| Field | What it does |
+| --- | --- |
+| Task | The first prompt. tuios types it when the agent is at its prompt. <kbd>Ctrl</kbd>+<kbd>J</kbd> adds a line |
+| Agent | The agents that run now come first, then the ones installed on this machine. `more` lists every agent |
+| Model | Passed to the agent as `--model`. Type one, or pick one that a running agent of the same kind reports. Empty uses the agent's default |
+| Where it works | New worktree, on its own branch, or This folder |
+| Branch | The new branch. It is named after the task, such as `agent/lru-cache-safe`, until you change it |
+| Base | Where the branch starts. Type it, or pick a local branch |
+| Machine | This machine and your linked hosts. The machine with the most free cores is first |
+| Attempts | 1 to 8. Each attempt gets its own worktree and branch |
+
+Uncommitted files stay in this folder. A new worktree starts from the base, not from your working tree.
+
+## Keys
+
+| Key | Does |
+| --- | --- |
+| <kbd>Tab</kbd>, <kbd>Shift</kbd>+<kbd>Tab</kbd> | Next or previous field |
+| <kbd>←</kbd> <kbd>→</kbd> | Change the agent, where it works, the attempts or the button |
+| <kbd>Space</kbd> or <kbd>↓</kbd> on the agent | Open the list of every agent |
+| <kbd>↑</kbd> <kbd>↓</kbd> on the machines | Pick a machine |
+| <kbd>v</kbd> on the attempts | Give each attempt a different agent |
+| <kbd>Ctrl</kbd>+<kbd>J</kbd> | Add a line to the task |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save the choices, without the task, for the next new sheet |
+| <kbd>Enter</kbd> | Start |
+| <kbd>Esc</kbd> | Close the sheet and keep what you wrote for the next <kbd>n</kbd> |
+
+The mouse works too: click a field, a choice, `Start agent` or `Cancel`. A start that fails keeps the sheet as it was, so you lose nothing. `n` is `inbox_new_agent` in `[keybindings.inbox]`.
+
+## Where the agent works
+
+**New worktree** goes through the same path as [`tuios fan`](/docs/worktrees#fan-out-one-prompt-several-agents): a worktree beside the repository, a branch from the base, a session for the worktree, and the agent in it. The branch name follows git's rules for a ref. A base that starts with `-` is refused.
+
+**This folder** goes through [`tuios start-agent`](/docs/cli-reference#start-agent): the agent starts in a new pane in the folder you are in. Use it outside a repository, or for a task that should change your working tree.
+
+## Many attempts
+
+Set Attempts to 2 or more to give the same task to several agents at once. Each one works in its own worktree on its own branch, so the attempts never touch each other. <kbd>v</kbd> on the attempts gives each attempt a different agent, so you can compare Claude Code and Codex on one task. When they finish, compare their changes and keep one. See [Comparing and keeping one](/docs/worktrees#comparing-and-keeping-one).
+
+All attempts start on the machine you picked.
+
+## On another machine
+
+Pick a linked host in Machine to start the agent there. The agent works in a new worktree of the host's checkout of this repository. The host finds that checkout by the repository's origin. See [Work from another machine](/docs/worktrees#work-from-another-machine).
+
+This machine is ranked by its free cores. A host is ranked by how many agents work there, and its row says "no load report". The order holds still while the sheet is open.
+
+## From a shell
+
+The sheet runs two commands that you can run yourself:
+
+```bash
+# This folder
+tuios start-agent claude --prompt "Make the LRU cache safe for concurrent reads."
+
+# Three attempts, each in a new worktree: two Claude Code, one Codex
+tuios fan 3 --agent claude,claude,codex "Make the LRU cache safe for concurrent reads."
+```
+
+See [start-agent](/docs/cli-reference#start-agent) and [fan](/docs/cli-reference#fan) for their flags.
+
+## How do I
+
+- **Start an agent on a task without opening a pane first?** Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd>, then <kbd>n</kbd>, type the task and press <kbd>Enter</kbd>.
+- **Let an agent change my working tree?** Pick This folder.
+- **Race two agents on one task?** Set Attempts to 2 and press <kbd>v</kbd> on it to give each attempt a different agent.
+- **Use the same agent and model every time?** Pick them once and press <kbd>Ctrl</kbd>+<kbd>S</kbd>.
+- **Run the agent on my build machine?** Pick the host in Machine. It needs a checkout of the repository.
+
+## Related
+
+<Cards>
+  <Card title="Inbox and Review" href="/docs/agent-inbox#the-agents-view" description="The agents view the sheet opens from, and how to review what an agent changed." />
+  <Card title="Worktrees" href="/docs/worktrees" description="Fan out one prompt to several agents, compare the attempts, and keep one." />
+  <Card title="Agents" href="/docs/agents" description="How tuios knows what each agent is doing." />
+</Cards>
