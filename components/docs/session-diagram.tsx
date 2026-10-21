@@ -129,7 +129,7 @@ export function SessionDiagram() {
   return (
     <figure
       data-widget="session-diagram"
-      className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card"
+      className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
     >
       <fieldset className="flex flex-wrap gap-1.5 border-fd-border border-b bg-fd-muted/40 p-3">
         <legend className="sr-only">Scenario</legend>

@@ -171,7 +171,7 @@ export function KeybindingExplorer() {
   return (
     <figure
       data-widget="keybinding-explorer"
-      className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card"
+      className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
     >
       <div className="flex flex-col gap-3 border-fd-border border-b bg-fd-muted/40 p-3">
         <div className="flex flex-wrap items-center gap-2">

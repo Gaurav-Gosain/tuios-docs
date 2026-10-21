@@ -245,7 +245,7 @@ export function ReleaseClip({
         </button>
       </div>
       {caption || steps?.length ? (
-        <figcaption className="mt-3 text-sm text-fd-muted-foreground">
+        <figcaption className="mt-2 text-sm text-fd-muted-foreground">
           {caption ? <p>{caption}</p> : null}
           {steps?.length ? (
             <details className={cn(caption && "mt-2")}>

@@ -51,7 +51,7 @@ export function BenchBars({
   const chartMax = Math.max(...series.flatMap((s) => s.values));
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-6 p-5" aria-hidden="true">
         {groups.map((group, gi) => {
           const groupMax =
@@ -135,7 +135,7 @@ export function BenchBars({
         </table>
       </div>
 
-      <figcaption className="border-fd-border border-t px-5 py-3 text-fd-muted-foreground text-xs leading-relaxed">
+      <figcaption className="border-t border-fd-border px-5 py-3 text-sm text-fd-muted-foreground">
         {caption}
       </figcaption>
     </figure>

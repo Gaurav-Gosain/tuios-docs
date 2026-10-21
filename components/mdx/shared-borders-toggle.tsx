@@ -34,7 +34,7 @@ export function SharedBordersToggle() {
   const [shared, setShared] = useState(false);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex items-center gap-2 border-b border-fd-border bg-fd-muted/40 px-3 py-2">
         <span className="font-mono text-xs text-fd-muted-foreground">
           bsp workspace

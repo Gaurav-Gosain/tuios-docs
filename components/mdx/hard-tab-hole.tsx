@@ -267,7 +267,7 @@ export function HardTabHole() {
   const current = tokens(STEPS[step], mode);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-3 border-b border-fd-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-xs text-fd-muted-foreground">

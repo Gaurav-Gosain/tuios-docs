@@ -184,7 +184,7 @@ export function ExtentScan() {
     total.after > 0 ? total.before / total.after : Number.POSITIVE_INFINITY;
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap gap-2">
           {PRESETS.map((p) => (
@@ -336,7 +336,7 @@ export function ExtentScan() {
         </table>
       </div>
 
-      <figcaption className="border-t border-fd-border px-4 py-3 text-xs leading-relaxed text-fd-muted-foreground">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         One row of the 207-column benchmark screen as it scrolls off the top.
         The counts cover only the two walks the extent changed: the scrollback
         push reading back from the end to find the text, and the scroll blanking

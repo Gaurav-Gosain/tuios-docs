@@ -452,7 +452,7 @@ export function AgentSourceTimeline() {
   };
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-wrap items-center gap-2 border-b border-fd-border px-4 py-3">
         <span className="mr-1 text-xs text-fd-muted-foreground">
           resolve with

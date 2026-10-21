@@ -88,7 +88,7 @@ export function SpentFrames() {
   const deathX = (FLOOD_MS / maxLen) * 100;
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="p-4">
         <svg
           viewBox="0 0 100 40"

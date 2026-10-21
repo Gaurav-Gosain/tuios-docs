@@ -86,7 +86,7 @@ export function RatioDrift() {
     .join(" ");
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-stretch">
         {/* The pair, drawn at whatever the current ratio and extent produce. */}
         <div className="flex w-full shrink-0 flex-col gap-0.5 sm:w-52">

@@ -266,7 +266,7 @@ export function ScrollColumnsRoundTrip() {
   const canExpel = (local.cols[local.focused]?.panes.length ?? 0) > 1;
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <fieldset className="m-0 min-w-0 flex flex-wrap items-center gap-2 border-0 border-b border-fd-border bg-fd-muted/40 px-3 py-2">
         <legend className="sr-only">Which build of tuios</legend>
         {(["before", "after"] as const).map((m) => (

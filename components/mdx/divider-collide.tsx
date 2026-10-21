@@ -104,7 +104,7 @@ export function DividerCollide() {
   );
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div
         ref={boxRef}
         className="relative mx-auto my-4 select-none"

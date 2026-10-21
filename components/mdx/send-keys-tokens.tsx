@@ -447,7 +447,7 @@ export function SendKeysTokens() {
     textTokens.some((t, i) => i > 0 && t && textTokens[i - 1]);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-3 p-4">
         <fieldset className="flex flex-wrap gap-2">
           <legend className="sr-only">Verb</legend>

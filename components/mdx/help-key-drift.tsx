@@ -84,7 +84,7 @@ export function HelpKeyDrift() {
   const agree = term === win;
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-3 border-fd-border border-b p-4 sm:flex-row sm:gap-6">
         <Segmented
           label="help is"
@@ -109,7 +109,7 @@ export function HelpKeyDrift() {
         <Cell title="both modes, after" value={now} />
       </div>
 
-      <figcaption className="border-fd-border border-t px-4 py-3 text-fd-muted-foreground text-xs leading-relaxed">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         {agree
           ? "The two copies agreed on this one."
           : "The two copies disagreed here."}{" "}

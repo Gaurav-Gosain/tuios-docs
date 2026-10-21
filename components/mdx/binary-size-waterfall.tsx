@@ -156,7 +156,7 @@ export function BinarySizeWaterfall() {
   const allOn = STEPS.every((s) => on[s.id]);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-4 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <fieldset className="flex flex-wrap items-center gap-2">
@@ -411,7 +411,7 @@ export function BinarySizeWaterfall() {
         </table>
       </div>
 
-      <figcaption className="border-fd-border border-t px-4 py-3 text-fd-muted-foreground text-xs leading-relaxed sm:px-5">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground sm:px-5">
         Stripped release builds, sizes from each commit's message, measured in
         the order shown. Turning a cut off subtracts its measured change; any
         other order is an estimate. The effect pack figure is the one

@@ -160,7 +160,7 @@ export function QueryPath() {
   }
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div
         className="flex flex-wrap gap-2 p-4"
         role="tablist"

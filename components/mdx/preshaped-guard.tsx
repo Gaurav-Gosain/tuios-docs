@@ -56,7 +56,7 @@ export function PreshapedGuard() {
   const vouches = rows.every((r) => r.columns === PANE_COLS);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
         tabIndex={0}

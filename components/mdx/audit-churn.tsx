@@ -162,7 +162,7 @@ export function AuditChurn() {
   const smallSum = totals(small);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-fd-border border-b p-4">
         <fieldset
           className="inline-flex overflow-hidden rounded-md border border-fd-border"
@@ -265,7 +265,7 @@ export function AuditChurn() {
         </table>
       </div>
 
-      <figcaption className="border-fd-border border-t px-4 py-3 text-fd-muted-foreground text-xs leading-relaxed">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         From <code>git diff --numstat</code> over the 92 commits of the audit,
         Go files only, grouped by package. A file counts as a test when its name
         ends in <code>_test.go</code>, so the test helpers in{" "}

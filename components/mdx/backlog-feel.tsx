@@ -184,7 +184,7 @@ export function BacklogFeel() {
   }, []);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div
         ref={boxRef}
         className="relative h-56 select-none overflow-hidden bg-fd-background"

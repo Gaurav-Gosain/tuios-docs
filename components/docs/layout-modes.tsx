@@ -342,7 +342,7 @@ export function LayoutModes({ initialMode = "bsp" }: { initialMode?: Mode }) {
   return (
     <figure
       data-widget="layout-modes"
-      className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card"
+      className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
     >
       <div className="flex flex-wrap items-center gap-2 border-fd-border border-b bg-fd-muted/40 px-3 py-2">
         <fieldset className="inline-flex overflow-hidden rounded-md border border-fd-border">
@@ -446,7 +446,7 @@ export function LayoutModes({ initialMode = "bsp" }: { initialMode?: Mode }) {
         ) : null}
       </div>
 
-      <figcaption className="border-fd-border border-t px-4 py-3 text-fd-muted-foreground text-sm">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         <p id={statusId} aria-live="polite" className="text-fd-foreground">
           {status}
         </p>

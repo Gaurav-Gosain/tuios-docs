@@ -72,7 +72,7 @@ export function JsonByteLoss() {
   const stages = STAGES[mode];
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <fieldset className="flex min-w-0 flex-wrap gap-2 p-4">
         <legend className="sr-only">How the step is stored</legend>
         {(

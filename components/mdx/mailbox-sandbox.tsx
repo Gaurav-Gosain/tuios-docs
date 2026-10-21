@@ -422,7 +422,7 @@ export function MailboxSandbox() {
   };
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4">
         {(["A", "B", "C"] as Name[]).map((n) => {
           const id = ids[n];

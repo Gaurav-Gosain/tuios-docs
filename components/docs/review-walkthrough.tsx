@@ -624,7 +624,7 @@ export function ReviewWalkthrough() {
   return (
     <figure
       data-widget="review-walkthrough"
-      className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card"
+      className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
     >
       <div className="flex items-center gap-2 border-fd-border border-b bg-fd-muted/40 px-3 py-2">
         <span className="font-mono text-fd-muted-foreground text-xs">
@@ -730,7 +730,7 @@ export function ReviewWalkthrough() {
         </span>
       </div>
 
-      <figcaption className="border-fd-border border-t px-4 py-3 text-fd-muted-foreground text-sm">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         The review overlay and its compare view, drawn as tuios draws them for a
         fan of three attempts. Every key and message is the overlay's own.
       </figcaption>

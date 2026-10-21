@@ -21,7 +21,7 @@ export function RunTally({
   caption: string;
 }) {
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-5 p-5">
         {groups.map((group) => (
           <div key={group.label}>
@@ -53,7 +53,7 @@ export function RunTally({
           </div>
         ))}
       </div>
-      <figcaption className="border-fd-border border-t px-5 py-3 text-fd-muted-foreground text-xs leading-relaxed">
+      <figcaption className="border-t border-fd-border px-5 py-3 text-sm text-fd-muted-foreground">
         {caption}
       </figcaption>
     </figure>

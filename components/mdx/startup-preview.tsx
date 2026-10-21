@@ -65,7 +65,7 @@ export function StartupPreview() {
   };
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="grid gap-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         {/* Toggles. */}
         <div className="flex flex-col gap-3 border-b border-fd-border p-4 sm:border-b-0 sm:border-r">

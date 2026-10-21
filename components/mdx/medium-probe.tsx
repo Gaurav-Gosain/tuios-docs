@@ -126,7 +126,7 @@ export function MediumProbe() {
   const o = outcome(host, proxy, guest);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="grid gap-4 p-4 sm:grid-cols-3">
         <Choice
           legend="host outside the multiplexer"

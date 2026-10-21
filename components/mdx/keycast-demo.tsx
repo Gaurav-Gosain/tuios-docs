@@ -126,7 +126,7 @@ export function KeycastDemo() {
   }, []);
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       {/* A focusable region rather than a button, so the terminal mock inside is
           valid DOM. A tabIndex of 0 makes it focusable by click and by tab. */}
       <div

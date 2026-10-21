@@ -145,7 +145,7 @@ export function TestPurgeStages() {
   const change = previous ? sum - total(previous) : 0;
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-3 border-fd-border border-b p-4">
         <fieldset className="flex flex-wrap gap-1.5">
           <legend className="sr-only">
@@ -256,7 +256,7 @@ export function TestPurgeStages() {
         </table>
       </div>
 
-      <figcaption className="border-fd-border border-t px-4 py-3 text-fd-muted-foreground text-xs leading-relaxed">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         Test functions outside <code>e2e/</code>, counted with{" "}
         <code>git grep</code> at each commit, one per package and name. Fuzz
         targets are not counted here: there were 32 at midday and 32 after every

@@ -70,7 +70,7 @@ export function DaemonTilePlacement() {
   };
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="relative h-60 overflow-hidden bg-fd-background/40 p-3">
         {Array.from({ length: count }, (_, i) => (
           <div

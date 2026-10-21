@@ -125,7 +125,7 @@ export function KeptTestBar() {
   const panelId = useId();
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="border-fd-border border-b p-4">
         <p className="mb-2 font-mono text-fd-muted-foreground text-xs">
           pick a test the strict pass deleted
@@ -214,7 +214,7 @@ export function KeptTestBar() {
         </p>
       </div>
 
-      <figcaption className="border-fd-border border-t px-4 py-3 text-fd-muted-foreground text-xs leading-relaxed">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         Seven of the 2,671 test functions the strict pass deleted. The quoted
         reasons are from the strict pass commit bodies. The answers in the
         second question are from the restore commits and{" "}

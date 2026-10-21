@@ -569,7 +569,7 @@ export function InboxDemo() {
   return (
     <figure
       data-widget="inbox-demo"
-      className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card"
+      className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
     >
       <div className="flex items-center gap-2 border-fd-border border-b bg-fd-muted/40 px-3 py-2">
         <span className="font-mono text-fd-muted-foreground text-xs">
@@ -789,7 +789,7 @@ export function InboxDemo() {
         </div>
       </div>
 
-      <figcaption className="border-fd-border border-t px-4 py-3 text-fd-muted-foreground text-sm">
+      <figcaption className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
         Click the list, then use the keys, or press the buttons. The first
         approval is <strong>risky</strong>: <kbd>1</kbd> only arms it, and a
         second <kbd>1</kbd> within 3 seconds allows it. Any other key disarms

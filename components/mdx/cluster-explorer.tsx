@@ -129,7 +129,7 @@ export function ClusterExplorer() {
   const disagrees = naiveTotal !== actualTotal;
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="border-b border-fd-border p-4">
         <label
           htmlFor={inputId}

@@ -246,7 +246,7 @@ export function WindowTargetOrder() {
     "rounded-md border px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary disabled:opacity-50";
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-col gap-3 p-4">
         <fieldset className="flex flex-wrap gap-2">
           <legend className="sr-only">Resolution order</legend>

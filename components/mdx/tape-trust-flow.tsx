@@ -136,7 +136,7 @@ export function TapeTrustFlow() {
   };
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex items-center gap-2 border-b border-fd-border bg-fd-muted/40 px-3 py-2">
         <span className="flex gap-1.5" aria-hidden="true">
           <span className="size-2.5 rounded-full bg-fd-muted-foreground/35" />

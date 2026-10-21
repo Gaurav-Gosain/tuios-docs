@@ -504,7 +504,7 @@ export function LinkLanes() {
   };
 
   return (
-    <figure className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+    <figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
       <div className="flex flex-wrap items-center gap-2 border-b border-fd-border p-3">
         <fieldset className="m-0 flex flex-wrap gap-1 border-0 p-0">
           <legend className="sr-only">Bug</legend>
