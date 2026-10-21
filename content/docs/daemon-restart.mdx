@@ -1,0 +1,174 @@
+---
+title: Restarting the Daemon
+description: Move the daemon to a new tuios build with tuios restart-server or from the app. tuios shows what stops first, and every attached client comes back by itself.
+icon: RotateCw
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
+
+The daemon runs the tuios build it started with until it stops. After you update tuios, restart the daemon to move your sessions to the new build. `tuios restart-server` <Since command="restart-server" /> does that in one step. It shows what stops and what comes back, asks you, then stops the daemon, starts the newest tuios you have installed, and waits until it answers.
+
+<Shot
+  name="restart-dialog"
+  width={1600}
+  height={823}
+  light
+  alt="The Restart the daemon dialog over three panes. It shows the daemon's version now and after the restart, the programs that stop (sleep in api and python3 in server), and that each session comes back with its layout, its pane history and new shells."
+  caption="The dialog the app shows. It is the same plan that tuios restart-server prints."
+/>
+
+## Quickstart
+
+```bash
+tuios update            # or your package manager
+tuios restart-server    # show what stops, ask, then restart
+```
+
+From a shell, the command prints the plan and asks:
+
+```
+Daemon now      0.10.1
+After restart   0.11.0   (from ~/.local/bin/tuios)
+
+These stop:
+  nvim in "edit" (session work)
+  claude in "agent" (session work)
+Only shells in notes.
+
+These come back:
+  Each session, with its layout, its pane history and new shells.
+  claude-code in "agent" (session work) can resume.
+The Inbox offers to resume each one.
+Restart the daemon? [y/N]
+```
+
+Then it shows each step:
+
+```
+Stopping the daemon...
+Starting the daemon 0.11.0...
+The daemon restarted on 0.11.0.
+These sessions came back: work, notes.
+```
+
+## What stops and what comes back
+
+A restart ends every program that runs in a pane: editors, servers, agents, long builds. The plan names each one, by pane and session, so you can finish or save work first.
+
+Each session comes back with its layout, the pane names and the history each pane showed. Every pane gets a new shell, under a divider that says when it was restored. An agent conversation that can resume is listed in the plan. `daemon.resume_agents` says what the new daemon does with it:
+
+| Value | The new daemon |
+| --- | --- |
+| `ask` | Puts a Resume item in the Inbox for each one. This is the default |
+| `auto` | Resumes each conversation in its pane |
+| `off` | Leaves them. `tuios resume-agent` resumes one later |
+
+See [Resuming after a restart](/docs/agent-inbox#resuming-after-a-restart).
+
+<Shot
+  name="restart-plan"
+  width={1600}
+  height={823}
+  light
+  alt="tuios restart-server --dry-run in the shell pane. It prints the daemon's version, the binary the restart runs, and that the sleep in api, python3 in server and the tuios command itself stop. Each session comes back with its layout, its pane history and new shells."
+  caption="--dry-run prints the plan and changes nothing."
+/>
+
+## Which tuios starts
+
+The new daemon runs the newer of two binaries, by `--version`:
+
+- The tuios at the path of the command you ran. `tuios update` replaces this file.
+- The `tuios` on your `PATH`. An install by Nix, mise, asdf or Linuxbrew moves this one.
+
+When the version does not change, the plan says "This restart starts the same version." The restart still saves and restores each session, so it is also a clean way to apply a change to `[daemon]` or `[hooks]`.
+
+## From the app <Since action="restart_daemon" /> [#from-the-app]
+
+When the daemon runs a version other than your client, the dock says so, for example "The daemon runs 0.10.1. ctrl+b j restarts it." Click the notice, or press the key it names. <kbd>Esc</kbd> puts the notice off until the next start. These open the same dialog:
+
+- The command palette entry "Restart the daemon".
+- The row "Restart the daemon" at the top of the Daemon tab in the settings.
+- The rail's menu for this machine.
+
+The dialog shows the plan. Press <kbd>r</kbd> to restart, or <kbd>Esc</kbd> to cancel. The dialog then shows each step: stop the daemon, start the new one, attach again. tuios starts again on the new build, in the same session, and says "The daemon restarted on 0.11.0. Your session is back."
+
+<Shot
+  name="restart-back"
+  width={1600}
+  height={823}
+  light
+  alt="The same three panes after the restart. Each pane has a restore divider and a new shell. The dock says: The daemon restarted on 0.11.0. Your session is back."
+  caption="After r: the same session on the new daemon, with the pane history and new shells."
+/>
+
+If a program started or stopped after you read the plan, the restart does not run, and the dialog asks you to read the new plan. If your session did not come back, tuios does not attach to it. The dialog says so and points to `tuios resurrect`.
+
+The action is `restart_daemon`. It has no default key. To bind one:
+
+```toml
+[keybindings.prefix_mode]
+restart_daemon = ["alt+r"]
+```
+
+The action is only on a client on the daemon's own machine. Over `tuios ssh` or tuios-web, run `tuios restart-server` on the daemon's machine.
+
+## Other clients come back by themselves
+
+Before it stops, the daemon tells each attached client why:
+
+| The daemon stopped with | The client |
+| --- | --- |
+| `restart-server`, the app, or `kill-server --restart` | Waits up to 15 seconds for the new daemon, then attaches to its session again and says "The daemon restarted. tuios reattached." |
+| A plain `kill-server` | Quits at once |
+| Nothing: the daemon crashed | Waits up to 6 seconds for a new daemon |
+
+While a client waits, the dock says "Waiting for the daemon. Keys are not sent." Keys you type then are dropped. The panes are new after a restart, so a held key could land in a different shell. When no daemon comes back, or the new daemon does not hold the session, the client quits with "The connection to the TUIOS daemon was lost."
+
+Only a client on the same machine waits and reattaches. A client of a daemon older than v0.11.0 gets no reason, so it waits 6 seconds and then quits. Attach again after that.
+
+<Callout title="Other machines">
+`tuios hosts sync --restart` installs your version on the machines in `[hosts]` and restarts each daemon the same way, so the clients attached there reattach too. See [hosts sync](/docs/cli-reference#hosts-sync).
+</Callout>
+
+## From a script
+
+```bash
+tuios restart-server --dry-run          # print the plan, change nothing
+tuios restart-server --yes              # restart without a question
+tuios restart-server --yes --json       # one JSON object per step
+tuios restart-server --last             # the steps of the last restart
+```
+
+- Without a terminal to ask on, the command refuses unless you give `--yes`. `--json` needs `--yes`.
+- `--json` writes one object per line: `plan`, then `stopping`, `starting` and `done`. `done` holds `restarted`, `after`, `back` and `missing`. A failed step sets `error` and `fix`, and the command exits `1`.
+- `--expect DIGEST` refuses the restart unless the plan has that digest. The app passes the digest of the plan you agreed to.
+- When no daemon runs, the command starts one.
+
+The stop and the start run in a process of their own, in a session of its own, so a restart that you start from a pane of the daemon it stops still finishes. Each step goes to `restart.log` beside the daemon log. One restart runs at a time. A second one refuses with "Another restart of the daemon is running."
+
+| Error | What to do |
+| --- | --- |
+| "The daemon did not stop. It still runs version X." | Run `tuios kill-server` to see why. |
+| "The daemon did not start." | Run `tuios start-server` to see why. The sessions come back when the daemon starts. |
+| "The daemon started and did not answer." | Run `tuios ls` to check it, or `tuios logs`. |
+| "Another restart of the daemon is running." | Wait for it to end. `tuios restart-server --last` shows its steps. |
+| "The restart stopped before it finished." | Run `tuios restart-server --last`, then `tuios ls`. |
+
+## How do I
+
+- **Move to a new build after `tuios update`?** Run `tuios restart-server`, or click the version notice in the app.
+- **See what a restart would stop, without a restart?** Run `tuios restart-server --dry-run`.
+- **Restart from a deploy script?** Run `tuios restart-server --yes --json` and read the `done` line.
+- **Stop the daemon and keep the clients from waiting?** Run `tuios kill-server`. The clients quit at once.
+- **Start with no sessions at all?** Run `tuios kill-server`, then `tuios daemon --no-restore`.
+
+## Related
+
+<Cards>
+  <Card title="Sessions" href="/docs/sessions" description="The daemon, attaching, and what a session keeps when the daemon stops." />
+  <Card title="Inbox and Review" href="/docs/agent-inbox#resuming-after-a-restart" description="Resume the agent conversations a restart stopped." />
+  <Card title="CLI Reference" href="/docs/cli-reference#restart-server" description="Every flag of restart-server and kill-server." />
+</Cards>
