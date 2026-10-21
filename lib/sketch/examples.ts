@@ -550,6 +550,20 @@ export const EXAMPLES: Example[] = [
 `,
   },
   {
+    id: "radar",
+    title: "Radar",
+    group: "Diagram types",
+    source: `radar-beta
+  title Release health
+  axis cpu["Idle CPU"], mem["Memory"], start["Startup"]
+  axis size["Binary size"], tests["E2E cover"], docs["Docs"]
+  curve old["v0.8"]{3, 3, 4, 3, 2, 3}
+  curve new["v0.9"]{5, 4, 4, 2, 4, 4}
+  max 5
+  graticule polygon
+`,
+  },
+  {
     id: "sankey",
     title: "Sankey",
     group: "Diagram types",
@@ -563,6 +577,41 @@ Agent,Pane redraw,30
 Agent,Inbox,5
 Leader key,Layout change,11
 Leader key,Copy mode,7
+`,
+  },
+  {
+    id: "treemap",
+    title: "Treemap",
+    group: "Diagram types",
+    source: `treemap-beta
+"tuios, thousands of lines of Go"
+    "Window manager"
+        "internal/app": 145
+        "internal/config": 26
+        "internal/input": 15
+    "Daemon and CLI"
+        "internal/session": 105
+        "cmd/tuios": 39
+    "Libraries"
+        "sketch": 37
+        "vt": 27
+        "tml": 7
+        "loom": 6
+`,
+  },
+  {
+    id: "venn",
+    title: "Venn",
+    group: "Diagram types",
+    source: `venn-beta
+  title What tuios is
+  set mux["Multiplexer"]
+  set wm["Window manager"]
+  set cockpit["Agent cockpit"]
+  union mux,wm["Tiling panes"]
+  union wm,cockpit["Agent rail"]
+  union mux,cockpit["Detached agents"]
+  union mux,wm,cockpit["tuios"]
 `,
   },
   {
@@ -647,6 +696,345 @@ Leader key,Copy mode,7
   done[Done]
     t6[Sketch draws sankey diagrams]
     t7[Omarchy themes]
+`,
+  },
+  {
+    id: "swimlane",
+    title: "Swimlane",
+    group: "Diagram types",
+    source: `swimlane-beta LR
+  subgraph Agent
+    branch[Make a worktree]
+    code[Write the change]
+    push[Push the branch]
+  end
+
+  subgraph CI
+    test[Run the tests]
+    green{Green?}
+  end
+
+  subgraph You
+    review[Review the diff]
+    merge[Merge]
+  end
+
+  branch --> code --> push --> test --> green
+  green -->|no| code
+  green -->|yes| review
+  review -->|changes| code
+  review -->|approve| merge
+`,
+  },
+  {
+    id: "eventmodeling",
+    title: "Event modeling",
+    group: "Diagram types",
+    source: `eventmodeling
+
+tf 01 ui AgentPane
+tf 02 cmd RunTool { command: string }
+tf 03 evt ApprovalAsked { tool: string }
+tf 04 rmo Inbox ->> 03
+tf 05 ui InboxPanel
+tf 06 cmd Approve { allow: bool }
+tf 07 evt ApprovalGranted { by: string }
+tf 08 pcr AgentResumer
+tf 09 evt ToolRan { exit: int }
+`,
+  },
+  {
+    id: "block",
+    title: "Block",
+    group: "Diagram types",
+    source: `block
+  columns 4
+  tui["Terminal"] web["Web"] ssh["SSH"] phone["Phone"]
+  attach<["attach"]>(down):4
+  block:daemon:4
+    columns 3
+    wire{{"Wire protocol"}}:3
+    sessions["Sessions"] panes["Panes"] agents["Agents"]
+  end
+  vt[("VT and scrollback")]:2 pty(["PTY"]) links(["Host links"])
+`,
+  },
+  {
+    id: "architecture-diagram",
+    title: "Architecture",
+    group: "Diagram types",
+    source: `architecture-beta
+  group laptop(server)[Laptop]
+  service client(internet)[Terminal client] in laptop
+  service daemon(server)[tuios daemon] in laptop
+  service state(disk)[Session state] in laptop
+
+  group build(cloud)[Build server]
+  service remote(server)[Remote daemon] in build
+  service cache(database)[Build cache] in build
+
+  service phone(internet)[Phone]
+
+  client:R --> L:daemon
+  daemon:B --> T:state
+  daemon:R <--> L:remote
+  remote:R --> L:cache
+  phone:T --> B:remote
+`,
+  },
+  {
+    id: "c4",
+    title: "C4",
+    group: "Diagram types",
+    source: `C4Context
+  title tuios in its surroundings
+  Person(dev, "Developer", "Works in panes and answers agents")
+  System(tuios, "tuios", "Multiplexer, window manager and agent cockpit")
+  System_Ext(agents, "Coding agents", "Claude Code, Codex and others")
+  System_Ext(git, "Git host", "Pull requests and CI")
+  System_Ext(hosts, "Other machines", "Remote tuios daemons")
+  Person(phone, "Developer on a phone", "Approves from anywhere")
+
+  Rel(dev, tuios, "Types into")
+  Rel(phone, tuios, "Attaches over SSH")
+  Rel(tuios, agents, "Runs in panes")
+  Rel(agents, git, "Pushes branches to")
+  Rel(tuios, hosts, "Links to")
+`,
+  },
+  {
+    id: "packet",
+    title: "Packet",
+    group: "Diagram types",
+    source: `packet
+  title A tagged tuios wire frame
+  0-31: "Length of the rest of the frame"
+  32-39: "Message type"
+  40-47: "Codec"
+  48-111: "Request id"
+  112-127: "gob payload"
+`,
+  },
+  {
+    id: "requirement",
+    title: "Requirement",
+    group: "Diagram types",
+    source: `requirementDiagram
+
+  requirement live_upgrade {
+    id: 1
+    text: A new daemon binary takes over without ending pane programs.
+    risk: high
+    verifymethod: test
+  }
+
+  functionalRequirement keep_ptys {
+    id: 1.1
+    text: The old daemon hands every PTY to the new one.
+    risk: high
+    verifymethod: test
+  }
+
+  performanceRequirement short_gap {
+    id: 1.2
+    text: Clients see a gap of less than 200 ms.
+    risk: medium
+    verifymethod: analysis
+  }
+
+  interfaceRequirement same_wire {
+    id: 1.3
+    text: Old clients attach to the new daemon.
+    risk: low
+    verifymethod: inspection
+  }
+
+  element handoff {
+    type: "Go package"
+    docref: internal/session
+  }
+
+  element e2e {
+    type: "E2E test"
+    docref: e2e/tui
+  }
+
+  live_upgrade - contains -> keep_ptys
+  live_upgrade - contains -> short_gap
+  live_upgrade - contains -> same_wire
+  handoff - satisfies -> keep_ptys
+  e2e - verifies -> live_upgrade
+`,
+  },
+  {
+    id: "usecase",
+    title: "Use case",
+    group: "Diagram types",
+    source: `usecase-beta
+direction LR
+actor Dev("Developer")
+actor Agent("Coding agent")
+systemBoundary tuios["tuios"]
+  Split("Split and tile panes")
+  Start("Start an agent")
+  Approve("Approve a command")
+  Review("Review the diff")
+  Ask("Ask for approval")
+  Push("Push a branch")
+end
+Dev --> Split
+Dev --> Start
+Dev --> Approve
+Dev --> Review
+Agent --> Ask
+Agent --> Push
+Approve ..> : include Ask
+`,
+  },
+  {
+    id: "agentflow",
+    title: "Agentflow",
+    group: "Diagram types",
+    source: `agentflow-beta TB
+  issue["Bug report"]@{ shape: input }
+
+  flow fixer["Fixer agent"]
+    repro["Reproduce the bug"]@{ shape: task }
+    tests["go test"]@{ shape: tool }
+    patch["Write the fix"]@{ shape: task }
+    guide["AGENTS.md"]@{ shape: refdoc }
+    repro --> tests --> patch
+    patch -.- guide
+  end
+
+  flow reviewer["Review agent"]
+    read["Read the diff"]@{ shape: task }
+    ok["Fix is right?"]@{ shape: decision }
+    read --> ok
+  end
+
+  pr["Open the pull request"]@{ shape: action }
+  issue --> fixer
+  fixer --> reviewer
+  ok -- yes --> pr
+`,
+  },
+  {
+    id: "ishikawa",
+    title: "Ishikawa",
+    group: "Diagram types",
+    source: `ishikawa-beta
+    Flaky E2E test
+    Timing
+        Fixed sleeps
+        Reply hook race
+    Machine
+        Busy CI runner
+        Slow disk
+    Test
+        Shared HOME
+        Leftover daemon
+    Code
+        Unbuffered channel
+        Missing condition wait
+    Terminal
+        Wrong TERM
+        Small window
+`,
+  },
+  {
+    id: "cynefin",
+    title: "Cynefin",
+    group: "Diagram types",
+    source: `cynefin-beta
+  title Kinds of work on tuios
+
+  clear
+    "Move a library pin"
+    "Fix a typo in help"
+
+  complicated
+    "Port a Mermaid renderer"
+    "Speed up the VT parser"
+
+  complex
+    "Design the agent cockpit"
+
+  chaotic
+    "Release broke on Windows"
+
+  chaotic --> complex : "Stabilized"
+  complex --> complicated : "Pattern found"
+  complicated --> clear : "Written down"
+`,
+  },
+  {
+    id: "wardley",
+    title: "Wardley map",
+    group: "Diagram types",
+    source: `wardley-beta
+title tuios value chain
+
+evolution Genesis@0.25 -> Custom@0.5 -> Product@0.75 -> Commodity@1.0
+
+anchor Developer [0.95, 0.6]
+
+component "Agent cockpit" [0.82, 0.22] (build)
+component "Window manager" [0.72, 0.56] (build)
+component "Coding agents" [0.58, 0.36] (buy)
+component "Session daemon" [0.5, 0.45] (build)
+component "VT emulator" [0.35, 0.6] (build)
+component "SSH" [0.2, 0.88] (buy)
+component "PTY" [0.12, 0.95] (market)
+
+Developer -> "Agent cockpit"
+Developer -> "Window manager"
+"Agent cockpit" -> "Coding agents"
+"Agent cockpit" -> "Session daemon"
+"Window manager" -> "Session daemon"
+"Session daemon" -> "VT emulator"
+"Session daemon" -> "SSH"
+"VT emulator" -> "PTY"
+
+evolve "Agent cockpit" 0.45
+`,
+  },
+  {
+    id: "treeview",
+    title: "Tree view",
+    group: "Diagram types",
+    source: `treeView-beta
+    tuios/
+        cmd/
+            tuios/
+            tuios-web/
+            tuios-wasm/
+        internal/
+            app/
+            session/
+            input/
+            terminal/
+        vt/
+        sketch/
+            raster/
+            text/
+        docs/
+        go.mod
+        go.work
+        AGENTS.md
+`,
+  },
+  {
+    id: "railroad",
+    title: "Railroad",
+    group: "Diagram types",
+    source: `railroad-ebnf-beta
+title "Agent selector"
+
+selector = term ( space term )* ;
+term = key ":" value ( "," value )* ;
+key = "harness" | "state" | "needs" | "session" | "group" | "host" | "name" | "cwd" ;
+value = glob | "you" ;
 `,
   },
 ];
