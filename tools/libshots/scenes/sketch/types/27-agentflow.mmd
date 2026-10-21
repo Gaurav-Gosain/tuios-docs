@@ -1,0 +1,24 @@
+%% title: Agentflow
+%% alt: An agent flow from a bug report through a fixer agent with tasks, a tool and a reference document, to a review agent and a pull request
+agentflow-beta TB
+  issue["Bug report"]@{ shape: input }
+
+  flow fixer["Fixer agent"]
+    repro["Reproduce the bug"]@{ shape: task }
+    tests["go test"]@{ shape: tool }
+    patch["Write the fix"]@{ shape: task }
+    guide["AGENTS.md"]@{ shape: refdoc }
+    repro --> tests --> patch
+    patch -.- guide
+  end
+
+  flow reviewer["Review agent"]
+    read["Read the diff"]@{ shape: task }
+    ok["Fix is right?"]@{ shape: decision }
+    read --> ok
+  end
+
+  pr["Open the pull request"]@{ shape: action }
+  issue --> fixer
+  fixer --> reviewer
+  ok -- yes --> pr
