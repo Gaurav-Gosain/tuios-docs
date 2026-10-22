@@ -1,0 +1,23 @@
+// snippet:begin sketch-error
+package main
+
+import (
+	"errors"
+	"fmt"
+
+	"tuios.dev/sketch"
+)
+
+func main() {
+	for _, src := range []string{
+		"flowchart LR\n  A --> B --> \n",
+		"zenuml\n  A.call()\n",
+	} {
+		_, err := sketch.Render(src, sketch.RenderOptions{})
+		var e *sketch.Error
+		if errors.As(err, &e) {
+			fmt.Printf("code %s, line %d, column %d: %s\n", e.Code, e.Line, e.Column, e.Message)
+		}
+	}
+}
+// snippet:end

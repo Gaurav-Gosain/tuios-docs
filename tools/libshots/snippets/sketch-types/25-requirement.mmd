@@ -1,0 +1,45 @@
+requirementDiagram
+
+  requirement live_upgrade {
+    id: 1
+    text: A new daemon binary takes over without ending pane programs.
+    risk: high
+    verifymethod: test
+  }
+
+  functionalRequirement keep_ptys {
+    id: 1.1
+    text: The old daemon hands every PTY to the new one.
+    risk: high
+    verifymethod: test
+  }
+
+  performanceRequirement short_gap {
+    id: 1.2
+    text: Clients see a gap of less than 200 ms.
+    risk: medium
+    verifymethod: analysis
+  }
+
+  interfaceRequirement same_wire {
+    id: 1.3
+    text: Old clients attach to the new daemon.
+    risk: low
+    verifymethod: inspection
+  }
+
+  element handoff {
+    type: "Go package"
+    docref: internal/session
+  }
+
+  element e2e {
+    type: "E2E test"
+    docref: e2e/tui
+  }
+
+  live_upgrade - contains -> keep_ptys
+  live_upgrade - contains -> short_gap
+  live_upgrade - contains -> same_wire
+  handoff - satisfies -> keep_ptys
+  e2e - verifies -> live_upgrade

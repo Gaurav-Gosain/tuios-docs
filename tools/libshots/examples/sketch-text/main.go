@@ -1,0 +1,32 @@
+// snippet:begin sketch-text
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"tuios.dev/sketch"
+	"tuios.dev/sketch/text"
+)
+
+const src = `flowchart LR
+  src[Mermaid source] --> sketch{{sketch}}
+  sketch --> svg[(SVG)]
+  sketch --> png[(PNG)]
+  sketch --> txt[(Text)]
+`
+
+func main() {
+	d, err := sketch.Parse(src, sketch.ParseOptions{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	lines, err := text.Draw(d, text.Options{Cols: 80, Color: true})
+	if err != nil {
+		log.Fatal(err) // text.ErrTooWide, text.ErrTooLarge or text.ErrUnsupported
+	}
+	for _, line := range lines {
+		fmt.Println(line)
+	}
+}
+// snippet:end

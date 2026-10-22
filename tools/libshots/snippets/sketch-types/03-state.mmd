@@ -1,0 +1,51 @@
+stateDiagram-v2
+  direction TB
+  state spread <<fork>>
+  state gather <<join>>
+  state check <<choice>>
+
+  [*] --> Idle
+  Idle --> Working: task
+
+  state Working {
+    [*] --> Thinking
+    Thinking --> Tool: call a tool
+    Tool --> Thinking: result
+    state Tool {
+      direction LR
+      [*] --> Reading
+      Reading --> Editing
+      Editing --> Testing
+      Testing --> [*]
+    }
+  }
+
+  Working --> spread: plan has parts
+  spread --> SubagentA
+  spread --> SubagentB
+  SubagentA --> gather
+  SubagentB --> gather
+  gather --> Working: merge
+
+  Working --> check: stop
+  check --> Waiting: needs input
+  check --> Done: finished
+  check --> Failed: error
+  Waiting --> Working: reply
+  Failed --> Idle: retry
+  Done --> [*]
+
+  note right of Waiting
+    Shows in the Inbox
+  end note
+
+  classDef busy fill:var(--pele-series-6),fill-opacity:0.18,stroke:var(--pele-series-6),stroke-width:2px
+  classDef wait fill:var(--pele-series-3),fill-opacity:0.18,stroke:var(--pele-series-3),stroke-width:2px
+  classDef good fill:var(--pele-series-4),fill-opacity:0.18,stroke:var(--pele-series-4),stroke-width:2px
+  classDef bad fill:var(--pele-series-1),fill-opacity:0.18,stroke:var(--pele-series-1),stroke-width:2px
+  classDef sub fill:var(--pele-series-7),fill-opacity:0.18,stroke:var(--pele-series-7),stroke-width:2px
+  class Thinking,Reading,Editing,Testing busy
+  class Waiting wait
+  class Done good
+  class Failed bad
+  class SubagentA,SubagentB sub

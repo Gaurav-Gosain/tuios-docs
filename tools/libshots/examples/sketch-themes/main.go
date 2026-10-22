@@ -1,0 +1,19 @@
+// snippet:begin sketch-themes
+package main
+
+import (
+	"fmt"
+
+	"tuios.dev/sketch"
+)
+
+func main() {
+	for _, t := range sketch.Themes() {
+		ground := "light"
+		if t.Dark {
+			ground = "dark"
+		}
+		fmt.Printf("%-17s %-17s %s\n", t.Name, t.Title, ground)
+	}
+}
+// snippet:end

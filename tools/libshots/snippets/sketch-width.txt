@@ -1,0 +1,40 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"strconv"
+
+	"tuios.dev/sketch"
+	"tuios.dev/sketch/text"
+)
+
+const src = `flowchart LR
+  push[git push] --> ci{CI passes?}
+  ci -->|yes| tag[Tag a release]
+  ci -->|no| fix[Fix the build]
+  tag --> ship[Ship it]
+`
+
+func main() {
+	cols, _ := strconv.Atoi(os.Args[1]) // go run . 100
+	d, err := sketch.Parse(src, sketch.ParseOptions{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	lines, err := text.Draw(d, text.Options{Cols: cols})
+	if errors.Is(err, text.ErrTooWide) {
+		// No layout fits: show the source, as tuios mermaid does
+		// for a type with no text drawing.
+		fmt.Printf("no drawing fits in %d columns\n%s", cols, src)
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, line := range lines {
+		fmt.Println(line)
+	}
+}

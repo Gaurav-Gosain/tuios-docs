@@ -1,0 +1,43 @@
+package main
+
+import (
+	"fmt"
+	"image/png"
+	"log"
+	"os"
+
+	"tuios.dev/sketch"
+	"tuios.dev/sketch/raster"
+)
+
+const src = `flowchart LR
+  src[Mermaid source] --> sketch{{sketch}}
+  sketch --> svg[(SVG)]
+  sketch --> png[(PNG)]
+  sketch --> txt[(Text)]
+`
+
+func main() {
+	svg, err := sketch.Render(src, sketch.RenderOptions{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	theme, _ := sketch.ThemeNamed("catppuccin-mocha")
+	img, err := raster.Draw(svg.Data, raster.Options{
+		Scale:      2,     // two pixels for each SVG unit
+		Theme:      theme, // nil keeps the colours of the SVG
+		Background: true,  // paint the theme's background first
+	})
+	if err != nil {
+		log.Fatal(err) // raster.ErrTooLarge past 40 million pixels
+	}
+	f, err := os.Create("flow.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("flow.png: %d by %d pixels\n", img.Bounds().Dx(), img.Bounds().Dy())
+}
