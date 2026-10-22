@@ -2,23 +2,11 @@
 import { useSearchContext } from "fumadocs-ui/contexts/search";
 import { usePathname, useRouter } from "next/navigation";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { keySequences, quickClicks, TILLY_EVENT } from "@/lib/eggs/triggers";
 import { OPEN_EVENT } from "@/lib/site-themes/store";
 
-// Tilly's visit loads only when someone enters the code.
+// Tilly's visit loads only when something brings Tilly in.
 const TillyPeek = lazy(() => import("./tilly-peek"));
-
-const KONAMI = [
-  "ArrowUp",
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowLeft",
-  "ArrowRight",
-  "b",
-  "a",
-];
 
 type Binding = { key: string; label: string; run: () => void };
 
@@ -42,8 +30,10 @@ function ignored(e: KeyboardEvent) {
 
 /**
  * The site's own prefix key. Ctrl+B, as in tuios, shows the keys the site
- * answers to, and the next key runs one. The Konami code brings Tilly.
- * Neither runs on /learn, where Ctrl+B belongs to the tuios in the page.
+ * answers to, and the next key runs one. Tilly comes in on the word tilly,
+ * the Konami code, three quick clicks on the logo, or TILLY_EVENT (the 404
+ * shell sends it). The keys do not run on /learn, where Ctrl+B belongs to the
+ * tuios in the page.
  */
 export function SiteKeys() {
   const router = useRouter();
@@ -51,7 +41,7 @@ export function SiteKeys() {
   const { setOpenSearch } = useSearchContext();
   const [prefix, setPrefix] = useState(false);
   const [tilly, setTilly] = useState(0);
-  const typed = useRef<string[]>([]);
+  const typed = useRef(keySequences());
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const off = pathname?.startsWith("/learn") ?? false;
@@ -103,16 +93,29 @@ export function SiteKeys() {
       }
 
       if (e.ctrlKey || e.altKey || e.metaKey) return;
-      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      typed.current = [...typed.current, k].slice(-KONAMI.length);
-      if (typed.current.join() === KONAMI.join()) {
-        typed.current = [];
-        setTilly((n) => n + 1);
-      }
+      if (typed.current.feed(e.key)) setTilly((n) => n + 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [off]);
+
+  // Three quick clicks on the logo. The listener only counts: it never stops
+  // a click, so a single click goes home at once, as before.
+  useEffect(() => {
+    const clicks = quickClicks(3, 1000);
+    const onClick = (e: MouseEvent) => {
+      const el = e.target as Element | null;
+      if (!el?.closest?.("[data-tilly-logo]")) return;
+      if (clicks.click(e.timeStamp)) setTilly((n) => n + 1);
+    };
+    const onTilly = () => setTilly((n) => n + 1);
+    document.addEventListener("click", onClick, true);
+    window.addEventListener(TILLY_EVENT, onTilly);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener(TILLY_EVENT, onTilly);
+    };
+  }, []);
 
   // The prefix gives up after a while, as tuios does.
   useEffect(() => {
@@ -152,6 +155,9 @@ export function SiteKeys() {
             <a href="/docs/keybindings" className="underline">
               See its keys
             </a>
+          </p>
+          <p className="mt-1 text-xs text-fd-muted-foreground">
+            psst: type <kbd>tilly</kbd>
           </p>
         </section>
       )}

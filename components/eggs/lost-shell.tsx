@@ -10,6 +10,7 @@ import {
   run,
   type Seg,
 } from "@/lib/eggs/shell";
+import { TILLY_EVENT } from "@/lib/eggs/triggers";
 
 type Entry = { prompt?: string; line: Line };
 
@@ -95,6 +96,7 @@ export function LostShell() {
     );
     setCwd(r.cwd);
     if (r.go) router.push(r.go);
+    if (r.tilly) window.dispatchEvent(new Event(TILLY_EVENT));
   };
 
   const recall = (step: number) => {

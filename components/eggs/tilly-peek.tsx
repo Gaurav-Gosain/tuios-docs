@@ -52,7 +52,7 @@ export default function TillyPeek({ onDone }: { onDone: () => void }) {
         className="pointer-events-auto relative mb-12 max-w-64 rounded-xl border bg-fd-popover px-3 py-2 pe-8 text-sm text-fd-popover-foreground shadow-lg"
       >
         <p>
-          Hi, I'm Tilly. You know the code, so here is a secret:{" "}
+          Hi, I'm Tilly. You found me, so here is a secret:{" "}
           <kbd className="keycap">Ctrl+B</kbd> shows the keys of this site.
         </p>
         <button

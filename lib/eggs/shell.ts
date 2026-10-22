@@ -24,6 +24,8 @@ export type Result = {
   /** A page to open. */
   go?: string;
   clear?: boolean;
+  /** Bring Tilly in. */
+  tilly?: boolean;
 };
 
 function parent(path: string) {
@@ -186,6 +188,12 @@ export function run(fs: Fs, cwd: string, line: string): Result {
       return { out: [[{ t: cwd }]], cwd };
     case "clear":
       return { out: [], cwd, clear: true };
+    case "tilly":
+      return {
+        out: [[{ t: "Hi! Look down there.", c: "muted" }]],
+        cwd,
+        tilly: true,
+      };
     case "whoami":
       return { out: [[{ t: "a reader, a long way from home" }]], cwd };
     case "exit":

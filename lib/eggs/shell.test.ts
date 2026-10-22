@@ -42,6 +42,11 @@ describe("404 shell", () => {
     expect(run(fs, "/docs", "open").go).toBe("/docs");
   });
 
+  test("tilly brings Tilly in", () => {
+    expect(run(fs, "/", "tilly").tilly).toBe(true);
+    expect(run(fs, "/", "ls").tilly).toBeUndefined();
+  });
+
   test("paths resolve like a shell", () => {
     expect(resolve("/docs", "../blog/./hello")).toBe("/blog/hello");
     expect(resolve("/docs", "/learn/")).toBe("/learn");

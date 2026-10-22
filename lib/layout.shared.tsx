@@ -5,7 +5,12 @@ import { ThemeSwitch } from "@/components/site-themes/theme-switch";
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
-      title: <BrandLockup size={26} />,
+      // data-tilly-logo: three quick clicks bring Tilly in (site-keys.tsx).
+      title: (
+        <span data-tilly-logo="">
+          <BrandLockup size={26} />
+        </span>
+      ),
     },
     themeSwitch: { component: <ThemeSwitch /> },
     githubUrl: "https://github.com/Gaurav-Gosain/tuios",
