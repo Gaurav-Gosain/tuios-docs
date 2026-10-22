@@ -1,7 +1,4 @@
-import {
-  rehypeCodeDefaultOptions,
-  remarkMdxMermaid,
-} from "fumadocs-core/mdx-plugins";
+import { rehypeCodeDefaultOptions } from "fumadocs-core/mdx-plugins";
 import {
   defineConfig,
   defineDocs,
@@ -10,6 +7,7 @@ import {
 } from "fumadocs-mdx/config";
 import type { ShikiTransformer } from "shiki";
 import { z } from "zod";
+import { remarkSketchMermaid } from "./lib/remark-sketch-mermaid";
 import { topicSlugs } from "./lib/topics";
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
@@ -80,7 +78,9 @@ const transformerBoxDrawing: ShikiTransformer = {
 
 export default defineConfig({
   mdxOptions: {
-    remarkPlugins: [remarkMdxMermaid],
+    // ```mermaid blocks are drawn by tuios.dev/sketch ahead of the build
+    // (bun run mermaid) and shown by <SketchDiagram>.
+    remarkPlugins: [remarkSketchMermaid],
     rehypeCodeOptions: {
       ...rehypeCodeDefaultOptions,
       transformers: [

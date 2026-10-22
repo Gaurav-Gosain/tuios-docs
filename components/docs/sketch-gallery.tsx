@@ -10,9 +10,9 @@ import drawings from "@/lib/sketch-text.json";
  * text colour, else 0 to 15), 1 for bold, the text, and the ANSI colour of
  * the cell ground when there is one.
  */
-type Run = [number, number, string] | [number, number, string, number];
+export type Run = [number, number, string] | [number, number, string, number];
 
-type Drawing = {
+export type Drawing = {
   title: string;
   cols: number;
   rows: number;
@@ -162,19 +162,45 @@ export function SketchText({
       `<SketchText id="${id}" />: no such drawing. Run scripts/gen-library-shots.sh sketch.`,
     );
   }
+  return (
+    <SketchTextDrawing
+      drawing={d}
+      scope={`sk-${id.replace(/[^a-z0-9-]/gi, "")}`}
+      label={label ?? `${d.title} as text`}
+      note={note}
+    />
+  );
+}
+
+/**
+ * A text drawing given as data, for drawings that are not in
+ * lib/sketch-text.json, such as the ```mermaid blocks of the pages
+ * (lib/mermaid.json). scope names the drawing on the page and must be unique
+ * there.
+ */
+export function SketchTextDrawing({
+  drawing: d,
+  scope,
+  label,
+  note = false,
+}: {
+  drawing: Omit<Drawing, "title">;
+  scope: string;
+  label: string;
+  note?: boolean;
+}) {
   // The width at which the drawing fits at full size: its columns at the
   // widest mono advance in the font stack (0.62 em) at 12.5 px, plus the
   // padding. Under it the drawing shrinks to fit, and the Full size toggle
   // shows. Over it the toggle would change nothing, so it hides.
   const fits = Math.ceil(d.cols * 0.62 * 12.5 + 32);
-  const scope = `sk-${id.replace(/[^a-z0-9-]/gi, "")}`;
   return (
     <div className="sk-wrap not-prose min-w-0" data-sk={scope}>
       <style>{`@container sk (min-width: ${fits}px) { [data-sk="${scope}"] .sk-full { display: none; } }`}</style>
       <section
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
         tabIndex={0}
-        aria-label={label ?? `${d.title} as text`}
+        aria-label={label}
         className="sk-text overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary"
         style={{ "--sk-cols": d.cols } as CSSProperties}
       >

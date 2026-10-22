@@ -7,9 +7,6 @@
  * downloaded, about 96 KB gzipped, whether it used any or not. Through
  * next/dynamic a page loads only the widgets it renders. They still render
  * on the server, so the HTML is the same.
- *
- * Mermaid is left out. It already loads mermaid with a dynamic import, and
- * behind next/dynamic the build split that into chunks twice the size.
  */
 import dynamic from "next/dynamic";
 

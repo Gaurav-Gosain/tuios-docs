@@ -3,6 +3,7 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 import { LibGallery, LibShot, LibShotSet } from "@/components/docs/lib-shot";
 import { Shot } from "@/components/docs/shot";
+import { SketchDiagram } from "@/components/docs/sketch-diagram";
 import { SketchText, SketchType } from "@/components/docs/sketch-gallery";
 import { VersionIndex } from "@/components/docs/version-index";
 import { BenchBars } from "@/components/mdx/bench-bars";
@@ -58,7 +59,6 @@ import {
   ToleranceBlind,
   WindowTargetOrder,
 } from "@/components/mdx/lazy";
-import { Mermaid } from "@/components/mdx/mermaid";
 import { RunTally } from "@/components/mdx/run-tally";
 import { Since } from "@/components/mdx/since";
 import { TerminalCapture } from "@/components/mdx/terminal-capture";
@@ -79,7 +79,6 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ),
     Step,
     Steps,
-    Mermaid,
     InboxDemo,
     KeybindingExplorer,
     LayoutModes,
@@ -139,6 +138,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     LibShot,
     LibGallery,
     LibShotSet,
+    SketchDiagram,
     SketchText,
     SketchType,
     ...components,

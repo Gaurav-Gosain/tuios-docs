@@ -21,6 +21,7 @@ bun run build        # static export to out/
 bun run types:check  # fumadocs-mdx, then tsc --noEmit
 bun run lint         # biome check
 bun run format       # biome format --write
+bun run mermaid      # draw the ```mermaid blocks into lib/mermaid.json (needs Go)
 ```
 
 Run `types:check`, `lint` and `build` before you commit. The build must succeed: it is what deploys.
@@ -86,6 +87,7 @@ lib/sketch/                   the sketch playground: the Web Worker that runs tu
                               tests/sketch/xss.mjs drives the page with hostile share links; run it before
                               changing lib/sketch/sanitize.ts or the engine pin
 assets/tilly-3d/              tilly.py (Blender) and build.sh, which rebuild public/tilly/tilly.glb
+lib/mermaid.json              the ```mermaid blocks of the pages, drawn by sketch with `bun run mermaid`
 mdx-components.tsx            registers the MDX widgets
 source.config.ts              the docs, blog and releases collections
 next.config.mjs               output: 'export'
@@ -103,7 +105,13 @@ Posts in `content/blog/` and pages in `content/releases/` need `title`, `descrip
 
 ### MDX widgets
 
-The widgets in `components/mdx/` are client components used in docs, posts and release notes, for example `<TerminalCapture>`, `<BenchBars>` and `<TapeTrustFlow>`. A widget registered in `mdx-components.tsx` can be used in any page without an import, so a new widget needs both its file and a line there. Mermaid diagrams are written as fenced `mermaid` code blocks and rendered by a remark plugin.
+The widgets in `components/mdx/` are client components used in docs, posts and release notes, for example `<TerminalCapture>`, `<BenchBars>` and `<TapeTrustFlow>`. A widget registered in `mdx-components.tsx` can be used in any page without an import, so a new widget needs both its file and a line there. Mermaid diagrams are written as fenced `mermaid` code blocks. tuios.dev/sketch draws them ahead of the build, so a page ships the SVG and runs no code to draw it:
+
+- `lib/remark-sketch-mermaid.ts` puts each block in `<SketchDiagram id="…">`. The id is a hash of the block's source.
+- `bun run mermaid` (`scripts/mermaid.mjs`) finds every block in `content/` and draws it with `tools/libshots/mermaid`, at the sketch pinned in `tools/libshots/go.mod`. It writes `lib/mermaid.json`: the SVG for the docs column, an SVG for a phone when that layout reads larger, and the text drawing.
+- Run it after you add or change a block, and commit `lib/mermaid.json`. The build fails on a block with no drawing. The command stops on a block sketch cannot draw and names the file and line.
+- The SVG takes its colours from the `--pele-*` tokens on `.skd` in `app/global.css`: Catppuccin Latte and Mocha by default, and the picked theme's colours under `:root[data-tt]`.
+- `<SketchDiagram>` shows the Picture, Text and Source tabs of the sketch gallery, in the same tab group.
 
 A widget that shows TUIOS behavior should match the code. Check it against the tuios source before you use it in the docs.
 
