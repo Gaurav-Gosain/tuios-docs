@@ -34,14 +34,15 @@ const covered =
 const wide =
   /^[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]$/u;
 
-// Block elements (U+2580 to U+259F) and braille are drawn by the page, not
-// by the font: a font draws each one as its own glyph, and the edges of
+// Block elements (U+2580 to U+259F), the diagonals ╱ ╲ ╳ and braille are
+// drawn by the page, not by the font: a font draws each one as its own glyph, and the edges of
 // glyphs side by side leave seams, while a face that lacks them takes them
 // from a fallback face of another width. A run of one block is one box with
 // a background, as wide as the run and as tall as the line, so blocks meet
 // across cells and from line to line. The characters stay in the box, clear,
 // so the drawing still copies as text.
-const isBlock = (cp: number) => cp >= 0x2580 && cp <= 0x259f;
+const isBlock = (cp: number) =>
+  (cp >= 0x2580 && cp <= 0x259f) || (cp >= 0x2571 && cp <= 0x2573);
 const isBraille = (cp: number) => cp > 0x2800 && cp <= 0x28ff;
 
 // The dots of a braille cell by bit: column, row.
