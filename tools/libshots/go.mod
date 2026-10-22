@@ -4,12 +4,13 @@ go 1.26.0
 
 require (
 	charm.land/bubbletea/v2 v2.0.8
+	github.com/charmbracelet/x/ansi v0.11.8
 	golang.org/x/image v0.45.0
 	tuios.dev/loom v0.1.1-0.20261021135526-b956b69e576d
 	tuios.dev/plot v0.1.1-0.20261021163928-0b9f16190301
 	tuios.dev/progstatus v0.1.1-0.20261020202737-da3567151be6
 	tuios.dev/shot v0.2.1-0.20261020202737-da3567151be6
-	tuios.dev/sketch v0.1.2-0.20261021152429-d60c774a4079
+	tuios.dev/sketch v0.1.2-0.20261022042327-d9baae7e2aa2
 	tuios.dev/swatch v0.1.1-0.20261020202737-da3567151be6
 	tuios.dev/tml v0.1.1-0.20261020202737-da3567151be6
 	tuios.dev/vt v0.3.1-0.20261020202737-da3567151be6
@@ -18,7 +19,6 @@ require (
 require (
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260812204455-68fa937c71be // indirect
-	github.com/charmbracelet/x/ansi v0.11.8 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
