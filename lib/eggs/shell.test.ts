@@ -17,6 +17,7 @@ describe("404 shell", () => {
     const top = run(fs, "/", "ls").out[0].map((s) => s.t);
     expect(top).toEqual(["blog/", "docs/", "learn"]);
     const docs = run(fs, "/", "ls docs").out[0].map((s) => s.t);
+    expect(run(fs, "/docs", "ls").out[0].map((s) => s.t)).toEqual(docs);
     expect(docs).toEqual(["libraries/", "sessions", "themes"]);
   });
 

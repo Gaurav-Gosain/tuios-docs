@@ -149,7 +149,8 @@ export function run(fs: Fs, cwd: string, line: string): Result {
     case "?":
       return { out: HELP, cwd };
     case "ls": {
-      const path = resolve(cwd, arg);
+      // A bare ls lists the current directory. A bare cd goes home.
+      const path = resolve(cwd, arg || ".");
       if (isDir(fs, path)) return { out: list(fs, path), cwd };
       if (fs.pages.has(path))
         return { out: [[{ t: arg, c: "page", href: path }]], cwd };

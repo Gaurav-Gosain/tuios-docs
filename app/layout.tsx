@@ -1,8 +1,7 @@
 import { RootProvider } from "fumadocs-ui/provider/next";
 import "./global.css";
 import type { Metadata } from "next";
-import { SiteKeys } from "@/components/eggs/site-keys";
-import { ThemeHost } from "@/components/site-themes/theme-host";
+import { SiteExtras } from "@/components/site-extras";
 import { feedAlternates } from "@/lib/metadata";
 import { site } from "@/lib/site";
 import { BOOT_SCRIPT } from "@/lib/site-themes/store";
@@ -68,8 +67,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           }}
         >
           {children}
-          <ThemeHost />
-          <SiteKeys />
+          <SiteExtras />
         </RootProvider>
       </body>
     </html>

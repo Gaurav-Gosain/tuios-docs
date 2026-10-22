@@ -28,8 +28,15 @@ const tone: Record<NonNullable<Seg["c"]>, string> = {
  * The pane on the 404 page: a focused tuios pane, its title in the top
  * border, with a shell over the site's pages (lib/eggs/shell.ts).
  */
-export function LostShell({ urls }: { urls: string[] }) {
+export function LostShell() {
   const router = useRouter();
+  const [urls, setUrls] = useState<string[]>([]);
+  useEffect(() => {
+    fetch("/api/pages.json")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: string[]) => setUrls(list))
+      .catch(() => {});
+  }, []);
   const fs = useMemo(() => buildFs(urls), [urls]);
   const [cwd, setCwd] = useState("/");
   const [log, setLog] = useState<Entry[]>([]);
@@ -42,6 +49,8 @@ export function LostShell({ urls }: { urls: string[] }) {
   // The opening lines name the path that was asked for. It is read on the
   // client: the same 404.html answers every missing path.
   useEffect(() => {
+    // Wait for the page list: buildFs always holds "/".
+    if (fs.pages.size < 2) return;
     const path = decodeURI(window.location.pathname).replace(/\/+$/, "") || "/";
     const near = nearest(fs, path);
     setLog([
