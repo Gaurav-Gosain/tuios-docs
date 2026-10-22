@@ -1,8 +1,11 @@
 import { RootProvider } from "fumadocs-ui/provider/next";
 import "./global.css";
 import type { Metadata } from "next";
+import { SiteKeys } from "@/components/eggs/site-keys";
+import { ThemeHost } from "@/components/site-themes/theme-host";
 import { feedAlternates } from "@/lib/metadata";
 import { site } from "@/lib/site";
+import { BOOT_SCRIPT } from "@/lib/site-themes/store";
 
 export const metadata: Metadata = {
   title: {
@@ -46,6 +49,13 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Puts a saved tuios theme on the page before it draws. */}
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed script from lib/site-themes/store.ts
+          dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }}
+        />
+      </head>
       <body className="flex flex-col min-h-screen">
         <RootProvider
           search={{
@@ -58,6 +68,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           }}
         >
           {children}
+          <ThemeHost />
+          <SiteKeys />
         </RootProvider>
       </body>
     </html>

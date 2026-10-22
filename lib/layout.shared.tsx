@@ -1,11 +1,13 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 import { BrandLockup } from "@/components/brand";
+import { ThemeSwitch } from "@/components/site-themes/theme-switch";
 
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
       title: <BrandLockup size={26} />,
     },
+    themeSwitch: { component: <ThemeSwitch /> },
     githubUrl: "https://github.com/Gaurav-Gosain/tuios",
     links: [
       {
