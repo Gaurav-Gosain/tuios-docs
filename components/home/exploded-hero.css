@@ -24,8 +24,11 @@
 .xh {
   --cw: 0.6em;
   --ch: 1.32em;
-  --term-bg: #1e1e2e;
-  --term-fg: #cdd6f4;
+  /* The terminal's own colours: the capture's theme (Catppuccin Mocha),
+     unless a dark site theme gives its own (below). */
+  --term-bg: var(--xh-bg, #1e1e2e);
+  --term-fg: var(--xh-fg, #cdd6f4);
+  --term-line: color-mix(in oklab, var(--term-fg) 16%, transparent);
   --nav: var(--fd-nav-height, 56px);
 
   /* The pose of the open stack comes from exploded-hero.tsx (POSE). */
@@ -48,6 +51,36 @@
 
   position: relative;
   margin-top: 2.5rem;
+  /* The glass reaches a little past the screen on a phone. clip, not hidden,
+     so the stage can still stick. */
+  overflow-x: clip;
+}
+
+/*
+ * A dark tuios theme from the site's theme picker recolours the terminal as
+ * tuios would: its ground, its text and its sixteen colours (see the colour
+ * table that exploded-hero.tsx writes). A light theme keeps the captured
+ * colours, because the capture's chrome greys are drawn for a dark ground.
+ */
+:root.dark[data-tt] .xh {
+  --xh-fg: var(--color-fd-foreground);
+  --xh-bg: var(--color-fd-background);
+  --xh-a0: var(--tt-0);
+  --xh-a1: var(--tt-1);
+  --xh-a2: var(--tt-2);
+  --xh-a3: var(--tt-3);
+  --xh-a4: var(--tt-4);
+  --xh-a5: var(--tt-5);
+  --xh-a6: var(--tt-6);
+  --xh-a7: var(--tt-7);
+  --xh-a8: var(--tt-8);
+  --xh-a9: var(--tt-9);
+  --xh-a10: var(--tt-10);
+  --xh-a11: var(--tt-11);
+  --xh-a12: var(--tt-12);
+  --xh-a13: var(--tt-13);
+  --xh-a14: var(--tt-14);
+  --xh-a15: var(--tt-15);
 }
 
 html:not(.dark) .xh {
@@ -192,7 +225,7 @@ html:not(.dark) .xh {
   box-shadow:
     inset 0 1px 0 color-mix(in oklab, var(--spec) 90%, transparent),
     inset 1px 0 0 color-mix(in oklab, var(--spec) 22%, transparent),
-    0 0 0 1px rgba(205, 214, 244, 0.16);
+    0 0 0 1px var(--term-line);
   animation-name: xh-apart;
 }
 
@@ -235,8 +268,8 @@ html:not(.dark) .xh {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(to right, rgba(205, 214, 244, 0.16) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(205, 214, 244, 0.16) 1px, transparent 1px);
+    linear-gradient(to right, var(--term-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--term-line) 1px, transparent 1px);
   background-size: var(--cw) var(--ch);
 }
 
@@ -246,7 +279,7 @@ html:not(.dark) .xh {
   top: calc(var(--py) * var(--ch));
   width: var(--cw);
   height: var(--ch);
-  outline: 2px solid #f9e2af;
+  outline: 2px solid var(--xh-a3, #f9e2af);
   outline-offset: 1px;
   border-radius: 1px;
 }
@@ -260,8 +293,9 @@ html:not(.dark) .xh {
     repeating-linear-gradient(
       90deg,
       transparent 0 calc(var(--cw) * 10 - 1px),
-      rgba(205, 214, 244, 0.05) calc(var(--cw) * 10 - 1px) calc(var(--cw) * 10)
-    ), #181825;
+      color-mix(in oklab, var(--term-fg) 5%, transparent)
+        calc(var(--cw) * 10 - 1px) calc(var(--cw) * 10)
+    ), color-mix(in oklab, var(--term-bg) 80%, black);
 }
 
 .xh-edge-on {
@@ -284,7 +318,7 @@ html:not(.dark) .xh {
 .xh-daemon-name span {
   margin-left: 0.8em;
   font-weight: 400;
-  color: #9399b2;
+  color: color-mix(in oklab, var(--term-fg) 62%, var(--term-bg));
 }
 
 .xh-proc {
@@ -301,8 +335,8 @@ html:not(.dark) .xh {
   font-family: var(--font-mono);
   font-size: 2em;
   color: var(--term-fg);
-  background: #313244;
-  box-shadow: inset 0 0 0 1px rgba(205, 214, 244, 0.16);
+  background: color-mix(in oklab, var(--term-bg) 82%, var(--term-fg));
+  box-shadow: inset 0 0 0 1px var(--term-line);
 }
 
 /* A PTY: a line standing up from the program to the pane it draws in. */
@@ -320,7 +354,11 @@ html:not(.dark) .xh {
   width: 1px;
   height: 17em;
   transform-origin: 50% 0;
-  background: linear-gradient(to bottom, #89b4fa, rgba(137, 180, 250, 0.25));
+  background: linear-gradient(
+    to bottom,
+    var(--xh-a4, #89b4fa),
+    color-mix(in oklab, var(--xh-a4, #89b4fa) 25%, transparent)
+  );
 }
 
 /* Callouts: a hairline out from the right edge of the layer, in its plane,
@@ -501,83 +539,95 @@ html:not(.dark) .xh {
   }
 }
 
-/* Reduced motion: no scroll-linked motion. The stack stands open, every
-   layer and callout in view, and the captions follow as a list. */
-@media (prefers-reduced-motion: reduce) {
-  .xh-track {
+/* The static diagram: the stack stands open and still, every layer and
+   callout in view, and the captions follow as a list. The section renders
+   this way, and an inline script in exploded-hero.tsx takes data-static off
+   before the first paint, unless the reader asks for reduced motion. So
+   reduced motion and a page without JavaScript both get the diagram. */
+.xh[data-static] {
+  & .xh-track {
     height: auto;
   }
 
-  .xh-stage {
+  /* A block, not the grid, and nothing centred: a centred caption list
+     takes the width of its widest content, three columns, past a phone's
+     screen. */
+  & .xh-stage {
     position: relative;
     top: 0;
+    display: block;
+    place-items: normal;
     height: auto;
     min-height: 0;
     padding: 9rem 0 2rem;
     overflow: visible;
   }
 
-  .xh-rig,
-  .xh [data-anim],
-  .xh-ground,
-  .xh-edge,
-  .xh-host,
-  .xh-hint,
-  .xh-outro {
+  & .xh-scene {
+    margin: 0 auto;
+  }
+
+  & .xh-rig,
+  & [data-anim],
+  & .xh-ground,
+  & .xh-edge,
+  & .xh-host,
+  & .xh-hint,
+  & .xh-outro {
     /* biome-ignore lint/complexity/noImportantStyles: the animation names are inline, on the elements */
     animation: none !important;
   }
 
-  .xh-rig {
+  & .xh-rig {
     transform: translate(var(--tx), 0) rotateX(var(--rx)) rotateZ(var(--rz))
       scale(var(--s));
   }
 
-  .xh-plane-host {
+  & .xh-plane-host {
     transform: translateZ(calc(18em * var(--zs)));
   }
-  .xh-plane-chrome {
+  & .xh-plane-chrome {
     transform: translateZ(calc(12em * var(--zs)));
   }
-  .xh-plane-scratch {
+  & .xh-plane-scratch {
     transform: translateZ(calc(6.5em * var(--zs)));
   }
-  .xh-plane-cells {
+  & .xh-plane-cells {
     transform: translateZ(calc(-7em * var(--zs)));
   }
-  .xh-plane-daemon {
+  & .xh-plane-daemon {
     transform: translateZ(calc(-15em * var(--zs)));
   }
 
-  .xh-ground {
+  & .xh-ground {
     opacity: 0.9;
   }
 
-  .xh-pty-line {
+  & .xh-pty-line {
     transform: rotateX(90deg);
   }
 
-  .xh-hint {
+  & .xh-hint {
     display: none;
   }
 
-  .xh-captions {
+  & .xh-captions {
     position: static;
     translate: none;
     width: auto;
     max-width: 60rem;
-    margin: 2rem auto 0;
+    margin: 4.5rem auto 0;
     padding: 0 1rem;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
     gap: 1.5rem 2rem;
   }
 
-  .xh-caption {
+  & .xh-caption {
     grid-area: auto;
   }
 
-  .xh-outro {
+  & .xh-outro {
     position: static;
     margin-top: 3rem;
     padding: 0 1rem;

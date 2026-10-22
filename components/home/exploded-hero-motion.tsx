@@ -6,15 +6,18 @@ import { useEffect } from "react";
  * The exploded view's motion where the browser has no scroll timelines. The
  * CSS gives every moving part a paused one-second animation. This sets each
  * one's time from how far the section has scrolled, once per frame while
- * the page scrolls. With scroll timelines, or with reduced motion, it does
- * nothing.
+ * the page scrolls. With scroll timelines it only turns the motion on, and
+ * with reduced motion it does nothing.
  */
 export function ExplodedHeroMotion() {
   useEffect(() => {
-    if (CSS.supports("animation-timeline: view()")) return;
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const track = document.getElementById("xh-track");
     if (!track) return;
+    // The inline script turns the motion on when the page loads. A visit
+    // through a client-side link renders the section without running it.
+    track.closest(".xh")?.removeAttribute("data-static");
+    if (CSS.supports("animation-timeline: view()")) return;
     const anims = track.getAnimations({ subtree: true });
     let frame = 0;
     const apply = () => {

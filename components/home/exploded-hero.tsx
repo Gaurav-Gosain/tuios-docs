@@ -13,6 +13,7 @@ import {
   type Sheet,
   scratch,
 } from "@/lib/hero/scene";
+import themePalettes from "@/media/palettes.json";
 import { ExplodedHeroMotion } from "./exploded-hero-motion";
 import "./exploded-hero.css";
 
@@ -29,6 +30,9 @@ import "./exploded-hero.css";
  * The keyframes are written here, from one table of states, so the depth of
  * every layer, its focus and its callout stay in step.
  */
+
+// The theme the scene was captured in (media/base.toml).
+const mocha = themePalettes.catppuccin_mocha;
 
 // The layers, nearest the reader first.
 const LAYERS = [
@@ -377,11 +381,40 @@ function motionCss(): string {
   return out.join("\n");
 }
 
+/**
+ * A captured colour that is one of the capture's theme colours (Catppuccin
+ * Mocha: its foreground, background or one of its sixteen) is written as a
+ * custom property with the captured colour as the fallback, so a site theme
+ * can recolour the terminal the way tuios recolours it with a theme. The
+ * capture is a few steps off in places (#89b3fa for #89b4fa), so a match
+ * allows a small distance.
+ */
+const MOCHA: [string, string][] = [
+  ["--xh-fg", mocha.foreground],
+  ["--xh-bg", mocha.background],
+  ...mocha.ansi.map((c, i): [string, string] => [`--xh-a${i}`, c]),
+];
+
+function rgb(hex: string): number[] {
+  const h = hex.replace("#", "");
+  return [0, 2, 4].map((i) => Number.parseInt(h.slice(i, i + 2), 16));
+}
+
+function themed(hex: string): string {
+  const c = rgb(hex);
+  for (const [name, ref] of MOCHA) {
+    const r = rgb(ref);
+    if (c.every((v, i) => Math.abs(v - r[i]) <= 3))
+      return `var(${name},${hex})`;
+  }
+  return hex;
+}
+
 function paletteCss(): string {
   const rule = (prefix: string, s: Style, n: number) => {
     const d: string[] = [];
-    if (s.fg) d.push(`color:${s.fg}`);
-    if (s.bg) d.push(`background:${s.bg}`);
+    if (s.fg) d.push(`color:${themed(s.fg)}`);
+    if (s.bg) d.push(`background:${themed(s.bg)}`);
     if (s.b) d.push("font-weight:700");
     if (s.i) d.push("font-style:italic");
     if (s.f) d.push("opacity:.55");
@@ -482,6 +515,35 @@ function Plane({ layer, children }: { layer: LayerId; children: ReactNode }) {
   );
 }
 
+const ANSI_NAMES = [
+  "black",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan",
+  "white",
+];
+
+/**
+ * The marked cell's colour, as tuios stores it: an ANSI colour by its name,
+ * so the caption stays true under a site theme that recolours it. A colour
+ * outside the sixteen is given as its hex.
+ */
+const probeColour: ReactNode = (() => {
+  if (!probe) return null;
+  const v = themed(probe.fg).match(/^var\(--xh-a(\d+),/);
+  if (!v) return <code>{probe.fg}</code>;
+  const n = Number(v[1]);
+  const name = `${n >= 8 ? "bright " : ""}${ANSI_NAMES[n % 8]}`;
+  return (
+    <>
+      {name} (ANSI {n})
+    </>
+  );
+})();
+
 const CAPTIONS: { layer: LayerId; title: string; body: ReactNode }[] = [
   {
     layer: "host",
@@ -514,7 +576,7 @@ const CAPTIONS: { layer: LayerId; title: string; body: ReactNode }[] = [
     body: probe ? (
       <>
         Each pane has its own terminal emulator and keeps a grid of cells. The
-        marked cell holds <code>{probe.char}</code> in <code>{probe.fg}</code>
+        marked cell holds <code>{probe.char}</code> in {probeColour}
         {probe.bold ? ", bold" : ""}.
       </>
     ) : (
@@ -554,9 +616,26 @@ const POSE_CSS = `.xh{--rx:${POSE.rx}deg;--rz:${POSE.rz}deg;--s:${POSE.s};--tx:$
 
 const CSS = `${POSE_CSS}\n${motionCss()}\n${paletteCss()}`;
 
+/**
+ * Runs as the page is parsed, before the first paint: the section starts as
+ * the static diagram, for a page without JavaScript, and this turns the
+ * motion on unless the reader asks for reduced motion.
+ */
+const UNSTATIC = `(function(s){try{if(!matchMedia("(prefers-reduced-motion: reduce)").matches)s.removeAttribute("data-static")}catch(e){}})(document.currentScript.parentElement)`;
+
 export function ExplodedHero() {
   return (
-    <section className="xh" aria-labelledby="xh-title">
+    <section
+      className="xh"
+      aria-labelledby="xh-title"
+      data-static=""
+      // The inline script below changes data-static before React hydrates.
+      suppressHydrationWarning
+    >
+      <script
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed script, no input
+        dangerouslySetInnerHTML={{ __html: UNSTATIC }}
+      />
       <style
         // biome-ignore lint/security/noDangerouslySetInnerHtml: generated keyframes, no user input
         dangerouslySetInnerHTML={{ __html: CSS }}
