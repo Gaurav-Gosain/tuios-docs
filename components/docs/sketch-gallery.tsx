@@ -1,5 +1,5 @@
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { LibShot } from "@/components/docs/lib-shot";
 import shots from "@/lib/libshots.json";
 import drawings from "@/lib/sketch-text.json";
@@ -76,14 +76,26 @@ export function SketchText({
       `<SketchText id="${id}" />: no such drawing. Run scripts/gen-library-shots.sh sketch.`,
     );
   }
+  // The width at which the drawing fits at full size: its columns at the
+  // widest mono advance in the font stack (0.62 em) at 12.5 px, plus the
+  // padding. Under it the drawing shrinks to fit, and the Full size toggle
+  // shows. Over it the toggle would change nothing, so it hides.
+  const fits = Math.ceil(d.cols * 0.62 * 12.5 + 32);
+  const scope = `sk-${id.replace(/[^a-z0-9-]/gi, "")}`;
   return (
-    <div className="not-prose min-w-0">
+    <div className="sk-wrap not-prose min-w-0" data-sk={scope}>
+      <style>{`@container sk (min-width: ${fits}px) { [data-sk="${scope}"] .sk-full { display: none; } }`}</style>
       <section
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
         tabIndex={0}
         aria-label={label ?? `${d.title} as text`}
         className="sk-text overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary"
+        style={{ "--sk-cols": d.cols } as CSSProperties}
       >
+        <label className="sk-full">
+          <input type="checkbox" />
+          Full size
+        </label>
         <pre style={{ minWidth: `${d.cols}ch` }}>
           {d.lines.map((line, y) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: the lines are fixed at build time
@@ -109,7 +121,7 @@ export function SketchText({
       {note ? (
         <p className="sk-note">
           {d.wide
-            ? `${d.cols} columns, ${d.rows} rows. No layout fits in 80 columns, so it is drawn at its full width. Scroll it sideways when it does not fit.`
+            ? `${d.cols} columns, ${d.rows} rows. No layout fits in 80 columns, so it is drawn at its full width. It shrinks to fit the page. Select Full size to read it at full size.`
             : `${d.cols} columns, ${d.rows} rows, drawn for 80 columns.`}
         </p>
       ) : null}

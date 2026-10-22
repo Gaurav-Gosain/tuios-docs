@@ -278,6 +278,17 @@ html.dark .shiki code span[style*="--shiki-dark:#6A737D"] {
   --sk-14: #94e2d5;
   --sk-15: #cdd6f4;
 }
+/*
+ * The scroll box is a size container. The drawing's font size shrinks so that
+ * --sk-cols columns fit its width, down from 12.5 px. 0.62 em is the widest
+ * cell advance of the faces in the stack, so the drawing never overflows.
+ * The Full size box (shown only when the drawing shrinks) puts it back at
+ * 12.5 px, and the box scrolls.
+ */
+.sk-text {
+  container: sk / inline-size;
+  position: relative;
+}
 .sk-text pre {
   margin: 0;
   padding: 0.75rem 1rem;
@@ -286,18 +297,36 @@ html.dark .shiki code span[style*="--shiki-dark:#6A737D"] {
   font-family:
     ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono",
     "Liberation Mono", "Roboto Mono", monospace;
-  font-size: 12px;
+  font-size: min(12.5px, calc((100cqw - 2rem) / (var(--sk-cols) * 0.62)));
   line-height: 1.15;
   white-space: pre;
+  text-align: left;
   font-variant-ligatures: none;
   font-feature-settings:
     "liga" 0,
     "calt" 0;
 }
-@media (min-width: 640px) {
-  .sk-text pre {
-    font-size: 12.5px;
-  }
+.sk-text:has(.sk-full input:checked) pre {
+  font-size: 12.5px;
+}
+.sk-full {
+  position: sticky;
+  left: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100cqw;
+  box-sizing: border-box;
+  padding: 0.5rem 1rem 0;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  color: var(--color-fd-muted-foreground);
+  cursor: pointer;
+  user-select: none;
+}
+.sk-full input {
+  accent-color: var(--color-fd-primary);
 }
 .sk-text .sk-b {
   font-weight: 700;
@@ -363,6 +392,7 @@ html.dark .shiki code span[style*="--shiki-dark:#6A737D"] {
 }
 .sk-note {
   margin: 0;
+  line-height: 1.45;
   padding: 0.5rem 1rem 0.75rem;
   font-size: 0.8125rem;
   color: var(--color-fd-muted-foreground);
