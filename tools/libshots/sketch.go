@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -13,10 +12,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/x/ansi"
+	"libshots/sketchtext"
 	"tuios.dev/sketch"
 	"tuios.dev/sketch/raster"
-	"tuios.dev/sketch/text"
 )
 
 func init() { register("sketch", drawSketch) }
@@ -42,7 +40,7 @@ func drawSketch(g *gen) error {
 		return err
 	}
 	sort.Strings(files)
-	drawings := map[string]textDrawing{}
+	drawings := map[string]sketchtext.Drawing{}
 	for _, f := range files {
 		src, err := os.ReadFile(f)
 		if err != nil {
@@ -69,7 +67,7 @@ func drawSketch(g *gen) error {
 
 		// The text drawing, as tuios mermaid --format text prints it, and
 		// the source, for the Source tab of the gallery.
-		td, err := drawText(string(src), textCols)
+		td, err := sketchtext.Draw(string(src), sketchtext.Cols)
 		if err != nil {
 			return fmt.Errorf("%s: text drawing: %w", f, err)
 		}
@@ -161,11 +159,6 @@ func (g *gen) writeImage(name, suffix string, img image.Image) error {
 	return nil
 }
 
-// textCols is the width of the text drawings in the gallery: the width of a
-// common terminal. A drawing that does not fit is drawn at its full width, as
-// tuios mermaid does, and the page lets it scroll.
-const textCols = 80
-
 // sketchTextPath is the file the gallery reads the text drawings from.
 const sketchTextPath = "lib/sketch-text.json"
 
@@ -173,147 +166,9 @@ const sketchTextPath = "lib/sketch-text.json"
 // the pages to include.
 const sourceDir = "tools/libshots/snippets/sketch-types"
 
-// textDrawing is one text drawing, split into runs of one style, so the page
-// can colour it from the site's own palette in either theme.
-type textDrawing struct {
-	Title string `json:"title"`
-	// Cols is the widest line in cells. Wide says the drawing did not fit
-	// textCols and was drawn at its full width.
-	Cols  int      `json:"cols"`
-	Rows  int      `json:"rows"`
-	Wide  bool     `json:"wide,omitempty"`
-	Lines [][]tRun `json:"lines"`
-}
-
-// tRun is a run of text in one style: the ANSI colour (-1 for the default
-// text colour, else 0 to 15), whether it is bold, the text, and the ANSI
-// colour of the ground (-1 for none). sketch/text sets a ground on a half
-// block that shows two colours, such as where two pie slices meet.
-type tRun struct {
-	FG   int
-	Bold bool
-	Text string
-	BG   int
-}
-
-// MarshalJSON writes a run as [fg, bold, text], with the ground as a fourth
-// element only when there is one.
-func (r tRun) MarshalJSON() ([]byte, error) {
-	b := 0
-	if r.Bold {
-		b = 1
-	}
-	if r.BG >= 0 {
-		return json.Marshal([]any{r.FG, b, r.Text, r.BG})
-	}
-	return json.Marshal([]any{r.FG, b, r.Text})
-}
-
-// drawText draws a source as tuios mermaid --format text does at cols
-// columns, with colour.
-func drawText(src string, cols int) (textDrawing, error) {
-	d, err := sketch.Parse(src, sketch.ParseOptions{})
-	if err != nil {
-		return textDrawing{}, err
-	}
-	wide := false
-	lines, err := text.Draw(d, text.Options{Cols: cols, Color: true})
-	if errors.Is(err, text.ErrTooWide) {
-		wide = true
-		lines, err = text.Draw(d, text.Options{Color: true})
-	}
-	if err != nil {
-		return textDrawing{}, err
-	}
-	td, err := parseDrawing(strings.Join(lines, "\n"), "")
-	td.Wide = wide
-	return td, err
-}
-
-// splitSGR splits a line of sketch/text into runs. sketch/text writes only
-// SGR 0, 1, 30 to 37, 90 to 97, 40 to 47 and 100 to 107; anything else is an
-// error, so a change in its output stops the build here instead of reaching
-// the page as junk.
-func splitSGR(line string) ([]tRun, error) {
-	var runs []tRun
-	cur := tRun{FG: -1, BG: -1}
-	var b strings.Builder
-	flush := func() {
-		if b.Len() > 0 {
-			cur.Text = b.String()
-			runs = append(runs, cur)
-			b.Reset()
-		}
-	}
-	for i := 0; i < len(line); i++ {
-		c := line[i]
-		if c != 0x1b {
-			if c < 0x20 || c == 0x7f {
-				return nil, fmt.Errorf("control byte %#x in a text drawing", c)
-			}
-			b.WriteByte(c)
-			continue
-		}
-		end := strings.IndexByte(line[i:], 'm')
-		if end < 0 || i+1 >= len(line) || line[i+1] != '[' {
-			return nil, fmt.Errorf("escape that is not SGR in a text drawing: %q", line[i:])
-		}
-		params := line[i+2 : i+end]
-		i += end
-		flush()
-		cur = tRun{FG: cur.FG, Bold: cur.Bold, BG: cur.BG}
-		for _, p := range strings.Split(params, ";") {
-			var n int
-			if p == "" {
-				n = 0
-			} else if _, err := fmt.Sscanf(p, "%d", &n); err != nil {
-				return nil, fmt.Errorf("SGR %q in a text drawing", params)
-			}
-			switch {
-			case n == 0:
-				cur = tRun{FG: -1, BG: -1}
-			case n == 1:
-				cur.Bold = true
-			case n >= 30 && n <= 37:
-				cur.FG = n - 30
-			case n >= 90 && n <= 97:
-				cur.FG = n - 90 + 8
-			case n >= 40 && n <= 47:
-				cur.BG = n - 40
-			case n >= 100 && n <= 107:
-				cur.BG = n - 100 + 8
-			default:
-				return nil, fmt.Errorf("SGR %d in a text drawing", n)
-			}
-		}
-	}
-	flush()
-	// Spaces at the end of a line in the default style show nothing.
-	for len(runs) > 0 {
-		last := &runs[len(runs)-1]
-		if last.BG != -1 {
-			// A ground shows, spaces and all.
-			break
-		}
-		if last.FG != -1 || last.Bold {
-			if strings.TrimRight(last.Text, " ") == "" {
-				runs = runs[:len(runs)-1]
-				continue
-			}
-			break
-		}
-		last.Text = strings.TrimRight(last.Text, " ")
-		if last.Text != "" {
-			break
-		}
-		runs = runs[:len(runs)-1]
-	}
-	return runs, nil
-}
-
 // writeDrawings writes the text drawings, in name order, one drawing a line
 // group, so a change to one diagram is a small diff.
-func writeDrawings(all map[string]textDrawing) error {
+func writeDrawings(all map[string]sketchtext.Drawing) error {
 	keys := make([]string, 0, len(all))
 	for k := range all {
 		keys = append(keys, k)
@@ -333,19 +188,8 @@ func writeDrawings(all map[string]textDrawing) error {
 			return err
 		}
 		fmt.Fprintf(&b, "  %q: {\n    %s,\n    \"lines\": [\n", k, strings.Trim(string(head), "{}"))
-		for j, l := range td.Lines {
-			if l == nil {
-				l = []tRun{}
-			}
-			data, err := json.Marshal(l)
-			if err != nil {
-				return err
-			}
-			sep := ","
-			if j == len(td.Lines)-1 {
-				sep = ""
-			}
-			fmt.Fprintf(&b, "      %s%s\n", data, sep)
+		if err := sketchtext.LinesJSON(&b, td.Lines, "      "); err != nil {
+			return err
 		}
 		sep := ","
 		if i == len(keys)-1 {
@@ -380,7 +224,7 @@ func writeSource(id, src string) error {
 // a scratch folder. What a program prints goes next to the snippets, a text
 // drawing it prints goes into the drawings, and a file it writes goes
 // under public/libs/sketch/examples.
-func (g *gen) sketchExamples(drawings map[string]textDrawing) error {
+func (g *gen) sketchExamples(drawings map[string]sketchtext.Drawing) error {
 	work, err := os.MkdirTemp("", "libshots-sketch")
 	if err != nil {
 		return err
@@ -437,7 +281,7 @@ func (g *gen) sketchExamples(drawings map[string]textDrawing) error {
 	if err != nil {
 		return err
 	}
-	td, err := parseDrawing(out, "The quick start flowchart")
+	td, err := sketchtext.Parse(out, "The quick start flowchart")
 	if err != nil {
 		return fmt.Errorf("sketch-text: %w", err)
 	}
@@ -476,32 +320,13 @@ func (g *gen) sketchExamples(drawings map[string]textDrawing) error {
 		if err != nil {
 			return err
 		}
-		td, err := parseDrawing(out, "The flowchart at "+cols+" columns")
+		td, err := sketchtext.Parse(out, "The flowchart at "+cols+" columns")
 		if err != nil {
 			return fmt.Errorf("sketch-width %s: %w", cols, err)
 		}
 		drawings["width-"+cols] = td
 	}
 	return nil
-}
-
-// parseDrawing reads the lines a program printed as a text drawing.
-func parseDrawing(out, title string) (textDrawing, error) {
-	td := textDrawing{Title: title}
-	for _, l := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		runs, err := splitSGR(l)
-		if err != nil {
-			return td, err
-		}
-		w := 0
-		for _, r := range runs {
-			w += ansi.StringWidth(r.Text)
-		}
-		td.Cols = max(td.Cols, w)
-		td.Lines = append(td.Lines, runs)
-	}
-	td.Rows = len(td.Lines)
-	return td, nil
 }
 
 // keepFile copies a file an example wrote into the output, as NAME. A PNG
