@@ -7,10 +7,10 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.8
 	golang.org/x/image v0.45.0
 	tuios.dev/loom v0.1.1-0.20261021135526-b956b69e576d
-	tuios.dev/plot v0.1.1-0.20261021163928-0b9f16190301
+	tuios.dev/plot v0.1.1-0.20261022133612-8ebab24dc8d1
 	tuios.dev/progstatus v0.1.1-0.20261020202737-da3567151be6
 	tuios.dev/shot v0.2.1-0.20261020202737-da3567151be6
-	tuios.dev/sketch v0.1.2-0.20261022074657-3c0052825d65
+	tuios.dev/sketch v0.1.2-0.20261022133613-24342bd2424a
 	tuios.dev/swatch v0.1.1-0.20261020202737-da3567151be6
 	tuios.dev/tml v0.1.1-0.20261020202737-da3567151be6
 	tuios.dev/vt v0.3.1-0.20261020202737-da3567151be6
