@@ -26,6 +26,36 @@ go get tuios.dev/plot
 
 The program maps two roles to ANSI colours, so the chart takes the colours of the terminal's theme.
 
+## The tplot command [#tplot-command]
+
+`tplot` draws a chart from CSV, TSV, JSON or plain numbers, from a file or standard input. It needs Go 1.25 or newer:
+
+```bash
+go install tuios.dev/plot/cmd/tplot@latest
+```
+
+Each tuios release from v0.11.0 also carries a `tplot` archive for Linux, macOS, Windows and FreeBSD, on x86_64 and arm64. Download it from the [releases page](https://github.com/Gaurav-Gosain/tuios/releases), or install it with a package manager:
+
+```bash
+brew install --cask gaurav-gosain/tap/tuios-plot   # macOS and Linux
+yay -S tuios-plot-bin                              # Arch Linux, from the AUR
+```
+
+```bash
+printf 'session,6.2\napp,4.8\nvt,3.1\n' | tplot
+seq 1 50 | awk '{print sin($1/5)}' | tplot --kind line
+tplot --kind pie shares.csv
+echo '{"US": 410, "DE": 120, "SG": 14}' | tplot --kind map --log
+```
+
+- A text column gives the labels. Each column of numbers is a series. A first row of names is a header.
+- JSON can be `[1, 2, 3]`, `{"a": 1}`, `{"rx": [1, 2], "tx": [3, 4]}`, rows as arrays, or rows as objects.
+- Without `--kind`, a few labelled values draw as bars, and other data as a line chart. The kinds are `bar`, `column`, `line`, `area`, `spark`, `hist`, `heatmap`, `pie`, `donut`, `gauge` and `map`.
+- The colours are the 16 ANSI colours, so the chart takes the colours of the terminal's theme. Without colour, a chart that needs colour to tell its parts apart uses ASCII marks.
+- `tplot -h` lists every flag.
+
+The command is `tplot`, because GNU plotutils already has a `plot` command. The Homebrew cask and the AUR package keep the library's name.
+
 ## How it works
 
 - A chart draws into a grid of the size you give it. The grid is always that size, and each row is exactly that wide.
