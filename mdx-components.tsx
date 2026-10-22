@@ -3,6 +3,7 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 import { LibGallery, LibShot, LibShotSet } from "@/components/docs/lib-shot";
 import { Shot } from "@/components/docs/shot";
+import { SketchText, SketchType } from "@/components/docs/sketch-gallery";
 import { VersionIndex } from "@/components/docs/version-index";
 import { BenchBars } from "@/components/mdx/bench-bars";
 import {
@@ -138,6 +139,8 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     LibShot,
     LibGallery,
     LibShotSet,
+    SketchText,
+    SketchType,
     ...components,
   };
 }
