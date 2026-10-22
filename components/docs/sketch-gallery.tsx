@@ -6,9 +6,10 @@ import drawings from "@/lib/sketch-text.json";
 
 /**
  * A run of one style in a text drawing: the ANSI colour (-1 is the default
- * text colour, else 0 to 15), 1 for bold, and the text.
+ * text colour, else 0 to 15), 1 for bold, the text, and the ANSI colour of
+ * the cell ground when there is one.
  */
-type Run = [number, number, string];
+type Run = [number, number, string] | [number, number, string, number];
 
 type Drawing = {
   title: string;
@@ -21,36 +22,119 @@ type Drawing = {
 const all = drawings as unknown as Record<string, Drawing>;
 
 // The characters that every common mono face draws at one cell: Latin,
-// punctuation, arrows, box drawing, blocks and shapes. Any other character can
-// come from a fallback face with another advance, such as braille in a line
-// chart, so it is boxed to its cell width and the columns stay in line.
-const covered = /^[ -ÿıŒœ -⁯←-⇿─-◿]$/u;
+// punctuation, arrows, box drawing and shapes. Any other character can come
+// from a fallback face with another advance, so it is boxed to its cell
+// width and the columns stay in line.
+const covered =
+  /^[ -\u00ff\u0131\u0152\u0153\u2000-\u206f\u2190-\u21ff\u2500-\u257f\u25a0-\u25ff]$/u;
 
 // East Asian wide and fullwidth characters take two cells, as sketch/text
 // counts them.
 const wide =
-  /^[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]$/u;
+  /^[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]$/u;
+
+// Block elements (U+2580 to U+259F) and braille are drawn by the page, not
+// by the font: a font draws each one as its own glyph, and the edges of
+// glyphs side by side leave seams, while a face that lacks them takes them
+// from a fallback face of another width. A run of one block is one box with
+// a background, as wide as the run and as tall as the line, so blocks meet
+// across cells and from line to line. The characters stay in the box, clear,
+// so the drawing still copies as text.
+const isBlock = (cp: number) => cp >= 0x2580 && cp <= 0x259f;
+const isBraille = (cp: number) => cp > 0x2800 && cp <= 0x28ff;
+
+// The dots of a braille cell by bit: column, row.
+const brailleDots: [number, number][] = [
+  [0, 0],
+  [0, 1],
+  [0, 2],
+  [1, 0],
+  [1, 1],
+  [1, 2],
+  [0, 3],
+  [1, 3],
+];
+
+// braille is the background of a braille cell: a round dot for each bit.
+function braille(cp: number): CSSProperties {
+  const layers: string[] = [];
+  const bits = cp - 0x2800;
+  for (let b = 0; b < 8; b++) {
+    if (bits & (1 << b)) {
+      const [x, y] = brailleDots[b];
+      layers.push(
+        `radial-gradient(circle at ${x ? 72 : 28}% ${12.5 + y * 25}%, var(--sk-c) 0.12em, transparent 0.135em)`,
+      );
+    }
+  }
+  return { backgroundImage: layers.join(",") };
+}
 
 function cells(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = [];
+  const chars = Array.from(text);
   let plain = "";
   let i = 0;
-  for (const ch of text) {
+  // A run of plain text is a box as wide as its cells too: a face whose
+  // advance is not exactly 1ch would move every cell after it off the grid.
+  const flush = () => {
+    if (plain) {
+      out.push(
+        <span
+          key={`${key}-${i++}`}
+          className="sk-t"
+          style={{ width: `${Array.from(plain).length}ch` }}
+        >
+          {plain}
+        </span>,
+      );
+      plain = "";
+    }
+  };
+  for (let k = 0; k < chars.length; k++) {
+    const ch = chars[k];
+    const cp = ch.codePointAt(0) ?? 0;
+    if (isBlock(cp)) {
+      // A run of the same block, or one quadrant: its layers are placed in
+      // one cell.
+      let n = 1;
+      if (cp < 0x2596) {
+        while (chars[k + n] === ch) n++;
+      }
+      flush();
+      out.push(
+        <span
+          key={`${key}-${i++}`}
+          className={`sk-k sk-k${cp.toString(16)}`}
+          style={{ width: `${n}ch` }}
+        >
+          {ch.repeat(n)}
+        </span>,
+      );
+      k += n - 1;
+      continue;
+    }
+    if (isBraille(cp)) {
+      flush();
+      out.push(
+        <span key={`${key}-${i++}`} className="sk-k" style={braille(cp)}>
+          {ch}
+        </span>,
+      );
+      continue;
+    }
     if (covered.test(ch)) {
       plain += ch;
       continue;
     }
-    if (plain) {
-      out.push(plain);
-      plain = "";
-    }
+    flush();
     out.push(
       <span key={`${key}-${i++}`} className={wide.test(ch) ? "sk-c2" : "sk-c1"}>
         {ch}
       </span>,
     );
   }
-  if (plain) out.push(plain);
+  flush();
   return out;
 }
 
@@ -100,9 +184,13 @@ export function SketchText({
           {d.lines.map((line, y) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: the lines are fixed at build time
             <span key={y} className="sk-line">
-              {line.map(([fg, bold, text], x) => {
+              {line.map(([fg, bold, text, bg], x) => {
                 const k = `${y}-${x}`;
-                const cls = [fg >= 0 ? `sk-${fg}` : "", bold ? "sk-b" : ""]
+                const cls = [
+                  fg >= 0 ? `sk-${fg}` : "",
+                  bold ? "sk-b" : "",
+                  bg !== undefined && bg >= 0 ? `sk-g${bg}` : "",
+                ]
                   .filter(Boolean)
                   .join(" ");
                 return cls ? (

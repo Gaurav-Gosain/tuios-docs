@@ -186,17 +186,25 @@ type textDrawing struct {
 }
 
 // tRun is a run of text in one style: the ANSI colour (-1 for the default
-// text colour, else 0 to 15), whether it is bold, and the text.
+// text colour, else 0 to 15), whether it is bold, the text, and the ANSI
+// colour of the ground (-1 for none). sketch/text sets a ground on a half
+// block that shows two colours, such as where two pie slices meet.
 type tRun struct {
 	FG   int
 	Bold bool
 	Text string
+	BG   int
 }
 
+// MarshalJSON writes a run as [fg, bold, text], with the ground as a fourth
+// element only when there is one.
 func (r tRun) MarshalJSON() ([]byte, error) {
 	b := 0
 	if r.Bold {
 		b = 1
+	}
+	if r.BG >= 0 {
+		return json.Marshal([]any{r.FG, b, r.Text, r.BG})
 	}
 	return json.Marshal([]any{r.FG, b, r.Text})
 }
@@ -223,11 +231,12 @@ func drawText(src string, cols int) (textDrawing, error) {
 }
 
 // splitSGR splits a line of sketch/text into runs. sketch/text writes only
-// SGR 0, 1, 30 to 37 and 90 to 97; anything else is an error, so a change in
-// its output stops the build here instead of reaching the page as junk.
+// SGR 0, 1, 30 to 37, 90 to 97, 40 to 47 and 100 to 107; anything else is an
+// error, so a change in its output stops the build here instead of reaching
+// the page as junk.
 func splitSGR(line string) ([]tRun, error) {
 	var runs []tRun
-	cur := tRun{FG: -1}
+	cur := tRun{FG: -1, BG: -1}
 	var b strings.Builder
 	flush := func() {
 		if b.Len() > 0 {
@@ -252,7 +261,7 @@ func splitSGR(line string) ([]tRun, error) {
 		params := line[i+2 : i+end]
 		i += end
 		flush()
-		cur = tRun{FG: cur.FG, Bold: cur.Bold}
+		cur = tRun{FG: cur.FG, Bold: cur.Bold, BG: cur.BG}
 		for _, p := range strings.Split(params, ";") {
 			var n int
 			if p == "" {
@@ -262,13 +271,17 @@ func splitSGR(line string) ([]tRun, error) {
 			}
 			switch {
 			case n == 0:
-				cur = tRun{FG: -1}
+				cur = tRun{FG: -1, BG: -1}
 			case n == 1:
 				cur.Bold = true
 			case n >= 30 && n <= 37:
 				cur.FG = n - 30
 			case n >= 90 && n <= 97:
 				cur.FG = n - 90 + 8
+			case n >= 40 && n <= 47:
+				cur.BG = n - 40
+			case n >= 100 && n <= 107:
+				cur.BG = n - 100 + 8
 			default:
 				return nil, fmt.Errorf("SGR %d in a text drawing", n)
 			}
@@ -278,6 +291,10 @@ func splitSGR(line string) ([]tRun, error) {
 	// Spaces at the end of a line in the default style show nothing.
 	for len(runs) > 0 {
 		last := &runs[len(runs)-1]
+		if last.BG != -1 {
+			// A ground shows, spaces and all.
+			break
+		}
 		if last.FG != -1 || last.Bold {
 			if strings.TrimRight(last.Text, " ") == "" {
 				runs = runs[:len(runs)-1]
