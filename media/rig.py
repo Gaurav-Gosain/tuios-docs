@@ -242,7 +242,9 @@ def main():
         merge(config, tomllib.load(open(own, "rb")))
     merge(config, {
         "screenshot": {
-            "directory": shots_dir, "format": "png", "frame": "none", "copy": False,
+            # "format" in scene.json: png unless the page wants the cells, as
+            # html or svg, to lay out itself.
+            "directory": shots_dir, "format": scene.get("format", "png"), "frame": "none", "copy": False,
             "preview": False, "scale": 2,
             # scripts/docs-media.sh sets the font. The renderer has one file
             # for every weight, so a shot draws bold in the regular face.
@@ -418,13 +420,14 @@ def main():
         if short_home:
             shutil.rmtree(env_root, ignore_errors=True)
 
-    taken = sorted(glob.glob(os.path.join(shots_dir, "*.png")), key=os.path.getmtime)
+    ext = scene.get("format", "png")
+    taken = sorted(glob.glob(os.path.join(shots_dir, f"*.{ext}")), key=os.path.getmtime)
     names = scene.get("shots", [])
     if len(taken) != len(names):
         print(f"rig: the tape took {len(taken)} screenshots and scene.json names {len(names)}", file=sys.stderr)
         status = 1
     for name, path in zip(names, taken):
-        shutil.move(path, os.path.join(build, f"{name}.png"))
+        shutil.move(path, os.path.join(build, f"{name}.{ext}"))
     sys.exit(status)
 
 

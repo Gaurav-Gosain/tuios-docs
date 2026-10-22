@@ -1,0 +1,566 @@
+/*
+ * The exploded view on the landing page. See exploded-hero.tsx: the keyframes
+ * and the colours of the cells are generated there; this file is the layout,
+ * the materials and the timing that does not depend on the scene.
+ *
+ * Units: the rig's font size is one cell font, so 0.6em is a column and
+ * 1.32em a row, the advance and line height of the cell font. A sheet sits at
+ * its cell rectangle (--x, --y, --w, --h).
+ */
+
+@font-face {
+  font-family: "tuios cells";
+  src: url("/fonts/hero-cells-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: "tuios cells";
+  src: url("/fonts/hero-cells-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
+
+.xh {
+  --cw: 0.6em;
+  --ch: 1.32em;
+  --term-bg: #1e1e2e;
+  --term-fg: #cdd6f4;
+  --nav: var(--fd-nav-height, 56px);
+
+  /* The pose of the open stack comes from exploded-hero.tsx (POSE). */
+  --zs: 1;
+  /* The pose it closes into. */
+  --fs: 0.86;
+  --fty: 7%;
+
+  /* Materials, per site theme. The terminal keeps its own colours. */
+  --hair: color-mix(in oklab, var(--color-fd-foreground) 38%, transparent);
+  --hair-soft: color-mix(in oklab, var(--color-fd-foreground) 16%, transparent);
+  --glass: color-mix(in oklab, var(--color-fd-background) 22%, transparent);
+  --glass-edge: color-mix(
+    in oklab,
+    var(--color-fd-foreground) 34%,
+    transparent
+  );
+  --spec: rgba(255, 255, 255, 0.5);
+  --shadow: rgba(4, 4, 12, 0.5);
+
+  position: relative;
+  margin-top: 2.5rem;
+}
+
+html:not(.dark) .xh {
+  --spec: rgba(255, 255, 255, 0.9);
+  --shadow: rgba(30, 30, 60, 0.28);
+  --glass: color-mix(in oklab, white 30%, transparent);
+}
+
+.xh-track {
+  position: relative;
+  height: 640svh;
+  view-timeline-name: --xh;
+  view-timeline-axis: block;
+}
+
+.xh-stage {
+  position: sticky;
+  top: var(--nav);
+  height: calc(100svh - var(--nav));
+  overflow: clip;
+  display: grid;
+  place-items: center;
+}
+
+.xh-scene {
+  --W: min(
+    974px,
+    calc(100vw - 32px),
+    calc((100svh - var(--nav) - 150px) * 1.446)
+  );
+  position: relative;
+  width: var(--W);
+  height: calc(var(--W) / 1.4463);
+  font-size: calc(var(--W) / 84);
+  perspective: var(--persp);
+  perspective-origin: 50% var(--po);
+}
+
+.xh-rig {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  transform-style: preserve-3d;
+  animation-name: xh-rig;
+}
+
+.xh-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.xh-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-left: 0.5rem;
+  translate: 0 -50%;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  line-height: 1.25;
+}
+
+.xh-rig-tags {
+  pointer-events: none;
+}
+
+.xh-plane,
+.xh-focus {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+/* A sheet of cells: the terminal's own text on the cell grid. */
+.xh-sheet {
+  position: absolute;
+  left: calc(var(--x) * var(--cw));
+  top: calc(var(--y) * var(--ch));
+  width: calc(var(--w) * var(--cw));
+  height: calc(var(--h) * var(--ch));
+  color: var(--term-fg);
+  font-family: "tuios cells", ui-monospace, monospace;
+  font-variant-ligatures: none;
+  font-feature-settings: normal;
+  font-synthesis: none;
+}
+
+.xh-ground {
+  position: absolute;
+  inset: 0;
+  background: var(--term-bg);
+  animation-name: xh-ground;
+}
+
+.xh-text {
+  position: relative;
+  line-height: var(--ch);
+  white-space: pre;
+}
+
+.xh-row {
+  height: var(--ch);
+}
+
+/* The edge of a sheet while the stack is apart: a fine specular line on the
+   top and left, a hairline round it and the shadow it casts downward. */
+.xh-edge {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 0.2em;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--spec) 45%, transparent),
+    inset 1px 0 0 color-mix(in oklab, var(--spec) 18%, transparent),
+    0 0 0 1px rgba(205, 214, 244, 0.1),
+    0 1.6em 3.2em -1.2em var(--shadow);
+  animation-name: xh-apart;
+}
+
+/* The host terminal: a pane of glass a little larger than the screen. */
+.xh-host {
+  position: absolute;
+  inset: -1.6em;
+  border-radius: 1.1em;
+  background:
+    linear-gradient(
+      155deg,
+      color-mix(in oklab, var(--spec) 16%, transparent) 0%,
+      transparent 38%
+    ), var(--glass);
+  box-shadow:
+    inset 0 1.5px 0 color-mix(in oklab, var(--spec) 80%, transparent),
+    inset 1.5px 0 0 color-mix(in oklab, var(--spec) 30%, transparent),
+    inset 0 0 0 1px var(--glass-edge),
+    0 2.5em 5em -2em var(--shadow);
+  backdrop-filter: blur(2px) saturate(1.15);
+  animation-name: xh-apart;
+}
+
+/* The cell layer: the lattice over one pane's emulator buffer. */
+.xh-cells .xh-text::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(205, 214, 244, 0.16) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(205, 214, 244, 0.16) 1px, transparent 1px);
+  background-size: var(--cw) var(--ch);
+}
+
+.xh-probe {
+  position: absolute;
+  left: calc(var(--px) * var(--cw));
+  top: calc(var(--py) * var(--ch));
+  width: var(--cw);
+  height: var(--ch);
+  outline: 2px solid #f9e2af;
+  outline-offset: 1px;
+  border-radius: 1px;
+}
+
+/* The daemon: the plate everything stands on, and a node per program. */
+.xh-daemon {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.6em;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 calc(var(--cw) * 10 - 1px),
+      rgba(205, 214, 244, 0.05) calc(var(--cw) * 10 - 1px) calc(var(--cw) * 10)
+    ), #181825;
+}
+
+.xh-edge-on {
+  animation: none;
+  opacity: 1;
+}
+
+.xh-daemon-name {
+  position: absolute;
+  left: 1.6em;
+  bottom: 1.2em;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 2.2em;
+  font-weight: 600;
+  color: var(--term-fg);
+  letter-spacing: -0.01em;
+}
+
+.xh-daemon-name span {
+  margin-left: 0.8em;
+  font-weight: 400;
+  color: #9399b2;
+}
+
+.xh-proc {
+  position: absolute;
+  left: calc(var(--cx) * var(--cw));
+  top: calc(var(--cy) * var(--ch));
+  translate: -50% -50%;
+}
+
+.xh-proc-name {
+  display: block;
+  padding: 0.3em 0.75em;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 2em;
+  color: var(--term-fg);
+  background: #313244;
+  box-shadow: inset 0 0 0 1px rgba(205, 214, 244, 0.16);
+}
+
+/* A PTY: a line standing up from the program to the pane it draws in. */
+.xh-pty {
+  position: absolute;
+  left: calc(var(--cx) * var(--cw));
+  top: calc(var(--cy) * var(--ch));
+  transform-style: preserve-3d;
+}
+
+.xh-pty-line {
+  position: absolute;
+  left: -0.5px;
+  top: 0;
+  width: 1px;
+  height: 17em;
+  transform-origin: 50% 0;
+  background: linear-gradient(to bottom, #89b4fa, rgba(137, 180, 250, 0.25));
+}
+
+/* Callouts: a hairline out from the right edge of the layer, in its plane,
+   and a label turned to face the reader. */
+.xh-tagline {
+  position: absolute;
+  left: calc(100% + 0.8em);
+  top: calc(var(--y) * var(--ch));
+  width: 8em;
+  height: 0;
+  border-top: 1px solid var(--hair);
+}
+
+.xh-tagline::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: -3.5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-fd-foreground);
+}
+
+.xh-tag-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-fd-foreground);
+}
+
+.xh-tag-meta {
+  font-size: 0.6875rem;
+  color: var(--color-fd-muted-foreground);
+}
+
+/* The captions: one per layer, in the same place, each in its own beat. */
+.xh-captions {
+  position: absolute;
+  left: max(1rem, calc((100vw - 76rem) / 2 + 1.5rem));
+  top: 50%;
+  translate: 0 -50%;
+  width: min(19rem, 28vw);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+
+.xh-caption {
+  grid-area: 1 / 1;
+}
+
+.xh-caption-n {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-fd-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.xh-caption-title {
+  margin: 0.5rem 0 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--color-fd-foreground);
+}
+
+.xh-caption-body {
+  margin: 0.6rem 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-fd-muted-foreground);
+  text-wrap: pretty;
+}
+
+.xh-caption-body code {
+  font-size: 0.875em;
+}
+
+.xh-hint {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-fd-muted-foreground);
+  animation-name: xh-hint;
+}
+
+.xh-outro {
+  position: absolute;
+  top: 1.5rem;
+  left: 1rem;
+  right: 1rem;
+  text-align: center;
+  animation-name: xh-outro;
+}
+
+.xh-outro-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 700;
+  color: var(--color-fd-foreground);
+}
+
+.xh-outro-body {
+  margin: 0.6rem auto 0;
+  max-width: 40rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-fd-muted-foreground);
+  text-wrap: balance;
+}
+
+/* Timing. Every moving part runs on the section's scroll. Without scroll
+   timelines each animation waits, paused, for exploded-hero-motion.tsx to
+   set its time. */
+.xh-rig,
+.xh [data-anim],
+.xh-ground,
+.xh-edge,
+.xh-host,
+.xh-hint,
+.xh-outro {
+  animation-duration: 1000ms;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+  animation-play-state: paused;
+}
+
+@supports (animation-timeline: view()) {
+  .xh-rig,
+  .xh [data-anim],
+  .xh-ground,
+  .xh-edge,
+  .xh-host,
+  .xh-hint,
+  .xh-outro {
+    animation-duration: auto;
+    animation-play-state: running;
+    animation-timeline: --xh;
+    animation-range: contain 0% contain 100%;
+  }
+}
+
+.xh-edge-on {
+  animation: none;
+}
+
+/* A phone: the stack tilts back on one axis and fans down the screen. The
+   callouts give way to the caption under it. */
+@media (max-width: 767px) {
+  /* On the stage, not on .xh, to win over the pose that
+     exploded-hero.tsx writes on .xh. */
+  .xh-stage {
+    --rx: 58deg;
+    --rz: 0deg;
+    --s: 0.94;
+    --tx: 0%;
+    --ty: -18%;
+    --zs: 1.9;
+    --fs: 1;
+    --fty: 0%;
+  }
+
+  .xh-scene {
+    --W: calc(100vw - 32px);
+  }
+
+  .xh-tagline,
+  .xh-labels {
+    display: none;
+  }
+
+  .xh-captions {
+    top: auto;
+    bottom: 1.25rem;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    translate: none;
+  }
+
+  .xh-caption-title {
+    font-size: 1.125rem;
+  }
+
+  .xh-caption-body {
+    font-size: 0.875rem;
+  }
+
+  .xh-outro {
+    top: auto;
+    bottom: 1.5rem;
+  }
+}
+
+/* Reduced motion: no scroll-linked motion. The stack stands open, every
+   layer and callout in view, and the captions follow as a list. */
+@media (prefers-reduced-motion: reduce) {
+  .xh-track {
+    height: auto;
+  }
+
+  .xh-stage {
+    position: relative;
+    top: 0;
+    height: auto;
+    min-height: 0;
+    padding: 9rem 0 2rem;
+    overflow: visible;
+  }
+
+  .xh-rig,
+  .xh [data-anim],
+  .xh-ground,
+  .xh-edge,
+  .xh-host,
+  .xh-hint,
+  .xh-outro {
+    /* biome-ignore lint/complexity/noImportantStyles: the animation names are inline, on the elements */
+    animation: none !important;
+  }
+
+  .xh-rig {
+    transform: translate(var(--tx), 0) rotateX(var(--rx)) rotateZ(var(--rz))
+      scale(var(--s));
+  }
+
+  .xh-plane-host {
+    transform: translateZ(calc(22em * var(--zs)));
+  }
+  .xh-plane-chrome {
+    transform: translateZ(calc(14em * var(--zs)));
+  }
+  .xh-plane-scratch {
+    transform: translateZ(calc(7.5em * var(--zs)));
+  }
+  .xh-plane-cells {
+    transform: translateZ(calc(-8em * var(--zs)));
+  }
+  .xh-plane-daemon {
+    transform: translateZ(calc(-17em * var(--zs)));
+  }
+
+  .xh-ground {
+    opacity: 0.9;
+  }
+
+  .xh-pty-line {
+    transform: rotateX(90deg);
+  }
+
+  .xh-hint {
+    display: none;
+  }
+
+  .xh-captions {
+    position: static;
+    translate: none;
+    width: auto;
+    max-width: 60rem;
+    margin: 2rem auto 0;
+    padding: 0 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1.5rem 2rem;
+  }
+
+  .xh-caption {
+    grid-area: auto;
+  }
+
+  .xh-outro {
+    position: static;
+    margin-top: 3rem;
+    padding: 0 1rem;
+  }
+}

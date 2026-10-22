@@ -25,6 +25,10 @@
 #                   NAME.mp4 (H.264) and the poster NAME.webp.
 #   "kind": "still" A shot of the take's last frame, drawn as a clip is.
 #                   For a screen with a glyph the font lacks.
+#   "kind": "cells" The screen as cells, not pixels: the tape's screenshot in
+#                   the scene's "format" (html), turned by
+#                   scripts/hero-cells.mjs into lib/hero/NAME.json, which a
+#                   page draws as text. The landing page's exploded view.
 #
 # Every take runs against its own daemon in a throwaway HOME, never yours.
 # Encodes run one at a time at nice 19 on cores 0 to 3.
@@ -165,6 +169,25 @@ still_scene() { # NAME
   echo "shot: public/shots/$shot.webp"
 }
 
+cells_scene() { # NAME
+  local name=$1 dir=$media/scenes/$1 shot
+  rig "$dir" "$build/$name"
+  mkdir -p "$root/lib/hero"
+  for shot in $(jq -r '.shots[]' "$dir/scene.json"); do
+    node "$root/scripts/hero-cells.mjs" "$build/$name/$shot.html" "$root/lib/hero/$shot.json"
+  done
+  # The page draws the cells in the font the shots use, cut down to the
+  # characters on this screen, so the text stays text and the file stays small.
+  local chars face
+  chars=$(jq -rs '[.[].lines[][][1]] | join("")' "$root"/lib/hero/*.json)
+  mkdir -p "$root/public/fonts"
+  for face in regular:"$DOCS_MEDIA_FONT" bold:"$DOCS_MEDIA_FONT_BOLD"; do
+    pyftsubset "${face#*:}" --text="$chars" --flavor=woff2 --layout-features='' \
+      --no-hinting --desubroutinize --output-file="$root/public/fonts/hero-cells-${face%%:*}.woff2"
+  done
+  echo "cells: lib/hero/*.json"
+}
+
 scenes=("$@")
 if ((${#scenes[@]} == 0)); then
   for d in "$media"/scenes/*/; do scenes+=("$(basename "$d")"); done
@@ -175,6 +198,7 @@ for name in "${scenes[@]}"; do
   shot) shot_scene "$name" ;;
   clip) clip_scene "$name" ;;
   still) still_scene "$name" ;;
+  cells) cells_scene "$name" ;;
   *) echo "docs-media: $name: unknown kind $kind" >&2; exit 1 ;;
   esac
 done
