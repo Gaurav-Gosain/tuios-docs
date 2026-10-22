@@ -37,7 +37,7 @@
   /* Materials, per site theme. The terminal keeps its own colours. */
   --hair: color-mix(in oklab, var(--color-fd-foreground) 38%, transparent);
   --hair-soft: color-mix(in oklab, var(--color-fd-foreground) 16%, transparent);
-  --glass: color-mix(in oklab, var(--color-fd-background) 22%, transparent);
+  --glass: color-mix(in oklab, white 5%, transparent);
   --glass-edge: color-mix(
     in oklab,
     var(--color-fd-foreground) 34%,
@@ -52,7 +52,7 @@
 
 html:not(.dark) .xh {
   --spec: rgba(255, 255, 255, 0.9);
-  --shadow: rgba(30, 30, 60, 0.28);
+  --shadow: rgba(30, 30, 60, 0.12);
   --glass: color-mix(in oklab, white 30%, transparent);
 }
 
@@ -100,10 +100,33 @@ html:not(.dark) .xh {
   pointer-events: none;
 }
 
+.xh-leader {
+  position: absolute;
+  left: calc(var(--lx) * 1em);
+  top: calc(var(--ly) * 1em);
+  width: 1em;
+  height: 1px;
+  background: var(--hair);
+  transform-origin: 0 50%;
+}
+
+.xh-dot {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-fd-foreground);
+  box-shadow: 0 0 0 2px var(--color-fd-background);
+}
+
+/* A callout's name, in the column, and its leader: a hairline of 1em
+   turned and stretched (rotate, scaleX) from the label to the layer. */
 .xh-label {
   position: absolute;
-  left: 0;
-  top: 0;
+  left: calc(var(--lx) * 1em);
+  top: calc(var(--ly) * 1em);
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -114,12 +137,7 @@ html:not(.dark) .xh {
   line-height: 1.25;
 }
 
-.xh-rig-tags {
-  pointer-events: none;
-}
-
-.xh-plane,
-.xh-focus {
+.xh-plane {
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
@@ -163,12 +181,32 @@ html:not(.dark) .xh {
   inset: 0;
   pointer-events: none;
   border-radius: 0.2em;
+  /* A faint frost toward the top, the light catching the top edge, and a
+     hairline round the sheet. */
+  background:
+    linear-gradient(
+      172deg,
+      color-mix(in oklab, var(--spec) 12%, transparent) 0%,
+      transparent 40%
+    ), color-mix(in oklab, var(--spec) 11%, transparent);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, var(--spec) 45%, transparent),
-    inset 1px 0 0 color-mix(in oklab, var(--spec) 18%, transparent),
-    0 0 0 1px rgba(205, 214, 244, 0.1),
-    0 1.6em 3.2em -1.2em var(--shadow);
+    inset 0 1px 0 color-mix(in oklab, var(--spec) 90%, transparent),
+    inset 1px 0 0 color-mix(in oklab, var(--spec) 22%, transparent),
+    0 0 0 1px rgba(205, 214, 244, 0.16);
   animation-name: xh-apart;
+}
+
+/* The shadow a sheet casts on the layer below it. */
+.xh-shade {
+  position: absolute;
+  left: calc(var(--x) * var(--cw));
+  top: calc(var(--y) * var(--ch));
+  width: calc(var(--w) * var(--cw));
+  height: calc(var(--h) * var(--ch));
+  border-radius: 0.4em;
+  background: var(--shadow);
+  filter: blur(1.4em);
+  transform: translate3d(0.8em, 1.6em, -3.5em);
 }
 
 /* The host terminal: a pane of glass a little larger than the screen. */
@@ -187,7 +225,7 @@ html:not(.dark) .xh {
     inset 1.5px 0 0 color-mix(in oklab, var(--spec) 30%, transparent),
     inset 0 0 0 1px var(--glass-edge),
     0 2.5em 5em -2em var(--shadow);
-  backdrop-filter: blur(2px) saturate(1.15);
+  backdrop-filter: blur(3px) saturate(1.25);
   animation-name: xh-apart;
 }
 
@@ -287,25 +325,6 @@ html:not(.dark) .xh {
 
 /* Callouts: a hairline out from the right edge of the layer, in its plane,
    and a label turned to face the reader. */
-.xh-tagline {
-  position: absolute;
-  left: calc(100% + 0.8em);
-  top: calc(var(--y) * var(--ch));
-  width: 8em;
-  height: 0;
-  border-top: 1px solid var(--hair);
-}
-
-.xh-tagline::before {
-  content: "";
-  position: absolute;
-  left: -3px;
-  top: -3.5px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-fd-foreground);
-}
 
 .xh-tag-title {
   font-size: 0.8125rem;
@@ -324,7 +343,7 @@ html:not(.dark) .xh {
   left: max(1rem, calc((100vw - 76rem) / 2 + 1.5rem));
   top: 50%;
   translate: 0 -50%;
-  width: min(19rem, 28vw);
+  width: min(16rem, 24vw);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -337,14 +356,15 @@ html:not(.dark) .xh {
 
 .xh-caption-n {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--color-fd-primary);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--color-fd-muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .xh-caption-title {
-  margin: 0.5rem 0 0;
-  font-size: 1.375rem;
+  margin: 0.45rem 0 0;
+  font-size: 1.625rem;
   font-weight: 700;
   color: var(--color-fd-foreground);
 }
@@ -454,7 +474,6 @@ html:not(.dark) .xh {
     --W: calc(100vw - 32px);
   }
 
-  .xh-tagline,
   .xh-labels {
     display: none;
   }
@@ -515,19 +534,19 @@ html:not(.dark) .xh {
   }
 
   .xh-plane-host {
-    transform: translateZ(calc(22em * var(--zs)));
+    transform: translateZ(calc(18em * var(--zs)));
   }
   .xh-plane-chrome {
-    transform: translateZ(calc(14em * var(--zs)));
+    transform: translateZ(calc(12em * var(--zs)));
   }
   .xh-plane-scratch {
-    transform: translateZ(calc(7.5em * var(--zs)));
+    transform: translateZ(calc(6.5em * var(--zs)));
   }
   .xh-plane-cells {
-    transform: translateZ(calc(-8em * var(--zs)));
+    transform: translateZ(calc(-7em * var(--zs)));
   }
   .xh-plane-daemon {
-    transform: translateZ(calc(-17em * var(--zs)));
+    transform: translateZ(calc(-15em * var(--zs)));
   }
 
   .xh-ground {

@@ -42,7 +42,7 @@ const LAYERS = [
 type LayerId = (typeof LAYERS)[number]["id"];
 
 /** How far the layers above the one in focus rise out of the way, in em. */
-const LIFT = 6;
+const LIFT = 5;
 /** The gap between tiled panes, in em: each is its own layer. */
 const PANE_STEP = 0.45;
 
@@ -56,6 +56,13 @@ const CLOSE_START = BEAT_START + BEAT * LAYERS.length + 1; // 80
 const FLAT_AGAIN = 92;
 
 const EASE = "cubic-bezier(0.65, 0, 0.35, 1)";
+// The layers part fast and close late, so they are well apart whenever the
+// stack is turned. Near one plane, the browser may sort them either way
+// while it turns.
+const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
+const EASE_IN = "cubic-bezier(0.55, 0, 1, 0.45)";
+/** The stack turns a little after the layers part, and is flat before they meet. */
+const TURN_LAG = 4;
 
 type State = {
   t: number;
@@ -85,20 +92,25 @@ const STATES = timeline();
 
 /** A layer's depth in em, in a state. */
 function depth(i: number, focus: number): number {
-  if (focus === -1) return 0;
+  // Flat, the layers still keep a sliver of depth in their order. On one
+  // plane the browser may sort them either way while the stack turns, and
+  // the scratch box would drop under the panes.
+  if (focus === -1) return (LAYERS.length - i) * 0.05;
   const lift = focus >= 0 && i < focus ? LIFT : 0;
   return LAYERS[i].z + lift;
 }
 
+/**
+ * The layer in focus is at full strength. The others stay legible, so the
+ * reader can count six sheets: the ones lifted above it fade more, as they
+ * are between it and the reader.
+ */
 function focusOpacity(i: number, focus: number): number {
   if (focus < 0) return 1;
   if (i === focus) return 1;
-  return i < focus ? 0.1 : 0.72;
-}
-
-function focusBlur(i: number, focus: number): number {
-  if (focus < 0 || i === focus) return 0;
-  return i < focus ? 1.5 : 0.6;
+  // The sheet right above the one in focus lies over it, so it fades more.
+  if (i === focus - 1) return 0.5;
+  return i < focus ? 0.58 : 0.65;
 }
 
 const f = (n: number) => Number(n.toFixed(3)).toString();
@@ -109,19 +121,24 @@ const f = (n: number) => Number(n.toFixed(3)).toString();
  * cannot disagree.
  */
 const POSE = {
-  rx: 54,
-  rz: -30,
-  s: 0.66,
-  tx: 0.1,
-  ty: 0.02,
+  rx: 58,
+  rz: -22,
+  s: 0.69,
+  tx: 0.035,
+  ty: 0.01,
   perspective: 224, // em
   originY: 0.4,
 };
 // The rig in em: 140 columns of 0.6em, 44 rows of 1.32em.
 const RIG_W = 84;
 const RIG_H = 44 * 1.32;
-/** How far a leader runs out from the right edge, in em. */
-const RULE = 8;
+/**
+ * The callouts sit in a fixed column right of the rig, one slot each, so
+ * they never overlap and never leave the screen. A leader runs from each to
+ * a point on its layer, wherever that layer is.
+ */
+const LABEL_X = RIG_W + 1.2;
+const labelY = (k: number) => 5 + k * 10;
 
 /**
  * Where a point of a layer lands on the screen, in em from the rig's top
@@ -150,13 +167,63 @@ function project(x: number, y: number, z: number): [number, number] {
   return [ox + (px - ox) * k, oy + (py - oy) * k];
 }
 
-function labelAt(t: { layer: LayerId; y: number }, focus: number): string {
-  const i = LAYERS.findIndex((l) => l.id === t.layer);
-  const [x, y] = project(
-    RIG_W + 0.8 + RULE,
-    t.y * 1.32,
-    depth(i, focus === -1 ? -2 : focus),
-  );
+/** The point a layer's leader ends on, in its own plane, in em. */
+function anchorOf(layer: LayerId): [number, number] {
+  const g = geometry;
+  switch (layer) {
+    case "host":
+      return [RIG_W + 1.6, 4];
+    case "chrome":
+      return [RIG_W, 12 * 1.32];
+    case "scratch":
+      return [(g.scratch.x + g.scratch.w) * 0.6, (g.scratch.y + 4) * 1.32];
+    case "panes":
+      return [g.railX * 0.6, 36 * 1.32];
+    case "cells": {
+      const r = cellSheet.rect;
+      return [(r.x + r.w) * 0.6, (r.y + r.h / 2) * 1.32];
+    }
+    case "daemon":
+      return [RIG_W, 50];
+  }
+}
+
+/** The cell layer's zoom in its beat: an offset in em and a scale. */
+const CELL_ZOOM = (() => {
+  const r = cellSheet.rect;
+  return {
+    dx: (geometry.cols / 2 - (r.x + r.w / 2)) * 0.6 * 0.7,
+    dy: (geometry.rows / 2 - (r.y + r.h / 2)) * 1.32 * 0.7,
+    k: 1.75,
+    cx: (r.x + r.w / 2) * 0.6,
+    cy: (r.y + r.h / 2) * 1.32,
+  };
+})();
+
+/** Where a layer's leader ends on the screen, in em, in a state. */
+function anchorAt(layer: LayerId, focus: number): [number, number] {
+  const i = LAYERS.findIndex((l) => l.id === layer);
+  let [x, y] = anchorOf(layer);
+  const open = focus === -1 ? -2 : focus;
+  if (layer === "cells" && open === i) {
+    const z = CELL_ZOOM;
+    x = z.cx + (x - z.cx) * z.k + z.dx;
+    y = z.cy + (y - z.cy) * z.k + z.dy;
+  }
+  return project(x, y, depth(i, open));
+}
+
+/** The leader of the k-th callout: from its label to its layer. */
+function leaderAt(layer: LayerId, k: number, focus: number): string {
+  const [ax, ay] = anchorAt(layer, focus);
+  const dx = ax - LABEL_X;
+  const dy = ay - labelY(k);
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return `rotate(${f(angle)}deg) scaleX(${f(Math.hypot(dx, dy))})`;
+}
+
+function anchorDot(layer: LayerId, focus: number): string {
+  const [x, y] = anchorAt(layer, focus);
   return `translate(${f(x)}em,${f(y)}em)`;
 }
 
@@ -168,7 +235,9 @@ function keyframes(
   const frames = states.map((st, n) => {
     const next = states[n + 1];
     const moving = next && value(next) !== value(st);
-    return `${f(st.t)}%{${value(st)}${moving ? `;animation-timing-function:${EASE}` : ""}}`;
+    const ease =
+      st.t === FLAT_END ? EASE_OUT : st.t === CLOSE_START ? EASE_IN : EASE;
+    return `${f(st.t)}%{${value(st)}${moving ? `;animation-timing-function:${ease}` : ""}}`;
   });
   return `@keyframes ${name}{${frames.join("")}}`;
 }
@@ -196,10 +265,10 @@ function motionCss(): string {
   // The whole stack: flat, then tilted into an axonometric view, then flat.
   out.push(
     `@keyframes xh-rig{` +
-      `0%,${FLAT_END}%{transform:translate(0,0) rotateX(0deg) rotateZ(0deg) scale(1);animation-timing-function:${EASE}}` +
+      `0%,${FLAT_END + TURN_LAG}%{transform:translate(0,0) rotateX(0deg) rotateZ(0deg) scale(1);animation-timing-function:${EASE}}` +
       `${OPEN}%{transform:translate(var(--tx),var(--ty)) rotateX(var(--rx)) rotateZ(var(--rz)) scale(var(--s));animation-timing-function:linear}` +
       `${CLOSE_START}%{transform:translate(var(--tx),var(--ty)) rotateX(var(--rx)) rotateZ(var(--rz)) scale(var(--s));animation-timing-function:${EASE}}` +
-      `${FLAT_AGAIN}%,100%{transform:translate(0,var(--fty)) rotateX(0deg) rotateZ(0deg) scale(var(--fs))}}`,
+      `${FLAT_AGAIN - TURN_LAG}%,100%{transform:translate(0,var(--fty)) rotateX(0deg) rotateZ(0deg) scale(var(--fs))}}`,
   );
 
   LAYERS.forEach((layer, i) => {
@@ -211,32 +280,30 @@ function motionCss(): string {
       ),
       keyframes(
         `xh-focus-${layer.id}`,
-        (st) =>
-          `opacity:${f(focusOpacity(i, st.focus))};filter:blur(${f(focusBlur(i, st.focus))}px)`,
+        (st) => `opacity:${f(focusOpacity(i, st.focus))}`,
       ),
       keyframes(`xh-label-${layer.id}`, (st) => {
-        const tag = TAGS.find((t) => t.layer === layer.id);
-        const at = tag ? labelAt(tag, st.focus) : "none";
-        // A layer lifted out of the way above the one in focus loses its
-        // label with it.
-        const o =
-          st.focus === -1
-            ? 0
-            : st.focus === -2
-              ? 0.55
-              : st.focus === i
-                ? 1
-                : i < st.focus
-                  ? 0
-                  : 0.32;
-        return `transform:${at};opacity:${o}`;
-      }),
-      keyframes(`xh-tag-${layer.id}`, (st) => {
         if (st.focus === -1) return "opacity:0";
-        if (st.focus === -2) return "opacity:0.55";
-        return `opacity:${st.focus === i ? 1 : i < st.focus ? 0 : 0.32}`;
+        return `opacity:${st.focus === i ? 1 : st.focus === -2 ? 0.75 : 0.5}`;
       }),
+      keyframes(
+        `xh-leader-${layer.id}`,
+        (st) =>
+          `transform:${leaderAt(layer.id, i, st.focus)};opacity:${st.focus === -1 ? 0 : st.focus === i ? 0.9 : 0.35}`,
+      ),
+      keyframes(
+        `xh-dot-${layer.id}`,
+        (st) =>
+          `transform:${anchorDot(layer.id, st.focus)};opacity:${st.focus === -1 ? 0 : st.focus === i ? 1 : 0.45}`,
+      ),
       captionKeyframes(layer.id, i),
+      // A sheet's shadow goes with it when it lifts out of the way.
+      // (The host glass has its own: it is not there at all while flat.)
+      keyframes(
+        `xh-shade-${layer.id}`,
+        (st) =>
+          `opacity:${st.focus === -1 || (st.focus >= 0 && i < st.focus) ? 0 : 1}`,
+      ),
     );
   });
 
@@ -254,21 +321,33 @@ function motionCss(): string {
   // In its beat the cell layer comes forward and grows, so the lattice and
   // the marked cell read. It moves toward the middle of the stack.
   const cellsIdx = LAYERS.findIndex((l) => l.id === "cells");
-  const r = cellSheet.rect;
-  const dx = (geometry.cols / 2 - (r.x + r.w / 2)) * 0.6 * 0.7;
-  const dy = (geometry.rows / 2 - (r.y + r.h / 2)) * 1.32 * 0.7;
   out.push(
     keyframes("xh-cells-zoom", (st) =>
       st.focus === cellsIdx
-        ? `transform:translate(${f(dx)}em,${f(dy)}em) scale(1.75)`
+        ? `transform:translate(${f(CELL_ZOOM.dx)}em,${f(CELL_ZOOM.dy)}em) scale(${CELL_ZOOM.k})`
         : "transform:translate(0em,0em) scale(1)",
     ),
   );
 
   // The sheets' edges, shadows and glass show only while the stack is apart.
+  // The host glass is nothing but glass, so it fades in and out with that,
+  // and with the focus.
   out.push(
+    // It arrives only once the layers have parted, and leaves before they
+    // meet: over a flat screen its blur would only smear the text.
+    keyframes(
+      "xh-host",
+      (st) => `opacity:${st.focus === -1 ? 0 : f(focusOpacity(0, st.focus))}`,
+      [
+        { t: 0, focus: -1 },
+        { t: OPEN - 5, focus: -1 },
+        ...STATES.filter((st) => st.t >= OPEN && st.t <= CLOSE_START),
+        { t: CLOSE_START + 4, focus: -1 },
+        { t: 100, focus: -1 },
+      ],
+    ),
     keyframes("xh-apart", (st) => `opacity:${st.focus === -1 ? 0 : 1}`),
-    keyframes("xh-ground", (st) => `opacity:${st.focus === -1 ? 1 : 0.88}`),
+    keyframes("xh-ground", (st) => `opacity:${st.focus === -1 ? 1 : 0.84}`),
   );
 
   // The PTY lines from each program up to its pane: as long as the gap
@@ -371,13 +450,22 @@ function SheetView({
   );
 }
 
-/** A callout's leader: a hairline out from the layer's right edge. */
-function Rule({ layer, y }: { layer: LayerId; y: number }) {
+/**
+ * The shadow a sheet casts on the layer below: a soft dark patch a little
+ * under the sheet, shown only while the stack is apart.
+ */
+function Shade({
+  layer,
+  rect,
+}: {
+  layer: LayerId;
+  rect: { x: number; y: number; w: number; h: number };
+}) {
   return (
     <div
-      className="xh-tagline"
+      className="xh-shade"
       data-anim=""
-      style={{ "--y": y, animationName: `xh-tag-${layer}` } as CSSProperties}
+      style={{ ...rectStyle(rect), animationName: `xh-shade-${layer}` }}
     />
   );
 }
@@ -388,18 +476,6 @@ function Plane({ layer, children }: { layer: LayerId; children: ReactNode }) {
       className={`xh-plane xh-plane-${layer}`}
       data-anim=""
       style={{ animationName: `xh-z-${layer}` }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Focus({ layer, children }: { layer: LayerId; children: ReactNode }) {
-  return (
-    <div
-      className="xh-focus"
-      data-anim=""
-      style={{ animationName: `xh-focus-${layer}` }}
     >
       {children}
     </div>
@@ -453,33 +529,21 @@ const CAPTIONS: { layer: LayerId; title: string; body: ReactNode }[] = [
 ];
 
 const cellRows0 = cellSheet.rect.h;
-const TAGS: { layer: LayerId; y: number; title: string; meta: string }[] = [
-  { layer: "host", y: 2, title: "Your terminal", meta: "any terminal" },
-  { layer: "chrome", y: 9, title: "Dock and sidebar", meta: "z 1000" },
-  {
-    layer: "scratch",
-    y: 18,
-    title: "Scratch terminal",
-    meta: "floats over the tiles",
-  },
+const TAGS: { layer: LayerId; title: string; meta: string }[] = [
+  { layer: "host", title: "Your terminal", meta: "any terminal" },
+  { layer: "chrome", title: "Dock and sidebar", meta: "z 1000" },
+  { layer: "scratch", title: "Scratch terminal", meta: "drawn over the tiles" },
   {
     layer: "panes",
-    y: 27,
     title: "Panes",
     meta: `${panes.length} layers, z 0 to ${panes.length - 1}`,
   },
   {
     layer: "cells",
-    y: 34,
     title: "Cells",
     meta: `${cellSheet.rect.w} × ${cellRows0} in one pane`,
   },
-  {
-    layer: "daemon",
-    y: 42,
-    title: "Daemon",
-    meta: `${panes.length + 1} PTYs`,
-  },
+  { layer: "daemon", title: "Daemon", meta: `${panes.length + 1} PTYs` },
 ];
 const windows = [
   ...panes.map((p) => ({ name: p.title, rect: p.rect })),
@@ -502,37 +566,41 @@ export function ExplodedHero() {
           <div className="xh-scene">
             <figure className="xh-rig" data-anim="" aria-hidden="true">
               <Plane layer="daemon">
-                <Focus layer="daemon">
-                  <div
-                    className="xh-daemon"
-                    style={rectStyle({
+                <div
+                  className="xh-daemon"
+                  data-anim=""
+                  style={{
+                    animationName: "xh-focus-daemon",
+                    ...rectStyle({
                       x: 0,
                       y: 0,
                       w: geometry.cols,
                       h: geometry.rows,
-                    })}
+                    }),
+                  }}
+                >
+                  <div className="xh-edge xh-edge-on" />
+                  <p className="xh-daemon-name">
+                    tuios daemon{" "}
+                    <span>session demo · {windows.length} PTYs</span>
+                  </p>
+                </div>
+                {windows.map((w) => (
+                  <div
+                    key={w.name}
+                    className="xh-proc"
+                    data-anim=""
+                    style={
+                      {
+                        "--cx": w.rect.x + w.rect.w / 2,
+                        "--cy": w.rect.y + w.rect.h / 2,
+                        animationName: "xh-focus-daemon",
+                      } as CSSProperties
+                    }
                   >
-                    <div className="xh-edge xh-edge-on" />
-                    <p className="xh-daemon-name">
-                      tuios daemon{" "}
-                      <span>session demo · {windows.length} PTYs</span>
-                    </p>
+                    <span className="xh-proc-name">{programs[w.name]}</span>
                   </div>
-                  {windows.map((w) => (
-                    <div
-                      key={w.name}
-                      className="xh-proc"
-                      style={
-                        {
-                          "--cx": w.rect.x + w.rect.w / 2,
-                          "--cy": w.rect.y + w.rect.h / 2,
-                        } as CSSProperties
-                      }
-                    >
-                      <span className="xh-proc-name">{programs[w.name]}</span>
-                    </div>
-                  ))}
-                </Focus>
+                ))}
                 {windows.map((w) => (
                   <div
                     key={w.name}
@@ -554,25 +622,27 @@ export function ExplodedHero() {
               </Plane>
 
               <Plane layer="cells">
-                <Focus layer="cells">
-                  <SheetView
-                    sheet={cellSheet}
-                    className="xh-cells"
-                    anim="xh-cells-zoom"
-                  >
-                    {probe ? (
-                      <div
-                        className="xh-probe"
-                        style={
-                          { "--px": probe.x, "--py": probe.y } as CSSProperties
-                        }
-                      />
-                    ) : null}
-                  </SheetView>
-                </Focus>
+                <Shade layer="cells" rect={cellSheet.rect} />
+                <SheetView
+                  sheet={cellSheet}
+                  className="xh-cells"
+                  anim="xh-cells-zoom, xh-focus-cells"
+                >
+                  {probe ? (
+                    <div
+                      className="xh-probe"
+                      style={
+                        { "--px": probe.x, "--py": probe.y } as CSSProperties
+                      }
+                    />
+                  ) : null}
+                </SheetView>
               </Plane>
 
               <Plane layer="panes">
+                {paneSheets.map((sheet) => (
+                  <Shade key={sheet.id} layer="panes" rect={sheet.rect} />
+                ))}
                 {/* No Focus wrapper here: its filter would flatten the
                     panes onto one plane. Each pane takes the focus itself. */}
                 {paneSheets.map((sheet, j) => (
@@ -585,50 +655,65 @@ export function ExplodedHero() {
               </Plane>
 
               <Plane layer="scratch">
-                <Focus layer="scratch">
-                  <SheetView sheet={scratch} />
-                </Focus>
+                <Shade layer="scratch" rect={scratch.rect} />
+                <SheetView sheet={scratch} anim="xh-focus-scratch" />
               </Plane>
 
               <Plane layer="chrome">
-                <Focus layer="chrome">
-                  <SheetView sheet={dock} />
-                  <SheetView sheet={rail} />
-                </Focus>
+                <Shade layer="chrome" rect={dock.rect} />
+                <Shade layer="chrome" rect={rail.rect} />
+                <SheetView sheet={dock} anim="xh-focus-chrome" />
+                <SheetView sheet={rail} anim="xh-focus-chrome" />
               </Plane>
 
               <Plane layer="host">
-                <Focus layer="host">
-                  <div className="xh-host" data-anim="" />
-                </Focus>
+                <div
+                  className="xh-host"
+                  data-anim=""
+                  style={{ animationName: "xh-host" }}
+                />
               </Plane>
             </figure>
-            {/* The callouts ride a second rig with the same motion, over
-                the first. In the first they would stand up through the
-                sheets above them and be cut by them. */}
-            <div className="xh-rig xh-rig-tags" data-anim="" aria-hidden="true">
-              {TAGS.map((t) => (
-                <Plane key={t.layer} layer={t.layer}>
-                  <Rule layer={t.layer} y={t.y} />
-                </Plane>
-              ))}
-            </div>
-            {/* The callouts' names, flat on the page at the end of each
-                leader. Text turned in 3D comes out soft, so these are
-                placed in 2D, at the leader's end as projected. */}
+            {/* The callouts: names in a fixed column right of the rig,
+                and a leader from each to its layer. Flat on the page, so
+                the text stays sharp. */}
             <div className="xh-labels" aria-hidden="true">
-              {TAGS.map((t) => (
-                <div
-                  key={t.layer}
-                  className="xh-label"
-                  data-anim=""
-                  style={{
-                    animationName: `xh-label-${t.layer}`,
-                    transform: labelAt(t, -2),
-                  }}
-                >
-                  <span className="xh-tag-title">{t.title}</span>
-                  <span className="xh-tag-meta">{t.meta}</span>
+              {TAGS.map((t, k) => (
+                <div key={t.layer}>
+                  <div
+                    className="xh-leader"
+                    data-anim=""
+                    style={
+                      {
+                        "--ly": labelY(k),
+                        "--lx": LABEL_X,
+                        animationName: `xh-leader-${t.layer}`,
+                        transform: leaderAt(t.layer, k, -2),
+                      } as CSSProperties
+                    }
+                  />
+                  <div
+                    className="xh-dot"
+                    data-anim=""
+                    style={{
+                      animationName: `xh-dot-${t.layer}`,
+                      transform: anchorDot(t.layer, -2),
+                    }}
+                  />
+                  <div
+                    className="xh-label"
+                    data-anim=""
+                    style={
+                      {
+                        "--ly": labelY(k),
+                        "--lx": LABEL_X,
+                        animationName: `xh-label-${t.layer}`,
+                      } as CSSProperties
+                    }
+                  >
+                    <span className="xh-tag-title">{t.title}</span>
+                    <span className="xh-tag-meta">{t.meta}</span>
+                  </div>
                 </div>
               ))}
             </div>
