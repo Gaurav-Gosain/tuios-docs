@@ -130,6 +130,29 @@ try {
       `${res.status} ${to}`,
     );
   }
+  {
+    // An old 800 px shot name goes to the full-size shot, and that is an image.
+    const res = await get("/shots/agents-800.webp");
+    const to = res.headers.get("location") ?? "";
+    await res.arrayBuffer();
+    const img = await get(new URL(to, base).pathname);
+    const type = img.headers.get("content-type") ?? "";
+    await img.arrayBuffer();
+    check(
+      "old 800 px shot",
+      res.status === 301 &&
+        to.endsWith("/shots/agents.webp") &&
+        img.status === 200 &&
+        type === "image/webp",
+      `${res.status} ${to}, then ${img.status} ${type}`,
+    );
+  }
+  {
+    // A name with no shot behind it stays a 404.
+    const res = await get("/shots/no-such-shot-800.webp");
+    await res.arrayBuffer();
+    check("missing 800 px shot", res.status === 404, `${res.status}`);
+  }
   for (const [name, pathname, immutable] of [
     ["hashed chunk", `/_next/static/chunks/${chunk}`, true],
     ["font", "/fonts/MonaspaceNeon-1.400.woff2", true],
