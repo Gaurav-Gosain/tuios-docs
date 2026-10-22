@@ -1,6 +1,7 @@
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import type { CSSProperties, ReactNode } from "react";
 import { LibShot } from "@/components/docs/lib-shot";
+import { SketchAnchor } from "@/components/docs/sketch-anchor";
 import shots from "@/lib/libshots.json";
 import drawings from "@/lib/sketch-text.json";
 
@@ -220,7 +221,10 @@ export function SketchText({
 /**
  * One diagram type of the gallery: the picture, the text drawing and the
  * source, in tabs. All the tabs on a page share one group, so a reader who
- * picks Text sees every diagram as text, and the choice is kept.
+ * picks Text sees every diagram as text, and the choice is kept. The panels
+ * share one grid cell, so a figure is as tall as the taller of its picture
+ * and its text drawing whichever tab shows, and a switch moves nothing on
+ * the page. The source scrolls inside that height.
  *
  * children is the source, as an <include> of
  * tools/libshots/snippets/sketch-types/ID.mmd.
@@ -257,6 +261,7 @@ export function SketchType({
         <SketchText id={id} note />
       </Tab>
       <Tab className="sk-source">{children}</Tab>
+      <SketchAnchor />
     </Tabs>
   );
 }
