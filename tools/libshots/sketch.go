@@ -426,6 +426,21 @@ func (g *gen) sketchExamples(drawings map[string]textDrawing) error {
 	}
 	drawings["example-text"] = td
 
+	// Math: one source drawn with a resolver and with none, and what it
+	// prints.
+	out, err = run("sketch-math")
+	if err != nil {
+		return err
+	}
+	if err := writeOutput("sketch-math-output", out); err != nil {
+		return err
+	}
+	for _, f := range []string{"math.svg", "math-source.svg"} {
+		if err := g.keepFile(work, f, "sketch/examples/"+f); err != nil {
+			return err
+		}
+	}
+
 	// Errors and themes: what they print.
 	for _, dir := range []string{"sketch-error", "sketch-themes"} {
 		out, err := run(dir)

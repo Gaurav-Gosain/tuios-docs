@@ -49,7 +49,7 @@ This is `flow.svg` as the program wrote it. It has no theme, so it shows pele's 
 
 <figure className="not-prose my-6">
   {/* biome-ignore lint/performance/noImgElement: the SVG file as the example wrote it */}
-  <img src="/libs/sketch/examples/flow.svg" alt="A flowchart from left to right: Mermaid source goes into a sketch box, which sends it to SVG, PNG and Text cylinders, in pele's own black on white" width={440} height={276} className="max-w-full h-auto rounded-xl border border-fd-border" />
+  <img src="/libs/sketch/examples/flow.svg" alt="A flowchart from left to right: Mermaid source goes into a sketch box, which sends it to SVG, PNG and Text cylinders, in pele's own black on white" width={440} height={276} className="max-w-full h-auto rounded-xl border border-fd-border bg-white" />
 </figure>
 
 The SVG takes its colours from `--pele-*` CSS custom properties, with pele's colours as the fallback. A page can set those properties to theme the diagram. Set `RenderOptions.Theme` to write a theme into the SVG.
@@ -222,10 +222,6 @@ A diagram can set its own fill with `style` or `classDef`. Text in a theme colou
 
 ### Math labels [#math]
 
-<Callout type="warn" title="Not in the pinned sketch yet">
-Math labels come with pele 1.8.0 support in tuios pull request [#993](https://github.com/Gaurav-Gosain/tuios/pull/993). This section describes the API of that pull request.
-</Callout>
-
 A label can hold TeX between `$$` marks. sketch has no typesetter. You give one in `RenderOptions.Math`, a `sketch.MathResolver`:
 
 ```go
@@ -242,21 +238,25 @@ The resolver gets the TeX without the `$$` marks, and the font size in pixels. I
 
 When there is no resolver, when it returns false, or when the size is not a positive number, the label shows its `$$` source as text. `tuios mermaid` gives no resolver, so its pictures and text drawings show the TeX source.
 
-This resolver writes the TeX as italic text. A real host calls a typesetter in its place:
+This program draws one source twice: with a resolver that writes the TeX as italic text, and with no resolver. A real host calls a typesetter in place of `resolve`.
 
-```go
-resolve := func(tex string, size float64) (sketch.MathMarkup, bool) {
-	y := strconv.FormatFloat(size, 'f', -1, 64)
-	return sketch.MathMarkup{
-		// Escape the TeX: it comes from the author of the diagram.
-		Markup: `<text y="` + y + `" font-style="italic">` + html.EscapeString(tex) + `</text>`,
-		Width:  float64(utf8.RuneCountInString(tex)) * size * 0.6,
-		Height: size * 1.2,
-	}, true
-}
-src := "flowchart LR\n  a[\"$$E = mc^2$$\"] --> b[\"$$x < y$$\"]\n"
-svg, err := sketch.Render(src, sketch.RenderOptions{Math: resolve})
-```
+<include cwd lang="go">tools/libshots/snippets/sketch-math.txt</include>
+
+<include cwd lang="text" meta='title="Output"'>tools/libshots/snippets/sketch-math-output.txt</include>
+
+These are the two files as the program wrote them. With the resolver, each label holds the markup of the resolver:
+
+<figure className="not-prose my-6">
+  {/* biome-ignore lint/performance/noImgElement: the SVG file as the example wrote it */}
+  <img src="/libs/sketch/examples/math.svg" alt="A flowchart with two boxes joined by an arrow. The labels show E = mc^2 and x < y in italic, from the resolver" width={261} height={64} className="max-w-full h-auto rounded-xl border border-fd-border bg-white" />
+</figure>
+
+With no resolver, each label shows its TeX source between the `$$` marks:
+
+<figure className="not-prose my-6">
+  {/* biome-ignore lint/performance/noImgElement: the SVG file as the example wrote it */}
+  <img src="/libs/sketch/examples/math-source.svg" alt="The same flowchart with no resolver. The labels show their source as text: $$E = mc^2$$ and $$x < y$$" width={309} height={64} className="max-w-full h-auto rounded-xl border border-fd-border bg-white" />
+</figure>
 
 <Callout type="error" title="The resolver gets untrusted TeX">
 The TeX comes from the author of the diagram, with entities decoded. sketch writes the markup of the resolver into the SVG with no change, as pele does.
@@ -388,7 +388,7 @@ sketch adds no third-party dependency. The diagram types make the tuios binary l
 
 ## Credit
 
-sketch is a port of [pele](https://github.com/obsidianmd/pele), the Mermaid renderer by [kepano](https://github.com/kepano) of [Obsidian](https://obsidian.md). pele is under the MIT licence, and so is the port. The port follows pele v1.7.0 (commit `8603bf3`). Each Go file is the port of one pele file and keeps its names and comments, so a change upstream maps to a change in sketch. The layout, the shapes, the safety rules, the test corpus and the themes from pele's site and launch video are pele's work.
+sketch is a port of [pele](https://github.com/obsidianmd/pele), the Mermaid renderer by [kepano](https://github.com/kepano) of [Obsidian](https://obsidian.md). pele is under the MIT licence, and so is the port. The port follows pele v1.8.0 (commit `8fad23b`). Each Go file is the port of one pele file and keeps its names and comments, so a change upstream maps to a change in sketch. The layout, the shapes, the safety rules, the test corpus and the themes from pele's site and launch video are pele's work.
 
 The pictures use subsets of [Arimo](https://github.com/googlefonts/Arimo) (SIL Open Font License 1.1) and Go Mono. The licence notices are in `sketch/LICENSE` and `sketch/raster/fonts/NOTICE`.
 
