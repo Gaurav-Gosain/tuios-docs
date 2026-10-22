@@ -4,117 +4,176 @@ description: Mermaid diagrams as SVG, PNG and box-drawing text, in pure Go. A po
 icon: Workflow
 ---
 
-import { Card } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-`tuios.dev/sketch` draws Mermaid diagrams in pure Go. It writes SVG, and its two packages turn a diagram into a picture (`sketch/raster`) or into box-drawing text for a terminal (`sketch/text`). It needs no browser, no JavaScript runtime and no cgo.
+`tuios.dev/sketch` draws Mermaid diagrams in pure Go. It needs no browser, no JavaScript runtime and no cgo. It has three outputs:
 
-<Card title="Try it in the playground" href="/docs/libraries/sketch/playground">
-  Type Mermaid and see sketch draw it as you type. sketch runs in your browser as WebAssembly and sends nothing to a server.
-</Card>
+- **SVG** from `sketch.Render`, the same SVG that pele writes, byte for byte.
+- **A picture** from `sketch/raster`, which draws that SVG into a Go `image.RGBA`.
+- **Text** from `sketch/text`, which draws the diagram with box-drawing characters for a terminal.
+
+<Cards>
+  <Card title="Diagram types" href="/docs/libraries/sketch/diagram-types">
+    All 32 drawn types as a picture, as text and as source, with notes on each.
+  </Card>
+  <Card title="Playground" href="/docs/libraries/sketch/playground">
+    Type Mermaid and see sketch draw it. It runs in your browser as WebAssembly.
+  </Card>
+</Cards>
 
 ![tuios mermaid in a tuios window: a flowchart with client, services and storage groups drawn as a kitty picture in the tuios theme, and below it the same flowchart drawn with box-drawing characters](/shots/sketch-hero.png)
 
 The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/sketch).
 
-## Quickstart
+## Install
 
 ```bash
 go get tuios.dev/sketch
 ```
 
-<include cwd lang="go">tools/libshots/snippets/sketch-quickstart.txt</include>
+The module holds three packages: `tuios.dev/sketch`, `tuios.dev/sketch/raster` and `tuios.dev/sketch/text`.
 
-<LibShot name="sketch/quickstart" alt="A flowchart from left to right: TML document, loom, cell buffer, shot and a PNG cylinder, in the theme of this site" />
+## Quick start
 
-Write `svg.Data` to a file for the SVG, or encode `img` with `image/png` for the picture.
+The three programs below draw the same flowchart. Each one is a complete program. The output under each program is what it printed when the docs were built.
 
-## Gallery
+### SVG [#quick-svg]
 
-Each diagram type that sketch draws, drawn by `sketch/raster` in the theme that matches this site. The sources are the examples of the [playground](/docs/libraries/sketch/playground). The gallery leaves out info, which only shows the version of pele. Click a picture to open it at full size.
+<include cwd lang="go">tools/libshots/snippets/sketch-svg.txt</include>
 
-<LibShotSet prefix="sketch/types/" />
+<include cwd lang="text" meta='title="Output"'>tools/libshots/snippets/sketch-svg-output.txt</include>
 
-{/* A new diagram type is one file: add tools/libshots/scenes/sketch/types/NN-name.mmd with "%% title:" and "%% alt:" lines at the top, run scripts/gen-library-shots.sh sketch, and it joins this gallery. Then add its row to the table below. */}
+This is `flow.svg` as the program wrote it. It has no theme, so it shows pele's own colours:
 
-## Credit
+<figure className="not-prose my-6">
+  {/* biome-ignore lint/performance/noImgElement: the SVG file as the example wrote it */}
+  <img src="/libs/sketch/examples/flow.svg" alt="A flowchart from left to right: Mermaid source goes into a sketch box, which sends it to SVG, PNG and Text cylinders, in pele's own black on white" width={440} height={276} className="max-w-full h-auto rounded-xl border border-fd-border" />
+</figure>
 
-sketch is a port of [pele](https://github.com/obsidianmd/pele), the Mermaid renderer by [kepano](https://github.com/kepano) of [Obsidian](https://obsidian.md). pele is under the MIT licence, and so is the port. The port follows pele v1.7.0 (commit `8603bf3`). Each Go file is the port of one pele file and keeps its names and comments, so a change upstream maps to a change in sketch. The pele layout, the shapes, the themes and the timing of the typing demo are pele's work.
+The SVG takes its colours from `--pele-*` CSS custom properties, with pele's colours as the fallback. A page can set those properties to theme the diagram. Set `RenderOptions.Theme` to write a theme into the SVG.
 
-The pictures use subsets of [Arimo](https://github.com/googlefonts/Arimo) (SIL Open Font License 1.1) and Go Mono. The licence notices are in `sketch/LICENSE` and `sketch/raster/fonts/NOTICE`.
+### PNG [#quick-png]
 
-## Diagram types
+<include cwd lang="go">tools/libshots/snippets/sketch-png.txt</include>
 
-| Type | pele's own SVG, byte for byte |
-| --- | ---: |
-| flowchart | 114 of 114 |
-| sequence | 38 of 38 |
-| state | 22 of 22 |
-| class | 38 of 38 |
-| ER | 25 of 25 |
-| pie | 2 of 2 |
-| mindmap | 13 of 13 |
-| gantt | 11 of 11 |
-| XY chart | 8 of 8 |
-| timeline | 14 of 14 |
-| quadrant chart | 3 of 3 |
-| user journey | 1 of 1 |
-| kanban | 3 of 3 |
-| git graph | 35 of 35 |
-| sankey | 8 of 8 |
-| block | 30 of 30 |
-| architecture | 6 of 6 |
-| requirement | 9 of 9 |
-| C4 | 6 of 6 |
-| packet | 4 of 4 |
-| radar | 3 of 3 |
-| treemap | 8 of 8 |
-| info | 2 of 2 |
-| tree view | 13 of 13 |
-| ishikawa | 1 of 1 |
-| Cynefin | 3 of 3 |
-| event modeling | 12 of 12 |
-| venn | 8 of 8 |
-| wardley map | 19 of 19 |
-| railroad | 14 of 14 |
-| swimlane | 13 of 13 |
-| use case | 24 of 24 |
-| agent flow | 12 of 12 |
+<include cwd lang="text" meta='title="Output"'>tools/libshots/snippets/sketch-png-output.txt</include>
 
-sketch draws all 33 diagram types of pele. The test suite draws each of the 522 sources in the pele documentation corpus and compares the result with the SVG that pele drew from it. Every diagram matches. A Mermaid type that pele does not draw gives an error with the code `unsupported-diagram`.
+<LibShot name="sketch/examples/flow" alt="The same flowchart drawn by sketch/raster in the Catppuccin Mocha theme: light text and coloured boxes on a dark background" />
 
-`sketch/text` draws every type that sketch draws.
+`raster.Draw` draws only SVG that sketch wrote. It is not a general SVG renderer.
 
-## Draw a diagram
+### Text [#quick-text]
 
-```go
-svg, err := sketch.Render("flowchart LR\n  A --> B\n", sketch.RenderOptions{})
-if err != nil {
-	// err is a *sketch.Error with a code: syntax, semantic, limit or unsupported-diagram.
-}
-os.WriteFile("out.svg", []byte(svg.Data), 0o644)
+<include cwd lang="go">tools/libshots/snippets/sketch-text.txt</include>
+
+The program prints this, with ANSI colours:
+
+<SketchText id="example-text" />
+
+## Text drawings
+
+`sketch/text` draws every type that sketch draws. It takes the layout that sketch works out for the SVG, and maps it to cells at a scale where every label fits. The labels stay real text. Charts and maps get a form that suits a terminal: a pie chart becomes bars, and a Venn diagram becomes a table. [Diagram types](/docs/libraries/sketch/diagram-types) shows the text drawing of each type.
+
+### Width [#text-width]
+
+`text.Options.Cols` is the most columns the drawing can use. `0` means no limit. When the drawing does not fit, `text.Draw` asks sketch for a narrower layout:
+
+1. A graph loses the columns that hold only gaps and horizontal lines.
+2. A flowchart that runs across turns to run down.
+3. A timeline, a user journey and some other types change their form. The [Diagram types](/docs/libraries/sketch/diagram-types) page tells you which.
+
+If no layout fits, `text.Draw` returns `text.ErrTooWide`. This program draws one flowchart at the width you give it:
+
+<include cwd lang="go">tools/libshots/snippets/sketch-width.txt</include>
+
+<Tabs items={['100 columns', '80 columns', '50 columns', '40 columns']}>
+  <Tab>
+    The layout of the SVG, with nothing changed.
+
+    <SketchText id="width-100" />
+  </Tab>
+  <Tab>
+    The empty columns close up.
+
+    <SketchText id="width-80" />
+  </Tab>
+  <Tab>
+    The flowchart turns to run down.
+
+    <SketchText id="width-50" />
+  </Tab>
+  <Tab>
+    No layout fits, so the program prints the source.
+
+    <SketchText id="width-40" />
+  </Tab>
+</Tabs>
+
+### Errors [#text-errors]
+
+| Error | Meaning | What `tuios mermaid` does |
+| --- | --- | --- |
+| `text.ErrTooWide` | No layout fits in `Cols`. | It draws at full width (`Cols: 0`), and writes a note on stderr. |
+| `text.ErrTooLarge` | The drawing needs more than `text.MaxCells` (4,000,000) cells, at any width. | It prints the source, and writes a note on stderr. |
+| `text.ErrUnsupported` | The type has no text drawing. All 33 types have one now. | It prints the source, and writes a note on stderr. |
+
+### Colours [#text-colours]
+
+With `Color: true`, the drawing has 16-colour ANSI escape codes (SGR 30 to 37 and 90 to 97, and bold). Without it, the lines are plain text. The terminal shows the colours in its own palette, so the drawing follows the terminal theme. The named sketch themes apply to the SVG and the picture, not to text.
+
+| Part | Colour |
+| --- | --- |
+| Lines and arrows, frames | Bright black (grey) |
+| Boxes | Cyan |
+| Notes | Yellow |
+| Titles | Bold |
+| Critical items, such as a critical gantt task | Red |
+| Data series of a chart, in order | Bright blue, yellow, green, red, cyan, magenta |
+
+### Safety [#text-safety]
+
+A label can hold any character, and labels are entity-decoded: `#27;` in a source is an ESC. `sketch/text` writes each character that a terminal acts on as U+FFFD. These are the C0 and C1 controls, DEL, the bidirectional overrides and isolates, the bidirectional marks, and the line and paragraph separators. A label cannot set the window title or write the clipboard of the terminal that shows the drawing.
+
+### tuios mermaid [#tuios-mermaid]
+
+![tuios mermaid in two tuios panes: a deploy pipeline drawn as a kitty picture on the left, and the same pipeline drawn with box-drawing characters on the right](/shots/sketch-kitty-text.png)
+
+`tuios mermaid` draws the Mermaid diagrams of a file with sketch. FILE is a `.mmd` file, a Markdown file (each `mermaid` code block), or `-` for standard input.
+
+```bash
+tuios mermaid flow.mmd                    # draw it here
+tuios mermaid README.md                   # every mermaid block of a Markdown file
+tuios mermaid flow.mmd --format text      # box-drawing text, also in a kitty terminal
+tuios mermaid flow.mmd -f text --cols 60  # text at most 60 columns wide
+tuios mermaid flow.mmd -o flow.png        # save a picture (or .svg)
+tuios mermaid flow.mmd --theme nord
+tuios mermaid flow.mmd --watch --split    # draw again on every save, source beside it
+tuios mermaid --demo --theme flexoki      # type a diagram, for a recording
 ```
 
-A picture:
+| Flag | Does |
+| --- | --- |
+| `-f`, `--format` | `svg`, `png`, `kitty` or `text`. With no flag, tuios picks one: `kitty` in a terminal with kitty graphics, `text` in another terminal, and `svg` when the output is not a terminal. |
+| `--cols`, `--rows` | The size in cells. `0`, the default, is the size of the terminal. |
+| `-o`, `--out` | Write to a file. The extension picks SVG or PNG. |
+| `--scale` | Pixels for each SVG unit of a PNG. The default is 2. |
+| `--diagram N` | Draw only diagram N of the file, from 1. |
+| `--theme NAME` | The colour theme of a picture: `tuios` (your tuios theme, the default) or a named sketch theme. |
+| `-w`, `--watch` | Draw again each time the file changes. With kitty graphics, the diagram moves to its new layout. |
+| `--split` | With `--watch`, show the source beside the diagram. |
+| `--demo` | Type the diagram one character at a time, for a recording. `--loop` starts again at the end. |
 
-```go
-th, _ := sketch.ThemeNamed("flexoki")
-img, err := raster.Draw(svg.Data, raster.Options{Scale: 2, Theme: th, Background: true})
-```
-
-Text, for a terminal with no pictures:
-
-```go
-d, _ := sketch.Parse(src, sketch.ParseOptions{})
-lines, err := text.Draw(d, text.Options{Cols: 100})
-```
-
-<LibShot name="sketch/text" alt="A flowchart drawn with box-drawing characters in a terminal: git push, a CI passes decision, then tag a release or fix the build, with a loop back to git push" />
-
-`text.ErrTooWide` says that the drawing does not fit in the columns. Before it gives up, the package asks for a narrower layout, which turns a flowchart that runs across into one that runs down.
+The text output uses colour only when the output is a terminal that shows colour. Piped text is plain. `theme` in the `[mermaid]` table of the tuios config sets the default theme. The [CLI reference](/docs/cli-reference#mermaid) lists every flag.
 
 ## Themes
 
-pele takes its colours from the page. sketch keeps that in `--pele-*` tokens, and `sketch.Themes()` lists named sets of them:
+pele takes its colours from the page, through `--pele-*` CSS custom properties. A `sketch.Theme` sets those properties. `sketch.Themes()` lists the named themes, and `sketch.ThemeNamed` finds one. Case, spaces and `_` do not matter in the name.
+
+<include cwd lang="go">tools/libshots/snippets/sketch-themes.txt</include>
+
+<include cwd lang="text" meta='title="Output"'>tools/libshots/snippets/sketch-themes-output.txt</include>
 
 | Theme | From |
 | --- | --- |
@@ -127,65 +186,211 @@ One flowchart in eight of the themes:
 
 <LibShotSet prefix="sketch/theme-" />
 
-With `raster.Options.Readable`, text in a theme colour that sits on a fill the diagram sets itself changes to the theme's text or background colour, where that reads better.
+Use a theme in one of two places:
+
+- `raster.Options.Theme` colours the picture. The SVG stays as it is.
+- `RenderOptions.Theme` writes the theme into the SVG. With `nil`, the SVG is pele's, byte for byte.
+
+For your own colours, fill a `sketch.Theme`. It has `Bg`, `Fg`, `Muted`, `Line`, `Surface`, `SurfaceAlt`, `Border`, `Accent`, `Critical`, eight `Series` colours, `Font`, `FontMono` and `Radius`. A `nil` colour keeps pele's fallback.
+
+A diagram can set its own fill with `style` or `classDef`. Text in a theme colour on such a fill can be hard to read. Set `raster.Options.Readable` to fix this. When such text has a contrast under 4.5:1 (`raster.TextFloor`), it changes to the theme's text or background colour. If neither reads, it changes to near-black or white. pele does not do this.
+
+## Options
+
+### RenderOptions [#render-options]
+
+`sketch.RenderOptions` holds pele's render options, plus a few that are not part of pele. A `nil` pointer or a zero value keeps the default.
+
+| Field | Does |
+| --- | --- |
+| `Theme` | Writes a `sketch.Theme` into the SVG. Not part of pele. |
+| `MaxWidth` | The width in pixels that the host has. A type that can draw narrower does so, and its text keeps its size. |
+| `AutoDirection`, `DirectionBreakpoint` | Let a diagram that runs across run down when it does not fit `MaxWidth`. On by default, under 640 pixels. |
+| `Responsive` | Lets the SVG scale to its container. |
+| `FontFamily`, `FontFamilyMono`, `FontSize` | The fonts that labels are measured and drawn in. |
+| `Measurer` | Measures text. The default is a table of Arial advances, which gives the same output as pele. |
+| `Padding`, `IDPrefix` | The space around the diagram, and a prefix for the ids in the SVG. |
+| `Limit`, `OutputLimit`, `MaxEdges` | Lower limits for this host. See [Limits](#limits). |
+| `Links`, `LinkSchemes`, `LinkRel` | Turn links off, set the schemes a link can use, and set its `rel` (`noopener` by default). |
+| `Images`, `ImageSchemes` | Turn images off, and set the schemes an image can use. |
+| `Icons` | Gives the markup of an icon by its name, for diagrams that show icons. |
+| `Config` | Mermaid configuration. The configuration in the source takes priority. |
+| `Now`, `Location` | The time that gantt charts use as now, and the time zone they read dates in. `Location` is not part of pele. |
+| `Geometry` | Receives the layout. sketch/text uses it. Not part of pele, and it does not change the SVG. |
+
+`sketch.Parse` reads a source once. `Diagram.RenderSVG` draws it, and `text.Draw` draws it as text. Use them to draw one source more than one way.
+
+### Math labels [#math]
+
+<Callout type="warn" title="Not in the pinned sketch yet">
+Math labels come with pele 1.8.0 support in tuios pull request [#993](https://github.com/Gaurav-Gosain/tuios/pull/993). This section describes the API of that pull request.
+</Callout>
+
+A label can hold TeX between `$$` marks. sketch has no typesetter. You give one in `RenderOptions.Math`, a `sketch.MathResolver`:
+
+```go
+type MathResolver func(tex string, size float64) (MathMarkup, bool)
+```
+
+The resolver gets the TeX without the `$$` marks, and the font size in pixels. It returns a `sketch.MathMarkup`:
+
+| Field | Holds |
+| --- | --- |
+| `Markup` | The inside of an `<svg>` element, or HTML when `HTML` is true. |
+| `HTML` | Marks `Markup` as HTML, which goes in a `<foreignObject>`. The page then needs the CSS of the typesetter. |
+| `Width`, `Height` | The size of the markup in pixels. |
+
+When there is no resolver, when it returns false, or when the size is not a positive number, the label shows its `$$` source as text. `tuios mermaid` gives no resolver, so its pictures and text drawings show the TeX source.
+
+This resolver writes the TeX as italic text. A real host calls a typesetter in its place:
+
+```go
+resolve := func(tex string, size float64) (sketch.MathMarkup, bool) {
+	y := strconv.FormatFloat(size, 'f', -1, 64)
+	return sketch.MathMarkup{
+		// Escape the TeX: it comes from the author of the diagram.
+		Markup: `<text y="` + y + `" font-style="italic">` + html.EscapeString(tex) + `</text>`,
+		Width:  float64(utf8.RuneCountInString(tex)) * size * 0.6,
+		Height: size * 1.2,
+	}, true
+}
+src := "flowchart LR\n  a[\"$$E = mc^2$$\"] --> b[\"$$x < y$$\"]\n"
+svg, err := sketch.Render(src, sketch.RenderOptions{Math: resolve})
+```
+
+<Callout type="error" title="The resolver gets untrusted TeX">
+The TeX comes from the author of the diagram, with entities decoded. sketch writes the markup of the resolver into the SVG with no change, as pele does.
+
+- Do not copy the TeX into the markup. Escape it in all markup that you make from it.
+- Do not trust it. Turn off each command that makes a link or runs a script, such as the `trust` option of KaTeX.
+</Callout>
 
 ## Limits
 
-The limits of pele apply. A source can have 50,000 characters, a flowchart 5,000 edges, and the SVG 4,000,000 characters. A host can set lower limits in `RenderOptions`. `sketch/raster` has its own pixel and work budgets, so hostile markup cannot run for long. Each package has fuzz targets.
+sketch keeps the limits of pele. A host can set lower limits in `RenderOptions` (and in `ParseOptions` for `sketch.Parse`).
 
-## Speed
+| Limit | Default | Error |
+| --- | ---: | --- |
+| Source length (`Limit`) | 50,000 characters | `limit` |
+| Edges of a flowchart (`MaxEdges`) | 5,000 | `limit` |
+| SVG length (`OutputLimit`) | 4,000,000 characters | `limit` |
+| Cells of a text drawing (`text.MaxCells`) | 4,000,000 | `text.ErrTooLarge` |
+| Pixels of a picture (`raster.Options.MaxPixels`) | 40,000,000, and 32,768 on a side | `raster.ErrTooLarge` |
 
-Measured on one machine against pele under Node 24, warm, on the 152 flowchart and sequence sources of the corpus: the median render takes 21.8 µs in sketch and 43.6 µs in pele. A new process that draws one diagram takes about 2 ms with sketch and about 60 ms with pele.
+`sketch/raster` also has a work budget. Each fill costs the pixels of its mask, so a style such as a huge stroke width cannot run for long.
 
-## tuios mermaid
+The limits bound the size of the input. Tests also bound the work for each size:
 
-![tuios mermaid in two tuios panes: a deploy pipeline drawn as a kitty picture on the left, and the same pipeline drawn with box-drawing characters on the right](/shots/sketch-kitty-text.png)
+- Parsers that build a string one token at a time stay linear. A test renders statements of 200,000 characters and fails when one allocates more than 512 MB.
+- `sketch/text` cuts and wraps labels in linear time. A test draws labels of 50,000 characters and holds the time to a fixed ratio of a short label's time.
 
-`tuios mermaid` draws the Mermaid diagrams of a file with sketch.
+### Errors [#errors]
 
-```bash
-tuios mermaid flow.mmd                    # draw it here
-tuios mermaid README.md                   # every mermaid block of a Markdown file
-tuios mermaid flow.mmd -o flow.png        # save a picture (or .svg)
-tuios mermaid flow.mmd --theme nord
-tuios mermaid flow.mmd --watch --split    # draw again on every save, source beside it
-tuios mermaid --demo --theme flexoki      # type a diagram, for a recording
-```
+A source that sketch cannot draw gives a `*sketch.Error`. Its `Code` is one of four values. A syntax error also has `Line` and `Column`.
 
-- In a terminal with kitty graphics (kitty, Ghostty, or tuios on such a terminal), the diagram is a picture that fits the terminal.
-- In any other terminal, it is drawn with box-drawing characters, and the labels stay text. A drawing too wide for the terminal is written as its source.
-- When the output is not a terminal, the command writes SVG.
+<include cwd lang="go">tools/libshots/snippets/sketch-error.txt</include>
 
-The colours come from your tuios theme by default. `--theme NAME`, or `theme` in the `[mermaid]` table, picks a named theme.
+<include cwd lang="text" meta='title="Output"'>tools/libshots/snippets/sketch-error-output.txt</include>
 
-`--watch` fills the terminal with the diagram and draws it again each time the file is saved. With kitty graphics, the diagram moves to its new layout: boxes slide and grow, new parts fade in and removed parts fade out. `--split` shows the source beside the diagram, or above it on a tall terminal. `--demo` types a diagram one character at a time: the diagram of FILE, or a built-in flowchart. Press <kbd>r</kbd> to start again and <kbd>q</kbd> to quit. The live view sends no frames while nothing moves.
+| Code | Meaning |
+| --- | --- |
+| `syntax` | The source does not parse. |
+| `semantic` | The source parses, but the diagram it describes is not valid. |
+| `limit` | The source or the SVG is past a limit. |
+| `unsupported-diagram` | sketch finds no diagram type, or pele does not draw the type. |
 
-The [CLI reference](/docs/cli-reference#mermaid) lists every flag.
+A panic in sketch also comes back as an error with the code `semantic`. A diagram never stops the host.
 
-## How do I
+## Security
 
-- **Check the type of a source before I draw it?** Call `sketch.Detect(src)`, or `sketch.Supports(src)` for a yes or no.
-- **Draw in my own colours?** Fill a `sketch.Theme` with your colours, such as `Bg`, `Fg`, `Accent` and `Series`, and pass it to `raster.Draw`.
-- **Get a transparent picture?** Leave `raster.Options.Background` off.
-- **Fit a terminal?** Call `text.Draw` with the terminal's columns in `Cols`, and fall back to the source on `text.ErrTooWide`.
-- **Handle a bad source?** The error is a `*sketch.Error`. Its code is `syntax`, `semantic`, `limit` or `unsupported-diagram`.
+sketch follows the safety rules of pele, and adds some of its own.
+
+- **Escaping:** text from the source is escaped in the SVG. Tests port pele's inert-output tests: hostile text goes through every template of each type, and the SVG must have no live markup.
+- **Links:** a link is relative, or uses `http`, `https`, `mailto` or `tel`. An image uses `http` or `https`. Other schemes are left out. `LinkSchemes` and `ImageSchemes` change these lists, and `Links` and `Images` turn them off.
+- **Fonts:** `Theme.Font` and `Theme.FontMono` must pass pele's check for a font list. A list with `;` is refused, so a font cannot add CSS.
+- **Text drawings:** terminal controls in a label become U+FFFD. See [Safety](#text-safety).
+- **Math:** the math resolver gets TeX from the author. See [Math labels](#math).
+
+sketch reads URLs with Go's `net/url`, and a browser uses the WHATWG URL parser. So some links differ from pele:
+
+- sketch writes no link for `http:host` or `https:/host`, where a browser reads `http://host/`.
+- It writes an international host as `%CF%89`, where pele writes `xn--bya`.
+- It reads U+2028 and U+2029 as part of a line.
+- It folds `ſ` and `K` to `s` and `k`, so it blocks `javaſcript:`, which pele keeps as a relative link.
+- It writes `(`, `)`, a soft hyphen or `;` in the user part in another form, and `#` in a fragment as `%23`.
+
+The last gate is the same scheme list as pele's. In a review of 30,000 hostile link targets, no link that sketch wrote led to a scheme other than `http`, `https`, `mailto` or `tel`.
+
+## Fidelity and tests [#fidelity-and-tests]
+
+### Goldens
+
+`TestGolden` draws the 522 sources of the pele documentation corpus. It compares each SVG with the SVG that pele drew from the same source, byte for byte. All 522 match. `testdata/extra` holds 62 more cases that pele drew, such as Chinese and Japanese labels that wrap, and they match too. [Diagram types](/docs/libraries/sketch/diagram-types#summary) gives the count for each type.
+
+The goldens catch small changes. When the port was new, a change to one layout constant failed 14 of the 114 flowchart goldens.
+
+### Differential tests
+
+Differential tests draw the same source with sketch in Go and with pele in Node, and compare the SVG. They run behind the `differential` build tag.
+
+- Each new type ran against thousands of mutated and random sources. For example: 40,896 block diagrams, 36,240 architecture diagrams and 25,440 requirement diagrams. The only difference was an emoji that the mutator split into half a surrogate pair, which a Go string cannot hold.
+- The JavaScript math functions are ported from V8, because Go's `math` package can differ in the last bit. `js.Acos` matches Node on 2,308,009 inputs, where Go's `math.Acos` differs on 737,401 of them. `js.Log` and `js.Log10` match on 1,086,347 inputs.
+- `sketch/raster` against `rsvg-convert`, on the 114 flowcharts: a mean difference of 0.59 in 255, and no pixel off by more than 24 in 255.
+
+### Fused multiply-add on arm64
+
+Go may fuse `x*y+z` into one FMA instruction. FMA rounds once, and JavaScript rounds twice, so the last bit can differ and move a line. arm64 fuses, and so does amd64 at `GOAMD64=v3`.
+
+- The ported code wraps each float product in `float64()`. The Go spec says that this rounds the product, so the compiler cannot fuse it.
+- CI runs the sketch tests on linux/arm64 and at `GOAMD64=v3`, so a fused product fails a check.
+- Before this fix, 3 of 12,000 random block diagrams differed at `GOAMD64=v3`. Two of them are now the goldens `fma-002` and `fma-003`.
+
+### Fuzzing
+
+Fuzz targets cover rendering, detection, the layout, `sketch/raster` (still pictures and motion) and `sketch/text`. They run each night in CI. Each new type ran `FuzzRender` and the text `FuzzDraw` for one to four minutes, with up to 5.8 million runs. No run found a problem.
+
+## Performance and size
+
+From the perf pass of October 2026, on an Intel Core i7-10700 with Linux, pinned to one core. The [perf record](https://github.com/Gaurav-Gosain/tuios/blob/main/docs/perf.md) of tuios has the method.
+
+| Measure | Time |
+| --- | ---: |
+| Render one diagram of the pele corpus, mean (`BenchmarkRenderCorpus`) | 38.9 µs |
+| Median render, 421 diagrams of other docs | 32.7 µs |
+| p95 render, the same diagrams | 70.9 µs |
+| A new process draws one flowchart (`tuios mermaid`) | 1.12 ms |
+| Start sketch's packages | 0.08 ms |
+
+A test holds a golden render to 260 allocations, and the start of the internal packages to 400 allocations. An allocation count does not depend on the machine, so the tests read no clock.
+
+Against pele in Node 24 on one machine, on the 152 flowchart and sequence sources of the corpus, sketch was faster on every source. The median render took 21.8 µs in sketch and 43.6 µs in pele. A new process that draws one diagram took about 2 ms with sketch and about 60 ms with pele.
+
+sketch adds no third-party dependency. The diagram types make the tuios binary larger: for example, eight types from tree views to railroad diagrams added 892,928 bytes on linux/amd64. The size ceiling of tuios went from 40 MB to 50 MB for sketch. The diagram types will move to plugins when tuios has them.
 
 ## API overview
 
 | Name | Does |
 | --- | --- |
 | [`Render`](https://pkg.go.dev/tuios.dev/sketch#Render), [`SVG`](https://pkg.go.dev/tuios.dev/sketch#SVG) | Draws a source as SVG. |
-| [`Parse`](https://pkg.go.dev/tuios.dev/sketch#Parse), [`Diagram`](https://pkg.go.dev/tuios.dev/sketch#Diagram) | Parses a source, for `sketch/text`. |
-| [`Detect`](https://pkg.go.dev/tuios.dev/sketch#Detect), [`Supports`](https://pkg.go.dev/tuios.dev/sketch#Supports) | The diagram type of a source. |
-| [`Themes`](https://pkg.go.dev/tuios.dev/sketch#Themes), [`ThemeNamed`](https://pkg.go.dev/tuios.dev/sketch#ThemeNamed) | The named themes. |
+| [`Parse`](https://pkg.go.dev/tuios.dev/sketch#Parse), [`Diagram`](https://pkg.go.dev/tuios.dev/sketch#Diagram) | Parses a source once, to draw it as SVG or as text. |
+| [`Detect`](https://pkg.go.dev/tuios.dev/sketch#Detect), [`Supports`](https://pkg.go.dev/tuios.dev/sketch#Supports) | Gives the diagram type of a source, and tells if sketch draws it. |
+| [`Themes`](https://pkg.go.dev/tuios.dev/sketch#Themes), [`ThemeNamed`](https://pkg.go.dev/tuios.dev/sketch#ThemeNamed), [`Theme`](https://pkg.go.dev/tuios.dev/sketch#Theme) | The named themes, and the colours of a theme. |
+| [`Error`](https://pkg.go.dev/tuios.dev/sketch#Error) | An error with a code, a line and a column. |
 | [`raster.Draw`](https://pkg.go.dev/tuios.dev/sketch/raster#Draw) | Draws SVG from sketch as an image. |
+| [`raster.ParseScene`](https://pkg.go.dev/tuios.dev/sketch/raster#ParseScene), [`raster.NewMotion`](https://pkg.go.dev/tuios.dev/sketch/raster#NewMotion) | The motion between two versions of a diagram, as `tuios mermaid --watch` shows it. |
 | [`text.Draw`](https://pkg.go.dev/tuios.dev/sketch/text#Draw) | Draws a diagram with box-drawing characters. |
 
 ## Where it fits
 
 - tuios draws `tuios mermaid` with sketch: a picture through kitty graphics, or text.
 - The [playground](/docs/libraries/sketch/playground) is sketch compiled to WebAssembly.
-- `sketch/text` draws XY charts with [plot](/docs/libraries/plot). sketch imports no other library of tuios and no tuios package.
+- `sketch/text` draws XY charts with [plot](/docs/libraries/plot). sketch imports no other tuios library and no tuios package.
+
+## Credit
+
+sketch is a port of [pele](https://github.com/obsidianmd/pele), the Mermaid renderer by [kepano](https://github.com/kepano) of [Obsidian](https://obsidian.md). pele is under the MIT licence, and so is the port. The port follows pele v1.7.0 (commit `8603bf3`). Each Go file is the port of one pele file and keeps its names and comments, so a change upstream maps to a change in sketch. The layout, the shapes, the safety rules, the test corpus and the themes from pele's site and launch video are pele's work.
+
+The pictures use subsets of [Arimo](https://github.com/googlefonts/Arimo) (SIL Open Font License 1.1) and Go Mono. The licence notices are in `sketch/LICENSE` and `sketch/raster/fonts/NOTICE`.
 
 ## Versions
 
