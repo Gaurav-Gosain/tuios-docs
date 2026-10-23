@@ -157,7 +157,7 @@ export function ArticleLayout({
 
         <aside className="max-xl:hidden">
           {showOutline ? (
-            <div className="sticky top-24 flex max-h-[calc(100dvh-8rem)] flex-col">
+            <div className="sticky top-[calc(6rem+var(--fd-banner-height,0px))] flex max-h-[calc(100dvh-8rem)] flex-col">
               <p className="inline-flex items-center gap-1.5 font-mono text-fd-muted-foreground text-sm">
                 <Text className="size-4" />
                 On this page

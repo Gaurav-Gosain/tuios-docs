@@ -1,6 +1,7 @@
 import { RootProvider } from "fumadocs-ui/provider/next";
 import "./global.css";
 import type { Metadata } from "next";
+import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
 import { SiteExtras } from "@/components/site-extras";
 import { feedAlternates } from "@/lib/metadata";
 import { site } from "@/lib/site";
@@ -66,6 +67,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             },
           }}
         >
+          <ImpersonationBanner />
           {children}
           <SiteExtras />
         </RootProvider>
