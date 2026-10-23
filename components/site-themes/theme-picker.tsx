@@ -108,6 +108,14 @@ export default function ThemePicker({ onClose }: { onClose: () => void }) {
       if (filter !== "all" && dark !== (filter === "dark")) continue;
       out.push({ id: raw.id, name: raw.name, dark, colors: swatch(raw), raw });
     }
+    // A name that starts with the first word comes first, so "tok" puts
+    // Tokyo Night at the top. The sort is stable, so the rest stay in order.
+    if (words.length) {
+      const starts = (e: Entry) =>
+        e.name.toLowerCase().startsWith(words[0]) ||
+        (e.id ?? "").toLowerCase().startsWith(words[0]);
+      out.sort((a, b) => Number(starts(b)) - Number(starts(a)));
+    }
     return out;
   }, [themes, query, filter, defaultMode]);
 
@@ -137,6 +145,19 @@ export default function ThemePicker({ onClose }: { onClose: () => void }) {
     },
     [defaultMode],
   );
+
+  // Typing or changing the filter moves the selection to the top result, so
+  // preview that result at once, the same as an arrow key would.
+  const searched = useRef({ query, filter });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: entries and show follow query and filter; running on them would preview again after every arrow key.
+  useEffect(() => {
+    const prev = searched.current;
+    if (prev.query === query && prev.filter === filter) return;
+    searched.current = { query, filter };
+    if (!entries.length) return;
+    show(entries[0]);
+    list.current?.scrollTo({ top: 0 });
+  }, [query, filter]);
 
   const restore = useCallback(() => {
     const s = readStored();
