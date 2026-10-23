@@ -6,6 +6,7 @@ import { cn } from "../../../../lib/cn";
 import * as TocClerk from "../../../toc/clerk";
 import * as TocDefault from "../../../toc/default";
 import { TOCProvider, TOCScrollArea } from "../../../toc/index";
+import { OfficialSources } from "../../official-sources";
 import {
   type BreadcrumbProps,
   type FooterProps,
@@ -148,6 +149,7 @@ export function DocsPage({
         {children}
         {footer.enabled !== false &&
           (footer.component ?? <PageFooter items={footer.items} />)}
+        <OfficialSources className="mt-4 border-fd-border border-t pt-4" />
       </main>
       {tocEnabled &&
         (tocReplace ?? (

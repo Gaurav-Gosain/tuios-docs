@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandLockup } from "@/components/brand";
+import { OfficialSources } from "./official-sources";
 
 const columns = [
   {
@@ -93,6 +94,9 @@ export function SiteFooter() {
             </ul>
           </nav>
         ))}
+      </div>
+      <div className="mx-auto w-full max-w-6xl px-4 pb-8 md:px-6">
+        <OfficialSources className="border-fd-border border-t pt-6" />
       </div>
     </footer>
   );
