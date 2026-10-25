@@ -22,6 +22,9 @@ export const SHOT_SIZES = {
  * With `light`, the scene was also shot in a light theme, as NAME-light.webp.
  * The page then shows the picture that matches the site theme. The other one
  * stays hidden, and a hidden lazy image is not fetched.
+ *
+ * With `href`, the picture links to that address, such as the full size file
+ * of a screen too wide to read at the column's width.
  */
 export function Shot({
   name,
@@ -31,6 +34,7 @@ export function Shot({
   light = false,
   caption,
   sizes = SHOT_SIZES.docs,
+  href,
 }: {
   name: string;
   alt: string;
@@ -39,6 +43,7 @@ export function Shot({
   light?: boolean;
   caption?: string;
   sizes?: string;
+  href?: string;
 }) {
   // A picture made outside scripts/docs-media.sh, such as a blog post's chart
   // or a page of the site, is 1600 wide with an 800 wide file beside it.
@@ -61,18 +66,27 @@ export function Shot({
       className={cn("block h-auto w-full", className)}
     />
   );
+  const frame = (
+    <div className="overflow-hidden rounded-xl border border-fd-border">
+      {light ? (
+        <>
+          {img(`${name}-light`, "dark:hidden")}
+          {img(name, "hidden dark:block")}
+        </>
+      ) : (
+        img(name)
+      )}
+    </div>
+  );
   return (
     <figure className="not-prose my-6">
-      <div className="overflow-hidden rounded-xl border border-fd-border">
-        {light ? (
-          <>
-            {img(`${name}-light`, "dark:hidden")}
-            {img(name, "hidden dark:block")}
-          </>
-        ) : (
-          img(name)
-        )}
-      </div>
+      {href ? (
+        <a href={href} className="block">
+          {frame}
+        </a>
+      ) : (
+        frame
+      )}
       {caption ? (
         <figcaption className="mt-2 text-sm text-fd-muted-foreground">
           {caption}

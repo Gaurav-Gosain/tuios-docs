@@ -20,9 +20,12 @@ const NARROW = "(max-width: 639px)";
  *   worker/media.ts).
  * - In view it plays muted and loops, like a GIF. Out of view it pauses, so a
  *   page of clips decodes one or two at a time.
- * - The clips are narrated. The sound button turns the voice on (and starts
- *   the clip); browsers only autoplay muted video, so it starts off. The
- *   narration's captions are `src.vtt`, a track the reader can turn on.
+ * - The sound button turns the sound on (and starts the clip); browsers only
+ *   autoplay muted video, so it starts off. `audio` says what the sound is:
+ *   "narration" (the default) or "music" for a clip with no voice, so the
+ *   button's label tells a screen reader what it turns on. The captions are
+ *   `src.vtt`, a track the reader can turn on: the narration, or the words
+ *   the clip shows.
  * - With prefers-reduced-motion it never starts by itself. The button starts
  *   it, and the button pauses it in every case, because moving content longer
  *   than five seconds needs a way to stop it.
@@ -31,18 +34,23 @@ const NARROW = "(max-width: 639px)";
  * - On a narrow screen it shows the portrait cut instead, `src-vertical.mp4`
  *   with the poster `src-vertical.jpg`. The landscape cut draws a 116 column
  *   terminal, which at phone width is too small to read; the portrait cut
- *   follows the action with a closer camera.
+ *   follows the action with a closer camera. A clip with no portrait cut
+ *   passes `portrait={false}` and keeps the landscape cut on every screen.
  */
 export function ReleaseClip({
   src,
   label,
   caption,
   steps,
+  portrait = true,
+  audio = "narration",
 }: {
   src: string;
   label: string;
   caption?: string;
   steps?: string[];
+  portrait?: boolean;
+  audio?: "narration" | "music";
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [near, setNear] = useState(false);
@@ -53,7 +61,9 @@ export function ReleaseClip({
   const [wanted, setWanted] = useState<boolean | null>(null);
   const [reduced, setReduced] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [narrow, setNarrow] = useState(false);
+  const [narrowScreen, setNarrowScreen] = useState(false);
+  // The portrait cut replaces the landscape one only when the clip has one.
+  const narrow = portrait && narrowScreen;
   const [sound, setSound] = useState(false);
   const stepsId = useId();
 
@@ -73,8 +83,8 @@ export function ReleaseClip({
 
   useEffect(() => {
     const query = window.matchMedia(NARROW);
-    setNarrow(query.matches);
-    const onChange = () => setNarrow(query.matches);
+    setNarrowScreen(query.matches);
+    const onChange = () => setNarrowScreen(query.matches);
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
   }, []);
@@ -207,7 +217,7 @@ export function ReleaseClip({
         <button
           type="button"
           onClick={toggleSound}
-          aria-label={`Narration sound: ${label}`}
+          aria-label={`${audio === "music" ? "Music" : "Narration sound"}: ${label}`}
           aria-pressed={sound}
           className={cn(
             "absolute right-14 bottom-3 inline-flex size-9 items-center justify-center rounded-full",

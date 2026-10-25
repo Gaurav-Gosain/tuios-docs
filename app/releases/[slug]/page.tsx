@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ArticleLayout } from "@/components/article/article-layout";
 import { ReleaseTag } from "@/components/article/release-tag";
+import { SHOT_SIZES, Shot } from "@/components/docs/shot";
 import {
   breadcrumbLd,
   JsonLd,
@@ -79,7 +80,14 @@ export default async function Page(props: {
           ]),
         ]}
       />
-      <MDX components={getMDXComponents()} />
+      <MDX
+        components={getMDXComponents({
+          // A release page has the blog's column, narrower than a docs page's.
+          Shot: (props: React.ComponentProps<typeof Shot>) => (
+            <Shot {...props} sizes={SHOT_SIZES.blog} />
+          ),
+        })}
+      />
     </ArticleLayout>
   );
 }
