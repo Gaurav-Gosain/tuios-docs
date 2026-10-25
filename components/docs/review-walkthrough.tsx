@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent, type ReactNode, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { cellWidth } from "@/lib/hero/cells";
 
 /**
  * A walk through reviewing what an agent changed and comparing the attempts
@@ -48,14 +49,46 @@ const TONE: Record<Tone, string> = {
   key: "text-fd-primary",
 };
 
-const RULE: Line = [["─".repeat(68), "mute"]];
+// Every screen is one terminal 80 cells wide. Each row is padded to it, and
+// the rules span it, so the divider and the edges line up on every row.
+const SCREEN_W = 80;
 
+const RULE: Line = [["─".repeat(SCREEN_W), "mute"]];
+
+const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
+
+/** The width of s in terminal cells, not in UTF-16 code units. */
+function cells(s: string) {
+  let w = 0;
+  for (const { segment } of graphemes.segment(s)) w += cellWidth(segment);
+  return w;
+}
+
+/** s cut or padded to exactly n cells. */
 function pad(s: string, n: number) {
-  return s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length);
+  let out = "";
+  let w = 0;
+  for (const { segment } of graphemes.segment(s)) {
+    const g = cellWidth(segment);
+    if (w + g > n) break;
+    out += segment;
+    w += g;
+  }
+  return out + " ".repeat(n - w);
 }
 
 function padLeft(s: string, n: number) {
-  return s.length >= n ? s.slice(0, n) : " ".repeat(n - s.length) + s;
+  const w = cells(s);
+  return w >= n ? pad(s, n) : " ".repeat(n - w) + s;
+}
+
+/**
+ * A row padded with blanks to the screen's width. A row that is too wide is
+ * left as it is, so the alignment test sees it instead of a silent cut.
+ */
+function fill(line: Line): Line {
+  const w = line.reduce((n, seg) => n + cells(seg[0]), 0);
+  return w < SCREEN_W ? [...line, [" ".repeat(SCREEN_W - w)]] : line;
 }
 
 /** A footer of keys, as the review's hint strip draws them. */
@@ -70,6 +103,7 @@ function hints(...pairs: [string, string][]): Line {
 
 // The file list is 26 cells wide, then the divider, then the diff.
 const LIST_W = 26;
+export const DIVIDER_COL = LIST_W;
 
 interface FileRow {
   status: "M" | "A" | "U";
@@ -87,7 +121,9 @@ function listCell(i: number, cursor: number, listFocus: boolean): Seg[] {
   const f = FILES[i];
   if (!f) return [[" ".repeat(LIST_W)]];
   const mark = listFocus && i === cursor ? "›" : " ";
-  const room = LIST_W - 4 - f.counts.length;
+  // The mark (1), the status and its space (2), the path, then the counts
+  // with a space each side: together exactly LIST_W cells, as a blank row.
+  const room = LIST_W - 5 - f.counts.length;
   return [
     [mark, "accent"],
     [`${f.status} `, f.status === "A" ? "add" : "hunk"],
@@ -252,7 +288,7 @@ function compare(
   rows: Attempt[],
   cursor: number,
   marks: string[],
-  question: Line,
+  question: Line[],
   footer: Line,
 ): Line[] {
   const S = 16;
@@ -282,7 +318,7 @@ function compare(
       [padLeft(r.age, 4), "mute"],
     ]);
   });
-  out.push([[""]], question, RULE, footer);
+  out.push([[""]], ...question, RULE, footer);
   return out;
 }
 
@@ -455,7 +491,7 @@ const STEPS: Step[] = [
       ATTEMPTS,
       1,
       [],
-      [[""]],
+      [[[""]]],
       hints(
         ["↵", "review"],
         ["m", "mark"],
@@ -483,7 +519,7 @@ const STEPS: Step[] = [
       CHECKED,
       1,
       [],
-      [[""]],
+      [[[""]]],
       hints(
         ["↵", "review"],
         ["m", "mark"],
@@ -512,7 +548,7 @@ const STEPS: Step[] = [
       CHECKED,
       0,
       ["api-fan-retry-2", "api-fan-retry"],
-      [[" Marked: api-fan-retry-2, api-fan-retry", "dim"]],
+      [[[" Marked: api-fan-retry-2, api-fan-retry", "dim"]]],
       hints(
         ["↵", "review"],
         ["m", "mark"],
@@ -546,9 +582,12 @@ const STEPS: Step[] = [
       [],
       [
         [
-          " Keep api-fan-retry-2 and remove api-fan-retry, api-fan-retry-3? Their worktrees and sessions go; branches stay.",
-          "warn",
+          [
+            " Keep api-fan-retry-2 and remove api-fan-retry, api-fan-retry-3?",
+            "warn",
+          ],
         ],
+        [[" Their worktrees and sessions go; branches stay.", "warn"]],
       ],
       hints(["y", "keep it, remove the others"], ["n", "cancel"]),
     ),
@@ -559,6 +598,15 @@ const STEPS: Step[] = [
     },
   },
 ];
+
+/** Each step's screen, every row padded to the screen's width. */
+const FRAMES: Line[][] = STEPS.map((s) => s.screen.map(fill));
+
+/** Each step's screen as plain rows, for the alignment test. */
+export const REVIEW_SCREENS = STEPS.map((s, i) => ({
+  title: s.title,
+  rows: FRAMES[i].map((line) => line.map((seg) => seg[0]).join("")),
+}));
 
 function Screen({ lines, label }: { lines: Line[]; label: string }) {
   return (
@@ -687,7 +735,7 @@ export function ReviewWalkthrough() {
           </p>
         </div>
 
-        <Screen lines={s.screen} label={`Screen: ${s.title}`} />
+        <Screen lines={FRAMES[step]} label={`Screen: ${s.title}`} />
 
         {s.dock ? (
           <p className="font-mono text-fd-foreground text-xs">
