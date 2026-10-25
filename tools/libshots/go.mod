@@ -6,14 +6,14 @@ require (
 	charm.land/bubbletea/v2 v2.0.8
 	github.com/charmbracelet/x/ansi v0.11.8
 	golang.org/x/image v0.45.0
-	tuios.dev/loom v0.1.1-0.20261021135526-b956b69e576d
-	tuios.dev/plot v0.2.1-0.20261022214313-cf30e2be4116
-	tuios.dev/progstatus v0.1.1-0.20261020202737-da3567151be6
-	tuios.dev/shot v0.2.1-0.20261020202737-da3567151be6
-	tuios.dev/sketch v0.3.1
-	tuios.dev/swatch v0.1.1-0.20261020202737-da3567151be6
-	tuios.dev/tml v0.1.1-0.20261020202737-da3567151be6
-	tuios.dev/vt v0.3.1-0.20261020202737-da3567151be6
+	tuios.dev/loom v0.2.2
+	tuios.dev/plot v0.2.2
+	tuios.dev/progstatus v0.1.1
+	tuios.dev/shot v0.2.1
+	tuios.dev/sketch v0.4.0
+	tuios.dev/swatch v0.1.1
+	tuios.dev/tml v0.1.1
+	tuios.dev/vt v0.3.1
 )
 
 require (
