@@ -147,7 +147,10 @@ All keys below go under `[appearance]`.
 | `glyphs` <Since config="appearance.glyphs" /> | `"default"` | a glyph set id | Shapes of the chrome. See [Glyph sets](#glyph-sets) |
 | `border_style` <Since config="appearance.border_style" /> | `"rounded"` | see [below](#border_style) | Border drawn around every pane |
 | `border_focused_color` <Since config="appearance.border_focused_color" /> | `""` | `#RRGGBB` | Override the focused border colour |
+| `border_focused_color_window` <Since config="appearance.border_focused_color_window" /> | `""` | a colour | The focused border in window mode. It wins over `border_focused_color`. See [Focused border colour](#focused-border-colour) |
+| `border_focused_color_terminal` <Since config="appearance.border_focused_color_terminal" /> | `""` | a colour | The focused border in terminal mode. It wins over `border_focused_color` |
 | `border_unfocused_color` <Since config="appearance.border_unfocused_color" /> | `""` | `#RRGGBB` | Override the unfocused border colour |
+| `frame_panels` <Since config="appearance.frame_panels" /> | `false` | bool | Frame the palette, the switchers, the Agents view, the settings page and the other large panels in `border_style`. See [Dialog and panel frames](#dialog-and-panel-frames) |
 | `shared_borders` <Since config="appearance.shared_borders" /> | `false` | bool | Draw one border between neighbouring tiled panes, in every layout |
 | `gap` <Since config="appearance.gap" /> | `0` | 0 to 8 | Empty cells between tiled panes |
 | `dim_unfocused` <Since config="appearance.dim_unfocused" /> | `0` | 0 to 90 | Fade panes you are not in, in percent |
@@ -162,6 +165,7 @@ All keys below go under `[appearance]`.
 | `theme_transition` <Since config="appearance.theme_transition" /> | `"none"` | `none`, `circle`, `fade` | How a theme change shows. `circle` grows the new theme from the middle of the screen. `fade` changes every cell from the old colours to the new colours, and needs a truecolor terminal. `none` changes the theme in one frame. `motion = "none"` and `--no-animations` turn it off |
 | `theme_transition_duration` <Since config="appearance.theme_transition_duration" /> | `450` | 100 to 2000 | The time a theme transition takes, in milliseconds. `animation_speed` scales it |
 | `modal_dim` <Since config="appearance.modal_dim" /> | `30` | 0 to 90 | Dim the screen behind a dialog, in percent. `0` turns it off. At 16 colours the text goes faint instead |
+| `popup_dim` <Since config="appearance.popup_dim" /> | `0` | 0 to 90 | Dim the screen behind a focused popup from `tuios popup`, in percent. `0` turns it off. `tuios popup --dim N` sets it for one popup. A TML popup uses `modal_dim` |
 | `max_fps` <Since config="appearance.max_fps" /> | `0` | 0, 10 to 240, or `"auto"` | The highest frame rate TUIOS draws at. `0` means 60. See [below](#max_fps) |
 | `wrap_lists` <Since config="appearance.wrap_lists" /> | `true` | bool | Moving past the end of a list wraps to the other end |
 
@@ -172,6 +176,42 @@ All keys below go under `[appearance]`.
 Values: `rounded` (default), `normal`, `thick`, `double`, `block`, `outer-half-block`, `inner-half-block`, `ascii`, `hidden`, `glyphs`.
 
 `glyphs` uses the border of the active [glyph set](#glyph-sets). `hidden` also hides the window buttons and the scrollbar, because both are drawn on the border.
+
+#### Focused border colour
+
+The focused pane's border shows the mode. By default it is the theme's cyan in window mode and its green in terminal mode. Three keys set it:
+
+```toml
+[appearance]
+border_focused_color_window = "accent"
+border_focused_color_terminal = "#ff9e64"
+# border_focused_color = "#89b4fa"   # both modes
+```
+
+- A key for one mode wins over `border_focused_color` in that mode.
+- An empty key uses the next key. After the three keys, the theme sets the colour.
+- A value is a hex colour, a palette index from `0` to `255`, a slot name such as `blue`, or a role name such as `accent`.
+- `border_focused_color` also replaces the colours for copy mode and for an agent that waits. The keys for one mode do not.
+- <Since config="appearance.border_focused_color_terminal" /> On many themes the cyan and the green have the same lightness. When you set no colour, the terminal-mode border is then a step darker, or a step lighter when darker is too faint. You can see the mode without the hue. To keep one colour for both modes, set `border_focused_color`.
+- At 16 colours the default borders use bright cyan and bright green from your terminal's palette.
+
+The settings page has a row for each key, in the Appearance section. See [Border colours](/docs/themes#border-colours).
+
+#### Dialog and panel frames <Since config="appearance.frame_panels" /> [#dialog-and-panel-frames]
+
+The small dialogs, such as rename, confirm and new space, draw their frame in `border_style`. The large panels, such as the command palette, the switchers, the Agents view and the settings page, have no frame. Set `frame_panels = true` to give them the same frame.
+
+```toml
+[appearance]
+border_style = "double"
+frame_panels = true
+```
+
+- `rounded`, `normal`, `thick`, `double` and `ascii` draw their own corners and lines.
+- `hidden` draws no frame. A dialog keeps its size, and its title and key hints stay in place. A frame that is the only edge of a region is drawn as `rounded`. An example is a panel at 16 colours.
+- `block`, `outer-half-block` and `inner-half-block` draw the `rounded` frame.
+- `glyphs` draws the border of the active glyph set.
+- At 16 colours a panel always has a frame, because its background is the background of your terminal.
 
 #### max_fps
 
@@ -336,8 +376,9 @@ The layout a new session starts in is `startup.layout`. See [The startup table](
 | `dock_mode_icon_window` <Since config="appearance.dock_mode_icon_window" /> | unset | text, `""` or `default` | Icon in the mode pill in window mode. Unset or `default` uses the icon of the glyph set. An empty value shows no icon |
 | `dock_mode_icon_terminal` <Since config="appearance.dock_mode_icon_terminal" /> | unset | text, `""` or `default` | Icon in the mode pill in terminal mode |
 | `dock_mode_icon_tiling` <Since config="appearance.dock_mode_icon_tiling" /> | unset | text, `""` or `default` | Icon in the mode pill while tiling is on |
+| `dock_mode_split_letter` <Since config="appearance.dock_mode_split_letter" /> | `true` | bool | Show `V` or `H` after the tiling icon in the mode pill. The letter is the direction of the next split |
 | `show_clock` <Since config="appearance.show_clock" /> | `false` | bool | Show the clock |
-| `clock_format` <Since config="appearance.clock_format" /> | `"15:04:05"` | Go time layout | Clock format, for example `15:04` or `Mon 3:04PM` |
+| `clock_format` <Since config="appearance.clock_format" /> | `"15:04"` | Go time layout | Clock format, for example `15:04` or `Mon 3:04PM` |
 | `show_cpu` <Since config="appearance.show_cpu" /> | `false` | bool | Show a CPU graph |
 | `show_ram` <Since config="appearance.show_ram" /> | `false` | bool | Show RAM use |
 | `hide_clock` <Since config="appearance.hide_clock" /> | `false` | bool | Deprecated. Use `show_clock` |
@@ -346,7 +387,7 @@ The layout a new session starts in is `startup.layout`. See [The startup table](
 
 `dock_compact` works with the dock at the top and at the bottom. It has no effect when `dockbar_position` is `hidden`. The change applies at once. A compact dock does not show the rule that tells how long a dock message stays. When clients with different docks share a session, the panes keep the largest dock height. A client with a compact dock shows a blank row in that case.
 
-The mode pill icons can be any text up to 8 cells wide. A wide character, such as `終`, counts as two cells. The dock does not accept control characters. For an icon that it does not accept, the dock shows the default icon and the config check shows a warning. The pill adds one space on each side of the icon. If an icon is empty and the mode has no other text, the dock shows no pill in that mode. While tiling is on, the pill also shows the next split direction, `V` or `H`.
+The mode pill icons can be any text up to 8 cells wide. A wide character, such as `終`, counts as two cells. The dock does not accept control characters. For an icon that it does not accept, the dock shows the default icon and the config check shows a warning. The pill adds one space on each side of the icon. If an icon is empty and the mode has no other text, the dock shows no pill in that mode. While tiling is on, the pill also shows the next split direction, `V` or `H`. Set `dock_mode_split_letter = false` to show the tiling icon alone. With the default icons, the pill then has the same width as the pill of the leader key, so the workspace tabs do not move when you press the leader.
 
 ```toml
 [appearance]
@@ -470,6 +511,7 @@ Pastes, notifications, OSC 66 text and link addresses lose their control charact
 | `position` <Since config="appearance.sidebar.position" /> | `"right"` | `right`, `left`, `hidden` | Edge the rail sits on |
 | `width` <Since config="appearance.sidebar.width" /> | `24` | columns | Preferred width on a wide screen |
 | `background` <Since config="appearance.sidebar.background" /> | `""` | `off`, `theme`, `#RRGGBB` | The rail's background. Empty follows `appearance.background`. See [Backgrounds](#backgrounds) |
+| `cursor_background` <Since config="appearance.sidebar.cursor_background" /> | `""` | a colour | The background of the row under the cursor while the rail has the keyboard. Empty keeps the theme's background. See [The cursor row](/docs/session-rail#the-cursor-row) |
 | `agent_rest_fold` <Since config="appearance.sidebar.agent_rest_fold" /> | `"1h"` | a duration, or `off` | How long an agent row rests (idle, unknown, or done and seen) before it folds into one `+N at rest` line |
 | `subagent_rows` <Since config="appearance.sidebar.subagent_rows" /> | `"rows"` | `rows`, `tree`, `count` | How an agent row shows its subagents. `rows` draws a row for each subagent under its agent's row. `tree` draws the same rows on tree lines. `count` draws the count alone. See [Subagent rows](/docs/session-rail#subagent-rows) |
 | `subagent_collapse` <Since config="appearance.sidebar.subagent_collapse" /> | `"off"` | `off`, `expanded`, `collapsed` | Draw a heading line, such as `▾ 4 subagents`, over the subagent rows of each agent. The value is the state at the start |
@@ -755,6 +797,8 @@ The directory is read again on every lookup, so a new file can be selected at on
 
 `--ascii-only` replaces non-ASCII glyphs role by role, so a set keeps every role it already spelled in ASCII. A glyph set never changes colours, and it does not change the dock's icons.
 
+<Since feature="nerd-font-names" /> A session name, a workspace name or a pane title can hold Nerd Font icons. TUIOS shows each icon in one cell, on the rail, in the dock and in the rest of the chrome. On the Linux console and under `--ascii-only`, TUIOS removes the icons from what it draws, because they show as empty boxes there. The name itself does not change.
+
 The settings page has a **Glyph set** row under **Theme**. Its picker applies each set as you move through the list.
 
 ## Themes
@@ -818,6 +862,30 @@ Selecting an id that is not registered yet, with `set-config` or the settings pa
 | `warning_duration` <Since config="notifications.warning_duration" /> | `0` | Seconds a warning stays up |
 | `error_duration` <Since config="notifications.error_duration" /> | `0` | Seconds an error stays up when `error_sticky` is off |
 | `error_sticky` <Since config="notifications.error_sticky" /> | `true` | Errors stay until you press <kbd>Esc</kbd> |
+| `bell` <Since config="notifications.bell" /> | `"toast"` | What a pane's bell does: `toast`, `forward`, `both` or `off`. See [The pane bell](#the-pane-bell) |
+
+### The pane bell <Since config="notifications.bell" /> [#the-pane-bell]
+
+A program in a pane rings the bell when it prints the BEL character. For example, `printf '\a'` rings it. `notifications.bell` sets what TUIOS does then:
+
+```toml
+[notifications]
+bell = "forward"   # or "toast", "both", "off"
+```
+
+| Value | What it does |
+|-------|--------------|
+| `toast` | Show "bell" in the dock. This is the default |
+| `forward` | Send the bell to the terminal that TUIOS runs in. That terminal then plays its sound, flashes, or marks the window or tab |
+| `both` | Do the two |
+| `off` | Do neither |
+
+- TUIOS sends the bell for every pane, also for the pane you are in. It sends at most one bell from each pane in 200 milliseconds.
+- Each client sends the bell to its own terminal. Over `tuios ssh` and in `tuios-web`, the bell goes to that client, not to the machine that runs TUIOS.
+- Your terminal decides what a bell does. In Ghostty, for example, set `bell-features` to choose a sound, an attention request or a title mark.
+- The workspace bell marker does not change with this setting. Set `bell_marker` under `[dock.tabs]` to change it.
+
+The settings page has this setting in the Alerts tab, as "Pane bell".
 
 ### Agent alerts
 
@@ -882,6 +950,21 @@ leader_key = "ctrl+a"
 `opt+` and `option+` mean `alt+` on every platform, `cmd+` and `command+` mean `super+`, and `control+` means `ctrl+`. See [Modifier spellings](/docs/keybindings#modifier-spellings). Press the leader two times in terminal mode to send it to the pane.
 
 If TUIOS cannot read the leader, the leader is `ctrl+b` until you correct it. See [When a key is wrong](#when-a-key-is-wrong).
+
+### lock <Since config="keybindings.lock" /> [#lock]
+
+Lock mode gives every key in terminal mode to the pane, except the leader.
+
+```toml
+[keybindings]
+lock = true
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `lock` <Since config="keybindings.lock" /> | `false` | `true` gives every key to the pane in terminal mode, except the leader. The leader unlocks for one action, and then TUIOS locks again. A repeatable action keeps its menu open until you press <kbd>Esc</kbd>. That menu takes only repeatable keys. Any other key goes to the pane. The `zellij` preset sets `true` |
+
+See [Lock mode](/docs/keybindings#lock-mode).
 
 ### Sections
 
@@ -1387,7 +1470,10 @@ A path is absolute or starts with `~`. Some places are always closed, whatever t
 
 - **Writes** never go into `~/.ssh`, `~/.gnupg`, cloud and git credentials, shell start files such as `.bashrc` and `.zshrc`, login items, crontabs, `/proc`, or tuios's own config and state.
 - **Reads** never return keys, credentials, keyrings, shell histories, browser profiles, `/proc`, or tuios's own state. A public `*.pub` key in `~/.ssh` is the one exception.
+- Reads also never return `~/.gitconfig`, `~/.config/git`, shell start files or `~/.config/environment.d`. The list also covers the snap and flatpak browser folders, Thunderbird, Signal, Discord, Slack, Telegram, VS Code and common crypto wallets. A folder copy over a link leaves these entries out.
 - A file with more than one name (a hard link) is never read over a link. Copy it to a new file to share it.
+
+The read rules and `files_read_roots` also apply to a kitty image that a program names by path in a pane that runs on this machine for the other machine. See [Kitty images in the pane](/docs/remote-hosts#kitty-images-in-the-pane).
 
 A refused write says where writes may land and which key to change. A deny list can never name every secret on a machine, so `files_read_roots` is the stronger choice.
 
@@ -1505,6 +1591,9 @@ test_patterns = ["go test", "pytest"]
 [agents.queue]
 max = 8                                 # at most 64
 
+[agents.mail]
+wake = true                             # type one line into an idle agent with unread mail
+
 [agents.checkpoints]
 enabled = true
 keep = 50                               # at most 1000
@@ -1525,6 +1614,7 @@ max_untracked_mb = 50                   # a negative value means no limit
 | `recap.away` <Since config="agents.recap.away" /> | `"10m"` | How long you must have been away from a pane for the dock to show its recap |
 | `recap.test_patterns` <Since config="agents.recap.test_patterns" /> | built in | Commands that count as a test run in the recap, such as `go test` and `npm test` |
 | `queue.max` <Since config="agents.queue.max" /> | `8` | Messages one pane's [queue](/docs/agent-inbox#replying-and-the-queue) holds |
+| `mail.wake` <Since config="agents.mail.wake" /> | `true` | Type one line into an agent at rest that has unread mail, so that it reads the mail. `false` stops it. A change to `false` applies at once. A change to `true` waits for `tuios config apply` from outside TUIOS, or a restart. See [Agent Messaging](/docs/agent-messaging) |
 | `checkpoints.enabled` <Since config="agents.checkpoints.enabled" /> | `true` | Save the git work tree of an agent's pane each time the agent finishes a turn that changed a file. See [Checkpoints](/docs/checkpoints) |
 | `checkpoints.keep` <Since config="agents.checkpoints.keep" /> | `50` | How many checkpoints one pane keeps, at most 1000 |
 | `checkpoints.max_untracked_mb` <Since config="agents.checkpoints.max_untracked_mb" /> | `50` | Leave an untracked file larger than this many megabytes out of a checkpoint. `tuios checkpoint list` names the files left out, and a restore does not change them |

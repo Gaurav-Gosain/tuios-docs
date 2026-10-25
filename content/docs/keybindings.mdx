@@ -316,6 +316,45 @@ A copy waits for an answer when a file is there on the other machine and the cop
 
 See [`tuios cp`](/docs/cli-reference#cp) and [Copy files between machines](/docs/remote-hosts#copy-files-between-machines).
 
+## Lock mode <Since config="keybindings.lock" /> [#lock-mode]
+
+Lock mode gives every key to the program in the pane. It is the locked mode of zellij. Turn it on in `config.toml`:
+
+```toml
+[keybindings]
+lock = true
+```
+
+The `zellij` [preset](#keybind-presets) turns it on, with <kbd>Ctrl</kbd>+<kbd>G</kbd> as the leader. Set `lock = false` to turn it off under that preset.
+
+- In terminal mode, TUIOS takes only the leader. Every other key goes to the pane, also the keys that TUIOS binds. <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>Alt</kbd>+<kbd>9</kbd>, <kbd>Alt</kbd>+<kbd>n</kbd>, <kbd>Alt</kbd>+<kbd>Esc</kbd>, <kbd>Ctrl</kbd>+<kbd>P</kbd>, the arrow keys with <kbd>Alt</kbd>, <kbd>Shift</kbd>+<kbd>↑</kbd> and the hold key all go to the pane.
+- The leader unlocks. Press the leader, then the keys of one action. The action runs and TUIOS locks again.
+- A repeatable action keeps its menu open. These are the actions in `keybindings.repeat`, such as focus moves and resize steps. Press the key again to move again. You do not press the leader again.
+- The open menu then takes only repeatable keys. Any other key closes the menu, goes to the pane, and TUIOS locks again. For example, <kbd>x</kbd> after <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>←</kbd> <kbd>→</kbd> goes to the pane. It does not close a pane. The which-key panel of the open menu shows only the repeatable keys and <kbd>Esc</kbd>.
+- Press <kbd>Esc</kbd> to close the menu and lock again. <kbd>Ctrl</kbd>+<kbd>C</kbd> also closes it.
+- Press the leader to close the menu and open a new leader menu.
+- To go to window mode, press the leader, then <kbd>Esc</kbd>.
+- To send the leader to the pane, press the leader two times.
+- Window mode, overlays, copy mode and the mouse do not change.
+
+The mode pill in the dock shows a lock while TUIOS is locked. It shows an open lock while the leader or a menu waits for a key. Without Nerd Fonts, the pill shows `LOCK` and `UNLOCK`. When the dock is hidden, or `appearance.dock_prefix_indicator` is `"badge"`, the floating badge shows `PREFIX` and the open lock while a menu waits for a key.
+
+<Shot
+  name="lock-mode"
+  width={1700}
+  height={1110}
+  alt="tuios in lock mode. The mode pill at the left of the dock shows the terminal icon and a closed lock."
+  caption="Locked: every key but the leader goes to the pane."
+/>
+
+<Shot
+  name="lock-mode-unlocked"
+  width={1700}
+  height={1110}
+  alt="The same screen after the leader. The mode pill shows the leader icon and an open lock, and the which-key panel lists the keys of the leader menu."
+  caption="After the leader: the lock is open for one action."
+/>
+
 ## Global keys
 
 Section: `[keybindings.global]`. These keys work in window mode and terminal mode.
@@ -808,6 +847,36 @@ The scrollback browser (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>s</kbd>) is a differen
 
 A yank in copy mode also adds a [paste buffer](/docs/paste-buffers). <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>]</kbd> pastes it again.
 
+### Clear the scrollback <Since feature="clear-scrollback" /> [#clear-the-scrollback]
+
+The `clear_scrollback` action clears the scrollback of the focused pane. It also removes the rows above the prompt, and the prompt row moves to the top of the pane. Ghostty, iTerm2 and Terminal.app do the same on <kbd>Cmd</kbd>+<kbd>K</kbd>.
+
+| Key | Action | Does |
+|-----|--------|------|
+| none | `clear_scrollback` <Since feature="clear-scrollback" /> | Clear the focused pane's scrollback. The palette entry is "Clear the scrollback" |
+
+- TUIOS sends no key to the program, so the shell does not redraw.
+- When the shell marks its prompt with OSC 133, TUIOS keeps all the lines of the prompt.
+- In a daemon session, the daemon clears the pane. Each client of the session shows the clear. A later attach does not bring the old rows back.
+- The key also works in copy mode. TUIOS leaves copy mode.
+- TUIOS clears nothing while a full-screen program, such as vim or less, uses the pane. TUIOS shows a message.
+
+The action has no default key, because the host terminal usually keeps <kbd>Cmd</kbd>+<kbd>K</kbd> for itself. To use <kbd>Cmd</kbd>+<kbd>K</kbd>, bind `super+k` in the `global` section. A key in that section works in terminal mode and in window mode:
+
+```toml
+[keybindings.global]
+clear_scrollback = ["super+k"]
+```
+
+Then tell the host terminal to send <kbd>Cmd</kbd>+<kbd>K</kbd> to TUIOS. In Ghostty, add `keybind = cmd+k=unbind` to the Ghostty config. In iTerm2 and Terminal.app, <kbd>Cmd</kbd>+<kbd>K</kbd> is a menu item. Remove or change its shortcut in the settings of the terminal. A terminal that does not send the Super key cannot send `super+k`. Bind another key, such as <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>K</kbd>:
+
+```toml
+[keybindings.prefix_mode]
+clear_scrollback = ["K"]
+```
+
+`tuios clear-history` <Since command="clear-history" /> clears the scrollback from a script, as tmux `clear-history` does. See the [CLI reference](/docs/cli-reference).
+
 ### Line start and line end
 
 <kbd>Home</kbd> moves the copy cursor to the start of the line, as <kbd>0</kbd> does. <kbd>End</kbd> moves it to the end of the line, as <kbd>$</kbd> does. Both keys also move the end of a <kbd>v</kbd> or <kbd>V</kbd> selection. The help lists them next to <kbd>0</kbd> <kbd>^</kbd> <kbd>$</kbd>.
@@ -1108,6 +1177,29 @@ For the synchronize-panes of tmux, bind `toggle_multifocus_all`. It puts every p
 mark_pane = ["m"]
 join_marked_right = ["J"]
 ```
+
+## Keybind presets <Since config="keybindings.preset" /> [#keybind-presets]
+
+`keybindings.preset` gives the keys of tmux, GNU screen or zellij after the leader:
+
+```toml
+[keybindings]
+preset = "tmux"
+```
+
+Or press <kbd>U</kbd> in window mode, or pick "Keybind preset" in the command palette. The picker shows each preset with three of its keys, and the keys that the program in your pane loses to it. Press <kbd>Enter</kbd> to use the preset. Or run `tuios keybinds preset tmux`. `tuios keybinds preset` shows the preset in use, and `tuios keybinds preset list` shows them all.
+
+| Preset | Leader | What it does |
+|--------|--------|--------------|
+| `tuios` | <kbd>Ctrl</kbd>+<kbd>B</kbd> | The TUIOS keys. This is the default |
+| `tmux` | <kbd>Ctrl</kbd>+<kbd>B</kbd> | tmux 3.8's keys after the leader |
+| `screen` | <kbd>Ctrl</kbd>+<kbd>A</kbd> | GNU screen's keys after the leader |
+| `zellij` | <kbd>Ctrl</kbd>+<kbd>G</kbd> | zellij's unlock-first keys. After the leader, <kbd>p</kbd> opens the window menu, <kbd>t</kbd> the workspace menu, <kbd>s</kbd> copy mode and <kbd>o</kbd> the session switcher. The next key runs one action. It turns on [lock mode](#lock-mode) |
+
+- A preset changes the leader, the keys after the leader and the terminal-mode keys. Window mode, the rail, copy mode and the agents view keep the TUIOS keys.
+- A TUIOS feature whose key the preset uses moves to the TUIOS menu. Press the leader, then <kbd>Ctrl</kbd>+<kbd>T</kbd>, then the key it had.
+- Your own bindings win over the preset. `tuios keybinds doctor` lists each preset key that your bindings take.
+- `tuios keybinds cheatsheet tmux` shows the keys that work as in tmux, the TUIOS keys that moved, and what tmux has that TUIOS does not.
 
 ## Customizing
 

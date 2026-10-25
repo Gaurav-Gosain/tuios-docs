@@ -199,6 +199,25 @@ The same works in a session attached with `tuios attach --host`. It also works <
 - A resurrected session brings the pane back as a local shell.
 - Both machines need a TUIOS new enough to open remote panes. An older one refuses with a message that says to update.
 
+### Kitty images in the pane <Since verb="pane-kitty-medium" /> [#kitty-images-in-the-pane]
+
+A program in such a pane can show a kitty image that it names by path. `kitten icat --transfer-mode=file` and `kitten icat --transfer-mode=memory` work there:
+
+```bash
+kitten icat --transfer-mode=file diagram.png
+```
+
+The path names a file on the host, so the host reads the file and sends the bytes over the link. The image then shows here, after the output that came before it. Other panes on the link do not wait for it.
+
+The host reads only the files that the link may read:
+
+- The host must allow `files` from this machine. Without it, the host refuses the image, as an older TUIOS did.
+- The read deny list applies. Keys, credentials, shell start files, histories, browser and chat folders, and TUIOS's own state are never read.
+- `files_read_roots` on the host limits the folders it reads.
+- A file with more than one name (a hard link) is refused.
+
+See [Files over a link](/docs/configuration#files-over-a-link) for the rules. A program that sends the image bytes in its output, such as `kitten icat --transfer-mode=stream`, works with every host. Both machines need TUIOS v0.11.0 or newer for images by path.
+
 ### Global sessions
 
 A session with panes from several machines belongs to none of them. Once a second machine is reachable, the rail draws a `global` group above the machines for such sessions.
@@ -281,7 +300,7 @@ You can also start a copy with the `transfer-start` verb. The `transfer-list`, `
 
 ### What a host lets you copy
 
-The machine that receives a write decides where it may land. Each machine needs `files` in the other machine's `allow` list. A host lets a write land only in its `files_roots`: by default one receive folder, `~/Downloads/tuios`. It never lets a write reach `~/.ssh`, credentials or shell start files, and it never lets a read return keys or credentials. When a host refuses a copy, the error names the setting to change on that host. See [Files over a link](/docs/configuration#files-over-a-link).
+The machine that receives a write decides where it may land. Each machine needs `files` in the other machine's `allow` list. A host lets a write land only in its `files_roots`: by default one receive folder, `~/Downloads/tuios`. It never lets a write reach `~/.ssh`, credentials or shell start files, and it never lets a read return keys, credentials, shell start files, or the data of browsers, mail and chat apps and crypto wallets. A folder copy leaves out the entries that the host denies. `tuios cp` then says how many items it did not copy, and exits with status 3. When a host refuses a copy, the error names the setting to change on that host. See [Files over a link](/docs/configuration#files-over-a-link).
 
 ## Keeping hosts on one version
 
