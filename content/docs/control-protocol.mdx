@@ -102,7 +102,7 @@ The hint says what to do next: the parameter that was wrong, the values it accep
 A few rules hold for every verb:
 
 - **Unknown parameters are refused**, not ignored. A misspelt parameter fails with `invalid_params` instead of doing something you did not ask for.
-- **`session` can usually be left out.** It then means the most recently active session.
+- **`session` can usually be left out.** From a pane, it then means that pane's own session. From outside every pane, it means the most recently active session.
 - **`window` takes a window ID or name.** Left out, it means the focused window.
 - **A request that cannot do what it asked never reports success.**
 
@@ -217,16 +217,18 @@ Over a link, these verbs need `list`.
 |------|---------|
 | `list-agents` | List the windows running coding agents, with their state and unread mail. |
 | `get-agent-state` | Read a window's agent state. |
-| `set-agent-state` | Report an agent's state: `working`, `needs_input`, `idle`, `done`, `errored`, `unknown`, or `none` to clear. |
+| `set-agent-state` | Report an agent's state: `working`, `needs_input`, `idle`, `done`, `errored`, `unknown`, or `none` to clear. A pane reports for its own window only. A report about another pane needs `respond`. |
 | `explain-agent-detect` | Explain why a window was or was not detected as running an agent. |
 | `explain-agent-screen` | Show what the screen-reading rules make of a window. |
 | `send-agent-message` | Leave a message for another window, or a notice for the whole session. It takes the message as text or as [parts](#queue-prompt) <Since feature="reply-composer" />. |
 | `read-agent-messages` | Read a session's messages, or one window's inbox. |
-| `ask-agent` | Type a question into another agent's window and wait for its answer. |
-| `ask-human` | Ask the person a question with fixed answers, and wait for the answer. |
+| `ask-agent` | Type a question into another agent's window and wait for its answer. Asks of one agent take turns. The reply has `queued_behind` and `waited_turn_ms`. |
+| `ask-human` | Ask the person a question with fixed answers, and wait for the answer. While it waits, the asking pane shows `needs_input` with the question. |
 | `set-agent-meta` | Record display metadata about a pane's agent, such as its model or context use. |
 | `set-agent-session` | Store a harness's conversation id for a pane without changing its state. |
 | `report-agent-activity` | Report a hook event that changes no state, such as a subagent's start, tool call or stop. It moves the pane's subagent count and list. |
+| `agent-mail-notice` <Since verb="agent-mail-notice" /> | The line that tells a pane's agent about its unread mail: the count, the senders and the command that reads it. Each message is announced once. The Claude Code and Codex hooks call it. A pane asks for its own window only. |
+| `artifact-list` <Since verb="artifact-list" /> | What one pane showed the person, newest first: TML surfaces and screenshots. The daemon keeps the last 20 of each pane. Another pane's list needs `read`. |
 | `agent-transcript` <Since verb="agent-transcript" /> | Read the conversation of the agent in a pane, as data. Only the person can. See [below](#agent-transcript). |
 | `start-agent` | Start an agent in a new pane and answer once it is ready for a prompt. |
 | `resume-agent` | Type a pane's resume command for the conversation a hook recorded. |

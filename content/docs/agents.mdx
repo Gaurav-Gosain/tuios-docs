@@ -91,13 +91,27 @@ tuios set-agent-state done
 tuios set-agent-state none        # clear it
 ```
 
-From inside a pane, name the pane and the harness, since the focused pane may be a different one:
+From inside a pane, the report is about that pane. Name the harness, so TUIOS knows which agent reports:
 
 ```bash
-tuios set-agent-state working -s "$TUIOS_SESSION" -w "$TUIOS_PANE_ID" --harness claude-code
+tuios set-agent-state working --harness claude-code
 ```
 
 A report that loses to a higher-ranked source still exits 0 and prints `Not applied: ...` on stderr.
+
+#### Agent state from another pane [#agent-state-from-another-pane]
+
+A pane sets the agent state of its own window only. A report about another pane needs the `respond` grant, because the state decides whether that pane waits on a prompt. This holds for `set-agent-state`, `set-agent-meta`, `set-agent-session`, `report-agent-activity`, `ask-human` and `request-approval`. A hook or another program that TUIOS starts outside every pane reports for no pane. From your own terminal outside TUIOS, you can still set the state of any pane.
+
+```
+set-agent-state failed: set-agent-state is refused for this pane: window
+target is not this pane, and a pane reports only for its own window
+a021e941. Reporting for another pane needs the respond grant.
+```
+
+<Callout type="warn" title="Upgrading from v0.10.1">
+v0.10.1 and earlier let one pane set another pane's state, and then type into that pane's prompt without `respond` ([GHSA-78rj-pghh-vh42](https://github.com/Gaurav-Gosain/tuios/security/advisories/GHSA-78rj-pghh-vh42)). A command under `[hooks]` that calls `set-agent-state` is now refused, because TUIOS runs it outside every pane. When a report from outside a pane moves a pane off its prompt, TUIOS still treats the pane as on its prompt until the pane draws something.
+</Callout>
 
 The old shell shim in `integrations/claude-code/` of the repository now just runs `tuios agent-hook claude-code`. Settings that still point at it keep working, but alongside an installed integration every event is reported twice. `tuios doctor agents` says so.
 
@@ -426,9 +440,11 @@ The host that receives a copy has its own rules too. See [What a host lets you c
 The daemon checks the grants on every way into a pane: the control socket, the link sockets, the tmux shim's pane holder, prompts, `send-keys`, `run-command` and typing through the client protocol.
 
 - **Prompts.** A pane without `respond` cannot type into another pane that waits on a prompt. This applies to a pane with `admin` too. To give `respond` to one pane, use `tuios set-pane-grants` or `--grants`.
+- **Typing at a prompt on purpose.** A pane with `respond` still does not type into a pane on `needs_input` by mistake. `send-text`, `send-keys`, `paste-buffer` and `ask-agent` refuse it with `agent_blocked` unless you pass `--allow-blocked`. The tmux shim refuses a tmux script the same way.
+- **Agent state.** A pane reports the agent state of its own window only. A report about another pane needs `respond`. See [Agent state from another pane](#agent-state-from-another-pane).
 - **`run-command`.** From a pane without `respond`, `run-command` cannot type or press keys. Use `send-keys` or `send-text` with `-w`.
 - **`send-keys` with `PREFIX`.** `send-keys` with `PREFIX` from a pane is refused. Use the TUIOS command for the action, such as `focus-window`, `new-window` or `split-window`.
-- **`send-keys` with no window.** From a pane, `send-keys` with no `-w` types into the focused pane. TUIOS does not read these keys as key bindings.
+- **`send-keys` and `send-text` with no window.** From a pane, both need `-w`. Without it they are refused, because the focused pane may not be the one the agent means.
 - **Link sockets.** A process inside a pane, or a process that the daemon started, cannot connect to a link socket.
 - **Other machines.** Grants do not travel over a link. A pane on another machine that types into a pane here is held to the same prompt rule. It types into a pane that waits on a prompt only when this machine's link policy allows `respond`. See [Remote Hosts](/docs/remote-hosts).
 
@@ -476,7 +492,7 @@ tuios --skill fleet        # one topic
 tuios --skill all          # everything
 ```
 
-The topics are `panes`, `state`, `mail`, `inbox`, `fleet`, `hosts`, `grants`, `events`, `mcp`, `tmux`, `config`, `errors` and `recipes`.
+The topics are `panes`, `state`, `mail`, `inbox`, `fleet`, `checkpoints`, `ship`, `files`, `tml`, `notify`, `pair`, `hosts`, `clients`, `grants`, `events`, `stream`, `mcp`, `tmux`, `herdr`, `config`, `agents-off`, `errors` and `recipes`. In v0.11.0 the skill is written as tasks, every error code has a fix in `errors`, and `recipes` has recipes for many agents that work together. `tml` teaches an agent to write valid TML.
 
 To install it, run `tuios integration install` with the harness. <Since feature="integration-skill" />
 

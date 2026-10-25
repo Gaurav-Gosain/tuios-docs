@@ -1,6 +1,6 @@
 ---
 title: Inbox and Review
-description: One list of everything your agents are waiting on, a view of every agent and its conversation, answers from wherever you are, safer approvals, replies queued for a busy agent, and a review of what an agent changed.
+description: One list of everything your agents are waiting on, a view of every agent with its conversation and the forms it showed you, answers from wherever you are, safer approvals, replies queued for a busy agent, and a review of what an agent changed.
 icon: Inbox
 ---
 
@@ -58,7 +58,7 @@ Approvals
 Questions
    46s  #1     docs/claude  which retry policy?
 
-2 waiting. Open the Inbox with the prefix key then i, or jump to the oldest with the prefix key then o.
+2 waiting. Open the agents view with the prefix key then i, or jump to the oldest with the prefix key then o.
 ```
 
 Only a person at an attached client can dismiss, snooze or answer an item. An agent cannot empty the list you read to find out what the agents want.
@@ -190,6 +190,31 @@ tuios ask-human 'Deploy the branch to staging?' -o yes -o no -o later
 
 The question waits in the Inbox under Questions. When your client shows the pane that asked, the Inbox opens on it at once, and a digit picks the answer. From any other pane it raises the usual alert and waits. The command prints your answer and exits `0`. If its `--timeout` runs out first it exits `2`, the question stays, and your answer is mailed to the asking pane when you give it. Only you can answer: an agent calling it gets `not_human`.
 
+While the question waits, the pane that asked shows `needs_input`, with the question as its note. The rail, `list-agents` and `wait-for agent-state` see it. When the call returns, the pane shows its earlier state again. A pane that is already on `needs_input` keeps its own prompt. A question from outside every pane changes no pane's state.
+
+```bash
+tuios list-agents -s work
+```
+
+```
+╭───────────┬────────┬────────────────────────┬─────────┬────────┬──────┬───────────────────────────────╮
+│ ID        │ NAME   │ STATE                  │ HARNESS │ SOURCE │ MAIL │ NOTE                          │
+├───────────┼────────┼────────────────────────┼─────────┼────────┼──────┼───────────────────────────────┤
+│ *a021e941 │ caller │ needs_input (question) │ (none)  │ report │      │ Deploy the branch to staging? │
+╰───────────┴────────┴────────────────────────┴─────────┴────────┴──────┴───────────────────────────────╯
+```
+
+A script that waits for `needs_input` now also wakes on such a question. To tell the two apart, read `list-attention`: the question is an item of kind `ask`.
+
+The question is one line of at most 160 bytes, and each answer at most 60 bytes. A longer question is refused, and the error names the next step:
+
+```
+ask-human failed: the question is 200 bytes, and the limit is 160 bytes.
+Most likely cause: Nothing was asked. Send the details to the person in a
+message, then ask a short question.
+Fix: run 'tuios send-agent-message -s work -w human "<the details>"'.
+```
+
 ## Snoozing, undo and unread
 
 Some of what lands in the Inbox is for later.
@@ -226,9 +251,19 @@ Try the keys on a pretend Inbox. Focus the list, then allow the risky command, s
   alt="The agents view. Agents are grouped under Needs you, Working and Idle. Beside the list, the thread of the Claude Code agent api shows its answer, an edit to retry.go as a diff with line numbers, a test run and its last answer. The reply area is at the foot."
 />
 
-On a wide screen each row has two lines. The first has the state mark, the name, the harness, the session (or the machine, for an agent on another one) and how long the agent has been in its state. The second says the one thing worth reading: what a Needs you row asks, what a working agent does now, or the branch of one ready for review. Subagents hang under their agent. The rows come from the rail's agents section, so the two lists always agree.
+On a wide screen each row has two lines. The first has the state mark, the name, the harness, the session (or the machine, for an agent on another one) and how long the agent has been in its state. The second says the one thing worth reading: what a Needs you row asks, what a working agent does now, or the branch of one ready for review, with its pull request and checks. Subagents hang under their agent. The attempts of a [fan](#fans-compare-and-judge) sit under one row with the fan's task. The rows come from the rail's agents section, so the two lists always agree.
 
-Beside the list, the focus shows the selected agent: its name, harness and state, its thread, and at the bottom the card of what it asks. A held approval's card shows the whole command and the buttons that answer it. At 170 columns and wider, a side column shows the agent's live pane, the files its last turn changed, and its [checkpoints](/docs/checkpoints). On a narrower screen these are tabs after Thread and Changes. <kbd>[</kbd> and <kbd>]</kbd> switch the tab.
+Beside the list, the focus shows the selected agent: its name, harness and state, its branch, machine and folder, then a row of tabs, and at the bottom the card of what it asks. A held approval's card shows the whole command, where it runs, and the buttons that answer it. The card stays under every tab. <kbd>[</kbd> and <kbd>]</kbd> switch the tab:
+
+| Tab | Shows |
+|-----|-------|
+| Thread | The agent's conversation. See [The thread](#the-thread) |
+| Changes | Every edit of the last turn, whole. It shows once tuios reads the agent's transcript |
+| Artifacts <Since action="inbox_artifact" /> | The forms, dashboards and screenshots the agent showed you. It shows once the agent has shown something. See [Artifacts](#artifacts) |
+| Checkpoints | The agent's [checkpoints](/docs/checkpoints), newest first |
+| Pane | The agent's live pane |
+
+A tab with items shows the count, such as `Artifacts 3`. At 170 columns and wider, a side column beside the focus also shows the live pane, the files the last turn changed, and the checkpoints.
 
 | Key | Does |
 |-----|------|
@@ -238,10 +273,15 @@ Beside the list, the focus shows the selected agent: its name, harness and state
 | <kbd>r</kbd>, <kbd>i</kbd>, <kbd>Tab</kbd> | With no approval waiting: write a reply. See [Replying and the queue](#replying-and-the-queue) |
 | <kbd>Space</kbd> | Read an approval's or a question's prompt and answer it here |
 | <kbd>n</kbd> <Since action="inbox_new_agent" /> | Start a new agent. See [Starting an Agent](/docs/new-agent) |
+| <kbd>c</kbd> <Since action="inbox_compare" /> | On an attempt of a fan: compare the attempts. See [Fans, compare and judge](#fans-compare-and-judge) |
+| <kbd>o</kbd> <Since action="inbox_artifact" /> | Open what the agent showed you, such as a form, on its Artifacts tab, and use it. <kbd>Esc</kbd> goes back to the list |
+| <kbd>x</kbd>, <kbd>\*</kbd> | Mark the agent, or every agent shown, for a bulk answer. See [Many agents at once](#many-agents-at-once) |
 | <kbd>f</kbd> | Show only what needs you, then each kind of item, then every agent |
 | <kbd>s</kbd> | Step the order inside each group: needs you first, name, most recent change, session |
 | <kbd>/</kbd> | Search. A `key:value` term is a [selector](#selectors). Other words match the name, the session and the agent's last message |
 | <kbd>v</kbd> | Review the agent's changes |
+| <kbd>[</kbd>, <kbd>]</kbd> | Switch the tab: Thread, Changes, Artifacts, Checkpoints and Pane |
+| <kbd>J</kbd>, <kbd>K</kbd> | Scroll the thread. On the Artifacts tab, move between the artifacts |
 | <kbd>e</kbd> | Show every line of every card in the thread |
 | <kbd>Ctrl</kbd>+<kbd>]</kbd> | Look at the agent's own screen. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> comes back |
 | <kbd>?</kbd> | All keys |
@@ -250,6 +290,17 @@ Beside the list, the focus shows the selected agent: its name, harness and state
 The mouse works too. A click on a row selects it, and a double-click goes to its pane. A click on a group heading folds the group. The buttons on an approval card answer it, and `+ New agent` opens the [New agent sheet](/docs/new-agent).
 
 The layout follows the screen. From 120 columns the rows have two lines. From 80 columns they have one. Under 80 columns the list fills the screen, and <kbd>Enter</kbd>, <kbd>→</kbd> or a click opens the focus in its place.
+
+<Callout title="Upgrading from v0.10.1">
+The agents view replaces the Inbox panel. The Inbox items are its Needs you group. Some keys moved:
+
+- <kbd>n</kbd> opens the New agent sheet. Reject with a reason is now <kbd>R</kbd>.
+- <kbd>x</kbd> marks an agent for a bulk answer. Before, this key was <kbd>Space</kbd>, which now reads the prompt.
+- <kbd>f</kbd> steps through the items, then each kind, then every agent.
+- The tab Live is now Pane.
+
+Every key is a binding in `[keybindings.inbox]`.
+</Callout>
 
 ### The thread <Since feature="agent-thread" /> [#the-thread]
 
@@ -274,6 +325,55 @@ The newest card is at the bottom. The wheel, or <kbd>J</kbd> and <kbd>K</kbd>, s
 />
 
 The view does not poll. The list changes when the state of an agent changes.
+
+### Artifacts <Since action="inbox_artifact" /> [#artifacts]
+
+The Artifacts tab lists what the agent showed you, newest first: each [TML document](/docs/libraries/tml#show-a-document-in-tuios) its pane opened with `tuios tml show`, open or closed, and each screenshot it took. The selected one shows under the list.
+
+<Shot
+  name="agents-artifacts"
+  width={1768}
+  height={1332}
+  light
+  alt="The agents view on the Artifacts tab of the release agent. The list holds an open release note form, a screenshot named retry.png and a test run dashboard that the agent closed. Under the list, the form is live, and its Note field holds the text the person pasted."
+/>
+
+- An open document is live. It is the same document as its popup or pane, with the same state, so what you choose in one place shows in the other. <kbd>o</kbd> or a click gives it the keys. <kbd>Esc</kbd> gives them back to the view.
+- A text field takes typed and pasted text. <kbd>Tab</kbd> or a click goes into a field, and <kbd>Enter</kbd> submits the form. The agent gets your answer.
+- A closed document shows what it showed last, and your answer. Its row says `answered`, `closed by the agent` or `dismissed`.
+- A screenshot shows its path and its format.
+- A document from another session is read-only here. Attach to that session to use it.
+
+A TML popup and the agents view do not show at the same time:
+
+- Open the view while an agent's popup floats, and the view selects that agent and shows the document, with the keys.
+- A document that opens while the view is open shows in the focus when it is from the selected agent. From another agent, its row gets a `● new artifact` chip, and a popup moves the row to Needs you. A click on the chip opens it.
+- Close the view while the Artifacts tab shows an open document, and its window gets the focus and floats again.
+
+The daemon keeps the last 20 artifacts of each pane in memory, so a client that attaches again sees the same list. A daemon restart clears it.
+
+### Fans, compare and judge <Since action="inbox_compare" /> [#fans-compare-and-judge]
+
+The attempts of a [fan](/docs/worktrees#fan-out-one-prompt-several-agents) sit under one row with the fan's task. A row that is ready for review shows its branch, its pull request and the checks of the pull request.
+
+<kbd>c</kbd> on an attempt compares all the attempts side by side. Each column shows the attempt's agent, how long it took, its diff, its check from `tuios fan verify`, its cost, its first changed lines and its files.
+
+| Key | Does |
+|-----|------|
+| <kbd>j</kbd> | Start a judge: an agent that reads the attempts and records which one to keep, and why |
+| <kbd>1</kbd> to <kbd>9</kbd>, arrows | Pick an attempt |
+| <kbd>k</kbd> twice | Keep the picked attempt and remove the others |
+| <kbd>Enter</kbd> | Go to the attempt's pane |
+| <kbd>r</kbd> | Read the attempts again |
+| <kbd>Esc</kbd> | Back to the list |
+
+The judge works in a session of its own, with the `read` grant only. Through tuios it can only read the attempts (their diffs, screens and scrollback) and record a verdict with [`tuios fan verdict`](/docs/cli-reference#fan). The verdict shows on top of the comparison, with its reasons. The judge's pick is marked recommended, and the fan's row names it.
+
+A keep removes the other worktrees. Their changes go to `git stash`, and their branches stay. The first <kbd>k</kbd> lists every file that git ignores in the other worktrees, such as `.env`. A keep deletes these files, and `git stash` does not keep them. <kbd>↑</kbd> and <kbd>↓</kbd> scroll that list. The second <kbd>k</kbd> reads the attempts again, and keeps only when nothing changed. When the list grew, or tuios could not read it, it says so and keeps nothing.
+
+### Machines
+
+With [linked hosts](/docs/remote-hosts), every agent on every machine has a row, and each row names its machine. The Machines block at the foot of the list shows each machine with its agent count, its load and the state of its link. A click on a machine shows only its agents. When the link to a machine is down, its rows are dim, say `link down`, and show the last state tuios knew.
 
 ### Many agents at once <Since feature="inbox-bulk" /> [#many-agents-at-once]
 
