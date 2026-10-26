@@ -582,7 +582,7 @@ Every subcommand takes `-s, --session`, `-w, --window` and `--json`.
 - `pr` pushes the branch and opens a pull request with your own `gh` login.
 - `status` shows the pull request and its checks. `--refresh` asks `gh` now.
 
-git uses your own identity, signing setup and hooks. `push` and `pr` show what they will send and ask `[y/N]` first. `-y, --yes` skips the question. Inside a TUIOS pane, they also need your yes in the Inbox. `--wait` sets how long to wait for it (default `2m`).
+git uses your own identity, signing setup and hooks. From inside a pane, git runs with no hooks, and with no program that only the repository's own config names. `push` and `pr` show what they will send and ask `[y/N]` first. `-y, --yes` skips the question. Inside a TUIOS pane, they also need your yes in the Inbox. `--wait` sets how long to wait for it (default `2m`).
 
 The pull request and its checks show on the agent's row in the rail, in `tuios worktree ls`, and as `pr` in `ls --json` and `worktree ls --json`.
 
@@ -953,6 +953,8 @@ tuios capture-pane --ansi > pane.txt
 ```
 
 `--lines` counts from the last line with content, so blank rows below the cursor do not count.
+
+On a window that shows a [TML surface](/docs/libraries/tml#read-a-surface-as-text), `capture-pane` prints the surface as drawn, at the window's size, with its state and the open tab.
 
 A history holds 10,000 lines or more, which is too much for an agent to read. So `--scrollback` without `--lines` keeps the last 3 commands. It finds them by the shell's OSC 133 marks: each command runs from its prompt to the next prompt. The capture keeps at most 2000 lines. A command whose output is too long keeps its command line, the start of its output and its end, and one line replaces the middle:
 
@@ -2454,6 +2456,7 @@ tuios tml replace SURFACE FILE [--keep-state]
 tuios tml get SURFACE
 tuios tml list
 tuios tml validate FILE
+tuios tml render FILE [--width N] [--height N] [--state JSON] [--tab ID] [--ansi]
 ```
 
 - `show` prints the surface id and the window id. `--wait` prints the value the document closed with, as JSON. It prints `null` with exit status `1` when you dismissed it, and exits `2` when a program closed it with `tuios tml close`. `--timeout <ms>` bounds the wait. `--events` prints the surface's events as JSON lines until it closes.
@@ -2461,8 +2464,9 @@ tuios tml validate FILE
 - <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>t</kbd> <kbd>f</kbd> docks a popup as a pane and floats it again. The surface keeps its state. Each document that a pane shows is also on that agent's Artifacts tab in the agents view.
 - A pane may patch, replace and close only the surfaces it opened. These need the `write` grant.
 - `validate` prints each problem with its place and the fix.
+- `render` <Since command="tml render" /> prints the document drawn as text, as tuios draws it in a pane, and opens nothing. The width is the terminal's width, or 100 when standard output is not a terminal. `--state` replaces the state, `--tab` opens a tab by its id, and `--ansi` keeps the colours. It exits with status 1 and prints the problems when the document is not valid. `validate` and `render` need no daemon.
 
-See [tml](/docs/libraries/tml#show-a-document-in-tuios).
+See [tml](/docs/libraries/tml#show-a-document-in-tuios) and [Read a surface as text](/docs/libraries/tml#read-a-surface-as-text).
 
 ### look <Since command="look" /> [#look]
 

@@ -150,11 +150,31 @@ The gear button in the corner opens the settings panel. Settings are saved in th
 | Setting | Options |
 |---------|---------|
 | Transport | Auto (prefers WebTransport), WebTransport, WebSocket |
-| Renderer | Auto (prefers WebGL), WebGL, Canvas, DOM, vtgl (experimental) |
+| Renderer | Auto (prefers WebGL), WebGL, Canvas, DOM, vtgl (experimental), Worker engine (experimental). See [The worker engine](#the-worker-engine) |
 | Font size | 10 to 28 px, default 14 |
 | Toggles | Copy on select, blinking cursor, the browser's right-click menu, and capturing <kbd>Ctrl</kbd>+<kbd>W</kbd> and similar keys (fullscreen only) |
 
 The page ships with JetBrains Mono Nerd Font, so icons render without anything installed on the client.
+
+### The worker engine [#the-worker-engine]
+
+The worker engine is an experimental renderer from [sip](https://github.com/Gaurav-Gosain/sip) v0.10.0. It runs the terminal and the connection in Web Workers, off the page's main thread. A flood of output then does not freeze the page. The default renderer does not change.
+
+To turn it on, do one of these:
+
+- Open the gear, and set **Renderer** to **Worker engine (experimental)**.
+- Add `?renderer=engine` to the page address, for example `http://localhost:7681/?renderer=engine`.
+
+If the browser cannot run the engine, the page uses the xterm.js client and keeps working. The browser console says why.
+
+With 50 MiB of `cat` output in a TUIOS pane:
+
+| | xterm.js client | Worker engine |
+|---|---|---|
+| Time on the page's main thread | 2,767 ms | 18 ms |
+| Longest gap between frames | about 200 ms | 16.8 ms |
+
+16.8 ms is one frame at 60 Hz.
 
 ## Paste
 

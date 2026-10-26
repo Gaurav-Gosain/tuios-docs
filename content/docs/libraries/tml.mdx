@@ -5,6 +5,7 @@ icon: Braces
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Since } from '@/components/mdx/since';
 
 `tuios.dev/tml` is the TML language. A TML document is a tree of components from a fixed catalog, with a JSON state store. A program, a plugin or an agent sends one to a host, and the host draws it in a pane, a popup or a dock cell. This library is the language. It draws nothing. [loom](/docs/libraries/loom) draws it.
 
@@ -134,7 +135,7 @@ A `table` shows the rows of a state array. Each `column` names a field. `format`
 
 ### List, tree and kv
 
-A `list` repeats its children once per element of a state array. A `tree` shows nested state objects. A `kv` shows key and value pairs in two aligned columns.
+A `list` repeats its children once per element of a state array. A `tree` shows nested state objects. A `kv` shows key and value pairs in two aligned columns. A long value wraps onto more rows under its value column.
 
 <include cwd lang="xml">tools/libshots/scenes/tml/list.tml</include>
 
@@ -178,6 +179,31 @@ A `card` is a titled block that a person can fold. `tabs` shows one `tab` at a t
 <include cwd lang="xml">tools/libshots/scenes/tml/charts.tml</include>
 
 <LibShot name="tml/charts" alt="Four charts in a grid: horizontal bars of seconds by package, a line of suite time, columns of wall time, and a donut of lines by language with its legend" />
+
+### Mermaid
+
+`mermaid` holds a Mermaid diagram. loom draws it as text with [sketch](/docs/libraries/sketch), fitted to the width of the element, in the theme's colours. A diagram taller than its box scrolls with the wheel. A diagram that sketch cannot draw shows its source under a note that says why.
+
+```xml
+<tml version="1">
+  <mermaid>
+flowchart LR
+  P[Prompt] --> A[Agent works]
+  A --> R[Review]
+  R --> S[Ship]
+  </mermaid>
+</tml>
+```
+
+`tuios tml render` draws it like this:
+
+```
+┌─────────┐      ┌─────────────┐      ┌─────────┐     ┌──────┐
+│ Prompt  │─────►│ Agent works │─────►│ Review  │────►│ Ship │
+└─────────┘      └─────────────┘      └─────────┘     └──────┘
+```
+
+The text of a `mermaid` element is kept as written. Bindings do not apply in it.
 
 ### Forms
 
@@ -302,6 +328,7 @@ tml report.tml
 
 ```bash
 tuios tml validate test-run.tml        # check it first: each problem names the fix
+tuios tml render test-run.tml          # see it drawn as text; opens nothing
 tuios tml show test-run.tml --pane     # a tiled pane; it prints the surface id
 ```
 
@@ -316,6 +343,23 @@ tuios tml show test-run.tml --pane     # a tiled pane; it prints the surface id
 The title bar shows the document's title, then who opened the surface: "from" and the name of that pane, or its id when it has no name. The document cannot change the owner. A surface does not take the focus: click it to use it.
 
 A text field takes typed text and a paste, in a popup, in a pane and in the agents view. <kbd>Tab</kbd> or a click goes into a field, and <kbd>Esc</kbd> leaves it. <kbd>Enter</kbd> submits the form. While a field has the focus, a button's key, such as <kbd>y</kbd>, types the letter. A paste with no field to take it tells you to select a field first.
+
+### Read a surface as text <Since command="tml render" /> [#read-a-surface-as-text]
+
+An agent cannot see your screen. It reads a surface as text before and after it shows it.
+
+```bash
+tuios tml render dash.tml                          # drawn at the terminal's width, or 100
+tuios tml render dash.tml --width 80 --height 24 --tab log
+tuios tml render dash.tml --state '{"runs":12}'
+tuios capture-pane -s "$TUIOS_SESSION" -w WINDOW   # an open surface, as drawn
+```
+
+- `tml render` draws the document as tuios draws it in a pane, and opens nothing. It needs no daemon.
+- The width is the terminal's width, or 100 when standard output is not a terminal. Without `--height`, the document gets the rows it needs.
+- `--state` replaces the state. `--tab` opens a tab by its id. `--ansi` keeps the colours as ANSI escape sequences.
+- When the document is not valid, `tml render` prints the problems and exits with status 1.
+- `capture-pane` on the window of a surface prints the surface as drawn, at the window's size. It uses the surface's state and the view that a client last reported: the open tab, the cursor rows and the scroll place. `--json` adds `surface` to the result.
 
 ### Ask a question and wait for the answer
 
