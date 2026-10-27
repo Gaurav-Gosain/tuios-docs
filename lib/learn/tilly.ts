@@ -366,6 +366,14 @@ export const GREET_LINES: Record<string, readonly string[]> = {
     "Forms, charts and diagrams, right in your panes. Let us draw some.",
     "Hi. Today your shell asks you a question in a real form.",
   ],
+  review: [
+    "Hi. Let us read a project and its change, like a reviewer.",
+    "Files on the left, the diff in the middle. Let us look.",
+  ],
+  ship: [
+    "Hi. From a new branch to a pull request, in a few steps.",
+    "Let us make a worktree and ship a small change.",
+  ],
 };
 
 const GREET_DEFAULT: readonly string[] = [
@@ -393,6 +401,8 @@ export const FINISH_LINES: Record<string, readonly string[]> = {
   cockpit: ["You ran a whole team of agents from one view. Nice work."],
   automation: ["You made tuios drive itself. That was fun to watch."],
   surfaces: ["A form, a flowchart, a chart and a dashboard. Nice work."],
+  review: ["You walked the files and left a note. Good review."],
+  ship: ["Branch, change, review, pull request. You shipped it."],
 };
 
 const FINISH_DEFAULT: readonly string[] = [
