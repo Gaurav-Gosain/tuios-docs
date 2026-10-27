@@ -54,6 +54,10 @@ export type TuiosWindow = {
   floating: boolean;
   agent: string;
   agentMessage: string;
+  /** "tml" for a window that draws a TML surface, "" for a program's pane. */
+  kind?: string;
+  /** The window floats as a popup. */
+  popup?: boolean;
 };
 
 /**
@@ -96,6 +100,15 @@ export type TuiosState = {
  * the order is `key` {key, mode}, then any `action` {name, mode}, then the
  * state changes it caused, each with the new state. `shell.*` events come
  * from the fake shell and carry the window id.
+ *
+ * `tml.*` events come from the TML surfaces that `tuios tml show` opens.
+ * They carry no state:
+ * - `tml.open` {surface, windowId, title, owner, target}: target is
+ *   "popup" or "pane".
+ * - `tml.input` {surface, state}: the person changed the surface's state.
+ * - `tml.place` {surface, windowId, target}: moved to a popup or a pane.
+ * - `tml.close` {surface, windowId, title, reason, value}: reason is
+ *   "closed" (value is the answer) or "dismissed" (value is null).
  */
 export type TuiosEvent = {
   type: string;

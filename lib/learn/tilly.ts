@@ -358,6 +358,10 @@ export const GREET_LINES: Record<string, readonly string[]> = {
     "Tapes let tuios drive itself. Let us watch one play.",
     "Hi. A little scripting, and then a party.",
   ],
+  surfaces: [
+    "Forms, charts and diagrams, right in your panes. Let us draw some.",
+    "Hi. Today your shell asks you a question in a real form.",
+  ],
 };
 
 const GREET_DEFAULT: readonly string[] = [
@@ -383,6 +387,7 @@ export const FINISH_LINES: Record<string, readonly string[]> = {
   "make-it-yours": ["It looks like yours now. Take it home."],
   agents: ["Now you can run agents and still get your own work done."],
   automation: ["You made tuios drive itself. That was fun to watch."],
+  surfaces: ["A form, a flowchart, a chart and a dashboard. Nice work."],
 };
 
 const FINISH_DEFAULT: readonly string[] = [
