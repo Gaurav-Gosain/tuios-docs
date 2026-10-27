@@ -65,6 +65,13 @@ const SLOW: Record<string, number> = {
  */
 const READY: Record<string, string> = {
   "agents/jump": "s.windowList.some((w) => w.agent === 'needs_input')",
+  // Both agents ask and codex is done, so the view opens on the edit.
+  "cockpit/open":
+    "s.windowList.some((w) => w.harness === 'claude-code' && w.agent === 'needs_input') && s.windowList.some((w) => w.harness === 'gemini-cli' && w.agent === 'needs_input') && s.windowList.some((w) => w.harness === 'codex' && w.agent === 'done')",
+  // Nothing asks, so g lands on codex, the first agent that is done.
+  "cockpit/reply": "!s.windowList.some((w) => w.agent === 'needs_input')",
+  // The attempts are done, so G lands on the last of them.
+  "cockpit/compare": "!s.windowList.some((w) => w.agent === 'working')",
 };
 
 // In the page: the lesson's terminal host, which lib/learn/runtime.ts gives

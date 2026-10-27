@@ -1,11 +1,12 @@
 import { agent, changed, on, opened } from "../matchers";
 import type { Track } from "../types";
-import { sampleAgain, sampleWindow } from "./setups";
+import { sampleWindow } from "./setups";
 
 /**
  * A pretend Claude Code in a pane: it works, asks, gets an answer and
- * finishes, and tuios follows it in the rail and the dock. Then what a real
- * machine adds: mail, fan-out and worktrees.
+ * finishes, and tuios follows it in the rail and the dock. Then mail between
+ * agents on a real machine, and the agents view, which the cockpit track
+ * covers in depth.
  */
 export const agents: Track = {
   id: "agents",
@@ -14,7 +15,7 @@ export const agents: Track = {
   audience: "Agent herders",
   group: "agents",
   minutes: 4,
-  next: ["automation", "workspaces"],
+  next: ["cockpit", "automation"],
   setup: [
     { command: "newWindow", args: ["agent"], wait: 250 },
     { command: "mode", args: ["terminal"] },
@@ -78,39 +79,20 @@ export const agents: Track = {
       hint: "",
       explainer: {
         art: "mail",
-        body: "On a real machine agents find each other with tuios list-agents, mail each other, and ask you questions. ctrl+b M opens the mail. ctrl+b i opens the agents view.",
+        body: "On a real machine agents find each other with tuios list-agents and mail each other. ctrl+b M opens the mail between them.",
         href: "/docs/agent-messaging",
         linkText: "Agent messaging",
       },
       learned: "mail",
     },
     {
-      id: "fanout",
-      title: "One prompt, three agents",
-      keys: [{ text: "tuios fan 3" }],
-      setup: sampleAgain("tuios fan 3 --agent claude 'add dark mode'"),
-      hint: "",
-      explainer: {
-        art: "fanout",
-        body: "tuios fan starts the same prompt in several agents, each in its own git worktree and session. Compare them, keep the best.",
-        href: "/docs/worktrees",
-        linkText: "Fan-out and worktrees",
-      },
-      learned: "fan-out",
-    },
-    {
-      id: "worktree",
-      title: "A worktree per agent",
-      keys: [{ text: "tuios worktree new" }],
-      setup: sampleAgain("tuios worktree new feat/retry"),
-      hint: "",
-      explainer: {
-        art: "worktree",
-        body: "A worktree is a second checkout on its own branch. One command makes it and a session inside it, and the rail groups them by repo.",
-        href: "/docs/worktrees",
-        linkText: "Worktrees",
-      },
-      learned: "worktrees",
+      id: "view",
+      title: "Every agent in one view",
+      note: "ctrl+b i opens the agents view. The next track, The agent cockpit, shows what it does.",
+      keys: ["ctrl+b", "i"],
+      done: opened("agents"),
+      hint: "ctrl+b, then i. esc closes it.",
+      learned: "agents view",
     },
   ],
 };
