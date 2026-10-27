@@ -7,6 +7,7 @@ export const powerMoves: Track = {
   title: "Power moves",
   blurb: "Palette, launcher, copy mode and the scrollback browser.",
   audience: "Keyboard fans",
+  group: "everyday",
   minutes: 5,
   next: ["make-it-yours", "automation"],
   setup: [

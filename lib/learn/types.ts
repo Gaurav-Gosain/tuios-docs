@@ -19,7 +19,26 @@ export type OverlayName =
   | "workspaceSwitcher"
   | "layoutPicker"
   | "sidebar"
-  | "logs";
+  | "logs"
+  | "screensaver"
+  | "agents"
+  | "mail"
+  | "presets"
+  | "goto"
+  | "hints"
+  | "paneLabels"
+  | "spotlight"
+  | "scratch";
+
+/** The keymap in use. */
+export type TuiosKeys = {
+  /** "tuios", "tmux", "screen" or "zellij". */
+  preset: string;
+  /** The leader key, such as "ctrl+b". */
+  leader: string;
+  /** Lock mode: every key but the leader goes to the pane. */
+  lock: boolean;
+};
 
 /** One window in the snapshot. Sizes are in cells. */
 export type TuiosWindow = {
@@ -64,6 +83,10 @@ export type TuiosState = {
   glyphs: string;
   /** The border style, such as "rounded". */
   borderStyle: string;
+  /** The keymap in use. An engine built before it existed leaves it out. */
+  keys?: TuiosKeys;
+  /** The window picture-in-picture shows, "" when it is off. */
+  pip?: string;
   cols: number;
   rows: number;
 };
@@ -189,4 +212,9 @@ export type Track = {
   steps: Step[];
   /** Tracks to suggest when this one is done. */
   next?: string[];
+  /** The group the hub lists the track under. */
+  group: TrackGroup;
 };
+
+/** The hub's groups, in the order it shows them. */
+export type TrackGroup = "start" | "everyday" | "agents" | "build" | "yours";

@@ -7,6 +7,7 @@ export const layouts: Track = {
   title: "Layouts",
   blurb: "Tiles, a master and a stack, a scrolling strip, and floats.",
   audience: "Tidy minds",
+  group: "everyday",
   minutes: 5,
   next: ["workspaces", "power-moves"],
   setup: [

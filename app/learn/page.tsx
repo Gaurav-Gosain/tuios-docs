@@ -5,8 +5,7 @@ import { tracks } from "@/lib/learn/tracks";
 import { pageMetadata } from "@/lib/metadata";
 import { absoluteUrl, site } from "@/lib/site";
 
-const description =
-  "A hands-on tour of tuios that runs in your browser: the real app, a pretend shell, and keys you press yourself. Nine tracks, from first steps to agents, with guides for tmux and zellij users. Nothing to install.";
+const description = `A hands-on tour of tuios that runs in your browser: the real app, a pretend shell, and keys you press yourself. ${tracks.length} tracks, from first steps to agents, with guides for tmux and zellij users. Nothing to install.`;
 
 export const metadata: Metadata = pageMetadata({
   title: "Learn tuios in 5 minutes",
