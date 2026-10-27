@@ -22,7 +22,7 @@ export const paneTricks: Track = {
       wait: 300,
     },
     { command: "newWindow", wait: 250 },
-    { command: "type", args: ["top\r"], wait: 300 },
+    { command: "type", args: ["rain\r"], wait: 300 },
   ],
   steps: [
     {
@@ -62,7 +62,7 @@ export const paneTricks: Track = {
         "window.focus",
         (e) => Boolean(e.state?.pip) && e.state?.pip !== e.data?.to,
       ),
-      hint: "Press tab. top keeps running in the corner.",
+      hint: "Press tab. The rain keeps falling in the corner.",
       learned: "picture in picture",
     },
     {

@@ -72,9 +72,9 @@ export const fromTmux: Track = {
       id: "display-panes",
       title: "Jump by number",
       note: "ctrl+b q shows a number on each pane. Type one to go there.",
-      keys: ["ctrl+b", "q", "1"],
+      keys: ["ctrl+b", "q", "2"],
       done: seq(opened("paneLabels"), on("window.focus")),
-      hint: "ctrl+b, then q. Big numbers show. Press 1.",
+      hint: "ctrl+b, then q. Big numbers show. Press 2.",
       learned: "pane numbers",
     },
     {
@@ -116,10 +116,11 @@ export const fromTmux: Track = {
     {
       id: "window-mode",
       title: "Meet window mode",
-      note: "New: a mode with no prefix at all. Single keys move windows.",
-      keys: ["ctrl+b", "esc"],
-      done: changed("mode", "window"),
-      hint: "ctrl+b, then esc. The badge flips to WINDOWS. i goes back to typing.",
+      note: "New: a mode with no prefix at all. i types into the pane, ctrl+b esc comes back.",
+      keys: ["i", "ctrl+b", "esc"],
+      needs: "window",
+      done: seq(changed("mode", "terminal"), changed("mode", "window")),
+      hint: "Press i. The badge says TYPING. Then ctrl+b and esc, and it says WINDOWS.",
       learned: "window mode",
     },
     {

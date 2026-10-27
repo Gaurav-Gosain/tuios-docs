@@ -48,9 +48,12 @@ export const makeItYours: Track = {
       id: "glyphs",
       title: "Pick heavy glyphs",
       note: "The shapes tuios draws its frames and marks with. / searches the settings.",
-      keys: ["/", { text: "glyph" }, "enter", { text: "heavy" }, "enter"],
-      done: setting("glyphs"),
-      hint: "Press / and type glyph. Enter opens the glyph picker. Type heavy and press enter.",
+      keys: ["/", { text: "glyph" }, "right"],
+      done: on(
+        "setting",
+        (e) => e.data?.name === "glyphs" && e.data?.to === "heavy",
+      ),
+      hint: "Press / and type glyph. The cursor lands on Glyph set. Right picks heavy.",
       learned: "glyphs",
     },
     {
