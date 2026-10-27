@@ -531,6 +531,9 @@ async function boot(
   const handle = { api, term, log };
   const page = window as unknown as { tuiosLearn?: unknown };
   page.tuiosLearn = handle;
+  // The hub's hero runs one too, so tests/learn/tracks.ts finds the
+  // lesson's from its terminal.
+  (host as HTMLElement & { tuiosLearn?: unknown }).tuiosLearn = handle;
 
   return {
     api,
