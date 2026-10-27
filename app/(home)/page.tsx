@@ -15,6 +15,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ReleaseTag } from "@/components/article/release-tag";
 import { Wordmark } from "@/components/brand";
+import { CompanyStrip } from "@/components/home/company-strip";
 import { ExplodedHero } from "@/components/home/exploded-hero";
 import { InstallTabs } from "@/components/home/install-tabs";
 import { JsonLd, personLd } from "@/components/json-ld";
@@ -154,6 +155,8 @@ export default function HomePage() {
             </a>
           </div>
         </div>
+
+        <CompanyStrip />
 
         <ExplodedHero />
       </section>
