@@ -28,7 +28,15 @@ export type OverlayName =
   | "hints"
   | "paneLabels"
   | "spotlight"
-  | "scratch";
+  | "scratch"
+  /** The rail has the keyboard (ctrl+b e). */
+  | "railFocus"
+  /** The palette searches files (ctrl+b f). */
+  | "fileSearch"
+  /** The review overlay (ctrl+b v). */
+  | "review"
+  /** The new worktree dialog (ctrl+b U). */
+  | "worktree";
 
 /** The keymap in use. */
 export type TuiosKeys = {
@@ -87,6 +95,17 @@ export type TuiosState = {
   keys?: TuiosKeys;
   /** The window picture-in-picture shows, "" when it is off. */
   pip?: string;
+  /**
+   * The rail's files section: the folder it lists, and the path of the row
+   * under the rail's cursor while the rail has the keyboard. "" for none.
+   * Missing from an engine older than the files lessons.
+   */
+  files?: { dir: string; cursor: string };
+  /**
+   * The review overlay: the file it shows and the hunk the cursor is in, -1
+   * for none. null while it is closed.
+   */
+  review?: { file: string; hunk: number } | null;
   cols: number;
   rows: number;
 };
@@ -96,6 +115,15 @@ export type TuiosState = {
  * the order is `key` {key, mode}, then any `action` {name, mode}, then the
  * state changes it caused, each with the new state. `shell.*` events come
  * from the fake shell and carry the window id.
+ *
+ * The files and review lessons use these too:
+ * - `files` {from, to}: each side `{dir, cursor}`, as in the state.
+ * - `review.move` {file, hunk, from}: the review's cursor reached another
+ *   file or hunk.
+ * - `review.note` {action, path?, line?, text?, notes}: a note was added
+ *   ("add"), edited or removed. `notes` is the count now.
+ * - `review.send` {notes}: S marked this many notes as sent.
+ * - `worktree` {repo, branch, path}: ctrl+b U made a worktree.
  */
 export type TuiosEvent = {
   type: string;
