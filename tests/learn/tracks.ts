@@ -145,6 +145,18 @@ async function stepIndex(page: Page) {
   return Number(await attr(page, "data-learn-step"));
 }
 
+/** Saves the frame of step i under --out/steps. */
+async function stepFrame(page: Page, track: Track, i: number, step: Step) {
+  const dir = path.join(out, "steps");
+  await mkdir(dir, { recursive: true });
+  await page.screenshot({
+    path: path.join(
+      dir,
+      `${track.id}--${String(i + 1).padStart(2, "0")}-${step.id}.png`,
+    ),
+  });
+}
+
 type Result = { track: string; step: string; ok: boolean; ms: number };
 const results: Result[] = [];
 
@@ -171,6 +183,9 @@ async function runTrack(page: Page, track: Track) {
     await page.waitForTimeout(700);
     const started = Date.now();
     if (step.explainer) {
+      // The sample the setup typed is the screen to check, so the frame is
+      // taken before the button.
+      if (frames) await stepFrame(page, track, i, step);
       await page.click("[data-learn-phase] [data-primary]");
       const ok = await waitFor(
         page,
@@ -209,16 +224,7 @@ async function runTrack(page: Page, track: Track) {
     const ms = Date.now() - started;
     results.push({ track: track.id, step: step.id, ok, ms });
     console.log(`${ok ? "ok  " : "FAIL"} ${name} (${ms} ms)`);
-    if (frames) {
-      const dir = path.join(out, "steps");
-      await mkdir(dir, { recursive: true });
-      await page.screenshot({
-        path: path.join(
-          dir,
-          `${track.id}--${String(i + 1).padStart(2, "0")}-${step.id}.png`,
-        ),
-      });
-    }
+    if (frames) await stepFrame(page, track, i, step);
     if (!ok) {
       const dir = path.join(out, "fail");
       await mkdir(dir, { recursive: true });

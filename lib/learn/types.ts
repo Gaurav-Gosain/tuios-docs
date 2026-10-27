@@ -11,6 +11,8 @@ export type OverlayName =
   | "launcher"
   | "settings"
   | "themePicker"
+  | "themeEditor"
+  | "glyphPicker"
   | "keybinds"
   | "copyMode"
   | "search"
@@ -96,6 +98,13 @@ export type TuiosState = {
  * the order is `key` {key, mode}, then any `action` {name, mode}, then the
  * state changes it caused, each with the new state. `shell.*` events come
  * from the fake shell and carry the window id.
+ *
+ * `setting` {name, from, to} is a look that changed. `name` is "glyphs",
+ * "borderStyle", or the config path of a look tuios watches, such as
+ * "appearance.window_title_style" or "appearance.sidebar.row_style". The
+ * values are strings. `themeEdit` {changed} says whether the theme editor
+ * holds a colour change that is not saved. The full list is in
+ * cmd/tuios-wasm/README.md in the tuios repo.
  */
 export type TuiosEvent = {
   type: string;

@@ -13,6 +13,7 @@ import { layouts } from "./layouts";
 import { makeItYours } from "./make-it-yours";
 import { paneTricks } from "./pane-tricks";
 import { powerMoves } from "./power-moves";
+import { sessions } from "./sessions";
 import { workspaces } from "./workspaces";
 import { yourKeys } from "./your-keys";
 
@@ -37,6 +38,7 @@ export const tracks: Track[] = [
   automation,
   yourKeys,
   makeItYours,
+  sessions,
 ];
 
 export function findTrack(id: string | null | undefined) {
