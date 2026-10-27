@@ -354,6 +354,10 @@ export const GREET_LINES: Record<string, readonly string[]> = {
     "Agents live in panes here. I will show you how to keep an eye on them.",
     "Hi. Let us start an agent and check on it from elsewhere.",
   ],
+  cockpit: [
+    "Three agents are at work. Let us answer them all from one view.",
+    "Hi. One agent asks, one waits, one is done. You handle all three.",
+  ],
   automation: [
     "Tapes let tuios drive itself. Let us watch one play.",
     "Hi. A little scripting, and then a party.",
@@ -382,6 +386,7 @@ export const FINISH_LINES: Record<string, readonly string[]> = {
   "your-keys": ["Any preset, any action by name. The keys are yours now."],
   "make-it-yours": ["It looks like yours now. Take it home."],
   agents: ["Now you can run agents and still get your own work done."],
+  cockpit: ["You ran a whole team of agents from one view. Nice work."],
   automation: ["You made tuios drive itself. That was fun to watch."],
 };
 

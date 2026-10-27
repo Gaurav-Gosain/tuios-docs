@@ -7,6 +7,7 @@ import type { Track, TrackGroup } from "../types";
 import { agents } from "./agents";
 import { automation } from "./automation";
 import { basics } from "./basics";
+import { cockpit } from "./cockpit";
 import { fromTmux } from "./from-tmux";
 import { fromZellij } from "./from-zellij";
 import { layouts } from "./layouts";
@@ -34,6 +35,7 @@ export const tracks: Track[] = [
   powerMoves,
   paneTricks,
   agents,
+  cockpit,
   automation,
   yourKeys,
   makeItYours,

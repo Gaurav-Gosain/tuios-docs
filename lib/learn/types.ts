@@ -28,7 +28,15 @@ export type OverlayName =
   | "hints"
   | "paneLabels"
   | "spotlight"
-  | "scratch";
+  | "scratch"
+  /** Over the agents view: the prompt an agent waits on. */
+  | "peek"
+  /** Over the agents view: the reply editor. */
+  | "reply"
+  /** Over the agents view: the New agent sheet. */
+  | "newAgent"
+  /** Over the agents view: the attempts of a fan side by side. */
+  | "compare";
 
 /** The keymap in use. */
 export type TuiosKeys = {
@@ -54,6 +62,10 @@ export type TuiosWindow = {
   floating: boolean;
   agent: string;
   agentMessage: string;
+  /** "approval" or "question" while the agent needs input. */
+  agentKind?: string;
+  /** The agent's harness, such as "claude-code", "codex" or "gemini-cli". */
+  harness?: string;
 };
 
 /**
@@ -87,6 +99,13 @@ export type TuiosState = {
   keys?: TuiosKeys;
   /** The window picture-in-picture shows, "" when it is off. */
   pip?: string;
+  /**
+   * The agents view's cursor: the window of the agent under it, and the
+   * focus tab ("thread", "changes", "checkpoints", "artifacts" or "pane").
+   * Both are "" while the view is closed. The agents.select and agents.tab
+   * events report each change.
+   */
+  agentsView?: { selected: string; tab: string };
   cols: number;
   rows: number;
 };
