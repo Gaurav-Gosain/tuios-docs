@@ -14,15 +14,18 @@ export const paneTricks: Track = {
   minutes: 4,
   next: ["your-keys", "power-moves"],
   setup: [
+    // Rain on the left fills its pane, so the corner view of it is full.
+    // The git log on the right has hashes for hints to label.
     { command: "newWindow", wait: 250 },
     { command: "mode", args: ["terminal"], wait: 150 },
+    { command: "type", args: ["rain\r"], wait: 300 },
+    { command: "newWindow", wait: 250 },
     {
       command: "type",
       args: ["cd projects/hello && git log --oneline\r"],
       wait: 300,
     },
-    { command: "newWindow", wait: 250 },
-    { command: "type", args: ["rain\r"], wait: 300 },
+    { command: "action", args: ["select_window_1"] },
   ],
   steps: [
     {
@@ -46,7 +49,7 @@ export const paneTricks: Track = {
     {
       id: "pin",
       title: "Pin a pane",
-      note: "p in window mode pins the pane you are on.",
+      note: "p in window mode pins the pane you are on, the rain.",
       keys: ["ctrl+b", "esc", "p"],
       done: on("pip", (e) => Boolean(e.data?.to)),
       hint: "ctrl+b, then esc for window mode. Then p.",
@@ -79,18 +82,18 @@ export const paneTricks: Track = {
       id: "labels",
       title: "Jump by number",
       note: "Every pane gets a big number. Type one to go there.",
-      keys: ["ctrl+b", "Q", "2"],
+      keys: ["ctrl+b", "Q", "1"],
       done: seq(opened("paneLabels"), on("window.focus")),
-      hint: "ctrl+b, then capital Q. Then press 2.",
+      hint: "ctrl+b, then capital Q. Then press 1 for the rain.",
       learned: "pane numbers",
     },
     {
       id: "hints",
       title: "Copy what you see",
       note: "Hints put a letter on each hash, path and link. Type it to copy.",
-      keys: ["ctrl+b", "1", "ctrl+b", "F", "a"],
+      keys: ["ctrl+b", "2", "ctrl+b", "F", "a"],
       done: seq(opened("hints"), closed("hints")),
-      hint: "ctrl+b 1 goes to the git log. ctrl+b F shows the letters. Press a.",
+      hint: "ctrl+b 2 goes to the git log. ctrl+b F shows the letters. Press a.",
       learned: "hints",
     },
     {
