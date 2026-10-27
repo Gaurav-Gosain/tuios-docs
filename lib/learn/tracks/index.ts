@@ -14,6 +14,7 @@ import { layouts } from "./layouts";
 import { makeItYours } from "./make-it-yours";
 import { paneTricks } from "./pane-tricks";
 import { powerMoves } from "./power-moves";
+import { surfaces } from "./surfaces";
 import { workspaces } from "./workspaces";
 import { yourKeys } from "./your-keys";
 
@@ -37,6 +38,7 @@ export const tracks: Track[] = [
   agents,
   cockpit,
   automation,
+  surfaces,
   yourKeys,
   makeItYours,
 ];
