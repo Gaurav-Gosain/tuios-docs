@@ -458,6 +458,10 @@ export function Lesson({
     <div
       ref={rootRef}
       className="fixed inset-0 z-[60] flex flex-col bg-fd-background"
+      // For tests/learn/tracks.mjs, which drives every track in a browser.
+      data-learn-phase={phase}
+      data-learn-step={lesson.index}
+      data-learn-holding={holdingCard ? "" : undefined}
     >
       <header className="flex h-14 shrink-0 items-center gap-4 border-fd-border border-b px-4 md:px-6">
         <Link
