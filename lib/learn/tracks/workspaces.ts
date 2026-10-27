@@ -1,6 +1,6 @@
 import { changed, closed, on, opened, seq, via } from "../matchers";
 import type { Track } from "../types";
-import { sampleWindow } from "./scenes";
+import { sampleWindow } from "./setups";
 
 /** Nine workspaces, moving windows between them, and the session rail. */
 export const workspaces: Track = {
@@ -8,6 +8,7 @@ export const workspaces: Track = {
   title: "Workspaces",
   blurb: "Nine desktops in one terminal, and a side rail that shows it all.",
   audience: "Many projects",
+  group: "everyday",
   minutes: 4,
   next: ["agents", "power-moves"],
   setup: [
@@ -45,9 +46,18 @@ export const workspaces: Track = {
       learned: "alt+number",
     },
     {
+      id: "send-stay",
+      title: "Send a window, stay here",
+      note: "ctrl+alt and a number sends the window away. You stay put.",
+      keys: ["ctrl+alt+2"],
+      done: on("window.workspace", (e) => e.data?.to === 2),
+      hint: "Hold ctrl and alt (option on a Mac), then press 2. The window leaves, and you stay on workspace 1.",
+      learned: "send and stay",
+    },
+    {
       id: "send",
-      title: "Send a window away",
-      note: "Shift and a number moves the window, and you follow it.",
+      title: "Send a window and follow",
+      note: "In the workspace menu, shift and a number moves the window, and you go with it.",
       keys: ["ctrl+b", "w", "#"],
       done: via(
         [

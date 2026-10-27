@@ -15,7 +15,7 @@ import { InstallTabs } from "@/components/home/install-tabs";
 import { formatTime } from "@/lib/learn/engine";
 import { type Progress, resumeStep } from "@/lib/learn/progress";
 import { runSetup, type TuiosInstance } from "@/lib/learn/runtime";
-import { tracks } from "@/lib/learn/tracks";
+import { trackGroups, tracks } from "@/lib/learn/tracks";
 import type { SetupCommand, Track } from "@/lib/learn/types";
 import { useEngineStatus } from "./hooks";
 import { Keycap, useHeldKeys } from "./keycaps";
@@ -128,23 +128,32 @@ export function Hub({
           </div>
           <p className="hidden font-mono text-fd-muted-foreground text-xs sm:block">
             press <Keycap label="1" size="sm" /> to{" "}
-            <Keycap label={String(tracks.length)} size="sm" />, or{" "}
+            <Keycap label={String(Math.min(tracks.length, 9))} size="sm" />, or{" "}
             <Keycap label="0" size="sm" /> to play
           </p>
         </div>
-        <div
-          className={`mt-8 grid gap-4 sm:grid-cols-2 ${tracks.length > 2 ? "lg:grid-cols-3" : ""}`}
-        >
-          {tracks.map((t, i) => (
-            <TrackCard
-              key={t.id}
-              track={t}
-              index={i}
-              progress={progress[t.id]}
-              onStart={() => onStart(t)}
-            />
-          ))}
-        </div>
+        {trackGroups.map((g) => {
+          const list = tracks.filter((t) => t.group === g.id);
+          if (list.length === 0) return null;
+          return (
+            <div key={g.id} className="mt-8">
+              <h3 className="font-mono text-fd-muted-foreground text-xs uppercase tracking-widest">
+                {g.title}
+              </h3>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {list.map((t) => (
+                  <TrackCard
+                    key={t.id}
+                    track={t}
+                    index={tracks.indexOf(t)}
+                    progress={progress[t.id]}
+                    onStart={() => onStart(t)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
         <button
           type="button"
           onClick={onPlay}
@@ -262,7 +271,7 @@ function TrackCard({
     >
       <MiniTiles seed={index} />
       <div className="flex items-center gap-3">
-        <Keycap label={String(index + 1)} />
+        {index < 9 ? <Keycap label={String(index + 1)} /> : null}
         <span className="rounded-full border border-fd-border px-2.5 py-0.5 font-mono text-fd-muted-foreground text-xs">
           {track.audience}
         </span>

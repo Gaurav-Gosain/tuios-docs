@@ -7,6 +7,7 @@ export const makeItYours: Track = {
   title: "Make it yours",
   blurb: "Hundreds of themes, borders, glyphs and a screen saver.",
   audience: "Ricers",
+  group: "yours",
   minutes: 3,
   next: ["power-moves", "agents"],
   setup: [
@@ -46,21 +47,19 @@ export const makeItYours: Track = {
     {
       id: "glyphs",
       title: "Pick heavy glyphs",
-      note: "The shapes tuios draws its frames and marks with.",
-      // The page opens on its first row, Agent features. Glyph set is two
-      // rows down, after Theme.
-      keys: ["down", "down", "right"],
+      note: "The shapes tuios draws its frames and marks with. / searches the settings.",
+      keys: ["/", { text: "glyph" }, "enter", { text: "heavy" }, "enter"],
       done: setting("glyphs"),
-      hint: "Down twice to Glyph set, then right to change it.",
+      hint: "Press / and type glyph. Enter opens the glyph picker. Type heavy and press enter.",
       learned: "glyphs",
     },
     {
       id: "borders",
       title: "Draw borders with them",
-      note: "Set Border style to glyphs and the frames turn heavy. Esc closes, so you can look.",
-      keys: ["down", "left", "esc"],
+      note: "Set Border style to glyphs and the frames turn heavy.",
+      keys: ["esc", "/", { text: "border style" }, "left", "esc", "esc"],
       done: seq(setting("borderStyle"), closed("settings")),
-      hint: "Down once to Border style, left to glyphs, then esc.",
+      hint: "Esc clears the search. Press / and type border style. Left picks glyphs. Esc twice closes the page.",
       learned: "border style",
     },
     {

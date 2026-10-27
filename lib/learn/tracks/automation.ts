@@ -1,6 +1,6 @@
 import { on, ranLine } from "../matchers";
 import type { Track } from "../types";
-import { sampleAgain, sampleWindow } from "./scenes";
+import { sampleAgain, sampleWindow } from "./setups";
 
 /** Tapes that drive tuios, then the control protocol and hooks. */
 export const automation: Track = {
@@ -8,6 +8,7 @@ export const automation: Track = {
   title: "Automation",
   blurb: "Tapes that drive tuios, a JSON protocol, and hooks.",
   audience: "Scripters",
+  group: "build",
   minutes: 4,
   next: ["agents", "power-moves"],
   setup: [

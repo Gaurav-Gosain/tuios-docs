@@ -83,7 +83,11 @@ export function LearnApp() {
       if (e.key === "0") {
         e.preventDefault();
         startPlay();
-      } else if (Number.isInteger(n) && n >= 1 && n <= tracks.length) {
+      } else if (
+        Number.isInteger(n) &&
+        n >= 1 &&
+        n <= Math.min(tracks.length, 9)
+      ) {
         e.preventDefault();
         start(tracks[n - 1]);
       }

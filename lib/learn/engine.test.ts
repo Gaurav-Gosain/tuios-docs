@@ -10,7 +10,7 @@ import {
 } from "./engine";
 import { keyBytes } from "./keys";
 import { changed, moved, on, seq, via, zoomed } from "./matchers";
-import { tracks } from "./tracks";
+import { trackGroups, tracks } from "./tracks";
 import { fromTmux } from "./tracks/from-tmux";
 import type { Track, TuiosEvent, TuiosState } from "./types";
 
@@ -73,7 +73,7 @@ describe("from-tmux split step", () => {
     s = feed(s, key("ctrl+b"), 1).state;
     expect(s.pressed).toBe(1);
     s = feed(s, ev("prefix", { from: "", to: "prefix" }), 2).state;
-    s = feed(s, key("|"), 3).state;
+    s = feed(s, key("%"), 3).state;
     expect(s.pressed).toBe(2);
     s = feed(s, act("prefix_split_vertical"), 4).state;
     const r = feed(s, ev("window.open", { id: "b", count: 2 }), 5);
@@ -179,7 +179,8 @@ describe("tracks", () => {
       const stepIds = new Set(t.steps.map((s) => s.id));
       expect(stepIds.size).toBe(t.steps.length);
       expect(t.steps.length).toBeGreaterThanOrEqual(5);
-      expect(t.steps.length).toBeLessThanOrEqual(9);
+      // Long enough to build a real workflow, short enough to finish.
+      expect(t.steps.length).toBeLessThanOrEqual(12);
       for (const s of t.steps) {
         expect(Boolean(s.done) || Boolean(s.explainer)).toBe(true);
         expect(s.title.split(/\s+/).length).toBeLessThanOrEqual(6);
@@ -190,6 +191,15 @@ describe("tracks", () => {
         expect(tracks.some((o) => o.id === n)).toBe(true);
       }
     }
+  });
+
+  test("tracks are listed in the order of their groups", () => {
+    // Keys 1 to 9 pick tracks by this order, and the hub shows them by
+    // group, so the two orders must agree or a keycap names the wrong card.
+    const order = trackGroups.map((g) => g.id);
+    const seen = tracks.map((t) => order.indexOf(t.group));
+    expect(seen.every((g) => g >= 0)).toBe(true);
+    expect(seen).toEqual([...seen].sort((a, b) => a - b));
   });
 
   test("copy has no em dashes and no dashes made of hyphens", () => {

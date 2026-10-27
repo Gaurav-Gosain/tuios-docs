@@ -16,6 +16,7 @@ export const basics: Track = {
   title: "The basics",
   blurb: "Windows, typing, the leader key and help. From zero.",
   audience: "New here",
+  group: "start",
   minutes: 4,
   next: ["layouts", "power-moves"],
   steps: [

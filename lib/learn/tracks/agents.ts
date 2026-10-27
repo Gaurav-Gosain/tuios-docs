@@ -1,6 +1,6 @@
 import { agent, changed, on, opened } from "../matchers";
 import type { Track } from "../types";
-import { sampleAgain, sampleWindow } from "./scenes";
+import { sampleAgain, sampleWindow } from "./setups";
 
 /**
  * A pretend Claude Code in a pane: it works, asks, gets an answer and
@@ -12,6 +12,7 @@ export const agents: Track = {
   title: "Agents",
   blurb: "Run coding agents side by side and never miss a question.",
   audience: "Agent herders",
+  group: "agents",
   minutes: 4,
   next: ["automation", "workspaces"],
   setup: [
@@ -77,7 +78,7 @@ export const agents: Track = {
       hint: "",
       explainer: {
         art: "mail",
-        body: "On a real machine agents find each other with tuios list-agents, leave messages, and ask you questions. ctrl+b M opens your inbox.",
+        body: "On a real machine agents find each other with tuios list-agents, mail each other, and ask you questions. ctrl+b M opens the mail. ctrl+b i opens the agents view.",
         href: "/docs/agent-messaging",
         linkText: "Agent messaging",
       },

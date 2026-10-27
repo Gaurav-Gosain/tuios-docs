@@ -60,6 +60,17 @@ export const cheatsheet: CheatGroup[] = [
     ],
   },
   {
+    title: "Pane tricks",
+    rows: [
+      { keys: ["ctrl+b", "g"], label: "scratch pane" },
+      { keys: ["p"], label: "pin in the corner", needs: "window" },
+      { keys: ["ctrl+b", "Q"], label: "pane numbers" },
+      { keys: ["ctrl+b", "F"], label: "copy with hints" },
+      { keys: ["B"], label: "the beam", needs: "window" },
+      { keys: ["ctrl+b", "i"], label: "agents view" },
+    ],
+  },
+  {
     title: "Find anything",
     rows: [
       { keys: ["ctrl+p"], label: "command palette" },
@@ -67,6 +78,7 @@ export const cheatsheet: CheatGroup[] = [
       { keys: ["ctrl+b", ","], label: "settings" },
       { keys: ["ctrl+b", "D", "k"], label: "show my keys" },
       { keys: ["S"], label: "screen saver", needs: "window" },
+      { keys: ["U"], label: "keys of tmux or zellij", needs: "window" },
     ],
   },
 ];

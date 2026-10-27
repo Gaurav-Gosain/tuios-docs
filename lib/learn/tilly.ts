@@ -319,12 +319,12 @@ export const GREET_LINES: Record<string, readonly string[]> = {
     "Hello. I live in a terminal too. Let us open your first window.",
   ],
   "from-tmux": [
-    "Coming from tmux? Your fingers already know most of this.",
-    "Hi. ctrl+b still leads here, so you have a head start.",
+    "Coming from tmux? First we turn on your own keys.",
+    "Hi. ctrl+b leads here too, and the tmux preset does the rest.",
   ],
   "from-zellij": [
-    "Hi. Panes, tabs and floats all have a home here. Let me show you where.",
-    "Coming from zellij? Same ideas, a few new keys.",
+    "Hi. One key turns on the zellij keys. Then panes, tabs and floats.",
+    "Coming from zellij? ctrl+g and lock mode are here too.",
   ],
   layouts: [
     "Layouts are my favourite part. My face is one.",
@@ -337,6 +337,14 @@ export const GREET_LINES: Record<string, readonly string[]> = {
   "power-moves": [
     "You know the basics. These keys save the most time.",
     "Hi again. Palette, launcher and copy mode are next.",
+  ],
+  "pane-tricks": [
+    "A busy screen? These small tools keep it calm.",
+    "Hi. A scratch pane, a corner pane and a beam. Let us try them.",
+  ],
+  "your-keys": [
+    "Your keys, your rules. Let us try a few presets.",
+    "Hi. Keys from tmux, screen or zellij, one menu away.",
   ],
   "make-it-yours": [
     "Let us make tuios look like yours.",
@@ -363,13 +371,15 @@ export const FINISH_LINES: Record<string, readonly string[]> = {
     "That is the basics. You can drive tuios now.",
     "Windows, modes, the leader key and help. All yours.",
   ],
-  "from-tmux": [
-    "Done. Your tmux habits carry over, and now you know the differences.",
-  ],
-  "from-zellij": ["Done. Panes, floats and tabs, the tuios way."],
+  "from-tmux": ["Done. Your tmux keys work here, and window mode is a bonus."],
+  "from-zellij": ["Done. Your zellij keys, locked and ready."],
   layouts: ["You shaped every layout there is. My face approves."],
   workspaces: ["Nine desks and you know your way around all of them."],
   "power-moves": ["Those are the keys that stick. Well played."],
+  "pane-tricks": [
+    "Scratch, pin, numbers, hints and a beam. Your screen is tidy now.",
+  ],
+  "your-keys": ["Any preset, any action by name. The keys are yours now."],
   "make-it-yours": ["It looks like yours now. Take it home."],
   agents: ["Now you can run agents and still get your own work done."],
   automation: ["You made tuios drive itself. That was fun to watch."],
