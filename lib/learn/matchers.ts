@@ -100,7 +100,11 @@ export function notified(pattern: RegExp): Matcher {
   );
 }
 
-/** A setting the settings page changes, such as "borderStyle". */
+/**
+ * A look changed: "glyphs", "borderStyle", or a config path tuios reports,
+ * such as "appearance.window_title_style". The list is in
+ * cmd/tuios-wasm/README.md in the tuios repo.
+ */
 export function setting(name: string): Matcher {
   return on("setting", (event) => event.data?.name === name);
 }

@@ -16,6 +16,7 @@ import { paneTricks } from "./pane-tricks";
 import { powerMoves } from "./power-moves";
 import { surfaces } from "./surfaces";
 import { review } from "./review";
+import { sessions } from "./sessions";
 import { ship } from "./ship";
 import { workspaces } from "./workspaces";
 import { yourKeys } from "./your-keys";
@@ -45,6 +46,7 @@ export const tracks: Track[] = [
   ship,
   yourKeys,
   makeItYours,
+  sessions,
 ];
 
 export function findTrack(id: string | null | undefined) {

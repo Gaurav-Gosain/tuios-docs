@@ -347,8 +347,12 @@ export const GREET_LINES: Record<string, readonly string[]> = {
     "Hi. Keys from tmux, screen or zellij, one menu away.",
   ],
   "make-it-yours": [
-    "Let us make tuios look like yours.",
-    "Hi. Themes, glyphs, borders. Pick what you like.",
+    "Let us make tuios look like yours. Colours first.",
+    "Hi. Themes, an editor, glyphs and borders. Pick what you like.",
+  ],
+  sessions: [
+    "Sessions keep your work when the terminal closes. Let us look around.",
+    "Hi. One rail for every session, every machine and your phone.",
   ],
   agents: [
     "Agents live in panes here. I will show you how to keep an eye on them.",
@@ -396,7 +400,10 @@ export const FINISH_LINES: Record<string, readonly string[]> = {
     "Scratch, pin, numbers, hints and the spotlight. Your screen is tidy now.",
   ],
   "your-keys": ["Any preset, any action by name. The keys are yours now."],
-  "make-it-yours": ["It looks like yours now. Take it home."],
+  "make-it-yours": [
+    "It looks like yours now. One line shares it with a friend.",
+  ],
+  sessions: ["Your work outlives the terminal now, on every machine you have."],
   agents: ["Now you can run agents and still get your own work done."],
   cockpit: ["You ran a whole team of agents from one view. Nice work."],
   automation: ["You made tuios drive itself. That was fun to watch."],
