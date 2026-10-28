@@ -37,7 +37,7 @@ export const surfaces: Track = {
     {
       id: "read",
       title: "Read the markup",
-      note: "A TML file is a tree of parts with a JSON state.",
+      note: "TML is the markup tuios draws forms and dashboards from. A file is a tree of parts with a JSON state.",
       keys: [{ text: "cat deploy.tml" }, "enter"],
       needs: "terminal",
       done: ranLine(/^cat\s+(~\/)?deploy\.tml/),
@@ -57,7 +57,7 @@ export const surfaces: Track = {
     {
       id: "open",
       title: "Open the form",
-      note: "With --wait, the command waits for your answer.",
+      note: "A surface is a TML file that tuios shows live, in a popup or a pane. With --wait, the command waits for your answer.",
       keys: [{ text: "tuios tml show deploy.tml --wait" }, "enter"],
       needs: "terminal",
       done: on("tml.open", (e) => e.data?.target === "popup"),
@@ -67,7 +67,7 @@ export const surfaces: Track = {
     {
       id: "focus",
       title: "Move to the form",
-      note: "Your shell keeps the keys. ctrl+b 2 moves them to the form. A click works too.",
+      note: "The keyboard focus stays on your shell. ctrl+b 2 moves the focus to the form. A click works too.",
       keys: ["ctrl+b", "2"],
       done: on("window.focus", (e) => windowOf(e, e.data?.to)?.kind === "tml"),
       hint: "Press ctrl+b, then 2. Or click the form.",
@@ -122,7 +122,7 @@ export const surfaces: Track = {
     {
       id: "float",
       title: "Float the dashboard",
-      note: "ctrl+b right moves to it. ctrl+b t f floats it. The same keys dock it again.",
+      note: "ctrl+b right moves to it. ctrl+b t f floats it. Press ctrl+b t f again to put it back in the tiles.",
       keys: ["ctrl+b", "right", "ctrl+b", "t", "f"],
       done: via(
         ["window_prefix_float"],
