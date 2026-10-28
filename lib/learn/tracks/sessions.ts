@@ -102,7 +102,7 @@ export const sessions: Track = {
       hint: "",
       explainer: {
         art: "detach",
-        body: "A return note says what comes next. ctrl+b I writes one for the session. The dock shows it when you come back.",
+        body: "A return note says what comes next. Press ctrl+b, then shift+i, to write one for the session. The dock shows it when you come back.",
         href: "/docs/sessions",
         linkText: "Sessions",
       },
