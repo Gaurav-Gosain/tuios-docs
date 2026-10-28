@@ -17,7 +17,7 @@ function agentOf(harness: string, to: string) {
  */
 export const cockpit: Track = {
   id: "cockpit",
-  title: "The agent cockpit",
+  title: "The agents view",
   blurb: "Answer, reply to and start agents from one view.",
   audience: "Agent herders",
   group: "agents",
@@ -64,7 +64,7 @@ export const cockpit: Track = {
     {
       id: "allow",
       title: "Allow the edit",
-      note: "a allows it once. A always allows it. r rejects it, and R rejects it with a reason.",
+      note: "Press a to allow it once. Press shift+a to always allow it. Press r to reject it, or shift+r to give a reason.",
       keys: ["a"],
       done: agentOf("claude-code", "working"),
       hint: "Press a. claude goes back to work.",
@@ -73,7 +73,7 @@ export const cockpit: Track = {
     {
       id: "peek",
       title: "Peek at the question",
-      note: "g goes to the top row: gemini asks which colors to use. Space reads its question.",
+      note: "g goes to the top row: gemini asks which colours to use. Space reads its question.",
       keys: ["g", "space"],
       done: opened("peek"),
       hint: "Press g, then space.",
@@ -100,7 +100,7 @@ export const cockpit: Track = {
     {
       id: "new",
       title: "Start three attempts",
-      note: "n opens the New agent sheet. Type the task. shift+tab goes back to Attempts, and + adds one.",
+      note: "An attempt is one agent that tries the task. Several attempts of one task make a fan. n opens the New agent sheet, + adds an attempt.",
       keys: [
         "n",
         { text: "add a footer" },
@@ -112,16 +112,16 @@ export const cockpit: Track = {
         "enter",
       ],
       done: seq(opened("newAgent"), times(3, on("window.open"))),
-      hint: "Press n and type the task. Press shift+tab three times, + twice, then enter.",
+      hint: "Press n and type the task. Press shift+tab three times to reach Attempts, + twice, then enter.",
       learned: "new agent",
     },
     {
       id: "compare",
       title: "Compare, then open one",
-      note: "G goes to the last row, an attempt. c shows the attempts side by side, and enter opens the one under the cursor.",
+      note: "shift+g goes to the last row, an attempt. c shows the attempts of the fan side by side. Enter opens the one under the cursor.",
       keys: ["G", "c", "enter"],
       done: seq(opened("compare"), closed("agents")),
-      hint: "Press G, then c. Wait for the attempts to finish, then press enter.",
+      hint: "Press shift+g, then c. Wait for the attempts to finish, then press enter.",
       learned: "compare",
     },
   ],
