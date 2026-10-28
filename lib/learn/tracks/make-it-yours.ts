@@ -23,7 +23,7 @@ export const makeItYours: Track = {
     {
       id: "theme",
       title: "Try on a theme",
-      note: "Type to filter, arrows to browse. Watch top change color.",
+      note: "Type to filter, arrows to browse. Watch top change colour.",
       keys: [
         "ctrl+p",
         { text: "theme" },
@@ -72,7 +72,7 @@ export const makeItYours: Track = {
       keys: ["S", "esc"],
       needs: "window",
       done: seq(opened("screensaver"), closed("screensaver")),
-      hint: "Capital S, so shift and s. Enjoy it, then press any key.",
+      hint: "Press shift+s. Enjoy it, then press any key.",
       learned: "screen saver",
     },
     {

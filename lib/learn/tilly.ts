@@ -340,7 +340,7 @@ export const GREET_LINES: Record<string, readonly string[]> = {
   ],
   "pane-tricks": [
     "A busy screen? These small tools keep it calm.",
-    "Hi. A scratch pane, a corner pane and a beam. Let us try them.",
+    "Hi. A scratch pane, a corner pane and the spotlight. Let us try them.",
   ],
   "your-keys": [
     "Your keys, your rules. Let us try a few presets.",
@@ -377,7 +377,7 @@ export const FINISH_LINES: Record<string, readonly string[]> = {
   workspaces: ["Nine desks and you know your way around all of them."],
   "power-moves": ["Those are the keys that stick. Well played."],
   "pane-tricks": [
-    "Scratch, pin, numbers, hints and a beam. Your screen is tidy now.",
+    "Scratch, pin, numbers, hints and the spotlight. Your screen is tidy now.",
   ],
   "your-keys": ["Any preset, any action by name. The keys are yours now."],
   "make-it-yours": ["It looks like yours now. Take it home."],

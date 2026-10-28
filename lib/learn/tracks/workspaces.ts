@@ -73,7 +73,7 @@ export const workspaces: Track = {
         ],
         on("workspace"),
       ),
-      hint: "ctrl+b, w, then shift and 3, which is #.",
+      hint: "ctrl+b, w, then shift+3, which is #.",
       learned: "move window",
     },
     {
@@ -104,7 +104,7 @@ export const workspaces: Track = {
       note: "A picker with a preview of each one.",
       keys: ["ctrl+b", "W", "enter"],
       done: seq(opened("workspaceSwitcher"), closed("workspaceSwitcher")),
-      hint: "ctrl+b, then capital W. Arrows pick one, enter goes there.",
+      hint: "ctrl+b, then shift+w. Arrows pick one, enter goes there.",
       learned: "workspace switcher",
     },
     {

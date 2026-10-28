@@ -24,7 +24,7 @@ export const powerMoves: Track = {
       note: "Every key you press now pops up bottom right.",
       keys: ["ctrl+b", "D", "k"],
       done: notified(/^Showkeys: ON/),
-      hint: "ctrl+b, then capital D for the debug menu, then k.",
+      hint: "ctrl+b, then shift+d for the debug menu, then k.",
       learned: "showkeys",
     },
     {

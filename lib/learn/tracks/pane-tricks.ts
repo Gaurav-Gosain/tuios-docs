@@ -3,12 +3,13 @@ import type { Track } from "../types";
 
 /**
  * Small tools for a busy screen: the scratch pane, picture-in-picture, the
- * pane numbers, hints that copy what you see, and the beam.
+ * pane numbers, hints that copy what you see, and the spotlight.
  */
 export const paneTricks: Track = {
   id: "pane-tricks",
   title: "Pane tricks",
-  blurb: "A scratch pane, a pane in the corner, numbers, hints and a beam.",
+  blurb:
+    "A scratch pane, a pane in the corner, numbers, hints and the spotlight.",
   audience: "Busy screens",
   group: "everyday",
   minutes: 4,
@@ -84,7 +85,7 @@ export const paneTricks: Track = {
       note: "Every pane gets a big number. Type one to go there.",
       keys: ["ctrl+b", "Q", "1"],
       done: seq(opened("paneLabels"), on("window.focus")),
-      hint: "ctrl+b, then capital Q. Then press 1 for the rain.",
+      hint: "ctrl+b, then shift+q. Then press 1 for the rain.",
       learned: "pane numbers",
     },
     {
@@ -99,10 +100,10 @@ export const paneTricks: Track = {
     {
       id: "spotlight",
       title: "Light up one pane",
-      note: "The beam dims the rest of the screen. Good for a demo.",
+      note: "The spotlight dims the rest of the screen. Good for a demo.",
       keys: ["ctrl+b", "B", "esc"],
       done: seq(opened("spotlight"), closed("spotlight")),
-      hint: "ctrl+b, then capital B. Look, then esc turns it off.",
+      hint: "ctrl+b, then shift+b. Look, then esc turns it off.",
       learned: "spotlight",
     },
   ],
