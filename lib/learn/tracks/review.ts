@@ -83,7 +83,7 @@ export const review: Track = {
     {
       id: "hunk",
       title: "Jump to the next hunk",
-      note: "] goes to the next hunk, [ to the one before. } and { go by file.",
+      note: "A hunk is one block of changed lines. ] goes to the next hunk, [ to the one before. } and { go by file.",
       keys: ["]"],
       done: on("review.move"),
       hint: "Press ]. The cursor moves to the next block of changes.",
