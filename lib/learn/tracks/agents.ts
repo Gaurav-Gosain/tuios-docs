@@ -88,7 +88,7 @@ export const agents: Track = {
     {
       id: "view",
       title: "Every agent in one view",
-      note: "ctrl+b i opens the agents view. The next track, The agent cockpit, shows what it does.",
+      note: "ctrl+b i opens the agents view. The next track, The agents view, shows what it does.",
       keys: ["ctrl+b", "i"],
       done: opened("agents"),
       hint: "ctrl+b, then i. esc closes it.",
