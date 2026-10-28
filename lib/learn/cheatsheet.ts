@@ -66,7 +66,7 @@ export const cheatsheet: CheatGroup[] = [
       { keys: ["p"], label: "pin in the corner", needs: "window" },
       { keys: ["ctrl+b", "Q"], label: "pane numbers" },
       { keys: ["ctrl+b", "F"], label: "copy with hints" },
-      { keys: ["B"], label: "the beam", needs: "window" },
+      { keys: ["B"], label: "the spotlight", needs: "window" },
       { keys: ["ctrl+b", "i"], label: "agents view" },
     ],
   },

@@ -30,7 +30,7 @@ export const yourKeys: Track = {
       keys: ["U"],
       needs: "window",
       done: opened("presets"),
-      hint: "Press capital U, so shift and u.",
+      hint: "Press shift+u.",
       learned: "presets",
     },
     {
@@ -45,10 +45,10 @@ export const yourKeys: Track = {
     {
       id: "split",
       title: "Split the screen way",
-      note: "ctrl+a, then capital S, as in screen.",
+      note: "ctrl+a, then shift+s, as in screen.",
       keys: ["ctrl+a", "S"],
       done: via(["prefix_split_horizontal"], on("window.open")),
-      hint: "Hold ctrl and tap a, let go. Then shift and s.",
+      hint: "Hold ctrl and tap a, let go. Then shift+s.",
       learned: "split, screen keys",
     },
     {

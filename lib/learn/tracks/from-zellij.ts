@@ -39,7 +39,7 @@ export const fromZellij: Track = {
         "keys",
         (e) => (e.data?.to as { preset?: string })?.preset === "zellij",
       ),
-      hint: "Press capital U. Press down three times to zellij, then enter.",
+      hint: "Press shift+u. Press down three times to zellij, then enter.",
       learned: "zellij preset",
     },
     {
