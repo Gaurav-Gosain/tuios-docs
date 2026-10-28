@@ -1,0 +1,21 @@
+flowchart LR
+  push([git push]) --> ci
+  subgraph ci [CI]
+    direction TB
+    lint[Lint] --> test[Tests] --> build[Build image]
+  end
+  ci --> scan{Image scan}
+  scan -->|CVE| block([Block release])
+  scan -->|clean| canary
+  subgraph prod [Production]
+    direction TB
+    canary[Canary 5%] --> health{Error rate OK?}
+    health -->|yes| full([Roll out 100%])
+    health -->|no| back([Roll back])
+  end
+  classDef ok fill:#a6e3a1,color:#11111b,stroke:#a6e3a1
+  classDef stop fill:#f38ba8,color:#11111b,stroke:#f38ba8
+  classDef go fill:#cba6f7,color:#11111b,stroke:#cba6f7
+  class full ok
+  class block,back stop
+  class push go
