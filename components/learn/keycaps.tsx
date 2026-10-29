@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { chordParts, keyLabel, pressedNames } from "@/lib/learn/keys";
 import type { KeyItem } from "@/lib/learn/types";
 
@@ -10,12 +10,15 @@ type Size = "sm" | "md" | "xl";
 export function Keycap({
   label,
   size = "md",
+  text,
   held,
   done,
   next,
 }: {
   label: string;
   size?: Size;
+  /** Typed text, such as a command, which wraps at its spaces. */
+  text?: boolean;
   held?: boolean;
   done?: boolean;
   next?: boolean;
@@ -24,6 +27,7 @@ export function Keycap({
     <kbd
       className="lk"
       data-size={size}
+      data-text={text || undefined}
       data-held={held || undefined}
       data-done={done || undefined}
       data-next={next || undefined}
@@ -52,8 +56,24 @@ export function KeySequence({
   pulseNext?: boolean;
 }) {
   const gap = size === "xl" ? "gap-2.5" : size === "sm" ? "gap-1" : "gap-2";
+  // The held keys light one item: the one the reader is pressing. The same
+  // key can be in the sequence twice, as in "ctrl+b z ctrl+b z", so the item
+  // is found by position. Its index is taken when a new key goes down, from
+  // the count before that key reached the engine, since the engine can count
+  // the key in the same render that first shows it held.
+  // A new sequence, the next step's, starts over.
+  const last = useRef({ items, held: new Set<string>(), pressed, at: pressed });
+  if (last.current.items !== items) {
+    last.current = { items, held: new Set(), pressed, at: pressed };
+  }
+  const grew = [...(held ?? [])].some((k) => !last.current.held.has(k));
+  const at = grew ? Math.min(last.current.pressed, pressed) : last.current.at;
+  last.current = { items, held: new Set(held), pressed, at };
+  const lit = heldIndex(items, held, [at, pressed - 1, pressed]);
   return (
-    <span className={`inline-flex flex-wrap items-center ${gap}`}>
+    <span
+      className={`inline-flex min-w-0 max-w-full flex-wrap items-center ${gap}`}
+    >
       {items.map((item, index) => {
         const done = index < pressed;
         const next = pulseNext && index === pressed;
@@ -73,7 +93,7 @@ export function KeySequence({
             {typeof item === "string" ? (
               <span className={`inline-flex items-center ${gap}`}>
                 {chordParts(item).map((part, i) => (
-                  <Fragment key={part}>
+                  <Fragment key={`${i}-${part}`}>
                     {i > 0 ? (
                       <span
                         aria-hidden
@@ -85,7 +105,7 @@ export function KeySequence({
                     <Keycap
                       label={keyLabel(part)}
                       size={size}
-                      held={isHeld(held, part)}
+                      held={index === lit && isHeld(held, part)}
                       done={done}
                       next={next}
                     />
@@ -96,6 +116,7 @@ export function KeySequence({
               <Keycap
                 label={item.text.trim()}
                 size={size}
+                text
                 done={done}
                 next={next}
               />
@@ -105,6 +126,30 @@ export function KeySequence({
       })}
     </span>
   );
+}
+
+/**
+ * The item the held keys belong to: the first of the candidate positions
+ * whose chord has a held key, or -1. A typed-text item passes its turn to
+ * the key after it, which ends the text.
+ */
+function heldIndex(
+  items: KeyItem[],
+  held: Set<string> | undefined,
+  candidates: number[],
+) {
+  if (!held || held.size === 0) return -1;
+  for (const c of candidates) {
+    const at = typeof items[c] === "object" ? c + 1 : c;
+    const item = items[at];
+    if (
+      typeof item === "string" &&
+      chordParts(item).some((part) => isHeld(held, part))
+    ) {
+      return at;
+    }
+  }
+  return -1;
 }
 
 function isHeld(held: Set<string> | undefined, part: string) {

@@ -556,10 +556,12 @@ export function Lesson({
             !step.explainer &&
             !termFocused &&
             catching === null ? (
+              // It sits above tuios's last two rows: the window's bottom
+              // border, with its mode label in the middle, and the dock.
               <button
                 type="button"
                 onClick={focusTerminal}
-                className="learn-pop absolute bottom-5 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-[#1e1e2e]/90 px-4 py-2 font-mono text-[#cdd6f4] text-sm shadow-xl backdrop-blur transition-colors hover:border-[#bb9af7]"
+                className="learn-pop absolute bottom-20 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-[#1e1e2e]/90 px-4 py-2 font-mono text-[#cdd6f4] text-sm shadow-xl backdrop-blur transition-colors hover:border-[#bb9af7]"
               >
                 <MousePointerClick className="size-4 text-[#bb9af7]" />
                 {leftTerminal

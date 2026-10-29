@@ -1,7 +1,7 @@
 // Drives every /learn track in headless Chromium, with the keys a reader
 // presses, and checks that the engine marks each step done.
 //
-//   bun tests/learn/tracks.ts <base-url> [track-id...] [--out DIR]
+//   bun tests/learn/tracks.ts <base-url> [track-id...] [--out DIR] [--size WxH]
 //   bun tests/learn/tracks.ts <base-url> --phone [--out DIR]
 //
 // <base-url> serves the site with an engine in public/learn, for example
@@ -16,12 +16,15 @@
 // Each finished track leaves a frame, and every step leaves one under
 // --out/steps when --frames is given.
 //
+// --size WxH sets the window, 1440x900 unless given.
+//
 // --phone loads /learn at a phone's size and saves a frame of the page.
 //
 // It exits 1 when any step failed.
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type Page } from "playwright-core";
+import { chordParts } from "../../lib/learn/keys";
 import { findTrack, tracks } from "../../lib/learn/tracks";
 import type { KeyItem, Step, Track } from "../../lib/learn/types";
 
@@ -40,6 +43,7 @@ function flag(name: string) {
 const out = path.resolve(option("--out") ?? "learn-run");
 const phone = flag("--phone");
 const frames = flag("--frames");
+const [width, height] = (option("--size") ?? "1440x900").split("x").map(Number);
 const base = (args.shift() ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 const picked = args.length
   ? args.map((id) => {
@@ -130,6 +134,88 @@ async function press(page: Page, item: KeyItem) {
   else await page.keyboard.type(item.text, { delay: 25 });
 }
 
+/** Whether a step names the same key twice, such as "ctrl+b z ctrl+b z". */
+function repeatsKey(step: Step) {
+  const parts = step.keys.flatMap((k) =>
+    typeof k === "string" ? chordParts(k) : [],
+  );
+  return new Set(parts).size < parts.length;
+}
+
+/**
+ * The lesson's caps, as the item each belongs to and whether it is held or
+ * done. The caps come in the order of the step's keys: one per key of a
+ * chord, one for typed text.
+ */
+async function caps(page: Page, keys: KeyItem[]) {
+  const owner = keys.flatMap((k, i) =>
+    typeof k === "string" ? chordParts(k).map(() => i) : [i],
+  );
+  const marks = await page.$$eval(
+    '[data-learn-phase] .lk[data-size="xl"]',
+    (els) =>
+      els.map((el) => ({
+        held: el.hasAttribute("data-held"),
+        done: el.hasAttribute("data-done"),
+      })),
+  );
+  if (marks.length !== owner.length) return null;
+  const held = new Set<number>();
+  const done = new Set<number>();
+  marks.forEach((m, c) => {
+    if (m.held) held.add(owner[c] as number);
+    if (m.done) done.add(owner[c] as number);
+  });
+  return { held: [...held], done: [...done] };
+}
+
+/**
+ * Presses item j of a step that repeats a key, holding it while it reads
+ * the caps. The held caps must be item j's alone, and once it is let go
+ * every item up to j must be done. Returns what went wrong, or "".
+ */
+async function pressAndCheck(page: Page, keys: KeyItem[], j: number) {
+  const item = keys[j] as string;
+  const parts = item === "+" ? ["+"] : pwKey(item).split("+");
+  for (const p of parts) await page.keyboard.down(p);
+  await page.waitForTimeout(250);
+  const during = await caps(page, keys);
+  for (const p of [...parts].reverse()) await page.keyboard.up(p);
+  await page.waitForTimeout(260);
+  const after = await caps(page, keys);
+  const want = keys.slice(0, j + 1).map((_, i) => i);
+  const problems: string[] = [];
+  if (during && (during.held.length !== 1 || during.held[0] !== j)) {
+    problems.push(`held [${during.held}] while pressing ${j}`);
+  }
+  if (after && after.done.join() !== want.join()) {
+    problems.push(`done [${after.done}] after ${j}, want [${want}]`);
+  }
+  return problems.join("; ");
+}
+
+/**
+ * The caps in the step card and the keys learned list whose text does not
+ * fit, in the cap or in its box, by their text. Empty when all fit.
+ */
+function capsPastEdge(page: Page) {
+  return page.$$eval("[data-learn-phase] aside .lk", (els) =>
+    els
+      .filter((el) => {
+        const box = el.closest(".rounded-xl");
+        if (!box) return false;
+        const pad = Number.parseFloat(getComputedStyle(box).paddingRight);
+        // A cap squeezed by its row keeps its box and spills its text.
+        return (
+          el.scrollWidth > el.clientWidth + 1 ||
+          el.getBoundingClientRect().right >
+            box.getBoundingClientRect().right - pad + 1
+        );
+      })
+      .map((el) => el.textContent ?? ""),
+  );
+}
+
 const attr = (page: Page, name: string) =>
   page.evaluate(
     (n) =>
@@ -189,6 +275,16 @@ async function runTrack(page: Page, track: Track) {
     );
     await page.waitForTimeout(700);
     const started = Date.now();
+    const past = await capsPastEdge(page);
+    if (past.length) {
+      results.push({
+        track: track.id,
+        step: `${step.id} fit`,
+        ok: false,
+        ms: 0,
+      });
+      console.log(`FAIL ${name} fit: ${past.join(", ")} does not fit`);
+    }
     if (step.explainer) {
       // The sample the setup typed is the screen to check, so the frame is
       // taken before the button.
@@ -218,10 +314,27 @@ async function runTrack(page: Page, track: Track) {
         ) as HTMLElement | null
       )?.focus(),
     );
-    for (const item of step.keys) {
+    // A step that names a key twice also checks that the caps follow the
+    // reader's place: the first ctrl+b marks the first ctrl+b cap.
+    const check = repeatsKey(step);
+    const marks: string[] = [];
+    for (const [j, item] of step.keys.entries()) {
+      if (check && typeof item === "string") {
+        const problem = await pressAndCheck(page, step.keys, j);
+        if ((await stepIndex(page)) !== i) break;
+        if (problem) marks.push(problem);
+        continue;
+      }
       await press(page, item);
       await page.waitForTimeout(typeof item === "string" ? 260 : 120);
       if ((await stepIndex(page)) !== i) break;
+    }
+    if (check) {
+      const ok = marks.length === 0;
+      results.push({ track: track.id, step: `${step.id} caps`, ok, ms: 0 });
+      console.log(
+        `${ok ? "ok  " : "FAIL"} ${name} caps${ok ? "" : `: ${marks.join("; ")}`}`,
+      );
     }
     const ok = await waitFor(
       page,
@@ -289,7 +402,7 @@ try {
     for (const track of picked) {
       // A new context per track: no saved progress, so no resume.
       const ctx = await browser.newContext({
-        viewport: { width: 1440, height: 900 },
+        viewport: { width: width as number, height: height as number },
       });
       await ctx.addInitScript(HELPERS);
       const page = await ctx.newPage();

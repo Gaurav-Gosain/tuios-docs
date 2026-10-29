@@ -142,6 +142,50 @@ describe("hints", () => {
   });
 });
 
+describe("the place in a sequence that repeats a key", () => {
+  const track = (keys: Track["steps"][number]["keys"]): Track => ({
+    id: "t",
+    title: "t",
+    blurb: "",
+    audience: "",
+    minutes: 1,
+    steps: [{ id: "x", title: "x", keys, done: on("never"), hint: "" }],
+  });
+  const pressed = (t: Track, keys: string[], mode = "window") =>
+    run(
+      t,
+      keys.map((k) => key(k, mode)),
+    ).pressed;
+
+  test("the second ctrl+b is the third key, not a start over", () => {
+    const t = track(["ctrl+b", "z", "ctrl+b", "z"]);
+    expect(pressed(t, ["ctrl+b"])).toBe(1);
+    expect(pressed(t, ["ctrl+b", "z", "ctrl+b"])).toBe(3);
+  });
+
+  test("the ctrl tuios reports before ctrl+b is no wrong key", () => {
+    const t = track(["ctrl+b", "z", "ctrl+b", "z"]);
+    expect(pressed(t, ["leftctrl", "ctrl+b", "z", "leftctrl", "ctrl+b"])).toBe(
+      3,
+    );
+  });
+
+  test("a wrong key keeps the longest start that still fits", () => {
+    const t = track(["j", "j", "enter"]);
+    expect(pressed(t, ["j", "j", "j"])).toBe(2);
+    expect(pressed(t, ["j", "j", "x"])).toBe(0);
+    const u = track(["ctrl+b", "x", "ctrl+b", "y"]);
+    expect(pressed(u, ["ctrl+b", "x", "ctrl+b", "ctrl+b"])).toBe(1);
+  });
+
+  test("the key after typed text moves past the text", () => {
+    const t = track(["n", { text: "hi" }, "shift+tab", "shift+tab", "enter"]);
+    expect(
+      pressed(t, ["n", "h", "i", "shift+tab", "shift+tab"], "terminal"),
+    ).toBe(4);
+  });
+});
+
 describe("matchers", () => {
   const ctx = () => ({ lastAction: "", state: null, mem: {} });
 

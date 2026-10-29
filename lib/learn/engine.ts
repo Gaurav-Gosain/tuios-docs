@@ -4,8 +4,8 @@
  * functions so it can be tested against recorded event logs, and the React
  * side only renders it.
  */
-import { isAltChord, sameChord } from "./keys";
-import type { MatchContext, Track, TuiosEvent } from "./types";
+import { isAltChord, isModifierKey, sameChord } from "./keys";
+import type { MatchContext, Step, Track, TuiosEvent } from "./types";
 
 /** Seconds of no progress before the hint shows, and before Show me glows. */
 export const HINT_AFTER = 8;
@@ -110,7 +110,9 @@ export function feed(
   const ctx = s.ctx;
   if (event.state) ctx.state = event.state;
 
-  if (event.type === "key") {
+  if (event.type === "key" && isModifierKey(String(event.data?.key ?? ""))) {
+    // A modifier on its own: the chord it starts comes next.
+  } else if (event.type === "key") {
     const key = String(event.data?.key ?? "");
     const mode = String(event.data?.mode ?? "");
     // The action event, if the key has one, comes right after it.
@@ -161,13 +163,19 @@ function trackKeys(
     return { ...s, pressed: s.pressed + 1, activeAt: now, wrongMode: false };
   }
   if (typeof wanted === "object") {
-    // Typing: every key is fine while the reader types the text.
+    // Typing: every key is fine while the reader types the text, and the
+    // key after the text ends it, so the caps after it light in order too.
+    // No step follows text with a printable key, so typing cannot end it.
+    const after = step.keys[s.pressed + 1];
+    if (typeof after === "string" && sameChord(key, after)) {
+      return { ...s, pressed: s.pressed + 2, activeAt: now, wrongMode: false };
+    }
     return { ...s, activeAt: now, wrongMode: false };
   }
-  const first = step.keys[0];
-  if (typeof first === "string" && sameChord(key, first)) {
+  const restart = restartAt(step.keys, s.pressed, key);
+  if (restart > 0) {
     // Starting over counts as progress.
-    return { ...s, pressed: 1, activeAt: now, wrongMode: false };
+    return { ...s, pressed: restart, activeAt: now, wrongMode: false };
   }
   const wrong = s.wrong + 1;
   return {
@@ -177,6 +185,34 @@ function trackKeys(
     wrongMode: false,
     hinted: s.hinted || wrong >= HINT_AFTER_WRONG,
   };
+}
+
+/**
+ * Where the sequence stands after a key that broke it: the longest run of
+ * the step's first keys that ends with this key, or 0. With the keys
+ * "j j enter", the presses "j j j" leave two caps lit, not one. The keys
+ * pressed so far are the step's first `pressed` keys, so they are read from
+ * the step itself. Typed text never matches, so a run stops at it.
+ */
+export function restartAt(
+  keys: Step["keys"],
+  pressed: number,
+  key: string,
+): number {
+  for (let n = Math.min(pressed, keys.length - 1); n >= 0; n--) {
+    // Does keys[0..n] equal the last n keys pressed, then this key?
+    let ok = true;
+    for (let i = 0; i <= n && ok; i++) {
+      const want = keys[i];
+      const got = i === n ? key : keys[pressed - n + i];
+      ok =
+        typeof want === "string" &&
+        typeof got === "string" &&
+        sameChord(got, want);
+    }
+    if (ok) return n + 1;
+  }
+  return 0;
 }
 
 /** Where the reader is on the hint ladder. */

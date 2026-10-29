@@ -293,6 +293,17 @@ export function pressedNames(event: KeyboardEvent): string[] {
   return names.filter(Boolean);
 }
 
+/**
+ * Whether tuios reported a modifier on its own, such as "leftctrl". In
+ * window mode tuios reports the ctrl of ctrl+b as a key before the chord.
+ * It is half of a chord, so it is no key of the step and no wrong key.
+ */
+export function isModifierKey(key: string): boolean {
+  return /(^|\+)((left|right)(shift|alt|ctrl|super|hyper|meta)|isolevel[35]shift)$/.test(
+    key,
+  );
+}
+
 /** Whether the key tuios reported is the chord a step asks for. */
 export function sameChord(reported: string, wanted: string): boolean {
   if (reported === wanted) return true;
