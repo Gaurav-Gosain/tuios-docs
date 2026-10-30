@@ -6,6 +6,7 @@ icon: Webhook
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Since } from '@/components/mdx/since';
 
 A hook is a shell command TUIOS runs when something happens: a window opens, focus moves, you switch workspace, you attach or detach, an agent finishes. Hooks live in the `[hooks]` table of your [config file](/docs/configuration).
 
@@ -29,6 +30,8 @@ Other config keys use `snake_case`. Hook event names use hyphens and are case-se
 | `after-workspace-switch` | The session switches to a different workspace | daemon |
 | `after-agent-state` | An agent in a pane changes state, filtered by the `[notifications.agent]` policy | daemon |
 | `after-command-finished` | A pane's shell reports, through its OSC 133 marks, that a command finished | daemon |
+| `after-new-worktree` | tuios makes a worktree session, before the first window starts. tuios waits for it | daemon |
+| `after-settle` | An agent is put on the Settled shelf | daemon |
 | `after-attach` | A client attaches to a session, including a switch between sessions | client |
 | `after-detach` | A client detaches from a session | client |
 | `after-layout-change` | The tiling layout changes | client |
@@ -93,6 +96,8 @@ Which variables carry data for each event:
 | `after-resize` | `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_WIDTH`, `TUIOS_HEIGHT`, `TUIOS_WORKSPACE`, `TUIOS_SESSION_ID` |
 | `after-agent-state` | `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_AGENT_STATE`, `TUIOS_AGENT_PREV_STATE`, `TUIOS_AGENT_HARNESS`, `TUIOS_AGENT_MESSAGE`, `TUIOS_SESSION_ID` |
 | `after-command-finished` | `TUIOS_WINDOW_ID`, `TUIOS_COMMAND`, `TUIOS_EXIT_CODE`, `TUIOS_DURATION_MS`, `TUIOS_SESSION_ID` |
+| `after-new-worktree` | `TUIOS_SESSION_ID`, `TUIOS_WORKTREE_PATH`, `TUIOS_WORKTREE_BRANCH`, `TUIOS_WORKTREE_REPO_ROOT`, `TUIOS_WORKTREE_CREATED_BRANCH` |
+| `after-settle` | `TUIOS_SESSION_ID`, `TUIOS_WINDOW_ID`, `TUIOS_WINDOW_NAME`, `TUIOS_WORKSPACE`, `TUIOS_SETTLE_REASON`, and for an agent in a worktree session `TUIOS_WORKTREE_PATH`, `TUIOS_WORKTREE_BRANCH`, `TUIOS_WORKTREE_REPO_ROOT` |
 
 A hook the daemon runs gets the daemon's environment, not your current shell's. A daemon started by `tuios new` keeps the environment of the shell that started it. Use full paths when in doubt.
 
@@ -155,6 +160,17 @@ after-agent-state = "[ \"$TUIOS_AGENT_STATE\" = needs_input ] && notify-send \"$
 To reach your phone without a script, use the `[notify]` table. It sends Inbox items through ntfy, Pushover or a webhook, with a link to the item on `tuios-web`. See [Push notifications](/docs/push-notifications).
 
 With `[agents] enabled = false`, agent hooks such as `after-agent-state` do not run. See [Turn off agent features](/docs/agents-off).
+
+## Worktree and settle hooks
+
+`after-new-worktree` fires for `tuios worktree new`, for "New worktree..." on the rail and for each session of `tuios fan`. It starts in the worktree's directory. Each command has 60 seconds. When a command fails or runs out of time, tuios keeps the worktree and the session and opens the first window. The caller shows the exit code and the last lines of stderr.
+
+`after-settle` fires once for each settle, also with nobody attached. It does not fire when the agent comes back, or for an agent that moves to Settled after an hour at rest. tuios does not stop the agent or close its pane. The command starts in the session's worktree when tuios made one, else in the folder the pane started in.
+
+```toml
+[hooks]
+after-settle = '[ -n "$TUIOS_WORKTREE_PATH" ] && cargo clean'
+```
 
 ## Related
 

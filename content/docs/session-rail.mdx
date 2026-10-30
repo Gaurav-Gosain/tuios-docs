@@ -101,6 +101,7 @@ A switch of workspace, a hidden rail or a detach does not stop the session or it
 | `agents` | Every pane running a coding agent, with its state. See [Agents](/docs/agents) |
 | `git` | The focused pane's repository, branch, and how far it is ahead of or behind its upstream |
 | `custom` | The output of a command you write, one row per line. See [The custom section](/docs/configuration#the-custom-section) |
+| `pane` <Since config="appearance.sidebar.pane" /> | A live terminal under its own heading. See [The pane section](#the-pane-section) |
 
 `appearance.sidebar.sections` is one string that says which sections the rail draws, in what order, and the most each may take:
 
@@ -205,6 +206,54 @@ cursor_background = "#45475a"   # or a slot name, such as "blue", or a role name
 - The option is on the settings page, in the Sidebar section.
 
 The focused pane's row in the terminals section carries the focus mark. When the rail does not show that row, the agents row of the pane carries the mark. This occurs when `sections` has no `terminals`, when the terminals section has no room for the row, and when the terminals section shows the panes of another session.
+
+## Quick look <Since action="file_quick_look" /> [#quick-look]
+
+Put the rail cursor on a row of the files section and press <kbd>Space</kbd>. The preview opens over the panes. Right-click a row and pick **Preview** to look at that row.
+
+The preview shows:
+
+- code with syntax colours and line numbers,
+- Markdown as formatted text,
+- a picture, the first page of a PDF or a frame of a film,
+- the names in a folder.
+
+A file that is not text shows its type and size. A long text shows its first 5000 lines, and the preview says so. The wheel scrolls the preview. A PDF page needs `pdftoppm`, and a film frame needs `ffmpeg`, on the machine that has the file. A picture uses Kitty graphics when the terminal supports them. Other terminals get block characters. At 16 colours the preview names the picture and does not draw it.
+
+<kbd>↑</kbd> and <kbd>↓</kbd> (or <kbd>j</kbd> and <kbd>k</kbd>) move the cursor to the next row, and the preview shows that row. <kbd>Space</kbd> or <kbd>Esc</kbd> closes the preview. A click outside it closes it too. Every other key goes to the rail. For a listing on another machine, that machine reads the file and sends the preview. Its host policy must allow `files`.
+
+## Drag a file into a pane <Since config="appearance.sidebar.file_drag" /> [#drag-a-file-into-a-pane]
+
+Press a row of the files section, move the pointer out of the rail, and release the button over a pane. The pane gets the path. <kbd>I</kbd> on a row does the same for the focused pane. A drag never copies or moves the file.
+
+- While you drag, a heavy frame in the accent colour shows the pane under the pointer. A pane that does not take the path gets the frame in the warning colour.
+- A label at the pointer shows the name, the pane and the program in the pane.
+- <kbd>Esc</kbd> cancels the drag. A release over the rail, the dock or an empty area does nothing.
+- After the drop, the pane has the focus and the mode does not change.
+
+tuios quotes the path for the program in the pane. It knows sh, bash, zsh, dash, ksh, fish, nu, csh, PowerShell, elvish and cmd. Other programs get POSIX single quotes. A folder path ends in `/`, and a space follows the path. Hold <kbd>Alt</kbd> when you release a folder to type a `cd` to it.
+
+tuios does not paste the path in these cases. The label and a dock note say why:
+
+- The pane is on another machine.
+- The pane runs ssh or mosh, or its shell reports a folder on another machine.
+- The file is in a listing from another machine.
+- The name holds a line break or a control character.
+- The pane is in copy mode.
+
+To turn the drag off, set `appearance.sidebar.file_drag = false`.
+
+## The pane section <Since config="appearance.sidebar.pane" /> [#the-pane-section]
+
+The rail can run a program in a real terminal under its own heading. Put `pane` in `sections` and describe the program in `[appearance.sidebar.pane]`. See [the keys](/docs/configuration#the-pane-section).
+
+- The program runs in the session, so it survives a detach. Tiling, layouts, the terminals section and `tuios list-windows` leave the pane out. `tuios list-windows --rail` lists it.
+- The pane is as wide as the rail's content and as tall as the lines the section gets. When the rail is hidden, folded, narrower than 10 columns or gives the section no lines, the program keeps running at its last size.
+- Click the pane, or press <kbd>P</kbd> in window mode (`focus_rail_pane` <Since action="focus_rail_pane" />), to type into it. <kbd>Alt</kbd>+<kbd>Esc</kbd>, a click outside the pane or the leader key gives the keyboard back. <kbd>Esc</kbd> goes to the program.
+- A program that asks for the mouse gets clicks, motion and the wheel.
+- The pane shows text only. Kitty images are not drawn in the rail.
+- When the program exits, the pane closes and the section says so. Click the line to start it again.
+- A session has one rail pane, and only the main rail draws it. If two clients name different commands, the last one to ask replaces the pane.
 
 ## Edit and search files
 
@@ -365,6 +414,9 @@ When messages wait for the machine, the count comes first, as in `3 queued, offl
 | `folder_click` | `"navigate"` | `navigate`, `cd` (send the focused pane there) or `both`. TUIOS types a `cd` only into a shell at its prompt |
 | `file_actions` | `true` | Allow create, rename, delete, copy, cut and paste |
 | `file_delete` | `"trash"` | `trash` or `permanent` |
+| `file_drag` <Since config="appearance.sidebar.file_drag" /> | `true` | Drag a file row onto a pane. See [Drag a file into a pane](#drag-a-file-into-a-pane) |
+| `group_main` <Since config="appearance.sidebar.group_main" /> | `false` | Put a repository's main checkout under the repository row. See [Group the main checkout](/docs/configuration#group-the-main-checkout) |
+| `peek` <Since config="appearance.sidebar.peek" /> | `true` | Show the panes of the session under the pointer or the cursor. See [Session peek](/docs/configuration#session-peek) |
 | `agent_rest_fold` | `"1h"` | How long an agent row rests before it folds. A duration, or `off` |
 | `subagent_rows` <Since config="appearance.sidebar.subagent_rows" /> | `"rows"` | `rows`, `tree` or `count`. How an agent row shows its subagents |
 | `subagent_collapse` <Since config="appearance.sidebar.subagent_collapse" /> | `"off"` | `off`, `expanded` or `collapsed`. A heading over the subagent rows |

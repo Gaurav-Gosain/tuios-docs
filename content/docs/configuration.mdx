@@ -213,6 +213,16 @@ frame_panels = true
 - `glyphs` draws the border of the active glyph set.
 - At 16 colours a panel always has a frame, because its background is the background of your terminal.
 
+`appearance.pane_overlays` <Since config="appearance.pane_overlays" /> draws dialogs and panels like pane windows. Every panel gets a frame in the focused pane's border colour. The frame and its content sit on the background of an empty pane cell. The selected row and input fields are steps of that background. The option is off by default. Under `hidden`, at 16 colours, or with no theme on a terminal that reports no background, a dialog keeps its shade.
+
+`appearance.overlay_border_color` <Since config="appearance.overlay_border_color" /> sets a colour for every dialog and panel frame: `#89b4fa`, a slot name such as `bright_cyan`, or a role such as `accent`.
+
+```toml
+[appearance]
+pane_overlays = true
+overlay_border_color = "accent"
+```
+
 #### max_fps
 
 `max_fps` is the highest frame rate TUIOS draws at. Your terminal and your monitor can show fewer frames. A value above what they can show does not make TUIOS smoother.
@@ -428,10 +438,25 @@ show_add      = false         # keep the "+" tab in the flat style
 | `number_glyphs` | The text of `{icon}` for each workspace. A workspace past the end of the list shows its number |
 | `zoom_marker` | The text of `{zoom}` on the current workspace while a pane is zoomed |
 | `show_add` | Keep the `+` tab in the flat style |
+| `caps` <Since config="dock.tabs.caps" /> | `true` gives each flat tab the rounded ends of a pill. A tab with no background gets a blank column in place of each end. There are no ends under ASCII glyphs or with `appearance.dock_pill_caps = false` |
+| `active_underline` <Since config="dock.tabs.active_underline" /> | Underline the current tab. When it is not set, a pill is underlined and a flat tab is not |
 
 Colours are `#rrggbb`, and they are overrides. With no colour set, a flat strip draws the current tab in bold on the theme's accent, and the other tabs in dim text. tuios ignores a colour that is not `#rrggbb` and shows a warning. The flat style shows even one workspace, and drops the `+` tab unless `show_add` is on. With no `[dock.tabs]` table, the strip does not change.
 
+`active_fg`, `active_bg`, `inactive_fg`, `inactive_bg` and `inactive_bold` also apply to pills. A pill with no colour keeps the theme's look.
+
+`appearance.dock_mode_pill` <Since config="appearance.dock_mode_pill" /> sets what the mode pill shows while tiling is on. `tiling` (the default) shows the tiling icon. `input` shows the terminal icon or the window icon, and the split letter after it shows that tiling is on.
+
 To reorder the dock or add your own cells, see [The dock table](#the-dock-table).
+
+### Calm mode <Since config="appearance.calm" /> [#calm-mode]
+
+`appearance.calm` turns [calm mode](/docs/keybindings#calm-mode) on. Nothing moves or blinks, and only the messages that need you show in the dock. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Z</kbd> turns it on and off and saves the choice here. Calm mode sits over `appearance.motion`. When you turn calm mode off, your motion level comes back.
+
+```toml
+[appearance]
+calm = true
+```
 
 ### Rail options
 
@@ -572,6 +597,8 @@ Delete uses the freedesktop.org trash in your home directory, so your desktop's 
 
 On Windows, a shell under MSYS2 or Cygwin reports its folder as `/c/work`. TUIOS reads that as `C:\work`, by the rules of `cygpath`, so the files section lists the right folder.
 
+`appearance.sidebar.file_drag` <Since config="appearance.sidebar.file_drag" /> lets you drag a row of the files section onto a pane. It is on by default. See [Drag a file into a pane](/docs/session-rail#drag-a-file-into-a-pane).
+
 #### The file editor
 
 <kbd>Shift</kbd>+<kbd>Enter</kbd> on a text file opens it in a terminal editor. `editor` sets the command. The settings page shows it as **File editor** under Sidebar.
@@ -613,6 +640,36 @@ The command follows the rules of a [dock component](#custom-components). It runs
 Each run gets the client's environment and these variables: `TUIOS_SESSION`, `TUIOS_SOCKET`, `TUIOS_RAIL_SECTION` (`custom`), `TUIOS_RAIL_WIDTH`, `TUIOS_RAIL_HEIGHT`, `TUIOS_ACTIVE_PANE_ID` and `TUIOS_ACTIVE_PANE_CWD`. An event that arrives during a run causes one more run after it, so a quick focus change never leaves the old pane's rows on screen. The command does not run while the rail is hidden or folded.
 
 `sections` works with `tuios set-config`. `[appearance.sidebar.custom]` is read from the file only, so a program in a pane cannot change the command.
+
+#### The pane section <Since config="appearance.sidebar.pane" /> [#the-pane-section]
+
+The rail can show a live terminal under its own heading. Put `pane` in `sections`, and describe it in `[appearance.sidebar.pane]`. tuios reads this table from the file only.
+
+```toml
+[appearance.sidebar]
+sections = "sessions:25,terminals,files:25,pane,agents:34"
+
+[appearance.sidebar.pane]
+title   = "git"
+command = "watch -t git status -sb"
+height  = 12
+```
+
+| Key | What it does |
+|-----|--------------|
+| `title` <Since config="appearance.sidebar.pane.title" /> | The heading of the section. The default is `pane` |
+| `command` <Since config="appearance.sidebar.pane.command" /> | The program the pane runs, through `sh -c` (`cmd /C` on Windows) |
+| `height` <Since config="appearance.sidebar.pane.height" /> | The most rows the pane takes. `0` or unset takes the share of the section, such as `pane:30` |
+
+See [The pane section](/docs/session-rail#the-pane-section).
+
+#### Group the main checkout <Since config="appearance.sidebar.group_main" /> [#group-the-main-checkout]
+
+`appearance.sidebar.group_main = true` puts a repository's main checkout under the repository row with its worktrees. The session is labelled by its branch. <kbd>Enter</kbd> or a click on the repository row then opens the main checkout's session. **Fold group** on the row's right-click menu folds the group. The default is `false`.
+
+#### Session peek <Since config="appearance.sidebar.peek" /> [#session-peek]
+
+When the pointer or the rail cursor is on a session row, the terminals section shows the panes of that session. `appearance.sidebar.peek = false` turns this off. The terminals section then shows the panes of the attached session.
 
 #### Two edges <Since config="appearance.sidebar.left.enabled" /> [#two-edges]
 
@@ -758,6 +815,8 @@ A set's border is used only when `border_style = "glyphs"`. This keeps a set fro
 
 ### Writing a set
 
+A set can name the marks of the agent states: `state_working`, `state_needs_input`, `state_idle`, `state_done`, `state_errored`, `state_unknown` and `state_waiting`. A mark may be one cell or two, so `state_needs_input = "✋"` is valid. A state the set leaves alone keeps the shipped mark. Of the built-in sets, only `ascii` names these marks.
+
 Save `<id>.json` in the glyphs directory. `tuios list-glyphs` prints its path.
 
 ```json
@@ -854,7 +913,7 @@ Selecting an id that is not registered yet, with `set-config` or the settings pa
 
 ## Notifications
 
-`[notifications]` sets how long messages stay on screen. `0` uses the built-in default.
+`[notifications]` sets how long messages stay on screen, how they look and which ones the dock shows. For a time, `0` uses the built-in default: 2 seconds for info and success messages, 8 for warnings and 15 for errors. A time can be up to 3600 seconds.
 
 | Key | Default | What it does |
 |-----|---------|--------------|
@@ -863,6 +922,11 @@ Selecting an id that is not registered yet, with `set-config` or the settings pa
 | `error_duration` <Since config="notifications.error_duration" /> | `0` | Seconds an error stays up when `error_sticky` is off |
 | `error_sticky` <Since config="notifications.error_sticky" /> | `true` | Errors stay until you press <kbd>Esc</kbd> |
 | `bell` <Since config="notifications.bell" /> | `"toast"` | What a pane's bell does: `toast`, `forward`, `both` or `off`. See [The pane bell](#the-pane-bell) |
+| `style` <Since config="notifications.style" /> | `"full"` | `full` shows a coloured bar and a line that counts down. `plain` shows the icon and the text only |
+| `level` <Since config="notifications.level" /> | `"info"` | The least severe message the dock shows: `info`, `warning` or `error` |
+| `log_hidden` <Since config="notifications.log_hidden" /> | `true` | `false` keeps the messages that `level` hides out of the log too |
+
+A message that `level` hides still goes to the log viewer (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>l</kbd>). Warnings and errors always go to the log. A message from a pane, an agent or mail does not use `level`. `[notifications.agent]` and `[notifications.mail]` control those messages.
 
 ### The pane bell <Since config="notifications.bell" /> [#the-pane-bell]
 
@@ -965,6 +1029,10 @@ lock = true
 | `lock` <Since config="keybindings.lock" /> | `false` | `true` gives every key to the pane in terminal mode, except the leader. The leader unlocks for one action, and then TUIOS locks again. A repeatable action keeps its menu open until you press <kbd>Esc</kbd>. That menu takes only repeatable keys. Any other key goes to the pane. The `zellij` preset sets `true` |
 
 See [Lock mode](/docs/keybindings#lock-mode).
+
+### nest_exit_key <Since config="keybindings.nest_exit_key" /> [#nest_exit_key]
+
+The key that ends [nest mode](/docs/keybindings#nest-mode). The default is `"f12"`. A key tuios cannot read goes back to `"f12"`, and a key that programs type is reported as a problem.
 
 ### Sections
 
@@ -1089,6 +1157,10 @@ To change `window_size` for one session while it runs, use `tuios set-config dae
 | `layout` <Since config="startup.layout" /> | `"bsp"` | Tiling layout: `bsp`, `master-stack` or `scrolling` |
 | `open_default_window` <Since config="startup.open_default_window" /> | `false` | Open one window when a session starts empty |
 | `start_in_terminal_mode` <Since config="startup.start_in_terminal_mode" /> | `false` | Start in terminal mode when a window is present |
+| `session` <Since config="startup.session" /> | `""` | The session a plain `tuios` attaches to. tuios makes the session if it is gone. Empty attaches to the most recent session |
+| `window` <Since config="startup.window" /> | `""` | The pane, by name or id, that a plain `tuios` focuses in `session`. When no pane has that name, the focus does not change |
+
+`session` and `window` change a plain `tuios` only. Other commands use the session you give them. `session` uses the daemon even when `daemon` is `false`.
 
 `--standalone` and `TUIOS_NO_DAEMON=1` override `daemon` for one run or one shell. If the daemon will not start, a bare `tuios` runs standalone and says so.
 
@@ -1160,6 +1232,13 @@ gui_command = "tuios-wayland launch --"   # or "niri msg action spawn --"
 <Callout type="warn" title="Use a command that runs an argv">
 Do not use a command that joins its arguments into a shell line, such as `swaymsg exec --` or `hyprctl dispatch exec`. With such a command, the text of a desktop entry becomes shell code. Any installed package can write a desktop entry.
 </Callout>
+
+`launcher.keep_open` <Since config="launcher.keep_open" /> keeps the pane of a launched program open after it exits. A line under the output shows the exit status. The option needs a daemon session.
+
+```toml
+[launcher]
+keep_open = true
+```
 
 ## The tape table
 
@@ -1257,6 +1336,39 @@ See [What hints mode finds](/docs/hints#what-hints-mode-finds) for the pattern n
 |-----|---------|--------|--------------|
 | `label_keys` <Since config="panes.label_keys" /> | `"1234567890"` | letters `a` to `z` and digits | The keys the labels are made of, first pane first. With more panes than keys, a label has two keys |
 | `navigator_layout` <Since config="panes.navigator_layout" /> | `"tree"` | `tree`, `flat`, `cards` | The layout the pane navigator opens in. <kbd>v</kbd> changes it while the navigator is open |
+| `navigator_search` <Since config="panes.navigator_search" /> | `false` | `true`, `false` | Open the navigator ready to type a search. <kbd>Esc</kbd> with nothing typed closes it |
+| `drag_and_drop` <Since config="panes.drag_and_drop" /> | `false` | `true`, `false` | Turn on drag and drop between panes over kitty's protocol (OSC 72) |
+
+With `drag_and_drop` on, a program that speaks the protocol, such as yazi 26.9 or later, can drag files from its pane. Hold the left button on a file in terminal mode, and carry it to another pane. A pane whose program speaks the protocol takes the drop itself. Any other pane gets the paths as a paste, quoted for its shell, by the rules of [a drag from the rail](/docs/session-rail#drag-a-file-into-a-pane). tuios reads no file, and refuses a drop back into the pane the drag came from. The switch is off because the protocol is still settling.
+
+## The path_picker table <Since config="path_picker" /> [#the-path_picker-table]
+
+`[path_picker]` sets `show_hidden`. With `true`, the [path picker](/docs/keybindings#pick-a-path) shows the names that start with a dot when it opens. The default is `false`.
+
+## The worktree table <Since config="worktree" /> [#the-worktree-table]
+
+`[worktree] path` sets where `tuios worktree new`, **New worktree...** on the rail and `tuios fan` put a worktree. The value is a path template. Empty is the default. See [Where a worktree goes](/docs/worktrees#where-a-worktree-goes).
+
+```toml
+[worktree]
+path = "{{ repo_path }}/.worktrees/{{ branch | slug }}"
+```
+
+## The tasks table <Since config="tasks" /> [#the-tasks-table]
+
+`[tasks]` sets how the [task board](/docs/agent-inbox#the-task-board) works.
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `stages` <Since config="tasks.stages" /> | every stage | The stages the board shows. The order stays `todo`, `plan`, `doing`, `verify`, `review`, `shipped`, `done` |
+| `auto_stage` <Since config="tasks.auto_stage" /> | `true` | `false` leaves every stage to you. tuios then moves no card on its own |
+
+```toml
+[tasks]
+stages = ["todo", "doing", "verify"]
+auto_stage = false
+```
+
 
 ## The scratch table
 
@@ -1358,6 +1470,27 @@ With `push`, the command keeps running and each line it prints replaces the cell
 A component whose command fails is hidden. `tuios list-dock-components` shows what each component last did and why a cell is missing. `tuios refresh-dock [name]` runs a component again now.
 
 A command runs in the client, with a three second timeout. TUIOS reads at most 64 KiB of its output and stops the command when it prints more. SGR colour stays. TUIOS removes other control sequences, C1 controls, bidirectional and invisible characters, and bytes that are not UTF-8. Wide characters and emoji stay.
+
+## SSH server limits <Since config="ssh" /> [#ssh-server-limits]
+
+The `[ssh]` table sets the limits of the `tuios ssh` server. The server reads it when it starts. The defaults do not stop a normal login.
+
+```toml
+[ssh]
+handshake_timeout = "120s" # time to finish the login; 0 turns the limit off
+idle_timeout = "0"         # close a connection with no traffic for this long; 0 is off
+max_handshakes = 32        # connections that log in at the same time; 0 is no limit
+max_sessions = 64          # sessions open at the same time; 0 is no limit
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `handshake_timeout` <Since config="ssh.handshake_timeout" /> | `"120s"` | Close a connection that does not log in within this time, as `LoginGraceTime` does in OpenSSH. The limit ends when the login is complete |
+| `idle_timeout` <Since config="ssh.idle_timeout" /> | `"0"` | Close a connection after this time with no traffic in either direction. A session that shows a clock stays open |
+| `max_handshakes` <Since config="ssh.max_handshakes" /> | `32` | When this many connections are logging in, close a new connection at once. A connection that is logged in does not count |
+| `max_sessions` <Since config="ssh.max_sessions" /> | `64` | When this many sessions are open, over all connections, refuse a new session. The client sees a message |
+
+A duration is a value such as `90s`, `30m` or `2h`. A value that does not parse, or a negative value, gives a warning and the default. `tuios ssh --handshake-timeout`, `--idle-timeout`, `--max-handshakes` and `--max-sessions` replace these values for one run. The server writes the limits it uses to its log when it starts. `tuios set-config` cannot change this table.
 
 ## The hosts table
 
@@ -1465,6 +1598,7 @@ files_min_free = "5GiB"                        # the space a write must leave fr
 | `files_roots` <Since config="hosts.*.files_roots" /> | one receive folder | The folders the machine may write in. The default is `~/Downloads/tuios` on macOS and Windows, and `$XDG_DOWNLOAD_DIR/tuios` (or `~/Downloads/tuios`) on other systems. tuios makes it on first use |
 | `files_read_roots` <Since config="hosts.*.files_read_roots" /> | not set | The folders the machine may read. Not set means every file you can read, apart from the read deny list. When set, the machine also reads the folders of `files_roots` |
 | `files_min_free` <Since config="hosts.*.files_min_free" /> | `"1GiB"` | The free space a write must leave on its disk. A whole number with `B`, `KB`, `MB`, `GB`, `TB`, `KiB`, `MiB`, `GiB` or `TiB`. `"0"` turns the check off |
+| `files_max_entries` <Since config="hosts.*.files_max_entries" /> | `20000` | The most new files and folders the machine may make here in ten minutes. Past the bound, a new file or folder is `busy`, and a copy waits and goes on. `0` turns the bound off |
 
 A path is absolute or starts with `~`. Some places are always closed, whatever the roots say:
 
@@ -1483,6 +1617,8 @@ Other limits:
 - Files dropped on a pane go to a private drop folder. It holds at most 256 MiB for all drops, for 24 hours.
 - A copy another machine starts here keeps to the same rules, also after tuios restarts. When `files` is taken away, its copies here stop.
 - A change that widens `files_roots` or `files_read_roots`, removes `files_read_roots`, or lowers `files_min_free` waits for `tuios config apply`. A change that narrows applies at once.
+- A file that another machine writes here gets the sender's permission bits under this machine's umask. It never gets group or world write. The execute bits stay. This holds for a paired device too.
+- A machine with `files` cannot write the config folders of the agent tools that tuios integrates. It also cannot read the logins and API keys of more agent tools and cloud tools.
 
 <Callout type="warn" title="Give files only to machines you trust">
 A machine with `files` can write any file inside its roots and read any file outside the deny list. A file copy can run code: a binary in a folder on your `PATH`, or a config file that a program reads. Give `files`, and a wide `files_roots`, only to a machine you trust as you trust your own.
@@ -1561,6 +1697,21 @@ enabled = false
 ```
 
 `enabled` (default `true`) is the one switch for every agent feature. With it off, TUIOS is only a multiplexer: no agent detection, no agents section on the rail, no Inbox, mail, approvals or agent alerts, and agent commands stop with a message. The change applies at once. It is the first row of the settings page, "Agent features", and `tuios set-config agents.enabled false` from a shell outside TUIOS also sets it. A process in a pane cannot change it. See [Turn Off Agent Features](/docs/agents-off).
+
+### Agents that stop reporting <Since config="agents.silent_after" /> [#agents-that-stop-reporting]
+
+A hooked agent reports at each prompt and each tool call. When an agent that reported `working` sends no report for `silent_after`, tuios shows it as `unknown` with the reason `silent`. Its row reads "No report for N min".
+
+```toml
+[agents]
+silent_after = "10m"   # default; "0" or "off" turns it off
+```
+
+The value is a Go duration, such as `90s` or `20m`. A value that does not parse reads as `10m`, with a warning. The daemon reads the value when it starts and when the file changes. See [Agents that stop reporting](/docs/agent-inbox#agents-that-stop-reporting).
+
+### Fold the Working group <Since config="agents.fold_working" /> [#fold-the-working-group]
+
+`fold_working = true` opens the agents view with the Working group folded. A folded group shows its heading, its count and the state mark of each agent. <kbd>F</kbd> folds or opens any group. tuios keeps that choice in `sidebar.json` in its state folder, and the choice wins over `fold_working`. The settings page has this option as "Fold Working".
 
 ### The other agent tables
 

@@ -141,11 +141,13 @@ Four keys move focus to the window in a direction. Each direction has a key in w
 | Up | <kbd>k</kbd> | <kbd>Alt</kbd>+<kbd>↑</kbd> | <kbd>↑</kbd> |
 | Right | <kbd>l</kbd> | <kbd>Alt</kbd>+<kbd>→</kbd> | <kbd>→</kbd> |
 
-Focus goes to the nearest window in that direction that faces the focused window. At the edge of a tiled layout, focus stays where it is. With tiling off, a window that does not face the focused window can also get focus.
+Focus goes to the nearest window in that direction that faces the focused window. At the edge of a tiled layout, focus stays where it is, unless `appearance.focus_wrap` <Since config="appearance.focus_wrap" /> is on. Then focus goes to the window on the far side that faces the focused window. With tiling off, a window that does not face the focused window can also get focus.
 
 With tiling off, <kbd>h</kbd> and <kbd>l</kbd> snap the focused window to the left or right half of the screen. <kbd>j</kbd> and <kbd>k</kbd> always move focus.
 
 In the [scrolling layout](/docs/layout-modes#scrolling), left and right move between columns. Up and down move between the windows in one column.
+
+The terminal mode keys and the prefix keys go on into the rail. When no window is in that direction and the rail is on that edge, the rail gets the keyboard. The key in the opposite direction gives the keyboard back. A hidden rail stays hidden.
 
 If your config already binds <kbd>j</kbd> or <kbd>k</kbd> in a window mode section, TUIOS keeps your binding and gives `focus_down` or `focus_up` no key. `tuios keybinds doctor` tells you when this happens.
 
@@ -204,6 +206,7 @@ Section: `[keybindings.terminal_mode]`. These keys work in terminal mode with no
 | <kbd>Shift</kbd>+<kbd>PgUp</kbd> | `terminal_scroll_page_up` <Since action="terminal_scroll_page_up" /> | Scroll one page into the pane's scrollback |
 | <kbd>Shift</kbd>+<kbd>PgDn</kbd> | `terminal_scroll_page_down` <Since action="terminal_scroll_page_down" /> | Scroll one page back toward live output |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, <kbd>Super</kbd>+<kbd>V</kbd>, <kbd>Shift</kbd>+<kbd>Super</kbd>+<kbd>V</kbd>, middle click | `terminal_paste_host` <Since action="terminal_paste_host" /> | Paste from the host clipboard. An image is pasted as a file path. See [Paste an image](#paste-an-image) |
+| <kbd>Alt</kbd>+<kbd>;</kbd> | `pick_path` <Since action="pick_path" /> | Open the path picker. See [Pick a path](#pick-a-path) |
 
 </Tab>
 <Tab value="macOS">
@@ -219,6 +222,7 @@ Section: `[keybindings.terminal_mode]`. These keys work in terminal mode with no
 | <kbd>Shift</kbd>+<kbd>PgUp</kbd> | `terminal_scroll_page_up` <Since action="terminal_scroll_page_up" /> | Scroll one page into the pane's scrollback |
 | <kbd>Shift</kbd>+<kbd>PgDn</kbd> | `terminal_scroll_page_down` <Since action="terminal_scroll_page_down" /> | Scroll one page back toward live output |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, <kbd>Super</kbd>+<kbd>V</kbd>, <kbd>Shift</kbd>+<kbd>Super</kbd>+<kbd>V</kbd>, middle click | `terminal_paste_host` <Since action="terminal_paste_host" /> | Paste from the host clipboard. An image is pasted as a file path. See [Paste an image](#paste-an-image) |
+| <kbd>Option</kbd>+<kbd>;</kbd> | `pick_path` <Since action="pick_path" /> | Open the path picker. See [Pick a path](#pick-a-path) |
 
 </Tab>
 </Tabs>
@@ -355,6 +359,23 @@ The mode pill in the dock shows a lock while TUIOS is locked. It shows an open l
   caption="After the leader: the lock is open for one action."
 />
 
+## Nest mode <Since action="nest" /> [#nest-mode]
+
+Nest mode gives every key to the program in the pane, the leader too, until you press one key to end it. Use it for a tmux, or a tuios on another machine, that uses the same leader. The `nest` action turns it on. Its default key is <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Enter</kbd>, in every preset.
+
+```toml
+[keybindings.terminal_mode]
+nest = ["alt+shift+enter"]
+```
+
+- In terminal mode, every key goes to the focused pane: the leader, the keys tuios binds and the hold key.
+- <kbd>F12</kbd> ends nest mode and does not go to the pane. `keybindings.nest_exit_key` <Since config="keybindings.nest_exit_key" /> sets another key. A key tuios cannot read goes back to <kbd>F12</kbd>, and the log viewer reports a key that programs type, such as a letter.
+- Overlays that you open with the mouse, copy mode and the mouse do not change.
+- While the rail has the keyboard, the rail takes the keys. Press <kbd>Esc</kbd> to give them back to the pane.
+- Nest mode belongs to the client. It ends when the client leaves terminal mode, and on detach.
+
+The mode pill in the dock shows `NEST F12`, and the focused pane's border takes the same colour.
+
 ## Global keys
 
 Section: `[keybindings.global]`. These keys work in window mode and terminal mode.
@@ -410,6 +431,11 @@ Press <kbd>Ctrl</kbd>+<kbd>B</kbd>, then the key. Section: `[keybindings.prefix_
 | <kbd>V</kbd> | `paste_image` <Since action="paste_image" /> | Paste the clipboard image as a file path. See [Paste an image](#paste-an-image) |
 | <kbd>g</kbd> | `toggle_scratch` <Since action="toggle_scratch" /> | Show or hide the [scratch terminal](/docs/sessions#scratch-terminal) |
 | <kbd>U</kbd> | `new_worktree` <Since action="new_worktree" /> | Make a worktree of the focused pane's repository, and a session in it. See [New worktree](#new-worktree) |
+| <kbd>Enter</kbd> | `nest` <Since action="nest" /> | Send every key to the pane until <kbd>F12</kbd>. See [Nest mode](#nest-mode) |
+| <kbd>.</kbd> | `pick_path` <Since action="pick_path" /> | Open the path picker. See [Pick a path](#pick-a-path) |
+| <kbd>I</kbd> | `set_note` <Since action="set_note" /> | Write the session's note. See [Session note](#session-note) |
+| <kbd>Z</kbd> | `toggle_calm` <Since action="toggle_calm" /> | Turn calm mode on or off. See [Calm mode](#calm-mode) |
+| <kbd>J</kbd> / <kbd>K</kbd> | `next_agent`, `prev_agent` <Since action="next_agent" /> | Go to the next or previous agent pane. See [Next and previous agent](#next-and-previous-agent) |
 | <kbd>e</kbd> | `prefix_explore` <Since action="prefix_explore" /> | Move the keyboard to the rail, or back |
 | <kbd>S</kbd> | `prefix_session_switcher` <Since action="prefix_session_switcher" /> | Open the session switcher |
 | <kbd>W</kbd> | `prefix_workspace_switcher` <Since action="prefix_workspace_switcher" /> | Open the workspace switcher |
@@ -453,6 +479,41 @@ After a command worth repeating, such as an arrow, <kbd>o</kbd> or <kbd>O</kbd>,
 3. Press <kbd>Enter</kbd>. TUIOS makes a new branch in a new worktree, and a session in it. The rail groups the session under its repository, and TUIOS switches to it.
 
 <kbd>Esc</kbd> closes the dialog. If the focused pane is not in a git repository, a message says so. This is what `tuios worktree new` does. The command palette has the action too. See [Worktrees](/docs/worktrees#from-a-pane).
+
+### Session note <Since action="set_note" /> [#session-note]
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>I</kbd> opens a one-line editor with the note of the session. A note says what the session is for or what comes next. <kbd>Enter</kbd> saves the note. An empty note removes it. <kbd>Esc</kbd> closes the editor. The command palette and the menu of a session row in the rail have it too. See [Return notes](/docs/sessions#return-notes).
+
+### Pick a path <Since action="pick_path" /> [#pick-a-path]
+
+<kbd>Alt</kbd>+<kbd>;</kbd> in terminal mode (<kbd>Option</kbd>+<kbd>;</kbd> on macOS), or <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>.</kbd>, opens the path picker at the cursor of the focused pane. The picker lists the folder that the shell in the pane is in. Folders come first, then files. Type to filter the names, and press <kbd>Enter</kbd> to type the path of the selected name at the cursor.
+
+| Key | Does |
+|-----|------|
+| Text | Filter the names |
+| <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Ctrl</kbd>+<kbd>P</kbd> <kbd>Ctrl</kbd>+<kbd>N</kbd> | Move the selection |
+| <kbd>Tab</kbd> | Open the selected folder. On a file, complete the name |
+| <kbd>Shift</kbd>+<kbd>Tab</kbd>, <kbd>Backspace</kbd> with no filter text | Go up one folder |
+| <kbd>/</kbd> at the start | Start an absolute path |
+| `~/` at the start | Start a path in the home folder |
+| <kbd>Enter</kbd> | Type the path and close the picker |
+| <kbd>Alt</kbd>+<kbd>H</kbd> | Show or hide the hidden files |
+| <kbd>Esc</kbd> | Close the picker and type nothing |
+
+The path is relative to the folder of the pane. A path that starts with `/` or `~/` stays absolute. tuios quotes the path for the shell in the pane. A click on a name types its path, and the wheel moves the selection.
+
+The picker works in a pane on another machine: the daemon there lists the folder, with the same read rules as the files section. When the shell in the pane runs ssh to another machine, the picker does not open. `path_picker.show_hidden` <Since config="path_picker.show_hidden" /> shows the hidden files when the picker opens.
+
+### Calm mode <Since action="toggle_calm" /> [#calm-mode]
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Z</kbd> turns calm mode on and off. While calm mode is on:
+
+- Nothing moves. Window slides, panel fades, the shimmer of a working agent and the copy sweep stop. Your `appearance.motion` level does not change.
+- Nothing blinks. The cursor is steady.
+- Messages from panes, agents and mail do not show in the dock. The log keeps them. An agent that needs you still shows its message, and so do warnings and errors.
+- The dock tabs do not mark output on other workspaces. The bell mark stays.
+
+The dock shows `calm` while it is on. `calm 3` means that 3 messages are in the log. When you turn calm mode off, tuios tells you how many messages came in. To keep calm mode on after a restart, set `appearance.calm = true`. See [Calm mode](/docs/configuration#calm-mode).
 
 ### Window prefix
 
@@ -580,6 +641,8 @@ When the cursor is on a row in the files section, section `[keybindings.sidebar_
 | <kbd>x</kbd> | `file_cut` <Since action="file_cut" /> | Cut |
 | <kbd>p</kbd> | `file_paste` <Since action="file_paste" /> | Paste into this folder |
 | <kbd>Y</kbd> | `file_copy_path` <Since action="file_copy_path" /> | Copy the absolute path of the file or folder. A folder's context menu has a **Copy path** row too |
+| <kbd>I</kbd> | `file_insert_path` <Since action="file_insert_path" /> | Paste the path into the focused pane. The context menu has **Paste path in pane** too |
+| <kbd>Space</kbd> | `file_quick_look` <Since action="file_quick_look" /> | Show a preview of the row. See [Quick look](/docs/session-rail#quick-look) |
 
 See [The files section](/docs/configuration#the-files-section).
 
@@ -616,19 +679,23 @@ The [agents view](/docs/agent-inbox#the-agents-view) shows every agent, and the 
 | <kbd>n</kbd> | `inbox_new_agent` <Since action="inbox_new_agent" /> | Start a new agent. See [Starting an Agent](/docs/new-agent) |
 | <kbd>d</kbd>, <kbd>Delete</kbd> | `inbox_dismiss` <Since action="inbox_dismiss" /> | Dismiss what needs you on the row. <kbd>u</kbd> undoes it for 10 seconds |
 | <kbd>z</kbd> | `inbox_snooze` <Since action="inbox_snooze" /> | Snooze what needs you on the row: then <kbd>1</kbd> 15 minutes, <kbd>2</kbd> an hour, <kbd>3</kbd> until 9:00 tomorrow, <kbd>4</kbd> until it changes |
-| <kbd>u</kbd> | `inbox_undo` <Since action="inbox_undo" /> | Undo the last dismiss or snooze, within 10 seconds |
+| <kbd>D</kbd> | `inbox_settle` <Since action="inbox_settle" /> | Settle the agent, or every marked one. See [Settling an agent](/docs/agent-inbox#settling-an-agent) |
+| <kbd>u</kbd> | `inbox_undo` <Since action="inbox_undo" /> | Undo the last dismiss, snooze or settle, within 10 seconds |
 | <kbd>S</kbd> | `inbox_show_snoozed` <Since action="inbox_show_snoozed" /> | Show or hide the snoozed rows |
-| <kbd>y</kbd> | `inbox_resume` <Since action="inbox_resume" /> | Resume the conversation in its pane |
+| <kbd>y</kbd> | `inbox_resume` <Since action="inbox_resume" /> | Resume the conversation in its pane, or every marked one. The view stays open |
 | <kbd>p</kbd> | `inbox_pass_on` <Since action="inbox_pass_on" /> | Pass held mail on to the agent it was for |
 | <kbd>m</kbd> | `inbox_mailbox` <Since action="inbox_mailbox" /> | Open the whole mailbox |
 | <kbd>f</kbd> | `inbox_filter` <Since action="inbox_filter" /> | Show only what needs you, then each kind, then every agent |
 | <kbd>s</kbd> | `inbox_sort` <Since action="inbox_sort" /> | Step the order inside each group |
 | <kbd>/</kbd> | `inbox_select` <Since action="inbox_select" /> | Search the agents, with selector terms such as `harness:codex` |
 | <kbd>v</kbd> | `inbox_review` <Since action="inbox_review" /> | Review the changes in the agent's pane |
-| <kbd>x</kbd> | `inbox_mark` <Since action="inbox_mark" /> | Mark the agent for a bulk answer |
+| <kbd>x</kbd> | `inbox_mark` <Since action="inbox_mark" /> | Mark the agent or Resume row for a bulk answer |
 | <kbd>\*</kbd> | `inbox_mark_all` <Since action="inbox_mark_all" /> | Mark every agent shown, or clear the marks |
 | <kbd>[</kbd> / <kbd>]</kbd> | `inbox_tab_prev`, `inbox_tab_next` <Since action="inbox_tab_next" /> | The focus's tab to the left or right |
 | <kbd>e</kbd> | `inbox_expand` <Since action="inbox_expand" /> | Show every line of every card in the thread, or fold them again |
+| <kbd>F</kbd> | `inbox_fold` <Since action="inbox_fold" /> | Fold or open the group of the row under the cursor |
+| <kbd>b</kbd> | `inbox_board` <Since action="inbox_board" /> | Show the task board, or the agents again. See [The task board](/docs/agent-inbox#the-task-board) |
+| <kbd>t</kbd> | `inbox_take` <Since action="inbox_take" /> | On a card: take it for the pane behind the agents view |
 | <kbd>J</kbd>, <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>K</kbd>, <kbd>Ctrl</kbd>+<kbd>U</kbd> | `inbox_detail_down`, `inbox_detail_up` | Scroll the card down or up, such as a long plan |
 | <kbd>l</kbd>, <kbd>→</kbd> | `inbox_open` <Since action="inbox_open" /> | Open the focus on a narrow screen, or show every row of a long group |
 | <kbd>h</kbd>, <kbd>←</kbd> | `inbox_back` <Since action="inbox_back" /> | Go back from the focus on a narrow screen |
@@ -662,6 +729,12 @@ The reply editor and the message editor take every key. <kbd>Enter</kbd> sends, 
 
 The footers name whatever key your config binds. Until an agent has been seen, the prefix menu, the help and the palette leave out the agent keys and entries, so a person who runs no agents is not shown them. The keys work before that too, except <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>O</kbd>, which types <kbd>O</kbd> into the pane until then.
 
+### Next and previous agent <Since action="next_agent" /> [#next-and-previous-agent]
+
+`next_agent` and `prev_agent` go to the next or previous agent pane, in the order the rail's agents section lists them. They wrap at the ends. From a pane with no agent, they go to the first and the last. An agent in another session or workspace is switched to.
+
+The default keys are <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> and <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> (with <kbd>Option</kbd> on macOS), and <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>J</kbd> and <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>K</kbd>. The chords also work in terminal mode and while the rail has the keyboard.
+
 ## The review overlay
 
 <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>v</kbd>, or <kbd>v</kbd> in the Inbox or on a rail agent row, opens the diff of a pane's changes over the whole screen. See [Reviewing an agent's changes](/docs/agent-inbox#reviewing-an-agents-changes). These keys are fixed and are not in the config.
@@ -671,8 +744,11 @@ The footers name whatever key your config binds. Until an agent has been seen, t
 | <kbd>j</kbd> <kbd>k</kbd>, arrows | Move by line. With the file list focused, move through the files |
 | <kbd>Space</kbd>, <kbd>PgDn</kbd>, <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>PgUp</kbd>, <kbd>Ctrl</kbd>+<kbd>U</kbd> | Move a page |
 | <kbd>g</kbd> <kbd>G</kbd> | First or last line |
-| <kbd>]</kbd> <kbd>[</kbd> | Next or previous hunk, going on into the next or previous file |
-| <kbd>&#125;</kbd> <kbd>&#123;</kbd> | Next or previous file |
+| <kbd>]</kbd> <kbd>[</kbd> | Next or previous hunk, going on into the next or previous file (`review_next_hunk`, `review_prev_hunk`) |
+| <kbd>&#125;</kbd> <kbd>&#123;</kbd> | Next or previous file (`review_next_file`, `review_prev_file`) |
+| <kbd>a</kbd> <kbd>d</kbd> | Stage or unstage the hunk under the cursor (`review_stage_hunk`, `review_unstage_hunk`) |
+| <kbd>A</kbd> <kbd>D</kbd> | Stage or unstage the whole file (`review_stage_file`, `review_unstage_file`) |
+| <kbd>z</kbd> | Undo the last stage or unstage (`review_undo_stage`) |
 | <kbd>s</kbd> | One column, or old and new side by side when the screen is wide enough |
 | <kbd>h</kbd> <kbd>l</kbd>, <kbd>←</kbd> <kbd>→</kbd> | Scroll the code sideways |
 | <kbd>Tab</kbd> | Focus the file list or the diff |
@@ -688,6 +764,18 @@ The footers name whatever key your config binds. Until an agent has been seen, t
 | <kbd>Esc</kbd>, <kbd>q</kbd> | Close |
 
 The compare view lists the attempts of a fan. <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>Enter</kbd> reviews an attempt, <kbd>m</kbd> marks one and <kbd>d</kbd> diffs the two marked attempts, <kbd>V</kbd> runs a command in every attempt, <kbd>K</kbd> keeps the attempt under the cursor and removes the others after a <kbd>y</kbd>, and <kbd>Esc</kbd>, <kbd>q</kbd> or <kbd>w</kbd> go back to the review.
+
+A stage key changes only the index of the pane's worktree. The working files do not change. A hunk header shows `staged` when the index holds all of the hunk, and `partly staged` when it holds some of it. <kbd>a</kbd> stages only the lines of the hunk you see. When git splits those lines into two hunks of the index, the first <kbd>a</kbd> stages one part. Press <kbd>a</kbd> again to stage the rest. The keys do nothing in a comparison of two attempts.
+
+The hunk and file motions and the stage keys are in `[keybindings.review]` <Since config="keybindings.review.*" />. A key you bind there wins over the overlay's own key. tuios warns when a `review` key is one of the overlay's own keys, and `tuios keybinds doctor` lists it under REVIEW KEYS. The other keys of the overlay are fixed.
+
+```toml
+[keybindings.review]
+review_next_hunk = ["n"]
+review_prev_hunk = ["p"]
+review_next_file = ["N"]
+review_prev_file = ["P"]
+```
 
 ## Lists and the settings page
 
@@ -743,6 +831,10 @@ The settings page (<kbd>,</kbd> in window mode, or <kbd>Ctrl</kbd>+<kbd>B</kbd> 
 A row whose value differs from its default has a dot after its name, including the hand-drawn rows such as the theme and shared borders, which have no reset. See [The in-app settings page](/docs/configuration#the-in-app-settings-page) for the search.
 
 The key hints at the foot of a panel stay on one row. When they do not fit, they get shorter in steps. First, `ctrl+` becomes `^`, `alt+` becomes `M-` and `shift+` becomes `S-`. Then the least important hints go, one whole hint at a time. The way out, such as `esc`, stays. Only when the most important hints still do not fit do their labels go, from the last hint back. A hint is never cut in the middle of a word.
+
+### Delete a word
+
+<kbd>Alt</kbd>+<kbd>Backspace</kbd>, <kbd>Ctrl</kbd>+<kbd>W</kbd> and <kbd>Ctrl</kbd>+<kbd>Backspace</kbd> delete the last word of a short text field, such as a filter or the rename dialog. The keys skip the characters at the end that are not part of a word, then take the word. A word is letters, digits and `_`. So `src/dir1/dir2` becomes `src/dir1/`, then `src/`, then nothing.
 
 ### Mode keys in the dock
 
@@ -888,6 +980,12 @@ clear_scrollback = ["K"]
 ```
 
 `tuios clear-history` <Since command="clear-history" /> clears the scrollback from a script, as tmux `clear-history` does. See the [CLI reference](/docs/cli-reference).
+
+### Leave copy mode, and other keys
+
+- <kbd>Ctrl</kbd>+<kbd>C</kbd> leaves copy mode from normal mode, a selection, the search prompt or <kbd>f</kbd>/<kbd>t</kbd>. Nothing is copied.
+- In a <kbd>v</kbd> or <kbd>V</kbd> selection, <kbd>o</kbd> moves the copy cursor to the other end of the selection. The selected text does not change. If the other end is outside the pane, the pane scrolls to show it.
+- `terminal_focus_left`, `terminal_focus_right`, `terminal_focus_up` and `terminal_focus_down` also work in copy mode. In window mode, the window mode focus keys work. Focus moves to the next pane, and the old pane stays in copy mode. A focus key that copy mode also uses keeps its copy mode action. A key under the leader does not work in copy mode, because copy mode uses <kbd>Ctrl</kbd>+<kbd>B</kbd> for page up.
 
 ### Line start and line end
 
@@ -1164,6 +1262,18 @@ key = "prefix+alt+y"
 type = "shell"
 command = "printf %s \"$TUIOS_ACTIVE_PANE_CWD\" | (pbcopy || wl-copy || xclip -selection clipboard)"
 description = "Copy pane folder"
+```
+
+## Cycle through machines <Since action="next_host" /> [#cycle-through-machines]
+
+`next_host` and `prev_host` go to a session on the next or the previous machine. This machine is first, then the machines of the `[hosts]` table. The actions wrap at the end. They skip a machine whose link is not up and a machine with no session. On each machine, they go to the session you last showed there, else the attached session, else the first session in the rail.
+
+The actions have no default key. The command palette has "Next machine" and "Previous machine".
+
+```toml
+[keybindings.window_management]
+next_host = ["alt+."]
+prev_host = ["alt+,"]
 ```
 
 ## Actions for a tmux-style keymap <Since action="mark_pane" /> [#actions-for-a-tmux-style-keymap]

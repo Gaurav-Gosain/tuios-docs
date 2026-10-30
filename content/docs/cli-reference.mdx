@@ -1766,6 +1766,30 @@ tuios peek-prompt -w buildbox:api:review --json
 
 Answering a prompt is acting as you. `respond` works from a shell outside every pane only when `[daemon] respond_from_shell = true` is set in the config file. A program in a pane is refused with `not_human`, unless the pane holds the `respond` grant.
 
+### task <Since command="task" /> [#task]
+
+Hand out a session's work as task cards. A card is one unit of work: a title, the prompt for the pane that takes it, a stage and the pane that holds it. The daemon keeps the cards with the session. After a daemon restart they come back with every holder let go. See [The task board](/docs/agent-inbox#the-task-board).
+
+```bash
+tuios task add [-p PROMPT] [--stage STAGE] TITLE...
+tuios task ls [--stage STAGE] [--open] [--all-sessions]
+tuios task get ID
+tuios task claim ID | --next [-w WINDOW]
+tuios task done ID
+tuios task stage ID STAGE
+tuios task block ID REASON... | --clear
+tuios task release ID
+tuios task rm ID
+```
+
+- The stages are `todo`, `plan`, `doing`, `verify`, `review`, `shipped` and `done`. `claim` moves a card in `todo` or `plan` to `doing`. `done` moves it to `done` and lets it go.
+- `-s` names the session. The default is this pane's session, else the most recently active.
+- `-p` takes at most 16 KiB. `-` reads it from standard input.
+- `claim --next` takes the oldest open card. A card that a pane holds, a blocked card, and a card that a fan of another session works on are skipped. With nothing to take, it fails with `no_task`. A card another pane holds fails with `task_held`.
+- From inside a pane, a change needs the `task` grant. A pane claims only for itself and changes only the card it holds, unless it holds `admin`. `rm` from a pane needs `admin`.
+
+`tuios fan --task ID` and `tuios start-agent --task ID` connect a card to the new work. `fan` stamps the card with the fan. `start-agent` claims the card for the new pane.
+
 ### queue <Since command="queue" /> [#queue]
 
 Queue a message for the agent in a pane. It is typed as a prompt once the agent has been at rest for a second, one message per rest, and never over a prompt it is waiting on.
@@ -2340,6 +2364,8 @@ A native plugin runs only after you approve it on each machine, also when it com
 
 ### ssh <Since command="ssh" /> [#ssh]
 
+`--handshake-timeout`, `--idle-timeout`, `--max-handshakes` and `--max-sessions` replace the values of the `[ssh]` table for one run. See [SSH server limits](/docs/configuration#ssh-server-limits).
+
 Serve TUIOS over SSH.
 
 ```bash
@@ -2468,6 +2494,46 @@ tuios tml render FILE [--width N] [--height N] [--state JSON] [--tab ID] [--ansi
 
 See [tml](/docs/libraries/tml#show-a-document-in-tuios) and [Read a surface as text](/docs/libraries/tml#read-a-surface-as-text).
 
+### tutor <Since command="tutor" /> [#tutor]
+
+Learn tuios in your own terminal. `tuios learn` is the same command. See [Learn with the tutor](/docs/getting-started#learn-with-the-tutor).
+
+```bash
+tuios tutor [track] [--list] [--reset]
+```
+
+### note <Since command="note" /> [#note]
+
+Set, read or clear the return note of a session or a pane. See [Return notes](/docs/sessions#return-notes).
+
+```bash
+tuios note set TEXT... [-s SESSION] [-w PANE] [--json]
+tuios note get [-s SESSION] [-w PANE] [--json]
+tuios note clear [-s SESSION] [-w PANE] [--json]
+```
+
+- The session defaults to this pane's session, else the most recently active.
+- `-w` names a pane for the pane's note. Without it, the command acts on the session's note.
+- `note get` prints nothing when there is no note. `tuios ls --json` also gives each session's `note`.
+
+### set-session-order <Since command="set-session-order" /> [#set-session-order]
+
+Put the sessions in an order. Every client lists them in it at once. A session you leave out, and one made later, goes after the named ones in creation order. Every name must be a live session.
+
+```bash
+tuios set-session-order work notes
+```
+
+### daemon-app [#daemon-app]
+
+macOS only. Write a small app, TUIOS Daemon, that starts the daemon, so panes keep local network access after the terminal quits. See [Local network access on macOS](/docs/sessions#local-network-access-on-macos).
+
+```bash
+tuios daemon-app install [--login] [--force] [--binary PATH] [--path PATH]
+tuios daemon-app status
+tuios daemon-app uninstall [--path PATH]
+```
+
 ### look <Since command="look" /> [#look]
 
 Apply a look: a small TOML file that sets how tuios looks, such as the theme, the glyph set, the borders, the gaps, the dock and the rail style. The [gallery](/gallery) shares looks.
@@ -2544,6 +2610,10 @@ tuios help -i             # search the commands in an explorer
 | <kbd>q</kbd>, <kbd>Esc</kbd> | Leave |
 
 An explorer opens only with its own flag or command. A plain command prints plain output, on a terminal too.
+
+`look export` <Since command="look export" /> prints the look in force as a look file. `tuios look apply` takes the file unchanged. `-o FILE` writes a file, `--name` and `--author` set those fields, and `--all` sets every look key. Otherwise the file sets the keys that differ from the defaults.
+
+`look share` <Since command="look share" /> shares your look in [Show us your tuios setup](https://github.com/Gaurav-Gosain/tuios/discussions/849). tuios puts the comment on the clipboard, takes a screenshot and opens the discussion in the browser. `--print` writes the comment to stdout and opens nothing. The command palette has it as "Share my look".
 
 ## Scripting examples
 

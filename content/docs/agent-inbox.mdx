@@ -240,7 +240,7 @@ Try the keys on a pretend Inbox. Focus the list, then allow the risky command, s
 | Ready for review | A finished turn you have not looked at |
 | Working | Agents in the middle of a turn |
 | Idle | Agents at rest |
-| Earlier | Agents at rest for more than an hour |
+| Settled <Since action="inbox_settle" /> | Agents you put away, and agents at rest for more than an hour. See [Settling an agent](#settling-an-agent) |
 | Snoozed | The items you snoozed, when <kbd>S</kbd> shows them |
 
 <Shot
@@ -301,6 +301,64 @@ The agents view replaces the Inbox panel. The Inbox items are its Needs you grou
 
 Every key is a binding in `[keybindings.inbox]`.
 </Callout>
+
+<kbd>F</kbd> <Since action="inbox_fold" /> folds the group of the row under the cursor. A folded group shows its title, its count and the state mark of each row. <kbd>F</kbd> or <kbd>Enter</kbd> on the heading opens it again. A row that changes group leaves the folded group. The folds stay when you close the view. `[agents] fold_working = true` folds Working until you open it.
+
+### Settling an agent <Since action="inbox_settle" /> [#settling-an-agent]
+
+When you are done with an agent's work and want it out of view, settle it. <kbd>D</kbd> puts the agent under the cursor on the Settled shelf, or every marked agent. The **Settle** button in the focus header does the same. Its finished turn closes. The agent keeps running in its pane.
+
+<Shot
+  name="release-0120-settled"
+  width={1904}
+  height={1258}
+  alt="The agents view with the groups Needs you, Working, Idle and Settled. The agents web and cache are under Settled. The selected agent, api, shows its thread and a Settle button with the key D."
+/>
+
+A settled agent comes back by itself in five cases: it asks a question or waits on an approval, reports an error, finishes a turn, sends you mail, or leaves the pane. It then goes to the group its state gives it. <kbd>D</kbd> on a settled agent takes it off the shelf, and <kbd>u</kbd> undoes a settle for 10 seconds. An agent that needs you now is not settled: answer it or dismiss its item first.
+
+An agent at rest for more than an hour goes to Settled too. Every client draws the same shelf, a second terminal, `tuios-web` and the agents view of a linked machine too. The rail folds a settled agent into its `+N at rest` line. Only a person can settle an agent. The [`after-settle` hook](/docs/hooks#worktree-and-settle-hooks) runs a command for each settle.
+
+### The task board <Since action="inbox_board" /> [#the-task-board]
+
+<kbd>b</kbd>, or the word in the header, turns the list into the task board: the task cards of every session, grouped by stage. A stage with no card has no heading, and Done starts folded. See [task](/docs/cli-reference#task) for the cards.
+
+<Shot
+  name="release-0120-board"
+  width={1904}
+  height={1258}
+  alt="The task board in the agents view. Cards are in the groups Todo, Doing, Verify, Review and Done. One card under Todo is blocked. The selected card, write the changelog, is free. Its Card tab shows its prompt and its history."
+/>
+
+- Inside a stage, the blocked cards come first, then the cards whose holder needs you, then the oldest.
+- A held card wears the mark of its holder. A free card says `free`. The Card tab shows the card's prompt and history.
+- <kbd>Enter</kbd> goes to the holder's pane. <kbd>t</kbd> takes the card for the pane behind the agents view, when the card is in that pane's session.
+- <kbd>n</kbd> opens the New agent sheet with the card's prompt as the task. A start in this folder claims the card for the new pane. A start in new worktrees stamps the card with the fan.
+- The board lists this machine's cards.
+
+A card moves on its own when tuios records a fact about its work:
+
+| Fact | From | To |
+|------|------|----|
+| A plan held for approval on the pane that holds the card | `todo`, `doing` | `plan` |
+| The plan approved from the Inbox | `plan` | `doing` |
+| `tuios fan verify` starts in the card's fan | `doing` | `verify` |
+| Every attempt's check ended and none passed | `verify` | `doing` |
+| A pull request on the branch opened | `plan`, `doing`, `verify` | `review` |
+| The pull request merged | `plan`, `doing`, `verify`, `review` | `shipped` |
+| The pull request closed with no merge | `review` | `doing` |
+
+A blocked card and a done card never move on their own. A plan is held only when `[agents.approvals]` holds plans for the harness and the pane is not in front of you. `[tasks] auto_stage = false` leaves every stage to you. `[tasks] stages` picks the stages the board shows. See [The tasks table](/docs/configuration#the-tasks-table).
+
+### Agents that stop reporting <Since config="agents.silent_after" /> [#agents-that-stop-reporting]
+
+A harness with hooks reports at each prompt and each tool call. When the harness hangs, the reports stop. A pane that reported `working` through a hook, and then sends no report for `silent_after`, shows as `unknown` with the reason `silent`. The default is 10 minutes.
+
+- `get-agent-state` and `list-agents` report `state: unknown` and `reason: silent`.
+- The rail and the agents view draw the `unknown` mark. The row reads "No report for N min".
+- The state the agent reported stays `working` underneath. `ask-agent`, `fan`, the queue and mail do not type into the pane. The next report shows the agent's state again.
+
+Set a longer time if your agents run long tool calls that send no hooks. See [Agents that stop reporting](/docs/configuration#agents-that-stop-reporting).
 
 ### The thread <Since feature="agent-thread" /> [#the-thread]
 
@@ -392,6 +450,8 @@ A bulk key acts only on the marked agents the list shows. An agent in a folded g
 The list that <kbd>1</kbd> opens shows each approval whole. <kbd>Enter</kbd> does nothing until the list has been on the screen for a moment. A risky approval, a plan, and an approval that the screen cannot show whole are not in the list. The list says `2 need a second look. Allow them one by one.` An approval that changed after the list showed it is not allowed. <kbd>2</kbd>, always allow, does not work on many agents at once.
 
 <kbd>Esc</kbd> and <kbd>Ctrl</kbd>+<kbd>]</kbd> close a reply to many agents and keep the draft. A key that `send-keys` typed does none of these actions.
+
+After a restart, each agent to resume is a Resume row. <kbd>*</kbd> then <kbd>y</kbd> resumes them all. To resume some, mark each with <kbd>x</kbd> and press <kbd>y</kbd>. <kbd>y</kbd> alone resumes the row under the cursor. The view stays open, and each row says `Resuming` until the agent is back. A Resume row on another machine is left out.
 
 ## Replying and the queue
 
@@ -509,6 +569,10 @@ When the daemon refuses a reply, the draft stays. Drafts stay in the memory of t
 
 A reply to an agent on a linked machine goes to the daemon on this machine, which sends it over the link. The other machine queues it, writes the paste and image files there, and types the reply when the agent comes to rest. The `[hosts]` policy of that machine for this machine must allow `write`, and `files` for a paste block or an image. See [Remote Hosts](/docs/remote-hosts).
 
+### Your draft comes first
+
+A message waits while you write to the agent. tuios does not type a queued message or a mail wake when you typed into the pane less than 3 seconds ago. For Claude Code and Codex, it also waits while the input box holds text. The row shows "Waits: your draft is in the prompt box", and `get-agent-state` reports `draft_held`. A draft that holds a message for 10 minutes opens a question in the Inbox. Nothing is dropped.
+
 ### The queue [#the-queue]
 
 From a shell:
@@ -576,6 +640,10 @@ Step through a review, from opening it to sending the notes and keeping one atte
 
 <ReviewWalkthrough />
 
+### Stage from the review <Since config="keybindings.review.*" /> [#stage-from-the-review]
+
+You can keep the good hunks of a change and leave the rest. <kbd>a</kbd> stages the hunk under the cursor and <kbd>d</kbd> unstages it. <kbd>A</kbd> and <kbd>D</kbd> do the same for the whole file, and <kbd>z</kbd> undoes the last of them. Only the index of the pane's worktree changes. The working files stay as the agent left them. A key from `send-keys` or a tape cannot stage. See [The review overlay](/docs/keybindings#the-review-overlay).
+
 ### Comparing the attempts of a fan
 
 For a pane in a [fan](/docs/worktrees#fan-out-one-prompt-several-agents), <kbd>w</kbd> in the review shows every attempt side by side, with what each changed against the fan's base and its last check:
@@ -623,6 +691,12 @@ A daemon restart ends every program in every pane. The restore brings back the l
 | `off` | Nothing |
 
 `tuios resume-agent -w <pane>` types the same command at any time, and `--dry-run` prints it. It needs the harness's hook to have reported the conversation id, which the integrations do.
+
+### Kept flags
+
+A resumed agent keeps the flags you started it with, for Claude Code, Codex, Copilot, opencode and pi. Start Claude Code with `claude --permission-mode plan --model opus`, and the resume command is `claude --resume <id> --permission-mode plan --model opus`. A prompt and a one-shot flag such as `-p` are never kept. tuios reads the flags on Linux and macOS.
+
+A kept flag that turns approvals off shows a warning. The Resume row says `Resumes with approvals off (--dangerously-skip-permissions)`. Its card has the `risky` badge. With `daemon.resume_agents = "auto"`, tuios does not resume such an agent. It stays a Resume row until you press <kbd>y</kbd>.
 
 ## Selectors
 

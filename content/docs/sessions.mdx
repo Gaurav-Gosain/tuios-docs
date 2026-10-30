@@ -111,6 +111,10 @@ tuios ls
 
 A session with a label (`tuios set-session-name`) shows in the table as `name (label)`. The label is not the session's name: scripts and `-s` keep using the real name.
 
+### Session order <Since command="set-session-order" /> [#session-order]
+
+The daemon keeps the order of your sessions. Move a session up or down on the rail, by key or by drag, and it moves on every client and in `tuios ls`. `tuios set-session-order work notes` puts sessions in order from a script. The order survives a daemon restart.
+
 ### Spaces <Since command="set-session-space" /> [#spaces]
 
 A space is a named group of related sessions. It is only a label on its sessions. A space exists while at least one session is in it.
@@ -287,6 +291,21 @@ corner = "bottom-right"  # bottom-right, bottom-left, top-right or top-left
 
 The action is `toggle_pip`. If your config puts <kbd>p</kbd> on a different window mode action, `toggle_pip` has no key. `tuios keybinds doctor` shows this. See [Keybindings](/docs/keybindings#windows).
 
+## Return notes <Since command="note" /> [#return-notes]
+
+A layout comes back after a detach or a restart. It does not tell you what you wanted to do next. A return note does. It is one short line on a session, or on one pane.
+
+```bash
+tuios note set next: run the migration
+tuios note get
+tuios note set -w build waiting for CI   # a note on one pane
+tuios note clear
+```
+
+When you attach or switch to the session, the dock shows `Note: next: run the migration`. The rail shows the note after the session name, in place of the branch. The session switcher shows it after the label. The focus of the agents view shows the note of the pane, else the note of its session.
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>I</kbd> edits the note of the session in the app. An agent can leave a note from its pane before it stops. A note is at most 200 bytes, and newlines become spaces. The note is saved with the session, so it survives a detach and a daemon restart. See [note](/docs/cli-reference#note).
+
 ## Sharing a session
 
 Several clients can attach to one session at the same time, for example two terminals on one machine, or a terminal and an SSH login.
@@ -442,6 +461,10 @@ $ _
 The `in <dir>` part is left out when the directory is unknown. Restored shells also get `TUIOS_RESTORED=1` in their environment, so your shell profile can react.
 
 The session is marked too. It shows a `restored` tag in `tuios ls`, the sidebar and the session switcher, and `tuios attach` prints a notice before drawing it. The mark clears on the first attach.
+
+<Callout type="info" title="Start session and start pane">
+`startup.session` and `startup.window` make a plain `tuios` open one session and one pane every time. See [The startup table](/docs/configuration#the-startup-table).
+</Callout>
 
 ### What survives each kind of interruption
 
@@ -683,6 +706,24 @@ WINDOW=$(tuios list-windows --json |
 ### Beyond the CLI
 
 Each CLI call opens its own connection. For a long-running program, speak the [JSON control protocol](/docs/control-protocol) on the daemon socket directly: structured errors, blocking waits and a live event stream. Run `tuios list-verbs` to see every verb. The [CLI Reference](/docs/cli-reference#remote-control-commands) documents every command and flag.
+
+## Local network access on macOS [#local-network-access-on-macos]
+
+On macOS 15 and later, a program needs permission to connect to devices on your local network. The permission belongs to an app. A daemon that a terminal started gets the permission of that terminal app. When the terminal app quits, programs in your panes get `No route to host` for local addresses, such as a NAS or a router.
+
+To fix this, run the daemon as an app of its own:
+
+```bash
+tuios daemon-app install          # write and sign ~/Applications/TUIOS Daemon.app
+tuios kill-server                 # run this in a terminal outside tuios
+tuios                             # starts the daemon through the app
+```
+
+Then connect to a device on your local network from a pane. When macOS asks about TUIOS Daemon, click Allow.
+
+- Each new daemon then starts through the app. Set `TUIOS_NO_DAEMON_APP=1` to start a daemon directly for one command.
+- Do not install the app again after you allow it. Each install makes a new signature. `--force` replaces the app, and you must then allow it again.
+- `--login` also starts the daemon at login. `tuios daemon-app status` shows the app, the tuios it starts and the login item. `tuios daemon-app uninstall` removes the app and the login item.
 
 ## Troubleshooting
 

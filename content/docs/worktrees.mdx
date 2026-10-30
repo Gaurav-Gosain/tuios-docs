@@ -50,6 +50,36 @@ TUIOS makes the worktree and its session, and attaches to it. The dialog does no
 
 <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>U</kbd> opens the same dialog on the repository of the focused pane's folder. Type the branch, and press <kbd>Enter</kbd>. TUIOS makes the worktree and its session, and switches to it. If the pane is not in a git repository, a message says so. The action is `new_worktree`. See [New worktree](/docs/keybindings#new-worktree).
 
+### Where a worktree goes <Since config="worktree.path" /> [#where-a-worktree-goes]
+
+`[worktree] path` sets where `tuios worktree new`, **New worktree...** on the rail and `tuios fan` put a worktree. The value is a path template.
+
+```toml
+[worktree]
+path = "{{ repo_path }}/.worktrees/{{ branch | slug }}"
+```
+
+| Variable | What it holds |
+|----------|---------------|
+| `repo_path` | The main checkout's directory |
+| `repo` | Its base name |
+| `branch` | The branch, as given |
+
+- `slug` turns a value into one folder name: `feat/retry` becomes `feat-retry`. `sanitize` is another name for `slug`. Use it on `branch`. Without it, the slash makes a folder per part, so the worktree of `feat/x` lands inside the worktree of `feat`.
+- A relative path starts at `repo_path`. A leading `~/` is your home folder.
+- The template must use `branch`.
+- A worktree can be inside the repository, where git does not ignore it. tuios then warns and names the folder to add to `.gitignore` or `.git/info/exclude`. tuios never edits those files.
+- The daemon reads the setting when it starts and when the file changes. While the setting is empty, `TUIOS_WORKTREE_DIR` in the daemon's environment still moves the default folder.
+
+### Run a command in a new worktree <Since feature="after-new-worktree" /> [#after-new-worktree]
+
+An `after-new-worktree` hook runs in the new worktree before its first pane starts. Use it to copy the ignored files a checkout needs. See [Hooks](/docs/hooks).
+
+```toml
+[hooks]
+after-new-worktree = 'cp "$TUIOS_WORKTREE_REPO_ROOT/.env" .'
+```
+
 ### Hooks and repository config
 
 TUIOS runs git with no hooks when it makes a worktree, so your `post-checkout` hook does not run. Run it yourself in the new worktree if you need it. The same holds for every git command TUIOS runs on its own: checkpoints, reviews, diffs and counts. A filter, textconv or diff program that only the repository's own `.git/config` names does not run. A filter from your global git config, such as Git LFS, still runs.
