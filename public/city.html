@@ -1,0 +1,1402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>tuios Factory</title>
+<meta name="description" content="An isometric map of tuios drawn as a factory: the daemon, its clients, agents and the flows between them.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+@font-face{font-family:"Monaspace Neon";src:url("/fonts/MonaspaceNeon-1.400.woff2") format("woff2");font-display:swap}
+
+/* Layout: one full-bleed canvas diorama; header, legend, controls, panel and tour card float over it. */
+:root{
+  color-scheme: dark;
+  --f-display: "Unbounded", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --f-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "Monaspace Neon", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --table:#15111d; --board:#2a2440; --board-side:#1c172d; --grid:#352e50;
+  --ink:#0e0b16; --shadow:#08060e; --fg:#ece6f8; --muted:#a79fbf;
+  --panel:#1f1a2e; --panel-2:#2a2340; --line:#3b3356; --accent:#cba6f7; --accent-ink:#1a1326;
+  --window:#f9e2af; --glass:#8fb6f5; --smoke:#cfc8e2; --belt:#3a3354; --screen-pane:#2b2a40;
+  --k-key:#89dceb; --k-out:#fab387; --k-snap:#a6e3a1; --k-state:#cba6f7; --k-agent:#f38ba8; --k-link:#94e2d5; --k-cell:#f9e2af;
+  --b-daemon:#b4befe; --b-daemon2:#cdb8f8; --roof-daemon:#8a78d4;
+  --b-agents:#f5c2e7; --b-agents2:#f2cdcd; --roof-agents:#d9779a;
+  --b-clients:#89dceb; --b-clients2:#a9d8f5; --roof-clients:#5c9fc4;
+  --b-surf:#f9e2af; --b-surf2:#f7cfa5; --roof-surf:#e99a5c;
+  --b-links:#94e2d5; --roof-links:#4fae9b;
+  --b-yard:#f5e0dc; --roof-yard:#d9928a;
+  --p-daemon:#b4befe1c; --p-agents:#f5c2e71a; --p-clients:#89dceb18; --p-surf:#f9e2af16; --p-links:#94e2d51a; --p-yard:#f5e0dc14;
+  --floor-text:#ffffff26;
+  --tilly-shell:#cba6f7; --tilly-dark:#a987ea; --tilly-feet:#8062cf; --tilly-screen:#11111b; --tilly-eye:#89dceb; --tilly-ball:#f9e2af; --tilly-blush:#f5c2e7; --tilly-mouth:#a6e3a1;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    color-scheme: light;
+    --table:#ebe6f3; --board:#faf8fd; --board-side:#d6cde6; --grid:#ebe5f3;
+    --ink:#2a2140; --shadow:#3a2d58; --fg:#221b34; --muted:#665c80;
+    --panel:#fdfcff; --panel-2:#f2eef9; --line:#dcd4ea; --accent:#8839ef; --accent-ink:#ffffff;
+    --window:#4c4f69; --glass:#5b7fc7; --smoke:#9a91b0; --belt:#e2dbee; --screen-pane:#363650;
+    --k-key:#0e9fd6; --k-out:#f2620f; --k-snap:#3d9a2a; --k-state:#8839ef; --k-agent:#d20f39; --k-link:#16918f; --k-cell:#d5880f;
+    --p-daemon:#7287fd1a; --p-agents:#ea76cb16; --p-clients:#04a5e514; --p-surf:#df8e1d16; --p-links:#17929918; --p-yard:#dc8a7814;
+    --floor-text:#2a214024;
+  }
+}
+:root[data-theme="light"]{
+  color-scheme: light;
+  --table:#ebe6f3; --board:#faf8fd; --board-side:#d6cde6; --grid:#ebe5f3;
+  --ink:#2a2140; --shadow:#3a2d58; --fg:#221b34; --muted:#665c80;
+  --panel:#fdfcff; --panel-2:#f2eef9; --line:#dcd4ea; --accent:#8839ef; --accent-ink:#ffffff;
+  --window:#4c4f69; --glass:#5b7fc7; --smoke:#9a91b0; --belt:#e2dbee; --screen-pane:#363650;
+  --k-key:#0e9fd6; --k-out:#f2620f; --k-snap:#3d9a2a; --k-state:#8839ef; --k-agent:#d20f39; --k-link:#16918f; --k-cell:#d5880f;
+  --p-daemon:#7287fd1a; --p-agents:#ea76cb16; --p-clients:#04a5e514; --p-surf:#df8e1d16; --p-links:#17929918; --p-yard:#dc8a7814;
+  --floor-text:#2a214024;
+}
+
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--table);color:var(--fg);font:15px/1.5 var(--f-body);overflow:hidden;-webkit-font-smoothing:antialiased}
+#map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none}
+#map.dragging{cursor:grabbing}
+#map.pointing{cursor:pointer}
+#map:focus-visible{box-shadow:inset 0 0 0 3px var(--accent)}
+button,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+code,.mono{font-family:var(--f-mono);font-size:.86em}
+code{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:0 .3em;white-space:nowrap}
+
+.float{position:fixed;z-index:5;box-sizing:border-box}
+.card{background:color-mix(in srgb,var(--panel) 92%,transparent);border:1.5px solid var(--line);border-radius:14px;box-shadow:0 1px 0 var(--ink),0 10px 30px -12px var(--shadow);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+
+#top{top:max(12px,env(safe-area-inset-top,0px));left:0;right:0;display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+#top>*{pointer-events:auto}
+.brand{display:flex;gap:12px;align-items:center;padding:10px 16px 10px 10px;min-width:0}
+.brand svg{flex:none;width:44px;height:47px}
+.brand h1{margin:0;font:700 19px/1.1 var(--f-display);letter-spacing:-.01em}
+.brand h1 span{color:var(--accent)}
+.brand p{margin:3px 0 0;color:var(--muted);font-size:13.5px;line-height:1.35}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.btn{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);cursor:pointer;font-weight:600;font-size:14px;box-shadow:0 2px 0 var(--ink)}
+.btn:hover{border-color:var(--accent)}
+.btn:active{transform:translateY(1px);box-shadow:0 1px 0 var(--ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn svg{width:16px;height:16px}
+select.btn{appearance:none;-webkit-appearance:none;padding-right:30px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 17px) 16px,calc(100% - 12px) 16px;background-size:5px 5px;background-repeat:no-repeat;max-width:210px}
+select.btn option,select.btn optgroup{background:var(--panel);color:var(--fg)}
+.menuwrap{position:relative}
+#toursMenu{position:absolute;right:0;top:46px;width:300px;padding:6px;display:grid;gap:2px}
+#toursMenu button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:28px 1fr;gap:2px 10px;padding:10px 12px;border-radius:9px;cursor:pointer}
+#toursMenu button:hover,#toursMenu button:focus-visible{background:var(--panel-2)}
+#toursMenu button:focus-visible{outline:2px solid var(--accent)}
+#toursMenu .n{grid-row:span 2;font:700 13px/26px var(--f-display);color:var(--accent);text-align:center;border:1.5px solid var(--line);border-radius:8px;height:26px}
+#toursMenu b{font-weight:600}
+#toursMenu small{color:var(--muted);font-size:12.5px;line-height:1.35}
+
+#legend{left:max(16px,env(safe-area-inset-left,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));width:236px;padding:4px 14px}
+#legend summary{cursor:pointer;font:600 12px/32px var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);list-style:none}
+#legend summary::-webkit-details-marker{display:none}
+#legend summary::after{content:"+";float:right;font-size:16px}
+#legend[open] summary::after{content:"–"}
+#legend ul{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:5px;font-size:13px}
+#legend li{display:flex;gap:9px;align-items:center}
+#legend .sw{flex:none;width:22px;height:8px;border-radius:4px;border:1.5px solid var(--ink)}
+#legend .gl{flex:none;width:22px;text-align:center;font:600 16px/1 var(--f-body)}
+#legend hr{border:0;border-top:1px solid var(--line);margin:8px 0}
+
+#ctrls{right:max(16px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));display:flex;flex-direction:row;gap:4px;padding:6px}
+#ctrls button{width:38px;height:38px;border-radius:9px;border:1.5px solid transparent;background:transparent;display:grid;place-items:center;cursor:pointer}
+#ctrls button:hover{background:var(--panel-2);border-color:var(--line)}
+#ctrls svg{width:18px;height:18px}
+#ctrls .sep{width:1px;background:var(--line);margin:4px 3px}
+#ctrls button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+#panel{top:96px;right:max(16px,env(safe-area-inset-right,0px));width:370px;max-height:calc(100% - 180px);overflow:auto;padding:18px 20px 20px;overscroll-behavior:contain}
+#panel .x{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:8px;border:0;background:transparent;cursor:pointer;font-size:20px;color:var(--muted)}
+#panel .x:hover{background:var(--panel-2);color:var(--fg)}
+.eyebrow{margin:0;font:600 11.5px/1.4 var(--f-body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.eyebrow i{width:10px;height:10px;border-radius:3px;border:1.5px solid var(--ink);display:inline-block}
+#panel h2,#tour h2{margin:6px 40px 8px 0;font:700 21px/1.2 var(--f-display);letter-spacing:-.01em;text-wrap:balance}
+#panel p.d{margin:0 0 14px;max-width:62ch}
+#panel h3{margin:16px 0 6px;font:600 11.5px/1.4 var(--f-body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+#panel ul{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+#pcode li{font-family:var(--f-mono);font-size:12.5px;overflow-wrap:anywhere}
+.facts{display:grid;gap:8px;margin:0;padding:12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line)}
+.facts div{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
+.facts dt{font:600 15px/1.2 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
+.facts dd{margin:0;font-size:13px;color:var(--muted);line-height:1.35}
+.flow{all:unset;box-sizing:border-box;display:flex;gap:9px;align-items:center;width:100%;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13.5px;line-height:1.3}
+.flow:hover,.flow:focus-visible{background:var(--panel-2)}
+.flow:focus-visible{outline:2px solid var(--accent)}
+.flow .sw{flex:none;width:16px;height:6px;border-radius:3px;border:1.5px solid var(--ink)}
+.flow span{min-width:0}
+.flow em{font-style:normal;color:var(--muted)}
+.none{color:var(--muted);font-size:13.5px;padding:2px 8px}
+
+#tour{left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom,0px));width:min(600px,calc(100% - 640px));min-width:380px;padding:16px 20px}
+#tour p.b{margin:0 0 14px;max-width:65ch}
+#tour .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#tour .row .spacer{flex:1}
+.dots{display:flex;gap:5px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--accent)}
+
+@media (max-width:1100px){
+  #tour{width:auto;min-width:0;left:max(16px,env(safe-area-inset-left,0px));right:max(70px,calc(env(safe-area-inset-right,0px) + 70px));transform:none}
+  #legend:not([open]){width:auto}
+}
+@media (max-width:720px){
+  body{font-size:14.5px}
+  #top{flex-direction:column;align-items:stretch;gap:8px}
+  .brand{padding:8px 12px 8px 8px}
+  .brand svg{width:34px;height:37px}
+  .brand h1{font-size:16px}
+  .brand p{font-size:12.5px}
+  .tools{justify-content:flex-start;flex-wrap:nowrap}
+  .tools .btn{height:36px}
+  select.btn{flex:1;min-width:0;max-width:none}
+  #toursMenu{left:0;right:auto;width:min(300px,calc(100vw - 32px))}
+  #legend{width:auto;max-width:calc(100% - 110px)}
+  #ctrls{flex-direction:row;flex-wrap:wrap;justify-content:flex-end;max-width:94px}
+  #ctrls .sep{display:none}
+  #ctrls button{width:36px;height:36px}
+  #panel,#tour{left:0;right:0;top:auto;bottom:0;width:auto;min-width:0;max-height:56%;transform:none;border-radius:16px 16px 0 0;border-bottom:0;padding:16px max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));z-index:7}
+  #tour{max-height:50%;overflow:auto}
+  #panel h2,#tour h2{font-size:18px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+<canvas id="map" tabindex="0" role="img" aria-label="An isometric map of tuios drawn as a factory. Use the building list or a tour to explore it."></canvas>
+
+<header id="top" class="float">
+  <div class="brand card">
+    <svg viewBox="8 2 104 118" aria-hidden="true">
+      <g stroke="var(--tilly-screen)" stroke-width="2.6">
+        <rect x="33" y="102" width="20" height="15" rx="6.5" fill="var(--tilly-feet)"/><rect x="67" y="102" width="20" height="15" rx="6.5" fill="var(--tilly-feet)"/>
+      </g>
+      <g stroke="var(--tilly-screen)" stroke-width="7" stroke-linecap="round"><line x1="54" y1="36" x2="43" y2="14"/><line x1="66" y1="36" x2="77" y2="14"/></g>
+      <g stroke="#7f849c" stroke-width="3" stroke-linecap="round"><line x1="54" y1="36" x2="43" y2="14"/><line x1="66" y1="36" x2="77" y2="14"/></g>
+      <g stroke="var(--tilly-screen)" stroke-width="2.6"><circle cx="43" cy="12.5" r="6" fill="var(--tilly-ball)"/><circle cx="77" cy="12.5" r="6" fill="var(--tilly-eye)"/></g>
+      <g stroke="var(--tilly-screen)" stroke-width="2.6" fill="var(--tilly-shell)"><ellipse cx="12" cy="76" rx="8" ry="10"/><ellipse cx="108" cy="76" rx="8" ry="10"/></g>
+      <rect x="17" y="34" width="86" height="73" rx="22" fill="var(--tilly-shell)" stroke="var(--tilly-screen)" stroke-width="2.6"/>
+      <rect x="26" y="44" width="68" height="52" rx="9" fill="var(--tilly-screen)"/>
+      <g fill="var(--tilly-eye)"><rect x="40" y="53.5" width="8.5" height="14" rx="2.2"/><rect x="71.5" y="53.5" width="8.5" height="14" rx="2.2"/></g>
+      <polyline points="53,79.5 57.5,83.5 53,87.5" stroke="var(--tilly-mouth)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <line x1="60.5" y1="88" x2="67" y2="88" stroke="var(--tilly-mouth)" stroke-width="2.6" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>tuios <span>factory</span></h1>
+      <p id="hint">A daemon runs your panes. Clients watch and type. Click a building, or start a tour.</p>
+    </div>
+  </div>
+  <nav class="tools" aria-label="Map tools">
+    <div class="menuwrap">
+      <button class="btn primary" id="toursBtn" aria-expanded="false" aria-controls="toursMenu">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3.5l7 4.5-7 4.5z" fill="currentColor"/></svg>Tours
+      </button>
+      <div id="toursMenu" class="card" role="menu" hidden></div>
+    </div>
+    <label class="sr" for="jump">Go to a building</label>
+    <select id="jump" class="btn"></select>
+  </nav>
+</header>
+
+<details id="legend" class="float card" open>
+  <summary>Legend</summary>
+  <ul id="legendList"></ul>
+</details>
+
+<div id="ctrls" class="float card" role="toolbar" aria-label="View">
+  <button id="rotL" title="Rotate left (Q)" aria-label="Rotate left"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a6.5 6.5 0 1 1 1.6 6.6"/><path d="M3.5 3.5V8H8"/></svg></button>
+  <button id="rotR" title="Rotate right (E)" aria-label="Rotate right"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6.5 6.5 0 1 0-1.6 6.6"/><path d="M16.5 3.5V8H12"/></svg></button>
+  <div class="sep"></div>
+  <button id="zin" title="Zoom in (+)" aria-label="Zoom in"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg></button>
+  <button id="zout" title="Zoom out (−)" aria-label="Zoom out"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 10h12"/></svg></button>
+  <button id="fit" title="Show the whole factory (0)" aria-label="Show the whole factory"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4"/></svg></button>
+  <div class="sep"></div>
+  <button id="pause" title="Pause motion (P)" aria-label="Pause motion" aria-pressed="false"><svg viewBox="0 0 20 20" fill="currentColor" id="pauseIcon"><rect x="5" y="4" width="3.5" height="12" rx="1"/><rect x="11.5" y="4" width="3.5" height="12" rx="1"/></svg></button>
+</div>
+
+<aside id="panel" class="float card" hidden aria-labelledby="pname">
+  <button class="x" id="pclose" aria-label="Close">×</button>
+  <p class="eyebrow" id="pdist"></p>
+  <h2 id="pname"></h2>
+  <p class="d" id="pdesc"></p>
+  <dl class="facts" id="pfacts"></dl>
+  <h3>Code</h3>
+  <ul id="pcode"></ul>
+  <h3>Flows in</h3>
+  <ul id="pin"></ul>
+  <h3>Flows out</h3>
+  <ul id="pout"></ul>
+</aside>
+
+<section id="tour" class="float card" hidden aria-live="polite" aria-labelledby="ttitle">
+  <p class="eyebrow"><span id="tname"></span></p>
+  <h2 id="ttitle"></h2>
+  <p class="b" id="tbody"></p>
+  <div class="row">
+    <div class="dots" id="tdots"></div>
+    <span class="spacer"></span>
+    <button class="btn" id="texit">End tour</button>
+    <button class="btn" id="tprev">Back</button>
+    <button class="btn primary" id="tnext">Next</button>
+  </div>
+</section>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const cv = $('#map'), ctx = cv.getContext('2d');
+
+/* ---------- geometry constants ---------- */
+const TW = 64, TH = 32, HU = 30, HW = TW / 2, HH = TH / 2, VZ = TH / HU;
+const WW = 48, WD = 41, CX = WW / 2, CY = WD / 2;
+const ISLAND = [-10.5, 1.2, 7.4, 6.6];
+
+/* ---------- tokens ---------- */
+const TOK = ['table','board','board-side','grid','ink','shadow','fg','muted','panel','panel-2','line','accent','accent-ink','window','glass','smoke','belt','screen-pane',
+  'k-key','k-out','k-snap','k-state','k-agent','k-link','k-cell',
+  'b-daemon','b-daemon2','roof-daemon','b-agents','b-agents2','roof-agents','b-clients','b-clients2','roof-clients','b-surf','b-surf2','roof-surf','b-links','roof-links','b-yard','roof-yard',
+  'p-daemon','p-agents','p-clients','p-surf','p-links','p-yard','floor-text',
+  'tilly-shell','tilly-dark','tilly-feet','tilly-screen','tilly-eye','tilly-ball','tilly-blush','tilly-mouth'];
+let T = {};
+const rgbCache = new Map();
+function rgb(h){
+  let c = rgbCache.get(h); if (c) return c;
+  let s = (h || '#000').trim().replace('#','');
+  if (s.length === 3 || s.length === 4) s = s.split('').map(x => x + x).join('');
+  const n = parseInt(s.slice(0,6), 16) || 0;
+  c = [n >> 16 & 255, n >> 8 & 255, n & 255, s.length >= 8 ? parseInt(s.slice(6,8),16) / 255 : 1];
+  rgbCache.set(h, c); return c;
+}
+const shadeCache = new Map();
+function shade(tok, f){
+  const q = Math.round(f * 40), key = tok + q;
+  let v = shadeCache.get(key); if (v) return v;
+  const A = rgb(T[tok]), B = rgb(T.shadow), t = Math.min(1, (1 - q / 40) * 0.95);
+  v = `rgba(${A[0] + (B[0]-A[0])*t | 0},${A[1] + (B[1]-A[1])*t | 0},${A[2] + (B[2]-A[2])*t | 0},${A[3]})`;
+  shadeCache.set(key, v); return v;
+}
+function alpha(tok, a){ const A = rgb(T[tok]); return `rgba(${A[0]},${A[1]},${A[2]},${A[3]*a})`; }
+function readTokens(){
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of TOK) T[k] = cs.getPropertyValue('--' + k).trim();
+  shadeCache.clear();
+}
+
+/* ---------- solids ---------- */
+function solid(faces, color, opt = {}){
+  let cx = 0, cy = 0, cz = 0, n = 0, z0 = Infinity, ztop = -Infinity;
+  for (const f of faces) for (const v of f){ cx += v[0]; cy += v[1]; cz += v[2]; n++; z0 = Math.min(z0, v[2]); ztop = Math.max(ztop, v[2]); }
+  cx /= n; cy /= n; cz /= n;
+  const fs = faces.map((v, i) => {
+    const a = v[0], b = v[1], c = v[2];
+    const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2], wx = c[0]-a[0], wy = c[1]-a[1], wz = c[2]-a[2];
+    let nx = uy*wz - uz*wy, ny = uz*wx - ux*wz, nz = ux*wy - uy*wx;
+    let fx = 0, fy = 0, fz = 0; for (const p of v){ fx += p[0]; fy += p[1]; fz += p[2]; }
+    fx /= v.length; fy /= v.length; fz /= v.length;
+    if ((fx-cx)*nx + (fy-cy)*ny + (fz-cz)*nz < 0){ nx = -nx; ny = -ny; nz = -nz; }
+    const L = Math.hypot(nx, ny, nz) || 1;
+    return { v, n: [nx/L, ny/L, nz/L], color: (opt.fc && opt.fc[i]) || null, decals: [] };
+  });
+  return { faces: fs, color, cx, cy, z0, ztop };
+}
+function box(x, y, z, w, d, h, color, opt){
+  const X0=x, X1=x+w, Y0=y, Y1=y+d, Z0=z, Z1=z+h;
+  return solid([
+    [[X0,Y0,Z1],[X1,Y0,Z1],[X1,Y1,Z1],[X0,Y1,Z1]],
+    [[X0,Y0,Z0],[X1,Y0,Z0],[X1,Y0,Z1],[X0,Y0,Z1]],
+    [[X1,Y0,Z0],[X1,Y1,Z0],[X1,Y1,Z1],[X1,Y0,Z1]],
+    [[X1,Y1,Z0],[X0,Y1,Z0],[X0,Y1,Z1],[X1,Y1,Z1]],
+    [[X0,Y1,Z0],[X0,Y0,Z0],[X0,Y0,Z1],[X0,Y1,Z1]],
+  ], color, opt);
+}
+function gable(x, y, z, w, d, h, axis, color){
+  const X0=x, X1=x+w, Y0=y, Y1=y+d, Z=z, ZH=z+h;
+  if (axis === 'x'){ const ym = y + d/2;
+    return solid([[[X0,Y0,Z],[X1,Y0,Z],[X1,ym,ZH],[X0,ym,ZH]],[[X1,Y1,Z],[X0,Y1,Z],[X0,ym,ZH],[X1,ym,ZH]],[[X0,Y0,Z],[X0,Y1,Z],[X0,ym,ZH]],[[X1,Y0,Z],[X1,Y1,Z],[X1,ym,ZH]]], color);
+  }
+  const xm = x + w/2;
+  return solid([[[X0,Y0,Z],[X0,Y1,Z],[xm,Y1,ZH],[xm,Y0,ZH]],[[X1,Y1,Z],[X1,Y0,Z],[xm,Y0,ZH],[xm,Y1,ZH]],[[X0,Y0,Z],[X1,Y0,Z],[xm,Y0,ZH]],[[X0,Y1,Z],[X1,Y1,Z],[xm,Y1,ZH]]], color);
+}
+function saw(x, y, z, w, d, h, n, color){
+  const out = [], tw = w / n;
+  for (let i = 0; i < n; i++){
+    const xa = x + i*tw, xb = xa + tw, Y0 = y, Y1 = y + d, ZH = z + h;
+    out.push(solid([
+      [[xa,Y0,z],[xa,Y1,z],[xb,Y1,ZH],[xb,Y0,ZH]],
+      [[xb,Y0,z],[xb,Y1,z],[xb,Y1,ZH],[xb,Y0,ZH]],
+      [[xa,Y0,z],[xb,Y0,z],[xb,Y0,ZH]],
+      [[xa,Y1,z],[xb,Y1,z],[xb,Y1,ZH]],
+    ], color, { fc: [null, 'glass', null, null] }));
+  }
+  return out;
+}
+function pyr(x, y, z, w, d, h, color){
+  const a = [x + w/2, y + d/2, z + h];
+  const c = [[x,y,z],[x+w,y,z],[x+w,y+d,z],[x,y+d,z]];
+  return solid([[c[0],c[1],a],[c[1],c[2],a],[c[2],c[3],a],[c[3],c[0],a]], color);
+}
+function cyl(cx, cy, z, r, h, n, color){
+  const top = [], faces = [];
+  for (let i = 0; i < n; i++){
+    const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2;
+    const p0 = [cx + Math.cos(a0)*r, cy + Math.sin(a0)*r], p1 = [cx + Math.cos(a1)*r, cy + Math.sin(a1)*r];
+    faces.push([[p0[0],p0[1],z],[p1[0],p1[1],z],[p1[0],p1[1],z+h],[p0[0],p0[1],z+h]]);
+    top.push([p0[0],p0[1],z+h]);
+  }
+  faces.unshift(top);
+  const s = solid(faces, color); s.round = true; return s;
+}
+function cone(cx, cy, z, r, h, n, color){
+  const faces = [], a = [cx, cy, z + h];
+  for (let i = 0; i < n; i++){
+    const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2;
+    faces.push([[cx + Math.cos(a0)*r, cy + Math.sin(a0)*r, z],[cx + Math.cos(a1)*r, cy + Math.sin(a1)*r, z], a]);
+  }
+  const s = solid(faces, color); s.round = true; return s;
+}
+function funnel(x, y, z, w, d, h, grow, color){
+  const b = [[x,y,z],[x+w,y,z],[x+w,y+d,z],[x,y+d,z]];
+  const t = [[x-grow,y-grow,z+h],[x+w+grow,y-grow,z+h],[x+w+grow,y+d+grow,z+h],[x-grow,y+d+grow,z+h]];
+  return solid([t,[b[0],b[1],t[1],t[0]],[b[1],b[2],t[2],t[1]],[b[2],b[3],t[3],t[2]],[b[3],b[0],t[0],t[3]]], color);
+}
+/* Decals on the four side faces of a box: windows, screens, cells. */
+function decal(s, side, u0, u1, v0, v1, color){
+  const f = s.faces[side], [A, B, , D] = f.v;
+  const P = (u, v) => [A[0] + (B[0]-A[0])*u + (D[0]-A[0])*v, A[1] + (B[1]-A[1])*u + (D[1]-A[1])*v, A[2] + (B[2]-A[2])*u + (D[2]-A[2])*v];
+  f.decals.push({ v: [P(u0,v0), P(u1,v0), P(u1,v1), P(u0,v1)], color });
+}
+function windows(s, rows = 1, per = 1.1, v0 = 0.3, v1 = 0.75, color = 'window'){
+  for (let side = 1; side <= 4; side++){
+    const [A, B] = s.faces[side].v, L = Math.hypot(B[0]-A[0], B[1]-A[1]);
+    const cols = Math.max(1, Math.floor(L / per)), rh = (v1 - v0) / rows;
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++)
+      decal(s, side, (c + 0.28) / cols, (c + 0.72) / cols, v0 + r*rh + rh*0.12, v0 + (r+1)*rh - rh*0.12, color);
+  }
+  return s;
+}
+
+/* ---------- districts ---------- */
+const DIST = {
+  links:    { name: 'Other machines', code: 'internal/federation', color: 'b-links', plate: 'p-links', r: [1, 1, 10, 10], label: [6, 9.4] },
+  surf:     { name: 'Surfaces', code: 'drawn in the client', color: 'b-surf', plate: 'p-surf', r: [13, 1, 20, 8.8], label: [24, 9.2] },
+  daemon:   { name: 'The daemon', code: 'internal/session', color: 'b-daemon', plate: 'p-daemon', r: [13, 12, 20, 17.2], label: [27.4, 27.6] },
+  yard:     { name: 'Pane programs', code: 'what runs in your panes', color: 'b-yard', plate: 'p-yard', r: [1, 13, 10.5, 17], label: [6.4, 31.8] },
+  agents:   { name: 'Agents', code: 'internal/harness, hooks, Inbox', color: 'b-agents', plate: 'p-agents', r: [13, 30.8, 20, 9.4], label: [30.6, 39.2] },
+  clients:  { name: 'Clients', code: 'loading docks', color: 'b-clients', plate: 'p-clients', r: [36.4, 1, 10.6, 39.2], label: [41.7, 38.2] },
+};
+
+/* ---------- buildings ---------- */
+const BL = [], B = {};
+function bld(id, dist, name, fp, info){
+  const b = { id, dist, name, fp, solids: [], sprites: [], chimneys: [], ...info };
+  b.cx = fp[0] + fp[2]/2; b.cy = fp[1] + fp[3]/2;
+  BL.push(b); B[id] = b; return b;
+}
+function add(b, ...ss){ for (const s of ss.flat()) b.solids.push(s); return b; }
+function house(b, x, y){
+  add(b, windows(box(x, y, 0, 2, 2, 1.1, 'b-yard'), 1, 1, 0.3, 0.7), gable(x, y, 1.1, 2, 2, 0.8, 'x', 'roof-yard'), box(x + 1.35, y + 0.25, 1.2, 0.32, 0.32, 1.0, 'roof-yard'));
+  b.chimneys.push([x + 1.51, y + 0.41, 2.2]);
+}
+
+/* The daemon */
+{
+  const b = bld('gate', 'daemon', 'Socket gate', [28, 14, 3, 3], {
+    d: 'Every client and every CLI call comes in through one unix socket. The daemon reads the first byte of a connection: `{` starts JSON verbs, and anything else starts binary frames. A client with a wire protocol out of range is refused before it attaches.',
+    code: ['internal/session/daemon_handlers.go', 'docs/protocol.md'],
+    facts: [['1.16 ms', 'daemon round trip at p50, a key to the client emulator (perf.md, 2026-08)']] });
+  const base = box(28, 14, 0, 3, 3, 1.2, 'b-daemon');
+  decal(base, 3, 0.36, 0.64, 0, 0.62, 'tilly-screen'); decal(base, 2, 0.36, 0.64, 0, 0.62, 'tilly-screen');
+  add(b, base, windows(box(28.6, 14.6, 1.2, 1.8, 1.8, 2.0, 'b-daemon2'), 2, 0.9, 0.15, 0.85), box(29.15, 15.15, 3.2, 0.7, 0.7, 0.45, 'accent'));
+  b.beacon = [29.5, 15.5, 3.65];
+}
+{
+  const b = bld('grants', 'daemon', 'Grants booth', [28, 18.5, 2, 2], {
+    d: 'The daemon checks every call from a pane against the pane’s grants before anything runs. The grants are read, write, fan, respond, files, task and admin. The CLI, a script on the socket, `tuios mcp` and the tmux shim all meet the same check.',
+    code: ['skills/tuios/grants.md', 'tuios pane-grants'],
+    facts: [['7', 'grants a pane can hold. A plugin can never hold respond.']] });
+  add(b, windows(box(28, 18.5, 0, 2, 2, 1.1, 'b-daemon'), 1, 1, 0.35, 0.7), pyr(28, 18.5, 1.1, 2, 2, 0.8, 'roof-daemon'), box(30, 19.35, 0.55, 1.4, 0.16, 0.16, 'k-agent'));
+}
+{
+  const b = bld('session', 'daemon', 'Session hall', [19, 13, 6, 4], {
+    d: 'The daemon owns the sessions, their windows and workspaces, and one PTY per pane. A client keeps its own copy of session state and pushes it back as it renders. The daemon merges that push by version.',
+    code: ['internal/session/session.go', 'internal/session (manager)', 'docs/SESSIONS.md'],
+    facts: [['9', 'workspaces per session'], ['1', 'daemon per user, by default']] });
+  add(b, windows(box(19, 13, 0, 6, 4, 2.0, 'b-daemon2'), 2, 1.0, 0.18, 0.82), saw(19, 13, 2.0, 6, 4, 0.8, 4, 'roof-daemon'));
+}
+{
+  const b = bld('archive', 'daemon', 'State archive', [14, 13, 4, 3], {
+    d: 'Each session writes its state to a JSON file within a couple of seconds of a change. It writes again every 30 seconds, and once more on a clean shutdown. The write is atomic: a temp file is renamed into place. Pane history goes to a separate file.',
+    code: ['internal/session (resurrection)', 'docs/SESSIONS.md#resurrection'],
+    facts: [['30 s', 'between saves when nothing changes'], ['1000', 'lines of scrollback kept across a daemon restart, by default']] });
+  add(b, windows(box(14, 13, 0, 4, 3, 1.4, 'b-daemon'), 1, 0.8, 0.3, 0.72), gable(14, 13, 1.4, 4, 3, 0.9, 'x', 'roof-daemon'));
+}
+{
+  const b = bld('pty', 'daemon', 'PTY works', [14, 20, 5, 4], {
+    d: 'Every pane’s program starts through one door, `ptyspawn`: allocate the pty, give the child its controlling terminal, start it. In a daemon session the PTY belongs to the daemon. A client can quit, and the program keeps running.',
+    code: ['internal/ptyspawn/spawn.go', 'internal/session/session.go (PTY)'],
+    facts: [['1', 'PTY per pane, owned by the daemon']] });
+  add(b, windows(box(14, 20, 0, 5, 4, 1.8, 'b-daemon2'), 1, 0.9, 0.25, 0.7), saw(14, 20, 1.8, 5, 4, 0.7, 3, 'roof-daemon'), cyl(18.35, 20.65, 0, 0.36, 3.7, 10, 'roof-daemon'));
+  b.chimneys.push([18.35, 20.65, 3.7]);
+}
+{
+  const b = bld('ring', 'daemon', 'Byte ring', [20.7, 20.2, 2.6, 2.6], {
+    d: 'Each PTY keeps a 64 KB ring of the bytes it produced, and a counter that numbers every byte ever produced. A subscribe replays the ring from a position, then streams live. That position lets a client resume without painting a byte twice.',
+    code: ['PTY.appendToBuffer, PTY.Subscribe (internal/session)', 'docs/REHYDRATION.md'],
+    facts: [['64 KB', 'ring per PTY, each byte numbered by outputSeq']] });
+  add(b, cyl(22, 21.5, 0, 1.3, 2.8, 16, 'b-daemon'), cyl(22, 21.5, 1.15, 1.34, 0.32, 16, 'k-out'), cone(22, 21.5, 2.8, 1.3, 0.8, 16, 'roof-daemon'));
+}
+{
+  const b = bld('emu', 'daemon', 'Emulator mill', [25, 19, 4, 4], {
+    d: 'One VT emulator per pane parses every byte, whether or not anyone watches. It answers the program’s queries and holds the screen and its scrollback. A build uses one of two backends: the pure Go emulator, or libghostty-vt behind `-tags ghostty`.',
+    code: ['vt/ (tuios.dev/vt)', 'vt/emulator.go', 'docs/ghostty-vt.md'],
+    facts: [['10,000', 'scrollback lines per pane by default, on the daemon and on the client']] });
+  add(b, windows(box(25, 19, 0, 4, 4, 2.8, 'b-daemon'), 2, 0.9, 0.15, 0.85), gable(25, 19, 2.8, 4, 4, 1.0, 'y', 'roof-daemon'));
+}
+{
+  const b = bld('snap', 'daemon', 'Snapshot press', [30, 22, 3, 3], {
+    d: '`snapshot.Capture` packs a pane’s state: the grid, cursor, pen, modes, kitty keyboard stack, titles, colours and history. The snapshot carries the stream position it was taken at, so the client subscribes from exactly there. Applying it twice changes nothing.',
+    code: ['vt/snapshot/capture.go', 'vt/snapshot/apply.go', 'docs/REHYDRATION.md'],
+    facts: [['1000', 'scrollback rows at most in one snapshot']] });
+  add(b, box(30, 22, 0, 3, 3, 1.0, 'b-daemon2'), box(30.2, 22.3, 1.0, 0.5, 2.4, 1.6, 'b-daemon'), box(32.3, 22.3, 1.0, 0.5, 2.4, 1.6, 'b-daemon'),
+    box(30.2, 22.3, 2.6, 2.6, 2.4, 0.5, 'roof-daemon'), box(31.05, 22.9, 1.75, 0.9, 1.2, 0.85, 'k-snap'));
+}
+{
+  const b = bld('crane', 'daemon', 'Upgrade crane', [14, 25.5, 3, 3], {
+    d: '`tuios restart-server` stops the daemon and starts the newest build. Sessions come back with their layout, their history and fresh shells. A live upgrade goes further: the daemon execs the new binary in place and hands over the PTYs, so the programs keep running.',
+    code: ['cmd/tuios/restart_server.go', 'internal/session/handoff.go', 'docs/design/live-handoff.md'],
+    facts: [['0.29–0.31 s', 'pause measured for a live upgrade of 60 busy panes with 1000 rows each'], ['15 s', 'a client waits for the new daemon after a restart']] });
+  add(b, box(14, 25.5, 0, 3, 3, 0.8, 'b-daemon'), box(15.1, 26.6, 0.8, 0.8, 0.8, 4.2, 'roof-surf'),
+    box(15.1, 24.3, 5.0, 0.8, 3.9, 0.35, 'roof-surf'), box(15.0, 27.6, 4.55, 1.0, 1.0, 0.75, 'roof-daemon'),
+    box(15.42, 24.62, 2.9, 0.16, 0.16, 2.1, 'ink'), box(15.15, 24.35, 2.3, 0.7, 0.7, 0.6, 'k-state'));
+}
+
+/* Pane programs */
+{
+  const b = bld('yard', 'yard', 'Pane programs', [3.5, 15.5, 7, 8], {
+    d: 'These are the programs in your panes: shells, editors, builds. Each one acts as if it owns a real terminal. It reads keys from its PTY and writes bytes back, escape sequences and all.',
+    code: ['$SHELL, nvim, make: started by internal/ptyspawn'],
+    facts: [] });
+  house(b, 3.5, 15.5); house(b, 6.8, 15.5); house(b, 3.5, 19.5); house(b, 6.8, 19.5);
+  add(b, box(10.0, 19.6, 0, 0.4, 4.2, 0.6, 'roof-yard'));
+}
+{
+  const b = bld('benches', 'yard', 'Agent benches', [3, 25, 6.6, 4], {
+    d: 'Coding agents run in panes like any other program. Each agent has one state: working, needs_input, idle, done or errored, or unknown when nothing says. The state shows as a shape in the title and as a row on the rail, so no state rests on colour alone.',
+    code: ['docs/AGENT_STATE.md#states', 'tuios list-agents --json'],
+    facts: [['7', 'states: none, working, needs_input, idle, done, errored, unknown']] });
+  add(b, box(3, 25, 0, 6.6, 4, 0.15, 'b-yard'));
+  const names = ['Claude Code', 'Codex', 'Gemini CLI'];
+  [3.4, 5.5, 7.6].forEach((x, i) => {
+    add(b, box(x, 27.1, 0.15, 1.7, 0.7, 0.35, 'roof-yard'));
+    const mon = box(x + 1.15, 27.15, 0.5, 0.5, 0.12, 0.45, 'tilly-screen');
+    add(b, mon);
+    b.sprites.push({ kind: 'robot', x: x + 0.6, y: 26.5, z: 0.15, name: names[i], i });
+  });
+}
+
+/* Agents */
+{
+  const b = bld('detector', 'agents', 'Harness detector', [14, 32, 4, 3], {
+    d: 'A registry of coding-agent CLIs, kept as data. It answers one question: which harness, if any, is this process. When nothing reports, tuios falls back to the process, screen rules and title rules. Sources are ranked, never added.',
+    code: ['internal/harness', 'tuios explain-agent-detect', 'docs/AGENT_STATE.md#recognising-a-harness'],
+    facts: [] });
+  add(b, windows(box(14, 32, 0, 4, 3, 1.3, 'b-agents'), 1, 0.9, 0.3, 0.72), cyl(15.3, 33.3, 1.3, 0.2, 0.9, 8, 'roof-agents'), cyl(15.3, 33.3, 2.2, 0.95, 0.16, 16, 'k-agent'));
+}
+{
+  const b = bld('hooks', 'agents', 'Hook relay', [19, 32, 3, 3], {
+    d: '`tuios integration install` wires a harness’s own hooks to tuios. Some harnesses report the pane’s state, and others report only the session id so the conversation can resume. A hook’s report outranks everything tuios can work out by looking.',
+    code: ['internal/integration', 'tuios agent-hook', 'tuios integration status'],
+    facts: [['19', 'harnesses wired: 12 report state, 7 report the session']] });
+  add(b, box(19, 32, 0, 3, 3, 1.0, 'b-agents2'), windows(box(19.9, 32.9, 1.0, 1.2, 1.2, 2.2, 'b-agents'), 2, 0.9, 0.15, 0.85), cyl(20.5, 33.5, 3.2, 0.07, 1.4, 6, 'ink'), box(20.37, 33.37, 4.6, 0.26, 0.26, 0.26, 'k-agent'));
+}
+{
+  const b = bld('inbox', 'agents', 'Inbox', [23, 32, 5, 3], {
+    d: 'One list of everything waiting for you, in every session: approvals, questions, mail, errors, finished turns and conversations to resume. The daemon keeps it, so every client shows the same list. An item closes by itself when what opened it stops being true.',
+    code: ['tuios list-attention', 'docs/AGENT_STATE.md#the-inbox'],
+    facts: [['ctrl+b i', 'opens the agents view and its Needs you group'], ['ctrl+b o', 'jumps to the oldest item']] });
+  const s = windows(box(23, 32, 0, 5, 3, 1.6, 'b-agents'), 1, 1.0, 0.3, 0.7);
+  decal(s, 3, 0.4, 0.6, 0, 0.55, 'tilly-screen');
+  add(b, s, gable(23, 32, 1.6, 5, 3, 1.0, 'x', 'roof-agents'), box(27.3, 31.7, 1.6, 0.12, 0.12, 1.6, 'ink'), box(27.42, 31.7, 2.75, 0.7, 0.08, 0.42, 'k-agent'));
+}
+{
+  const b = bld('approvals', 'agents', 'Approvals desk', [29, 32, 3, 3], {
+    d: 'You answer a prompt from the Inbox without attaching: a digit, `a` or `d`, or `1`, `2` or `3` on an approval. Risk rules mark a command risky, and a risky allow takes a second press of the same key. The daemon checks the prompt before it presses anything.',
+    code: ['internal/risk', 'docs/AGENT_STATE.md#approvals-from-the-inbox'],
+    facts: [] });
+  add(b, windows(box(29, 32, 0, 3, 3, 1.2, 'b-agents2'), 1, 0.9, 0.3, 0.7), pyr(29, 32, 1.2, 3, 3, 0.9, 'roof-agents'));
+}
+{
+  const b = bld('tasks', 'agents', 'Task board', [14, 36.2, 3.6, 2], {
+    d: 'A task card is one unit of work in a session: a title, a prompt, a stage and the pane that holds it. The daemon keeps the cards, so they outlive the pane that added them. An agent takes the next card with `tuios task claim --next`.',
+    code: ['tuios task', 'skills/tuios/tasks.md'],
+    facts: [] });
+  const p = box(14.2, 37.0, 0.3, 3.2, 0.25, 1.8, 'b-agents2');
+  const cards = ['k-cell', 'k-snap', 'k-key', 'k-cell', 'k-agent', 'k-snap'];
+  for (const side of [1, 3]) cards.forEach((c, i) => decal(p, side, 0.08 + (i % 3) * 0.31, 0.3 + (i % 3) * 0.31, i < 3 ? 0.55 : 0.12, i < 3 ? 0.88 : 0.45, c));
+  add(b, box(14, 36.2, 0, 3.6, 2, 0.3, 'roof-agents'), p);
+}
+{
+  const b = bld('mail', 'agents', 'Mail room', [18.6, 36.2, 3, 2], {
+    d: 'Agents mail each other and ask each other questions. Everything one agent reads from another is fenced as data. Only you can answer a prompt or speak as human, and your reply is marked verified. A return note waits for whoever comes back.',
+    code: ['tuios send-agent-message', 'tuios ask-human', 'tuios note set', 'skills/tuios/mail.md'],
+    facts: [] });
+  add(b, windows(box(18.6, 36.2, 0, 3, 2, 1.2, 'b-agents'), 1, 0.9, 0.3, 0.7), gable(18.6, 36.2, 1.2, 3, 2, 0.8, 'y', 'roof-agents'));
+}
+{
+  const b = bld('shelf', 'agents', 'Settled shelf', [23, 36.2, 5, 2], {
+    d: 'Settle an agent with `D` in the agents view to put it out of view without ending it. It keeps running in its pane. It comes back by itself when it asks a question, waits on an approval, errors, finishes a turn or sends you mail.',
+    code: ['docs/AGENT_STATE.md#settling-an-agent'],
+    facts: [] });
+  add(b, box(23, 36.2, 0, 5, 2, 0.15, 'roof-agents'));
+  for (const x of [23, 27.8]) for (const y of [36.2, 38.0]) add(b, box(x, y, 0.15, 0.2, 0.2, 1.6, 'roof-agents'));
+  add(b, box(23, 36.2, 0.85, 5, 2, 0.1, 'b-agents2'), box(23, 36.2, 1.75, 5, 2, 0.1, 'b-agents2'));
+  [[23.5,'k-cell'],[24.6,'k-snap'],[26.1,'k-key']].forEach(([x,c]) => add(b, box(x, 36.6, 0.15, 0.8, 0.9, 0.6, c)));
+  [[23.9,'k-agent'],[25.4,'k-cell'],[26.7,'k-state']].forEach(([x,c]) => add(b, box(x, 36.6, 0.95, 0.75, 0.9, 0.55, c)));
+}
+
+/* Clients */
+{
+  const b = bld('term', 'clients', 'Your terminal', [43, 10, 3, 3], {
+    d: 'The terminal you run tuios in. It sends key and mouse events to the tuios client, and shows the frames the compositor writes. With a daemon, this client is only a viewer.',
+    code: ['charm.land/bubbletea/v2', 'cmd/tuios (tuios, tuios attach)'],
+    facts: [] });
+  const scr = box(43, 10.6, 1.0, 3, 1.0, 2.3, 'b-clients2');
+  for (const side of [1, 3]){
+    decal(scr, side, 0.06, 0.94, 0.08, 0.92, 'tilly-screen');
+    decal(scr, side, 0.1, 0.48, 0.42, 0.88, 'screen-pane'); decal(scr, side, 0.52, 0.9, 0.42, 0.88, 'screen-pane'); decal(scr, side, 0.1, 0.9, 0.12, 0.38, 'screen-pane');
+  }
+  add(b, box(44.1, 11.0, 0, 0.8, 0.5, 1.0, 'roof-clients'), scr, box(43.4, 12.2, 0, 2.2, 0.75, 0.22, 'b-clients'));
+}
+{
+  const b = bld('input', 'clients', 'Input router', [37, 11, 4, 3], {
+    d: 'Every key arrives as a Bubble Tea event, and the router reads the mode: window management, terminal or copy mode. In terminal mode the key is for the focused pane. It goes to the daemon as `MsgInput`, with the pane id and the bytes.',
+    code: ['internal/input/handler.go', 'internal/input/keyboard.go'],
+    facts: [['574 ns', 'to route one key at p50, 4 panes (perf.md, 2026-08)']] });
+  add(b, windows(box(37, 11, 0, 4, 3, 1.4, 'b-clients'), 1, 0.9, 0.3, 0.72), saw(37, 11, 1.4, 4, 3, 0.65, 3, 'roof-clients'));
+}
+{
+  const b = bld('cemu', 'clients', 'Client emulator', [37, 16, 4, 3], {
+    d: 'Each window in the client holds a second emulator for its pane. It is filled from a snapshot, then from the stream from the snapshot’s position. Its replies to the program are dropped, because the daemon’s emulator already answered.',
+    code: ['internal/terminal/window.go', 'internal/app/session.go (restoreTerminalContent)'],
+    facts: [] });
+  add(b, windows(box(37, 16, 0, 4, 3, 2.0, 'b-clients2'), 2, 0.9, 0.18, 0.82), gable(37, 16, 2.0, 4, 3, 0.8, 'x', 'roof-clients'));
+}
+{
+  const b = bld('coal', 'clients', 'Render coalescer', [37, 20.5, 3, 2], {
+    d: 'The coalescer fires on the leading edge, so a quiet pane shows its output at once. After that it holds to at most one render per 8 ms. A flooding pane cannot make the compositor draw partial frames.',
+    code: ['internal/terminal/window_io.go (renderCoalescer)'],
+    facts: [['8 ms', 'at most one render per pane in this window'], ['20.1 µs', 'quiet pane, output to render signal at p50 (was 5.01 ms)']] });
+  add(b, box(37.2, 20.7, 0, 2.6, 1.6, 0.7, 'b-clients'), funnel(37.7, 21.0, 0.7, 1.6, 0.6, 1.0, 0.55, 'b-clients2'));
+}
+{
+  const b = bld('comp', 'clients', 'Compositor', [42, 16, 4, 5], {
+    d: '`OS.View` culls hidden windows, reuses cached layers, and stacks windows by z-index. It adds the overlays, the dock and notifications, then writes ANSI. Renders follow state changes, so an idle session draws nothing.',
+    code: ['internal/app/render.go', 'internal/app/stylecache.go', 'internal/app/os.go'],
+    facts: [['1.78 ms', 'key to the composed frame with its echo, 1 pane, p50 (p99 2.15 ms)'], ['0', 'renders and wire bytes in 10 s of idle with 3 windows']] });
+  add(b, windows(box(42, 16, 0, 4, 5, 2.0, 'b-clients'), 2, 1.0, 0.18, 0.82), saw(42, 16, 2.0, 4, 5, 0.8, 4, 'roof-clients'));
+}
+{
+  const b = bld('tape', 'clients', 'Tape studio', [42, 23, 3, 2.5], {
+    d: 'A tape script drives tuios with its own keys: `Press`, `Action`, `Run`, `WaitFor` and `Expect`. Record a tape with `ctrl+b T r`. Play it with `tuios tape play`.',
+    code: ['internal/tape', 'docs/TAPE_SCRIPTING.md'],
+    facts: [] });
+  add(b, windows(box(42, 23, 0, 3, 2.5, 1.2, 'b-clients2'), 1, 0.9, 0.3, 0.7), cyl(42.9, 24.25, 1.2, 0.45, 0.22, 12, 'tilly-screen'), cyl(44.1, 24.25, 1.2, 0.45, 0.22, 12, 'tilly-screen'));
+}
+{
+  const b = bld('ssh', 'clients', 'SSH dock', [37, 27, 4, 2.5], {
+    d: '`tuios ssh` serves tuios over SSH with Wish. It builds one window manager per connection, attached to the daemon like a local client. It sends the composed frame to the SSH client’s terminal.',
+    code: ['internal/server', 'internal/served'],
+    facts: [] });
+  const s = box(37, 27, 0, 4, 2.5, 1.3, 'b-clients');
+  for (const u of [0.12, 0.42, 0.72]) decal(s, 4, u, u + 0.2, 0, 0.7, 'tilly-screen');
+  decal(s, 3, 0.1, 0.3, 0, 0.7, 'tilly-screen'); decal(s, 3, 0.4, 0.6, 0, 0.7, 'tilly-screen'); decal(s, 3, 0.7, 0.9, 0, 0.7, 'tilly-screen');
+  add(b, s, gable(37, 27, 1.3, 4, 2.5, 0.7, 'x', 'roof-clients'));
+}
+{
+  const b = bld('web', 'clients', 'Web dock', [42, 27, 4, 2.5], {
+    d: '`tuios-web` is a separate binary, kept apart for security. It builds one window manager per connection and serves it to a browser through sip.',
+    code: ['cmd/tuios-web', 'internal/served', 'docs/WEB.md'],
+    facts: [] });
+  add(b, windows(box(42, 27, 0, 4, 2.5, 1.3, 'b-clients2'), 1, 0.9, 0.3, 0.72), gable(42, 27, 1.3, 4, 2.5, 0.7, 'x', 'roof-clients'), cyl(45.0, 28.25, 2.0, 0.5, 0.5, 12, 'k-link'));
+}
+{
+  const b = bld('gui', 'clients', 'GUI bridge', [37, 31.5, 4, 2.5], {
+    d: '`tuios gui-bridge` runs a full tuios client with no screen of its own. It hands a native GPU renderer, tuios-gpui, the session layout as JSON and each pane’s bytes as binary frames over a pipe.',
+    code: ['internal/guibridge'],
+    facts: [] });
+  add(b, windows(box(37, 31.5, 0, 4, 2.5, 1.6, 'b-clients'), 1, 0.9, 0.3, 0.72), saw(37, 31.5, 1.6, 4, 2.5, 0.6, 3, 'roof-clients'));
+}
+{
+  const b = bld('phone', 'clients', 'Phone pier', [42, 32, 4, 3], {
+    d: 'A phone connects over ssh and runs `tuios stdio-proxy --as NAME`. `tuios pair` gives the phone its key with a QR code. The Android app is in private testing. Today a phone can also open tuios-web in its browser.',
+    code: ['tuios pair', 'docs/SESSIONS.md#adding-a-phone'],
+    facts: [] });
+  const ph = box(43.4, 33.3, 0.3, 1.2, 0.32, 2.0, 'tilly-screen');
+  decal(ph, 1, 0.12, 0.88, 0.1, 0.9, 'glass'); decal(ph, 3, 0.12, 0.88, 0.1, 0.9, 'glass');
+  add(b, box(42, 32, 0, 4, 3, 0.3, 'b-clients2'), ph);
+  for (const x of [42.2, 45.4]) add(b, box(x, 34.5, 0.3, 0.3, 0.3, 0.5, 'roof-clients'));
+}
+{
+  const b = bld('cli', 'clients', 'CLI and MCP kiosk', [37, 3, 3, 2], {
+    d: 'The CLI, agents and `tuios mcp` speak JSON verbs on the same socket as the clients. Each MCP tool is a daemon verb, with a schema made from the verb table. Every listing takes `--json`.',
+    code: ['cmd/tuios', 'internal/mcp', 'skills/tuios/SKILL.md'],
+    facts: [] });
+  add(b, windows(box(37, 3, 0, 3, 2, 1.3, 'b-clients'), 1, 0.9, 0.3, 0.7), box(36.85, 2.85, 1.3, 3.3, 2.3, 0.18, 'roof-clients'));
+}
+{
+  const b = bld('tmux', 'clients', 'tmux shim', [42, 3, 3, 2], {
+    d: 'An opt-in shim. `tuios tmux-shim` puts a tmux link to tuios first on PATH for one command. Tools that only know tmux, such as Claude Code agent teams, then drive tuios panes through verbs.',
+    code: ['internal/tmuxcompat', 'docs/TMUX_SHIM.md'],
+    facts: [] });
+  add(b, windows(box(42, 3, 0, 3, 2, 1.1, 'b-clients2'), 1, 0.9, 0.3, 0.7), pyr(42, 3, 1.1, 3, 2, 0.8, 'roof-clients'));
+}
+
+/* Surfaces */
+{
+  const b = bld('rail', 'surf', 'The rail', [14, 2, 2, 7], {
+    d: 'The sidebar: sessions, agents with their state shapes, and the files of the current folder. `Space` on a file row opens a quick look preview over the panes. The rail draws in the client, from session state.',
+    code: ['internal/sessiontree', 'internal/dirwatch', 'docs/AGENT_STATE.md#the-rails-agents-section'],
+    facts: [] });
+  const r = box(14, 2, 0, 2, 7, 2.2, 'b-surf');
+  const cs = ['k-agent', 'k-state', 'k-snap', 'k-state', 'k-key', 'k-cell'];
+  for (const side of [2, 4]) cs.forEach((c, i) => decal(r, side, 0.06 + i * 0.152, 0.17 + i * 0.152, 0.25, 0.75, c));
+  add(b, r, box(13.9, 1.9, 2.2, 2.2, 7.2, 0.2, 'roof-surf'));
+}
+{
+  const b = bld('tml', 'surf', 'TML stage', [18, 2, 4, 3], {
+    d: 'TML is a tree of known components with a JSON state: tables, charts, forms and stats. loom draws it into cells with your theme. A document names colour roles, and a hex colour is refused.',
+    code: ['tml/ (tuios.dev/tml)', 'loom/ (tuios.dev/loom)', 'tuios tml show', 'skills/tuios/tml.md'],
+    facts: [['5,000', 'nodes at most in one document'], ['256 KiB', 'at most from a pane']] });
+  const s = box(18, 2, 0, 4, 3, 1.6, 'b-surf');
+  decal(s, 3, 0.15, 0.85, 0.12, 0.8, 'tilly-screen'); decal(s, 3, 0.22, 0.5, 0.45, 0.72, 'k-cell'); decal(s, 3, 0.55, 0.78, 0.2, 0.72, 'k-snap');
+  decal(s, 1, 0.15, 0.85, 0.12, 0.8, 'tilly-screen');
+  add(b, s, gable(18, 2, 1.6, 4, 3, 0.9, 'x', 'roof-surf'));
+}
+{
+  const b = bld('plugins', 'surf', 'Plugin workshop', [24, 2, 4, 3], {
+    d: 'tuios runs herdr plugins and native ones. `tuios plugins install` pins each plugin to one commit in plugins.lock. A native plugin names the grants its processes hold, and it runs only after you type allow.',
+    code: ['internal/herdrplugin', 'internal/session/plugin_host.go', 'docs/AGENT_STATE.md#herdr-plugins'],
+    facts: [] });
+  add(b, windows(box(24, 2, 0, 4, 3, 1.3, 'b-surf2'), 1, 0.9, 0.3, 0.7), saw(24, 2, 1.3, 4, 3, 0.7, 3, 'roof-surf'));
+}
+{
+  const b = bld('dockbar', 'surf', 'Dock bar', [18, 7, 10, 1.4], {
+    d: 'Three ordered lists of components: left, center and right. A custom component runs a command in the client, and the first line of its stdout becomes its cell. SGR colour survives, and every other control sequence is stripped.',
+    code: ['[dock] in config.toml', 'tuios list-dock-components', 'examples/dock/'],
+    facts: [['3 s', 'timeout for a custom component’s command'], ['5', 'failures in a row stop a component']] });
+  const s = box(18, 7, 0, 10, 1.4, 0.85, 'b-surf');
+  const cells = ['k-state', 'k-key', 'k-key', 'screen-pane', 'screen-pane', 'k-cell', 'k-snap', 'k-agent', 'k-out'];
+  for (const side of [1, 3]) cells.forEach((c, i) => decal(s, side, 0.02 + i * 0.108, 0.1 + i * 0.108, 0.22, 0.78, c));
+  add(b, s);
+}
+
+/* Other machines */
+{
+  const b = bld('fed', 'links', 'Federation depot', [3, 3, 4, 3], {
+    d: 'The local daemon is a hub. It dials each host over ssh and runs `tuios stdio-proxy` there, and one ssh connection carries several streams. A pane on another machine has its PTY there and its emulator here.',
+    code: ['internal/federation', 'tuios hosts', 'skills/tuios/hosts.md'],
+    facts: [] });
+  add(b, windows(box(3, 3, 0, 4, 3, 1.3, 'b-links'), 1, 0.9, 0.3, 0.72), gable(3, 3, 1.3, 4, 3, 0.8, 'y', 'roof-links'), box(7.3, 5.2, 0, 0.2, 0.2, 1.6, 'ink'), box(7.15, 5.05, 1.6, 0.5, 0.5, 0.35, 'k-link'));
+}
+{
+  const b = bld('remote', 'links', 'Another machine', [-8.6, 3, 3, 2.6], {
+    d: 'A host you added with `tuios hosts add`. Its daemon is passive and never dials back. Sessions, panes, agents, mail and the Inbox reach across the link, and `tuios cp` copies files over it.',
+    code: ['tuios hosts add', 'tuios attach --host', 'docs/SESSIONS.md#windows-on-another-machine'],
+    facts: [] });
+  add(b, windows(box(-8.6, 3, 0, 3, 2.6, 1.4, 'b-links'), 1, 0.9, 0.3, 0.72), saw(-8.6, 3, 1.4, 3, 2.6, 0.6, 2, 'roof-links'), box(-6.3, 3.3, 2.0, 0.3, 0.3, 0.9, 'roof-links'));
+  b.chimneys.push([-6.15, 3.45, 2.9]);
+}
+
+/* ---------- belts ---------- */
+const KIND = {
+  key:   { tok: 'k-key',   name: 'Keys and input' },
+  out:   { tok: 'k-out',   name: 'Program output bytes' },
+  snap:  { tok: 'k-snap',  name: 'Snapshots and saved state' },
+  state: { tok: 'k-state', name: 'Verbs and session state' },
+  agent: { tok: 'k-agent', name: 'Agent state and attention' },
+  link:  { tok: 'k-link',  name: 'Links to other machines' },
+  cell:  { tok: 'k-cell',  name: 'Cells and frames' },
+};
+const BELTS = [
+  ['keys','term','input','key','Key and mouse events',[[42.8,11.4],[41.2,11.4]]],
+  ['msginput','input','gate','key','MsgInput: pane id and bytes',[[36.8,12.3],[33,12.3],[33,15.0],[31.2,15.0]]],
+  ['gate-sess','gate','session','state','Frames and verbs',[[27.8,15.0],[25.2,15.0]]],
+  ['sess-pty','session','pty','key','Write to the PTY',[[20.25,17.2],[20.25,19.0],[17,19.0],[17,19.8]]],
+  ['pty-yard','pty','yard','key','Keys to the program',[[13.8,21.0],[10.6,21.0]]],
+  ['yard-pty','yard','pty','out','Program output',[[10.6,22.6],[13.8,22.6]]],
+  ['pty-ring','pty','ring','out','Bytes into the ring',[[19.2,21.5],[20.6,21.5]]],
+  ['pty-emu','pty','emu','out','Bytes into the emulator',[[19.2,23.4],[26.2,23.4],[26.2,23.2]]],
+  ['ring-gate','ring','gate','out','Stream with byte positions',[[22,20.0],[22,18.2],[27.3,18.2],[27.3,16.4],[27.8,16.4]]],
+  ['gate-cemu','gate','cemu','out','MsgPTYOutput to each client',[[31.2,16.2],[34,16.2],[34,17.5],[36.8,17.5]]],
+  ['cemu-coal','cemu','coal','out','The pane is dirty',[[38.5,19.2],[38.5,20.4]]],
+  ['coal-comp','coal','comp','cell','Render signal',[[40.2,21.6],[43,21.6],[43,21.2]]],
+  ['comp-term','comp','term','cell','Composed frame',[[44.6,15.8],[44.6,13.2]]],
+  ['emu-snap','emu','snap','snap','Screen state',[[29.2,22.6],[29.9,22.6]]],
+  ['snap-gate','snap','gate','snap','Snapshot with its position',[[31.6,21.8],[31.6,17.3],[30.6,17.3]]],
+  ['sess-arch','session','archive','snap','Saved state',[[19.6,12.8],[19.6,12.5],[16,12.5],[16,12.8]]],
+  ['arch-sess','archive','session','snap','Restore on start',[[16.6,16.2],[16.6,16.8],[18.8,16.8]]],
+  ['crane-pty','crane','pty','state','Hand over the PTYs',[[15.6,25.3],[15.6,24.2]]],
+  ['pty-bench','pty','benches','key','Keys to the agent',[[13.8,23.6],[12.2,23.6],[12.2,25.8],[9.8,25.8]]],
+  ['bench-pty','benches','pty','out','Agent output',[[9.8,27.2],[12.6,27.2],[12.6,23.95],[13.8,23.95]]],
+  ['bench-hooks','benches','hooks','agent','Hook: set-agent-state',[[9.8,28.4],[11.6,28.4],[11.6,30.6],[20.5,30.6],[20.5,31.8]]],
+  ['hooks-gate','hooks','gate','agent','Report over the socket',[[21.5,31.8],[21.5,30.9],[33.4,30.9],[33.4,15.6],[31.2,15.6]]],
+  ['detect-sess','detector','session','agent','Detected harness and state',[[16,31.8],[16,30.0],[19.85,30.0],[19.85,17.2]]],
+  ['bench-detect','benches','detector','agent','Process, screen, title',[[6,29.2],[6,33.5],[13.8,33.5]]],
+  ['sess-inbox','session','inbox','agent','Attention item',[[23.8,17.2],[23.8,31.8]]],
+  ['sess-appr','session','approvals','agent','Your answer, checked',[[24.6,17.2],[24.6,31.3],[30.5,31.3],[30.5,31.8]]],
+  ['shelf-inbox','shelf','inbox','agent','A settled agent comes back',[[25.5,36.0],[25.5,35.2]]],
+  ['mail-inbox','mail','inbox','agent','Mail to you',[[21.8,37],[22.5,37],[22.5,33.5],[22.8,33.5]]],
+  ['tasks-bench','tasks','benches','state','task claim --next',[[13.8,37.2],[8.5,37.2],[8.5,29.2]]],
+  ['sync','gate','comp','state','Versioned state sync',[[29.5,13.8],[29.5,13.0],[34.4,13.0],[34.4,19.7],[41.8,19.7]]],
+  ['fed-sess','fed','session','link','Hosts, panes and mail',[[7.2,4.4],[11.7,4.4],[11.7,11.9],[21.5,11.9],[21.5,12.8]]],
+  ['fed-remote','fed','remote','link','ssh: tuios stdio-proxy',[[2.8,4.4],[-5.4,4.4]]],
+  ['rail-comp','rail','comp','cell','Rail rows',[[15,9.2],[15,10.0],[41.8,10.0],[41.8,15.8]]],
+  ['tml-comp','tml','comp','cell','Surface cells',[[20,5.2],[17.3,5.2],[17.3,10.6],[42.6,10.6],[42.6,15.8]]],
+  ['dock-comp','dockbar','comp','cell','Dock cells',[[23,8.6],[23,10.3],[42.2,10.3],[42.2,15.8]]],
+  ['plug-grants','plugins','grants','state','Verb calls from a plugin',[[28.2,3.6],[34.8,3.6],[34.8,19.5],[30.2,19.5]]],
+  ['grants-gate','grants','gate','state','Checked call',[[29,18.3],[29,17.3]]],
+  ['cli-gate','cli','gate','state','JSON verbs',[[36.8,4.4],[35.4,4.4],[35.4,14.4],[31.2,14.4]]],
+  ['tmux-cli','tmux','cli','state','tmux commands as verbs',[[41.8,4],[40.2,4]]],
+  ['ssh-gate','ssh','gate','state','Attached like a local client',[[36.8,28],[35.8,28],[35.8,16.85],[31.2,16.85]]],
+  ['web-gate','web','gate','state','Attached like a local client',[[44,26.8],[44,26.1],[35.8,26.1],[35.8,16.85],[31.2,16.85]]],
+  ['gui-gate','gui','gate','state','Layout and pane bytes',[[36.8,32.6],[35.8,32.6],[35.8,16.85],[31.2,16.85]]],
+  ['phone-gate','phone','gate','state','ssh and stdio-proxy',[[41.8,33.4],[41.3,33.4],[41.3,35.7],[35.8,35.7],[35.8,16.85],[31.2,16.85]]],
+  ['tape-input','tape','input','key','Press, Action, Run',[[41.8,24],[41.5,24],[41.5,14.3],[40.5,14.3]]],
+].map(([id, from, to, kind, label, pts]) => {
+  const segs = []; let len = 0;
+  for (let i = 1; i < pts.length; i++){
+    const [ax, ay] = pts[i-1], [bx, by] = pts[i], l = Math.hypot(bx-ax, by-ay);
+    segs.push({ ax, ay, bx, by, l, s0: len }); len += l;
+  }
+  return { id, from, to, kind, label, pts, segs, len, acc: Math.random() };
+});
+const BE = Object.fromEntries(BELTS.map(b => [b.id, b]));
+function beltAt(b, s){
+  for (const g of b.segs) if (s <= g.s0 + g.l){ const t = (s - g.s0) / (g.l || 1); return [g.ax + (g.bx-g.ax)*t, g.ay + (g.by-g.ay)*t]; }
+  const g = b.segs[b.segs.length-1]; return [g.bx, g.by];
+}
+const RATE = { out: 0.9, key: 0.35, state: 0.3, cell: 0.55, snap: 0.18, agent: 0.16, link: 0.3 };
+
+/* ---------- tours ---------- */
+const TOURS = [
+  { id: 'key', name: 'A key press', blurb: 'From your keyboard to the pane and back as a frame.', steps: [
+    { t: 'You press a key', lit: ['term','input'], belts: ['keys'], b: 'Your terminal hands the key to the tuios client as a Bubble Tea event. The input router reads the mode. In terminal mode the key is for the focused pane.' },
+    { t: 'The key crosses the socket', lit: ['input','gate'], belts: ['msginput'], b: 'The client sends `MsgInput`, with the pane id and the bytes, over the unix socket. Routing the key took 574 ns at p50 in the 2026-08 measurement.' },
+    { t: 'The daemon writes it to the PTY', lit: ['gate','session','pty'], belts: ['gate-sess','sess-pty'], b: 'The daemon finds the pane and writes the bytes to its PTY. The program reads them as if you typed into a real terminal.' },
+    { t: 'The program echoes', lit: ['pty','yard'], belts: ['pty-yard','yard-pty'], b: 'The shell writes the character back, with any escape sequences it wants. The bytes come out of the PTY, which the daemon holds.' },
+    { t: 'One byte goes three ways', lit: ['pty','ring','emu','gate'], belts: ['pty-emu','pty-ring','ring-gate'], b: 'Every byte goes to the daemon’s emulator for the pane, to the 64 KB ring with its stream position, and to every client subscribed to the pane.' },
+    { t: 'The client parses it again', lit: ['gate','cemu'], belts: ['gate-cemu'], b: '`MsgPTYOutput` reaches the client, and its own emulator parses the same bytes. Its replies to the program are dropped, because the daemon’s emulator already answered.' },
+    { t: 'At most one render per 8 ms', lit: ['cemu','coal','comp'], belts: ['cemu-coal','coal-comp'], b: 'The render coalescer fires on the leading edge, so a quiet pane draws at once. In a flood it holds to one render per 8 ms, so the compositor never draws a partial frame.' },
+    { t: 'The frame', lit: ['comp','term'], belts: ['comp-term'], b: 'The compositor culls hidden windows, reuses cached layers and writes the frame. From key to composed frame with its echo: 1.78 ms at p50 for one pane, in the latency test.' },
+  ]},
+  { id: 'agent', name: 'An agent asks for you', blurb: 'A permission prompt becomes an Inbox item, and your answer goes back.', steps: [
+    { t: 'An agent stops at a prompt', lit: ['benches'], belts: [], robot: 'needs', b: 'Claude Code runs in a pane. It stops to ask before it runs a command, so now it waits on you.' },
+    { t: 'Its hook reports', lit: ['benches','hooks','gate'], belts: ['bench-hooks','hooks-gate'], robot: 'needs', b: 'The hook that `tuios integration install` set up runs `tuios agent-hook`. It reports `needs_input` with the kind approval, over the verb socket.' },
+    { t: 'The daemon ranks the claim', lit: ['gate','session','detector'], belts: ['gate-sess','detect-sess'], robot: 'needs', b: 'A report from a hook outranks everything tuios can work out by looking. The harness detector and the screen rules are the fallback, and they cannot overwrite a report.' },
+    { t: 'The Inbox opens an item', lit: ['session','inbox','shelf'], belts: ['sess-inbox','shelf-inbox'], robot: 'needs', b: 'The daemon keeps the Inbox, so every client shows the same list. A settled agent comes back by itself when it needs you.' },
+    { t: 'Every client sees it', lit: ['gate','comp','term'], belts: ['sync','comp-term'], robot: 'needs', b: 'Agent state rides the same versioned state sync as every window property. The title gets a shape and the rail gets a row: ● needs you. `ctrl+b o` jumps to the oldest item.' },
+    { t: 'You answer', lit: ['term','input','gate','session','approvals'], belts: ['keys','msginput','gate-sess','sess-appr'], robot: 'needs', b: 'Press 1, 2 or 3 on the approval in the Inbox. A risky command takes a second press of the same key. The daemon checks the prompt before it presses anything.' },
+    { t: 'The answer reaches the agent', lit: ['session','pty','benches'], belts: ['sess-pty','pty-bench','bench-pty'], robot: 'working', b: 'The daemon types the answer into the agent’s PTY. The agent leaves `needs_input`, and the Inbox item closes by itself.' },
+  ]},
+  { id: 'restart', name: 'Reattach after a restart', blurb: 'The daemon goes away and comes back. Your screen comes back once.', steps: [
+    { t: 'Restart the daemon', lit: ['crane','session'], belts: [], b: '`tuios restart-server` lists the panes that run a program and the agents that can resume, and asks. Then it stops the daemon and starts the newest build.' },
+    { t: 'A last save', lit: ['session','archive'], belts: ['sess-arch'], b: 'On a clean shutdown each session writes its state once more, while the shells still run, so the working folders are right. A temp file is renamed into place.' },
+    { t: 'The client waits', lit: ['gate','cemu','term'], belts: [], b: 'The daemon tells each client it stops for a restart. A client on this machine waits up to 15 seconds for the new daemon. Keys typed while it waits are not sent.' },
+    { t: 'The new daemon restores', lit: ['archive','session','pty','yard'], belts: ['arch-sess','sess-pty','pty-yard'], b: 'The new daemon reads the saved state. Each pane gets a fresh shell in its saved folder, with the old output above a divider: `-- tuios: restored from … --`.' },
+    { t: 'A snapshot, then the stream', lit: ['emu','snap','gate','cemu'], belts: ['emu-snap','snap-gate','gate-cemu'], b: 'The client asks for a snapshot of each pane: the grid, cursor, modes and up to 1000 rows of history. The snapshot carries its stream position, and the client subscribes from there. Nothing is painted twice.' },
+    { t: 'Or keep every program', lit: ['crane','pty','yard','benches'], belts: ['crane-pty'], b: 'A live upgrade keeps the programs. The daemon execs the new binary in place and hands it the PTYs, so each pane keeps its process. For 60 busy panes the pause measured 0.29 to 0.31 s.' },
+  ]},
+  { id: 'plugin', name: 'A plugin draws a cell', blurb: 'A command becomes a dock cell. A plugin with grants calls the daemon.', steps: [
+    { t: 'A command becomes a component', lit: ['dockbar'], belts: [], b: 'The simplest plugin is a dock component: a command under `[dock.custom.branch]`, such as git-branch.sh. Its refresh is a duration or an event, such as `event:after-focus-change`.' },
+    { t: 'The client runs it', lit: ['dockbar'], belts: ['dock-comp'], b: 'When the event fires, the client runs the command through `sh -c`, with a three second timeout and bounded output. Five failures in a row stop it.' },
+    { t: 'The first line is the cell', lit: ['dockbar','comp','term'], belts: ['dock-comp','comp-term'], b: 'The first line of stdout becomes the cell. SGR colour survives, and every other control sequence is stripped. A command that fails hides its cell.' },
+    { t: 'A plugin with grants', lit: ['plugins','grants','gate'], belts: ['plug-grants','grants-gate'], b: 'A native plugin’s tuios-plugin.toml names the grants its processes hold, such as read. It runs only after you type allow. The daemon checks each call it makes against those grants.' },
+    { t: 'A whole surface', lit: ['tml','comp','term'], belts: ['tml-comp','comp-term'], b: 'For more than a cell, a plugin or an agent shows TML with `tuios tml show`. loom draws it into cells with your theme. A document names colour roles, and hex colours are refused.' },
+  ]},
+];
+
+/* ---------- state ---------- */
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+let motion = !reduceMQ.matches;
+const cam = { x: CX, y: CY, zoom: 0.5, th: 0 };
+let rotIdx = 0, tween = null;
+let VW = 0, VH = 0, DPR = 1;
+let cc = 1, ss = 0, Z = 0.5, OX = 0, OY = 0;
+let hover = null, sel = null, tour = null, tourStep = 0;
+let packets = [], heroes = [], simT = 0, lastT = 0, lastDraw = 0;
+const robotState = ['working', 'working', 'idle'];
+let hits = [];
+
+/* ---------- projection ---------- */
+function P(x, y, z){
+  const dx = x - CX, dy = y - CY;
+  const rx = dx*cc - dy*ss, ry = dx*ss + dy*cc;
+  return [(rx - ry)*HW*Z + OX, (rx + ry)*HH*Z - z*HU*Z + OY];
+}
+function depth(x, y){ const dx = x - CX, dy = y - CY; return dx*(cc + ss) + dy*(cc - ss); }
+function insets(){
+  const top = $('#top').getBoundingClientRect();
+  const narrow = VW <= 720;
+  let t = narrow ? top.bottom + 8 : 86, r = 20, bt = 70, l = 20;
+  if (!narrow && !$('#panel').hidden) r = 410;
+  const tc = $('#tour');
+  if (!tc.hidden) bt = VH - tc.getBoundingClientRect().top + 10;
+  if (narrow && !$('#panel').hidden) bt = Math.max(bt, VH - $('#panel').getBoundingClientRect().top + 10);
+  if (narrow) { r = 16; l = 16; bt = Math.max(bt, 70); }
+  return { t, r, b: bt, l };
+}
+function setView(){
+  cc = Math.cos(cam.th); ss = Math.sin(cam.th); Z = cam.zoom;
+  const I = insets(), vx = I.l + (VW - I.l - I.r) / 2, vy = I.t + (VH - I.t - I.b) / 2;
+  const dx = cam.x - CX, dy = cam.y - CY, rx = dx*cc - dy*ss, ry = dx*ss + dy*cc;
+  OX = vx - (rx - ry)*HW*Z; OY = vy - (rx + ry)*HH*Z;
+}
+function toGrid(X, Y){
+  const sx = (X - OX) / Z, sy = (Y - OY) / Z, a = sx / HW, b2 = sy / HH;
+  const rx = (a + b2) / 2, ry = (b2 - a) / 2;
+  return [CX + rx*cc + ry*ss, CY - rx*ss + ry*cc];
+}
+function clampCam(){
+  cam.x = Math.max(-10, Math.min(WW + 2, cam.x)); cam.y = Math.max(-2, Math.min(WD + 2, cam.y));
+  cam.zoom = Math.max(0.12, Math.min(2.6, cam.zoom));
+}
+/* Camera that fits a set of grid rects (with heights) into the free area. */
+function frameRects(rects, th, pad = 40, maxZ = 1.5){
+  const c = Math.cos(th), s = Math.sin(th);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y, w, d, h] of rects) for (const [px, py] of [[x,y],[x+w,y],[x+w,y+d],[x,y+d]]) for (const z of [0, h]){
+    const dx = px - CX, dy = py - CY, rx = dx*c - dy*s, ry = dx*s + dy*c;
+    const sx = (rx - ry)*HW, sy = (rx + ry)*HH - z*HU;
+    x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+  }
+  const I = insets(), aw = Math.max(120, VW - I.l - I.r - pad*2), ah = Math.max(120, VH - I.t - I.b - pad*2);
+  const zoom = Math.max(0.12, Math.min(maxZ, aw / (x1 - x0), ah / (y1 - y0)));
+  const bx = (x0 + x1) / 2, by = (y0 + y1) / 2 + 12;
+  const a = bx / HW, b2 = by / HH, rx = (a + b2) / 2, ry = (b2 - a) / 2;
+  return { x: CX + rx*c + ry*s, y: CY - rx*s + ry*c, zoom, th };
+}
+function fitAll(){ return frameRects([[0,0,WW,WD,3.5],[ISLAND[0],ISLAND[1],ISLAND[2],ISLAND[3],2]], cam.th, VW <= 720 ? 8 : 24); }
+function tweenTo(to, dur = 650){
+  if (!motion) dur = 0;
+  tween = { from: { ...cam }, to: { ...cam, ...to }, t0: performance.now(), dur };
+  req();
+}
+function stepTween(now){
+  if (!tween) return false;
+  const k = tween.dur ? Math.min(1, (now - tween.t0) / tween.dur) : 1;
+  const e = k < 0.5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2;
+  for (const f of ['x','y','zoom','th']) cam[f] = tween.from[f] + (tween.to[f] - tween.from[f]) * e;
+  if (k >= 1) tween = null;
+  return true;
+}
+
+/* ---------- drawing ---------- */
+const NL = (() => { const l = [0.2, 0.55, 1]; const m = Math.hypot(...l); return l.map(v => v / m); })();
+function poly(pts){ ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); }
+function litSet(){
+  if (!tour) return null;
+  const st = TOURS[tour].steps[tourStep];
+  return { b: new Set(st.lit), belts: new Set(st.belts) };
+}
+function drawSolid(s, bid, emph){
+  const lw = Math.max(0.7, Math.min(1.8, 1.6 * Z));
+  for (const f of s.faces){
+    const n = f.n, rnx = n[0]*cc - n[1]*ss, rny = n[0]*ss + n[1]*cc;
+    if (rnx + rny + n[2]*VZ <= 1e-6) continue;
+    const L = 0.5 + 0.5 * Math.max(0, rnx*NL[0] + rny*NL[1] + n[2]*NL[2]);
+    const pts = f.v.map(v => P(v[0], v[1], v[2]));
+    poly(pts);
+    ctx.fillStyle = shade(f.color || s.color, L); ctx.fill();
+    if (!s.round || n[2] > 0.5){ ctx.lineWidth = lw; ctx.strokeStyle = emph ? T.accent : T.ink; ctx.stroke(); }
+    else { ctx.lineWidth = 1; ctx.strokeStyle = ctx.fillStyle; ctx.stroke(); }
+    for (const dc of f.decals){
+      poly(dc.v.map(v => P(v[0], v[1], v[2])));
+      let col = dc.color;
+      ctx.fillStyle = col === 'window' || col === 'screen-pane' || col === 'tilly-screen' ? T[col] : shade(col, Math.min(1, L + 0.12));
+      ctx.fill();
+    }
+    if (bid) hits.push({ id: bid, pts });
+  }
+}
+function drawBoard(rect, th){
+  const [x, y, w, d] = rect;
+  const top = [P(x,y,0), P(x+w,y,0), P(x+w,y+d,0), P(x,y+d,0)];
+  // soft shadow
+  for (const [o, a] of [[30, 0.10], [18, 0.14], [9, 0.18]]){
+    poly(top.map(p => [p[0], p[1] + (th*HU + o)*Z])); ctx.fillStyle = alpha('shadow', a); ctx.fill();
+  }
+  const s = box(x, y, -th, w, d, th, 'board-side');
+  for (const f of s.faces){
+    const n = f.n, rnx = n[0]*cc - n[1]*ss, rny = n[0]*ss + n[1]*cc;
+    if (n[2] > 0.5 || rnx + rny <= 1e-6) continue;
+    poly(f.v.map(v => P(v[0], v[1], v[2])));
+    ctx.fillStyle = shade('board-side', 0.6 + 0.4 * Math.max(0, rnx*NL[0] + rny*NL[1])); ctx.fill();
+    ctx.lineWidth = Math.max(0.8, 1.6*Z); ctx.strokeStyle = T.ink; ctx.stroke();
+  }
+  poly(top); ctx.fillStyle = T.board; ctx.fill(); ctx.lineWidth = Math.max(0.8, 1.6*Z); ctx.strokeStyle = T.ink; ctx.stroke();
+}
+function drawGround(L){
+  drawBoard([0, 0, WW, WD], 1.1);
+  drawBoard(ISLAND, 0.9);
+  // grid
+  if (Z > 0.32){
+    ctx.lineWidth = 1; ctx.strokeStyle = T.grid; ctx.beginPath();
+    for (let i = 1; i < WW; i++){ const a = P(i, 0, 0), b = P(i, WD, 0); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    for (let j = 1; j < WD; j++){ const a = P(0, j, 0), b = P(WW, j, 0); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    ctx.stroke();
+  }
+  // district plates
+  for (const k in DIST){
+    const D = DIST[k], [x, y, w, d] = D.r;
+    poly([P(x,y,0), P(x+w,y,0), P(x+w,y+d,0), P(x,y+d,0)]);
+    ctx.fillStyle = T[D.plate]; ctx.fill();
+    ctx.setLineDash([6*Z, 5*Z]); ctx.lineWidth = Math.max(0.8, 1.4*Z); ctx.strokeStyle = alpha(D.color, 0.5); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // painted district names on the floor
+  const o = P(0, 0, 0), ex = P(1, 0, 0), ey = P(0, 1, 0);
+  const vx = [ex[0]-o[0], ex[1]-o[1]], vy = [ey[0]-o[0], ey[1]-o[1]];
+  const cands = [[vx, vy], [[-vx[0],-vx[1]], [-vy[0],-vy[1]]], [vy, [-vx[0],-vx[1]]], [[-vy[0],-vy[1]], vx]];
+  let best = cands[0];
+  for (const c of cands){ if (c[0][0] > best[0][0] + 1e-6) best = c; }
+  const [u, v] = best, fk = 0.82 / 40;
+  for (const k in DIST){
+    const D = DIST[k], p = P(D.label[0], D.label[1], 0);
+    ctx.save(); ctx.setTransform(u[0]*DPR*fk, u[1]*DPR*fk, v[0]*DPR*fk, v[1]*DPR*fk, p[0]*DPR, p[1]*DPR);
+    ctx.font = '700 40px ' + getFont('display'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = T['floor-text']; ctx.fillText(D.name.toUpperCase(), 0, 0);
+    ctx.restore();
+  }
+  // belts
+  const conn = new Set(); const focus = hover || sel;
+  if (focus) for (const b of BELTS) if (b.from === focus || b.to === focus) conn.add(b.id);
+  const order = BELTS.slice().sort((a, b) => (conn.has(a.id) || (L && L.belts.has(a.id)) ? 1 : 0) - (conn.has(b.id) || (L && L.belts.has(b.id)) ? 1 : 0));
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const b of order){
+    const on = conn.has(b.id) || (L && L.belts.has(b.id));
+    const dim = (L && !L.belts.has(b.id)) || (focus && !L && !conn.has(b.id));
+    const pts = b.pts.map(p => P(p[0], p[1], 0.02));
+    const w = Math.max(2, (on ? 9 : 7) * Z);
+    ctx.globalAlpha = dim ? 0.28 : 1;
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.lineWidth = w + Math.max(1.6, 2.6*Z); ctx.strokeStyle = T.ink; ctx.stroke();
+    ctx.lineWidth = w; ctx.strokeStyle = on ? T[KIND[b.kind].tok] : T.belt; ctx.stroke();
+    if (!on){ ctx.lineWidth = Math.max(1, 2*Z); ctx.strokeStyle = alpha(KIND[b.kind].tok, 0.85); ctx.stroke(); }
+    // arrow head at the end
+    const a = pts[pts.length-2], e = pts[pts.length-1], ang = Math.atan2(e[1]-a[1], e[0]-a[0]), r = Math.max(4, 10*Z);
+    ctx.beginPath(); ctx.moveTo(e[0] + Math.cos(ang)*r*0.6, e[1] + Math.sin(ang)*r*0.6);
+    ctx.lineTo(e[0] + Math.cos(ang + 2.5)*r, e[1] + Math.sin(ang + 2.5)*r); ctx.lineTo(e[0] + Math.cos(ang - 2.5)*r, e[1] + Math.sin(ang - 2.5)*r); ctx.closePath();
+    ctx.fillStyle = T[KIND[b.kind].tok]; ctx.fill(); ctx.lineWidth = Math.max(1, 1.4*Z); ctx.strokeStyle = T.ink; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // selection ring
+  if (sel){
+    const b = B[sel], [x, y, w, d] = b.fp, m = 0.45;
+    poly([P(x-m,y-m,0.03), P(x+w+m,y-m,0.03), P(x+w+m,y+d+m,0.03), P(x-m,y+d+m,0.03)]);
+    ctx.fillStyle = alpha('accent', 0.16); ctx.fill(); ctx.lineWidth = Math.max(1.5, 2.4*Z); ctx.strokeStyle = T.accent; ctx.setLineDash([8*Z, 6*Z]); ctx.lineDashOffset = -simT * 20 * Z; ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+const fontCache = {};
+function getFont(role){
+  if (!fontCache[role]) fontCache[role] = getComputedStyle(document.documentElement).getPropertyValue(role === 'display' ? '--f-display' : role === 'mono' ? '--f-mono' : '--f-body').trim();
+  return fontCache[role];
+}
+function drawCube(x, y, z, kind, size, hero){
+  const p = P(x, y, z), a = size * HW * Z, h = a * 0.95;
+  const col = T[KIND[kind].tok];
+  const [cx, cy] = p;
+  if (hero){
+    ctx.beginPath(); ctx.arc(cx, cy - h/2, a * 2.1, 0, Math.PI*2); ctx.fillStyle = alpha(KIND[kind].tok, 0.22); ctx.fill();
+  }
+  ctx.lineWidth = Math.max(0.8, 1.2*Z); ctx.strokeStyle = T.ink;
+  poly([[cx-a, cy-h], [cx, cy-h+a/2], [cx, cy+a/2], [cx-a, cy]]); ctx.fillStyle = shade(KIND[kind].tok, 0.78); ctx.fill(); ctx.stroke();
+  poly([[cx, cy-h+a/2], [cx+a, cy-h], [cx+a, cy], [cx, cy+a/2]]); ctx.fillStyle = shade(KIND[kind].tok, 0.62); ctx.fill(); ctx.stroke();
+  poly([[cx, cy-h-a/2], [cx+a, cy-h], [cx, cy-h+a/2], [cx-a, cy-h]]); ctx.fillStyle = col; ctx.fill(); ctx.stroke();
+}
+function rr(x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r); ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath(); }
+const GLYPH = { working: '◐', needs: '●', done: '✓', idle: '○' };
+const GLYPHCOL = { working: 'k-key', needs: 'k-agent', done: 'k-snap', idle: 'muted' };
+function drawRobot(sp, emph){
+  const st = robotState[sp.i];
+  const p = P(sp.x, sp.y, sp.z), k = 2.0 * HU * Z / 112;
+  const bob = motion ? Math.sin(simT * 2.4 + sp.i) * 1.2 : 0;
+  ctx.save(); ctx.translate(p[0], p[1]); ctx.scale(k, k); ctx.translate(-60, -118 + bob);
+  ctx.lineWidth = 2.6; ctx.strokeStyle = T['tilly-screen'];
+  ctx.beginPath(); ctx.ellipse(60, 120, 30, 5, 0, 0, Math.PI*2); ctx.fillStyle = alpha('shadow', 0.3); ctx.fill();
+  rr(33, 102, 20, 15, 6.5); ctx.fillStyle = T['tilly-feet']; ctx.fill(); ctx.stroke();
+  rr(67, 102, 20, 15, 6.5); ctx.fill(); ctx.stroke();
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(54, 36); ctx.lineTo(43, 14); ctx.moveTo(66, 36); ctx.lineTo(77, 14); ctx.lineWidth = 7; ctx.stroke();
+  ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.arc(43, 12.5, 6, 0, Math.PI*2); ctx.fillStyle = T['tilly-ball']; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(77, 12.5, 6, 0, Math.PI*2); ctx.fillStyle = T['tilly-eye']; ctx.fill(); ctx.stroke();
+  const wave = st === 'needs' && motion ? Math.sin(simT * 8) * 10 : 0;
+  ctx.fillStyle = T['tilly-shell'];
+  ctx.beginPath(); ctx.ellipse(12, 76 - (st === 'needs' ? 30 + wave : 0), 8, 10, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(108, 76, 8, 10, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  rr(17, 34, 86, 73, 22); ctx.fillStyle = T['tilly-shell']; ctx.fill(); ctx.strokeStyle = emph ? T.accent : T['tilly-screen']; ctx.lineWidth = emph ? 5 : 2.6; ctx.stroke();
+  ctx.strokeStyle = T['tilly-screen']; ctx.lineWidth = 2.6;
+  rr(26, 44, 68, 52, 9); ctx.fillStyle = T['tilly-screen']; ctx.fill();
+  const look = st === 'working' && motion ? Math.sin(simT * 1.7 + sp.i) * 3 : 0;
+  ctx.fillStyle = T['tilly-eye']; ctx.strokeStyle = T['tilly-eye'];
+  if (st === 'done'){
+    ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(39.5, 63); ctx.lineTo(44.25, 57.5); ctx.lineTo(49, 63); ctx.moveTo(71, 63); ctx.lineTo(75.75, 57.5); ctx.lineTo(80.5, 63); ctx.stroke();
+  } else {
+    const blink = motion && (simT * 0.7 + sp.i * 0.37) % 4 < 0.08 ? 0.15 : 1;
+    rr(40 + look, 53.5 + 7*(1-blink), 8.5, 14*blink, 2.2); ctx.fill(); rr(71.5 + look, 53.5 + 7*(1-blink), 8.5, 14*blink, 2.2); ctx.fill();
+  }
+  ctx.strokeStyle = T['tilly-mouth']; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.moveTo(53, 79.5); ctx.lineTo(57.5, 83.5); ctx.lineTo(53, 87.5); ctx.moveTo(60.5, 88); ctx.lineTo(67, 88); ctx.stroke();
+  ctx.fillStyle = T['tilly-blush']; rr(34, 81.5, 9, 4, 2); ctx.fill(); rr(77, 81.5, 9, 4, 2); ctx.fill();
+  ctx.restore();
+  // state badge
+  const bx = p[0], by = p[1] - 2.2 * HU * Z - 8 + bob * k;
+  const r = Math.max(7, 10 * Z);
+  ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI*2); ctx.fillStyle = T.panel; ctx.fill(); ctx.lineWidth = Math.max(1.2, 2*Z); ctx.strokeStyle = st === 'needs' ? T['k-agent'] : T.ink; ctx.stroke();
+  ctx.fillStyle = T[GLYPHCOL[st]]; ctx.font = `600 ${Math.round(r*1.25)}px ${getFont('body')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(GLYPH[st], bx, by + 0.5);
+  hits.push({ id: 'benches', pts: [[p[0]-48*k*1.1, p[1]-118*k], [p[0]+48*k*1.1, p[1]-118*k], [p[0]+48*k*1.1, p[1]], [p[0]-48*k*1.1, p[1]]] });
+}
+function drawSmoke(){
+  if (Z < 0.25) return;
+  for (const b of BL) for (const [x, y, z] of b.chimneys){
+    for (let k = 0; k < 4; k++){
+      const ph = (((simT * 0.22 + k / 4 + x * 0.13) % 1) + 1) % 1;
+      const p = P(x + ph * 0.5, y - ph * 0.3, z + 0.15 + ph * 1.8);
+      ctx.beginPath(); ctx.arc(p[0], p[1], (5 + ph * 11) * Z, 0, Math.PI*2);
+      ctx.fillStyle = alpha('smoke', 0.38 * (1 - ph)); ctx.fill();
+    }
+  }
+}
+function drawLabels(L){
+  const minZ = VW <= 720 ? 0.3 : 0.26;
+  const placed = [];
+  const list = BL.slice().sort((a, b) => pri(b) - pri(a));
+  function pri(b){ return (b.id === sel ? 1e4 : 0) + (b.id === hover ? 5e3 : 0) + (L && L.b.has(b.id) ? 2e3 : 0) + b.fp[2]*b.fp[3]; }
+  const fs = Math.round(Math.max(11, Math.min(14, 13 * Math.sqrt(Z / 0.6))));
+  ctx.font = `600 ${fs}px ${getFont('body')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const b of list){
+    const important = b.id === sel || b.id === hover || (L && L.b.has(b.id));
+    if (Z < minZ && !important) continue;
+    if (L && !L.b.has(b.id) && b.id !== sel && b.id !== hover) continue;
+    let top = 0; for (const s of b.solids) top = Math.max(top, s.ztop);
+    for (const sp of b.sprites) top = Math.max(top, sp.z + 2.9);
+    const p = P(b.cx, b.cy, top + 0.5);
+    const w = ctx.measureText(b.name).width + 22, h = fs + 10;
+    const r = [p[0] - w/2, p[1] - h - 4, w, h];
+    if (placed.some(q => r[0] < q[0]+q[2]+4 && r[0]+r[2]+4 > q[0] && r[1] < q[1]+q[3]+3 && r[1]+r[3]+3 > q[1])) continue;
+    placed.push(r);
+    ctx.beginPath(); ctx.moveTo(p[0], p[1] - 4); ctx.lineTo(p[0], p[1] + 2); ctx.lineWidth = 1.5; ctx.strokeStyle = T.ink; ctx.stroke();
+    rr(r[0], r[1], r[2], r[3], h/2); ctx.fillStyle = important ? T.accent : T.panel; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = T.ink; ctx.stroke();
+    ctx.fillStyle = important ? T['accent-ink'] : T.fg; ctx.fillText(b.name, p[0], r[1] + h/2 + 0.5);
+    hits.push({ id: b.id, pts: [[r[0], r[1]], [r[0]+r[2], r[1]], [r[0]+r[2], r[1]+r[3]], [r[0], r[1]+r[3]]], label: true });
+  }
+  // the remote link label floats over the bridge
+}
+function draw(){
+  hits = [];
+  setView();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = T.table; ctx.fillRect(0, 0, VW, VH);
+  const L = litSet();
+  drawGround(L);
+  // depth-sorted scene
+  const items = [];
+  for (const b of BL) items.push({ k: depth(b.cx, b.cy), b });
+  const pk = packets.concat(heroes.filter(h => h.pos));
+  for (const p of pk){ const [x, y] = p.pos || beltAt(p.belt, p.s); items.push({ k: depth(x, y) + 0.01, p, x, y }); }
+  if (L && !motion){ // static flow markers when motion is off
+    for (const id of L.belts){ const b = BE[id]; for (const f of [0.25, 0.55, 0.85]){ const [x, y] = beltAt(b, b.len * f); items.push({ k: depth(x, y), p: { belt: b, hero: true }, x, y }); } }
+  }
+  items.sort((a, b) => a.k - b.k);
+  for (const it of items){
+    if (it.b){
+      const b = it.b, dim = L && !L.b.has(b.id);
+      const emph = b.id === hover || b.id === sel;
+      ctx.globalAlpha = dim ? 0.3 : 1;
+      const parts = b.solids.map(s => ({ k: s.z0 === 0 && s.ztop <= 0.31 ? -1e6 : depth(s.cx, s.cy) + s.z0 * 0.9, s })).concat(b.sprites.map(sp => ({ k: depth(sp.x, sp.y) + sp.z * 0.9 + 0.05, sp })));
+      parts.sort((a, c) => a.k - c.k);
+      for (const q of parts) q.s ? drawSolid(q.s, b.id, emph) : drawRobot(q.sp, emph);
+      if (b.beacon){
+        const on = !motion || Math.sin(simT * 3) > -0.2, p = P(...b.beacon);
+        if (on){ ctx.beginPath(); ctx.arc(p[0], p[1], 9 * Z, 0, Math.PI*2); ctx.fillStyle = alpha('accent', 0.35); ctx.fill(); }
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      const p = it.p;
+      drawCube(it.x, it.y, 0.12, p.belt.kind, p.hero ? 0.34 : 0.22, p.hero);
+    }
+  }
+  drawSmoke();
+  drawLabels(L);
+}
+
+/* ---------- simulation ---------- */
+function spawn(belt, hero){ packets.push({ belt, s: 0, v: hero ? 2.6 : 1.6 + Math.random()*0.5, hero }); }
+function update(dt){
+  simT += dt;
+  const L = litSet();
+  for (const b of BELTS){
+    if (L && !L.belts.has(b.id)) continue;
+    const rate = (L ? 0.7 : RATE[b.kind]) * Math.min(1.6, 4 / b.len + 0.4);
+    b.acc += dt * rate;
+    while (b.acc >= 1){ b.acc -= 1; if (packets.length < 170) spawn(b, !!L); }
+  }
+  for (const p of packets) p.s += p.v * dt;
+  packets = packets.filter(p => p.s < p.belt.len && (!L || L.belts.has(p.belt.id)));
+  // ambient agent life
+  if (!tour){
+    const phase = Math.floor(simT / 6) % 6;
+    robotState[0] = phase === 4 ? 'needs' : 'working';
+    robotState[1] = phase % 2 ? 'done' : 'working';
+    robotState[2] = phase >= 3 ? 'working' : 'idle';
+  }
+}
+
+/* ---------- loop ---------- */
+let raf = 0, dirty = true;
+function req(){ dirty = true; if (!raf) raf = requestAnimationFrame(frame); }
+function frame(now){
+  raf = 0;
+  const tw = stepTween(now);
+  const ambient = motion && !document.hidden;
+  const dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
+  if (ambient) update(dt);
+  if (dirty || tw || (ambient && now - lastDraw > 32)){ draw(); lastDraw = now; dirty = false; }
+  if (ambient || tw || tween) raf = requestAnimationFrame(frame);
+  else lastT = 0;
+}
+
+/* ---------- UI: panel ---------- */
+function esc(s){ return s.replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+function rich(s){ return esc(s).replace(/`([^`]+)`/g, '<code>$1</code>'); }
+function flowItem(b, other){
+  const li = document.createElement('li');
+  const bt = document.createElement('button'); bt.className = 'flow'; bt.type = 'button';
+  bt.innerHTML = `<i class="sw" style="background:var(--${KIND[b.kind].tok})"></i><span>${esc(b.label)} <em>· ${esc(B[other].name)}</em></span>`;
+  bt.addEventListener('click', () => select(other, true));
+  li.append(bt); return li;
+}
+function select(id, move){
+  sel = id;
+  const pn = $('#panel');
+  if (!id){ pn.hidden = true; $('#jump').value = ''; req(); return; }
+  const b = B[id], D = DIST[b.dist];
+  $('#pdist').innerHTML = `<i style="background:var(--${D.color})"></i>${esc(D.name)}`;
+  $('#pname').textContent = b.name;
+  $('#pdesc').innerHTML = rich(b.d);
+  const facts = $('#pfacts'); facts.innerHTML = '';
+  for (const [v, l] of b.facts){ const dv = document.createElement('div'); dv.innerHTML = `<dt>${esc(v)}</dt><dd>${rich(l)}</dd>`; facts.append(dv); }
+  facts.hidden = !b.facts.length;
+  $('#pcode').innerHTML = b.code.map(c => `<li>${esc(c)}</li>`).join('');
+  const pin = $('#pin'), pout = $('#pout'); pin.innerHTML = ''; pout.innerHTML = '';
+  for (const be of BELTS){ if (be.to === id) pin.append(flowItem(be, be.from)); if (be.from === id) pout.append(flowItem(be, be.to)); }
+  if (!pin.children.length) pin.innerHTML = '<li class="none">None</li>';
+  if (!pout.children.length) pout.innerHTML = '<li class="none">None</li>';
+  pn.hidden = false; pn.scrollTop = 0;
+  $('#jump').value = id;
+  if (move){
+    setView();
+    const p = P(b.cx, b.cy, 1), I = insets();
+    if (p[0] < I.l + 40 || p[0] > VW - I.r - 40 || p[1] < I.t + 40 || p[1] > VH - I.b - 40 || move === 'center')
+      tweenTo({ x: b.cx, y: b.cy, zoom: Math.max(cam.zoom, VW <= 720 ? 0.75 : 0.85) });
+  }
+  req();
+}
+$('#pclose').addEventListener('click', () => { select(null); cv.focus({ preventScroll: true }); });
+
+/* ---------- UI: tours ---------- */
+const menu = $('#toursMenu');
+TOURS.forEach((t, i) => {
+  const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
+  b.innerHTML = `<span class="n">${i + 1}</span><b>${esc(t.name)}</b><small>${esc(t.blurb)} ${t.steps.length} steps.</small>`;
+  b.addEventListener('click', () => { closeMenu(); startTour(i); });
+  menu.append(b);
+});
+function openMenu(){ menu.hidden = false; $('#toursBtn').setAttribute('aria-expanded', 'true'); menu.querySelector('button').focus(); }
+function closeMenu(){ menu.hidden = true; $('#toursBtn').setAttribute('aria-expanded', 'false'); }
+$('#toursBtn').addEventListener('click', e => { e.stopPropagation(); menu.hidden ? openMenu() : closeMenu(); });
+document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
+function startTour(i){ tour = i; tourStep = 0; select(null); packets = []; showStep(); }
+function endTour(){ tour = null; heroes = []; packets = []; $('#tour').hidden = true; tweenTo(fitAll()); req(); }
+function showStep(){
+  const t = TOURS[tour], st = t.steps[tourStep];
+  $('#tour').hidden = false;
+  $('#tname').textContent = `Tour ${tour + 1} · ${t.name} · step ${tourStep + 1} of ${t.steps.length}`;
+  $('#ttitle').textContent = st.t;
+  $('#tbody').innerHTML = rich(st.b);
+  $('#tdots').innerHTML = t.steps.map((_, i) => `<i class="${i === tourStep ? 'on' : ''}"></i>`).join('');
+  $('#tprev').disabled = tourStep === 0;
+  $('#tnext').textContent = tourStep === t.steps.length - 1 ? 'Finish' : 'Next';
+  if (st.robot) robotState[0] = st.robot; else if (tour === 1) robotState[0] = 'working';
+  packets = [];
+  const rects = st.lit.map(id => { const b = B[id]; let top = 0; for (const s of b.solids) top = Math.max(top, s.ztop); return [...b.fp, top]; });
+  for (const id of st.belts) for (const [x, y] of BE[id].pts) rects.push([x, y, 0, 0, 0]);
+  requestAnimationFrame(() => tweenTo(frameRects(rects, cam.th, VW <= 720 ? 18 : 70, 1.25)));
+  req();
+}
+$('#tnext').addEventListener('click', () => { const t = TOURS[tour]; if (tourStep < t.steps.length - 1){ tourStep++; showStep(); } else endTour(); });
+$('#tprev').addEventListener('click', () => { if (tourStep > 0){ tourStep--; showStep(); } });
+$('#texit').addEventListener('click', endTour);
+
+/* ---------- UI: jump list and legend ---------- */
+{
+  const j = $('#jump');
+  j.innerHTML = '<option value="">Go to a building…</option>' + Object.keys(DIST).map(k =>
+    `<optgroup label="${esc(DIST[k].name)}">` + BL.filter(b => b.dist === k).map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('') + '</optgroup>').join('');
+  j.addEventListener('change', () => { if (j.value) select(j.value, 'center'); });
+  const ll = $('#legendList');
+  ll.innerHTML = Object.values(KIND).map(k => `<li><i class="sw" style="background:var(--${k.tok})"></i>${esc(k.name)}</li>`).join('') +
+    '<li><hr style="flex:1"></li>' +
+    [['working','◐ working'],['needs','● needs you'],['done','✓ to review'],['idle','○ idle']].map(([s, l]) => `<li><span class="gl" style="color:var(--${GLYPHCOL[s]})">${l[0]}</span>Agent ${esc(l.slice(2))}</li>`).join('');
+  if (innerWidth <= 720) $('#legend').open = false;
+}
+
+/* ---------- UI: controls ---------- */
+function rotate(dir){ rotIdx = (rotIdx + dir + 4) % 4; tweenTo({ th: (tween ? tween.to.th : cam.th) + dir * Math.PI / 2 }, 520); }
+function zoomBy(f, X = null, Y = null){
+  setView();
+  if (X == null){ X = VW / 2; Y = VH / 2; }
+  const g0 = toGrid(X, Y);
+  cam.zoom *= f; clampCam(); setView();
+  const g1 = toGrid(X, Y); cam.x += g0[0] - g1[0]; cam.y += g0[1] - g1[1]; clampCam();
+  req();
+}
+$('#rotL').addEventListener('click', () => rotate(-1));
+$('#rotR').addEventListener('click', () => rotate(1));
+$('#zin').addEventListener('click', () => zoomBy(1.25));
+$('#zout').addEventListener('click', () => zoomBy(0.8));
+$('#fit').addEventListener('click', () => tweenTo(fitAll()));
+function setMotion(on){
+  motion = on;
+  const b = $('#pause'); b.setAttribute('aria-pressed', String(!on)); b.title = on ? 'Pause motion (P)' : 'Play motion (P)'; b.setAttribute('aria-label', on ? 'Pause motion' : 'Play motion');
+  $('#pauseIcon').innerHTML = on ? '<rect x="5" y="4" width="3.5" height="12" rx="1"/><rect x="11.5" y="4" width="3.5" height="12" rx="1"/>' : '<path d="M6 4l10 6-10 6z"/>';
+  lastT = 0; req();
+}
+$('#pause').addEventListener('click', () => setMotion(!motion));
+reduceMQ.addEventListener?.('change', e => setMotion(!e.matches));
+
+/* ---------- input ---------- */
+const ptrs = new Map(); let drag = null, pinch = null;
+function hitTest(X, Y){
+  for (let i = hits.length - 1; i >= 0; i--){
+    const pts = hits[i].pts; let inside = false;
+    for (let a = 0, b = pts.length - 1; a < pts.length; b = a++){
+      const [xa, ya] = pts[a], [xb, yb] = pts[b];
+      if ((ya > Y) !== (yb > Y) && X < (xb - xa) * (Y - ya) / (yb - ya) + xa) inside = !inside;
+    }
+    if (inside) return hits[i].id;
+  }
+  return null;
+}
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, moved: 0 };
+  else if (ptrs.size === 2){ const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0]-b[0], a[1]-b[1]), mx: (a[0]+b[0])/2, my: (a[1]+b[1])/2 }; drag = null; }
+});
+cv.addEventListener('pointermove', e => {
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pinch && ptrs.size === 2){
+    const [a, b] = [...ptrs.values()], d = Math.hypot(a[0]-b[0], a[1]-b[1]), mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
+    setView(); const g0 = toGrid(pinch.mx, pinch.my), g1 = toGrid(mx, my);
+    cam.x += g0[0] - g1[0]; cam.y += g0[1] - g1[1];
+    zoomBy(d / pinch.d, mx, my); pinch = { d, mx, my }; return;
+  }
+  if (drag){
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.moved += Math.abs(dx) + Math.abs(dy);
+    if (drag.moved > 5){
+      tween = null; cv.classList.add('dragging');
+      setView(); const g0 = toGrid(drag.x, drag.y), g1 = toGrid(e.clientX, e.clientY);
+      cam.x += g0[0] - g1[0]; cam.y += g0[1] - g1[1]; clampCam();
+      drag.x = e.clientX; drag.y = e.clientY; req();
+    }
+    return;
+  }
+  if (e.pointerType === 'mouse'){
+    const h = hitTest(e.clientX, e.clientY);
+    if (h !== hover){ hover = h; cv.classList.toggle('pointing', !!h); req(); }
+  }
+});
+function endPtr(e){
+  ptrs.delete(e.pointerId);
+  if (pinch && ptrs.size < 2){ pinch = null; drag = null; return; }
+  if (drag && drag.moved <= 5 && e.type === 'pointerup'){
+    const h = hitTest(e.clientX, e.clientY);
+    select(h, !!h);
+  }
+  drag = null; cv.classList.remove('dragging');
+}
+cv.addEventListener('pointerup', endPtr);
+cv.addEventListener('pointercancel', endPtr);
+cv.addEventListener('pointerleave', () => { if (hover){ hover = null; cv.classList.remove('pointing'); req(); } });
+cv.addEventListener('wheel', e => {
+  e.preventDefault(); tween = null;
+  const f = Math.exp(-Math.max(-60, Math.min(60, e.deltaY * (e.deltaMode ? 30 : 1))) * 0.0022);
+  zoomBy(f, e.clientX, e.clientY);
+}, { passive: false });
+const DKEYS = ['daemon', 'clients', 'agents', 'yard', 'surf', 'links'];
+document.addEventListener('keydown', e => {
+  const tag = e.target.tagName;
+  if (e.key === 'Escape'){
+    if (!menu.hidden){ closeMenu(); $('#toursBtn').focus(); return; }
+    if (sel){ select(null); return; }
+    if (tour !== null){ endTour(); return; }
+  }
+  if (tag === 'SELECT' || tag === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (tag === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
+  const step = 1.6 / Math.max(0.3, cam.zoom);
+  const pan = (sx, sy) => { setView(); const g0 = toGrid(VW/2, VH/2), g1 = toGrid(VW/2 + sx*60, VH/2 + sy*60); cam.x += (g1[0]-g0[0]) * step / 2; cam.y += (g1[1]-g0[1]) * step / 2; clampCam(); req(); };
+  switch (e.key){
+    case 'ArrowLeft': case 'a': case 'A': pan(-1, 0); break;
+    case 'ArrowRight': case 'd': case 'D': pan(1, 0); break;
+    case 'ArrowUp': case 'w': case 'W': pan(0, -1); break;
+    case 'ArrowDown': case 's': case 'S': pan(0, 1); break;
+    case '+': case '=': zoomBy(1.25); break;
+    case '-': case '_': zoomBy(0.8); break;
+    case 'q': case 'Q': rotate(-1); break;
+    case 'e': case 'E': rotate(1); break;
+    case '0': case 'Home': tweenTo(fitAll()); break;
+    case 'p': case 'P': setMotion(!motion); break;
+    case 't': case 'T': openMenu(); break;
+    case ']': case '.': if (tour !== null) $('#tnext').click(); break;
+    case '[': case ',': if (tour !== null && tourStep > 0) $('#tprev').click(); break;
+    default:
+      if (/^[1-6]$/.test(e.key)){ const D = DIST[DKEYS[+e.key - 1]], [x, y, w, d] = D.r; tweenTo(frameRects([[x, y, w, d, 3]], cam.th, 30, 1.3)); }
+      else return;
+  }
+  e.preventDefault();
+});
+
+/* ---------- size, theme, start ---------- */
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  VW = innerWidth; VH = innerHeight;
+  cv.width = Math.round(VW * DPR); cv.height = Math.round(VH * DPR);
+  req();
+}
+addEventListener('resize', resize);
+document.addEventListener('visibilitychange', () => { lastT = 0; req(); });
+const themeMQ = matchMedia('(prefers-color-scheme: dark)');
+const retheme = () => { readTokens(); req(); };
+themeMQ.addEventListener?.('change', retheme);
+new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+
+readTokens(); resize();
+Object.assign(cam, fitAll());
+setMotion(motion);
+for (const b of BELTS){ const n = Math.round(b.len * RATE[b.kind] / 1.8); for (let i = 0; i < n; i++) packets.push({ belt: b, s: Math.random() * b.len, v: 1.6 + Math.random()*0.5 }); }
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { for (const k in fontCache) delete fontCache[k]; req(); });
+req();
+})();
+</script>
+</body>
+</html>
