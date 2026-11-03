@@ -115,7 +115,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 | [Agent setup](#agent-setup) | `integration`, `doctor`, `pane-grants`, `set-pane-grants`, `mcp`, `tmux-shim`, `tmux` |
 | [Remote hosts](#remote-hosts) | `hosts`, `pair` |
 | [Tapes and layouts](#tapes-and-layouts) | `tape`, `layout` |
-| [Plugins](#plugins) | `plugins` |
+| [Plugins](#plugins) | `plugins`, `plugin-cell`, `plugin-notify` |
 | [Other](#other-commands) | `ssh`, `notify`, `mermaid`, `tml`, `look`, `update`, `completion`, `help` |
 
 `agent-hook`, `agent-statusline` and `agent-proto` are run by the harness integrations and by `start-agent --protocol`, not by hand. Their `--help` says what they do.
@@ -460,6 +460,25 @@ tuios daemon --log-level messages
 
 `tuios start-server` starts the daemon in the background with no session. It is hidden from `--help` because commands start the daemon on their own.
 
+#### daemon upgrade <Since command="daemon upgrade" /> [#daemon-upgrade]
+
+Move the running daemon to another tuios binary, and keep every program in its pane. Experimental, macOS and Linux only. See [Upgrade in place](/docs/daemon-restart#upgrade-in-place).
+
+```bash
+tuios daemon upgrade [--binary PATH] [--json]
+```
+
+- `--binary <path>`: the tuios binary that the daemon runs next. Default: the tuios that runs the command.
+- `--json`: print the result as one JSON object.
+
+The command refuses a binary that neither you nor root owns, or one that its group or other users can write. It exits `1` with `upgrade_refused`, and nothing changes, when the daemon:
+
+- runs on Windows, or inside another program (`tuios-web`, the SSH server),
+- holds a pane for another machine, or a window whose process runs on another machine,
+- runs a `tuios fan verify` check, or a popup with `capture_stdout`.
+
+A second upgrade while one runs is refused as `busy`. From a pane, the upgrade waits for a person to choose Yes in a dialog on an attached client. No, <kbd>Esc</kbd> or 60 seconds without an answer refuses it with `forbidden`. A daemon from before live upgrades answers `unknown_verb`. Run `tuios restart-server` for it.
+
 ### logs <Since command="logs" /> [#logs]
 
 Print the daemon's log.
@@ -610,7 +629,7 @@ Open a window and print its ID and name.
 tuios new-window [name] [command...] [flags]
 ```
 
-- `--workspace <n>`: the workspace to open it on. Default: the current one.
+- `--workspace <n>`: the workspace to open it on. Default: the workspace of the pane that runs the command, else the one the session shows.
 - `--cwd <dir>`: the starting directory. Default: the daemon's.
 - `--no-focus`: leave the focus where it is.
 - `--host <name>`: run the window's process on a machine from the `[hosts]` table. The window still belongs to this session.
@@ -1374,7 +1393,7 @@ tuios config prune [--dry-run]  # remove the keys of config.toml that have their
 
 ### set-config <Since command="set-config" /> [#set-config]
 
-Change an option in a running session. The config file is not changed.
+Change an option in a running session. With a client attached, the client applies the value and writes it to `config.toml`. With no client attached, the daemon keeps the value for the session. The next client that attaches applies it and writes it to `config.toml`. The command prints `Set PATH = VALUE`. With no client attached, it also says on stderr that the value is not applied yet.
 
 ```bash
 tuios set-config <path> <value>
@@ -1802,7 +1821,7 @@ tuios queue rm q3
 tuios queue rm --all -w build
 ```
 
-A message the agent shows no sign of taking is marked `stalled`, is never typed again, and opens a question in the Inbox. A pane holds at most `[agents.queue] max` messages (8 by default), each at most 16 KiB. A reply from the Inbox with a long paste can carry more, as a file that the daemon writes when it types the reply. See [Large pastes](/docs/agent-inbox#large-pastes). The queue lives in the daemon's memory. `queue ls` shows each entry's id, its state (`waiting`, `delivering` or `stalled`), who queued it, its age and the pane. Put `--` before text that starts with `ls` or `rm`.
+A message the agent shows no sign of taking is marked `stalled`, is never typed again, and opens a question in the Inbox. The question closes, and the message leaves the queue, when the pane shows within ten minutes that it took the message after all. A pane holds at most `[agents.queue] max` messages (8 by default), each at most 16 KiB. A reply from the Inbox with a long paste can carry more, as a file that the daemon writes when it types the reply. See [Large pastes](/docs/agent-inbox#large-pastes). The queue lives in the daemon's memory. `queue ls` shows each entry's id, its state (`waiting`, `delivering` or `stalled`), who queued it, its age and the pane. Put `--` before text that starts with `ls` or `rm`.
 
 ### review <Since command="review" /> [#review]
 
@@ -2342,21 +2361,29 @@ tuios tape exec dev.tape
 
 ## Plugins
 
-Install, run and inspect plugins. Run the commands that change a plugin from a terminal outside tuios. The daemon refuses them from a pane. See [Plugins](/docs/plugins).
+Install, write, run and inspect plugins. Run the commands that change a plugin from a terminal outside tuios. The daemon refuses them from a pane. An enabled plugin runs with your rights. Grants are not a sandbox. See [Plugins](/docs/plugins).
 
 | Command | What it does |
 |---------|--------------|
-| `tuios plugins install SOURCE` <Since command="plugins install" /> | Get a plugin with git, show the plan, build it, pin its commit in `plugins.lock` and enable it. `SOURCE` is `owner/repo[/dir][@ref]` on github.com, a git URL with an optional `@ref`, or a local folder. It asks you to approve a native plugin in the terminal. Flags: `--ref`, `--subdir`, `--yes`, `--no-enable`, `--no-build`, `--replace`, `--grant admin`. `--grant admin` needs a running daemon |
+| `tuios plugins install SOURCE` <Since command="plugins install" /> | Get a plugin, show the plan, build it, pin it in `plugins.lock` and enable it. `SOURCE` is the name of a plugin of the tuios release, such as `pr-status`, `owner/repo[/dir][@ref]` on github.com, a git URL with an optional `@ref`, or a local folder. It asks you to approve a native plugin in the terminal. Flags: `--ref`, `--subdir`, `--yes`, `--no-enable`, `--no-build`, `--replace`, `--grant admin`. `--grant admin` needs a running daemon |
 | `tuios plugins install` | With no source: install each plugin in `plugins.lock` at its commit. It enables nothing |
+| `tuios plugins update [ID...]` <Since command="plugins update" /> | Move installed plugins to the newest commit of their ref. It shows the commits and asks. It asks again, also with `--yes`, when what the plugin runs or asks for changes, when the history was rewritten, or when a tag moved. `--check` changes nothing. Exits `3` when a source cannot be reached. Flags: `--check`, `--yes`, `--grant admin` |
+| `tuios plugins uninstall ID [--yes]` <Since command="plugins uninstall" /> | Disable the plugin, stop its processes and close its panes. Then remove it from `plugins.lock`, remove its folder and its approval. The config and state folders stay. Refused for a plugin that `install` did not install |
 | `tuios plugins approve ID` <Since command="plugins approve" /> | Allow a native plugin to run on this machine. `--deny` denies it, and it stays off until you allow it. `--grant admin` gives the `admin` grant to a plugin that asks for it. `--yes` answers without the question. Needs a running daemon |
-| `tuios plugins list [--json]` | List the plugins tuios finds, with the state of each. An installed one shows `managed`, its source and its commit. A native plugin can show "waiting for approval" or "denied" |
+| `tuios plugins list [--json]` | List the plugins tuios finds, with the state of each and the reason: `on`, `off`, `error`, `waiting for approval` or `denied`. An installed one shows `managed`, its source and its commit |
 | `tuios plugins info ID [--json]` | Show what a plugin runs, and the grants a native plugin asks for and holds |
 | `tuios plugins enable ID`, `disable ID` | Add the plugin to `[plugins] enabled` and start it, or remove it and stop its processes. A native plugin starts only after you approve it |
-| `tuios plugins link DIR [--enable]`, `unlink ID` | Add a plugin folder to `[plugins] dirs`, or stop using it. A linked plugin stays off. `--enable` enables it too |
+| `tuios plugins link DIR [--enable]`, `unlink ID` | Add a plugin folder to `[plugins] dirs`, or stop using it and close the plugin's panes. A linked plugin stays off. `--enable` enables it too |
 | `tuios plugins build ID` | Run the plugin's build commands. Each one is shown first |
 | `tuios plugins run ID ACTION [--wait]` | Run an action of an enabled plugin |
 | `tuios plugins open ID PANE [--placement P]` | Open a pane of an enabled plugin: `overlay`, `popup`, `split`, `tab` or `zoomed` |
+| `tuios plugins stats [--json]` <Since command="plugins stats" /> | Show each plugin's processes and memory now, and its runs and run time since the daemon started. macOS shows no memory. Needs the daemon |
 | `tuios plugins log [ID] [--limit N] [--json]` | Show the last runs of plugin commands, with their exit codes and output |
+| `tuios plugins new NAME [--id ID]` <Since command="plugins new" /> | Make a plugin folder that works: a manifest, a shell script, a README and a GitHub workflow that runs `check` and attaches the plugin to the release of a tag |
+| `tuios plugins check [PATH]` <Since command="plugins check" /> | Read a plugin folder as tuios does. Print each problem and warning, and exit `1` when the plugin cannot load. Runs nothing and needs no daemon |
+| `tuios plugins dev PATH` <Since command="plugins dev" /> | Install a folder in place and reload it each time a file changes, until Ctrl-C. Asks once at the start |
+| `tuios plugin-cell set ID TEXT [--action ACTION]`, `plugin-cell clear ID` <Since command="plugin-cell" /> | From a plugin with the `ui` grant: set or clear a dock cell that its manifest names. A click runs `ACTION` |
+| `tuios plugin-notify TEXT [--level LEVEL]` <Since command="plugin-notify" /> | From a plugin with the `ui` grant: show a notification under the plugin's name |
 
 A native plugin runs only after you approve it on each machine, also when it comes from `plugins.lock`. `tuios plugins install` asks in the terminal. For a plugin that comes another way, an attached client shows a dialog with its source, what it runs and each grant. To allow it, type `allow` and press <kbd>Enter</kbd>. `tuios plugins approve ID` asks the same question in a terminal. A changed manifest asks again.
 
@@ -2468,7 +2495,16 @@ FILE is a Mermaid source (`.mmd`), a Markdown file, or `-` for stdin. A Markdown
 - `--demo`: type the diagram of FILE, or a built-in flowchart, one character at a time, for a recording. A Markdown file is typed one `mermaid` block after the other.
 - `--loop`: with `--demo`, start again 2 seconds after the end.
 
-In the live view, press <kbd>r</kbd> to start the demo again and <kbd>q</kbd> to quit. sketch draws all 33 diagram types of pele, and each type has a text drawing. A drawing wider than the terminal is written at its full width, with a note on stderr. The command exits `1` when a diagram cannot be drawn. [sketch](/docs/libraries/sketch) draws the diagrams.
+In the live view, press <kbd>r</kbd> to start the demo again and <kbd>q</kbd> to quit.
+
+tuios draws eight diagram types itself: flowcharts, sequence diagrams, state diagrams, class diagrams, ER diagrams, gantt charts, pie charts and mindmaps. The `sketch` plugin draws the other types, such as timelines, git graphs and sankey diagrams. Install it with `tuios plugins install sketch`. See [Plugins of the tuios release](/docs/plugins#plugins-of-the-tuios-release).
+
+- With the plugin, `tuios mermaid` runs it for such a diagram, with `--format`, `--out`, `--cols`, `--diagram` and `--theme`.
+- Without the plugin, the command says what to run and exits `3`.
+- `--watch` and `--demo` draw the eight types only.
+- `text` draws each of the eight types. It writes another type as its source, with a note on stderr.
+
+A drawing wider than the terminal is written at its full width, with a note on stderr. The command exits `1` when a diagram cannot be drawn. [sketch](/docs/libraries/sketch) draws the diagrams.
 
 ### tml <Since command="tml" /> [#tml]
 

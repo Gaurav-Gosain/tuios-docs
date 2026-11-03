@@ -215,12 +215,53 @@ The preview shows:
 
 - code with syntax colours and line numbers,
 - Markdown as formatted text,
-- a picture, the first page of a PDF or a frame of a film,
+- a picture, a page of a PDF or a frame of a film,
+- JSON laid out for reading, and CSV and TSV as a table,
+- the files in an archive,
 - the names in a folder.
 
-A file that is not text shows its type and size. A long text shows its first 5000 lines, and the preview says so. The wheel scrolls the preview. A PDF page needs `pdftoppm`, and a film frame needs `ffmpeg`, on the machine that has the file. A picture uses Kitty graphics when the terminal supports them. Other terminals get block characters. At 16 colours the preview names the picture and does not draw it.
+A binary file shows its first 16 KiB in hex. A long text opens at once, and tuios reads more of it as you move. Line numbers after a jump to the end are estimates, and the preview says so. A search or a count stops after 5 seconds and says how far it went. Press <kbd>n</kbd> to go on.
 
-<kbd>↑</kbd> and <kbd>↓</kbd> (or <kbd>j</kbd> and <kbd>k</kbd>) move the cursor to the next row, and the preview shows that row. <kbd>Space</kbd> or <kbd>Esc</kbd> closes the preview. A click outside it closes it too. Every other key goes to the rail. For a listing on another machine, that machine reads the file and sends the preview. Its host policy must allow `files`.
+- **A PDF** shows one page and a bar with the page number. Click the bar to go to a page. At 16 colours the preview shows the words of the page.
+- **A film** shows one frame and a bar with the time. Click or drag the bar to move to a time. There is no playback. Press <kbd>t</kbd> to show 7 small frames from across the film. At 16 colours the preview shows the facts of the film.
+- **A GIF**: <kbd>J</kbd> and <kbd>K</kbd> step through its frames.
+- **A picture** uses Kitty graphics when the terminal supports them. Other terminals get block characters. At 16 colours the preview names the picture and does not draw it.
+
+A PDF page needs `pdftoppm`, and a film frame needs `ffmpeg`, on the machine that has the file. For a listing on another machine, that machine reads the file and sends the preview. Its host policy must allow `files`.
+
+<kbd>↑</kbd> and <kbd>↓</kbd> (or <kbd>j</kbd> and <kbd>k</kbd>) move the cursor to the next row, and the preview shows that row. <kbd>Space</kbd> or <kbd>Esc</kbd> closes the preview. A click outside it closes it too. When the rail loses the keyboard, the preview closes.
+
+These keys work while the cursor is in the list. The preview shows the keys that work now. Every other key goes to the rail.
+
+| Key | Action |
+| --- | --- |
+| <kbd>J</kbd> <kbd>K</kbd> | Move half a page, one page of a PDF, or 5 percent of a film |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd> <kbd>Ctrl</kbd>+<kbd>U</kbd> | Move half a page |
+| Mouse wheel over the preview | Move 3 lines, one page of a PDF, or 1 percent of a film |
+| <kbd>t</kbd> | Show or hide the small frames of a film |
+| <kbd>v</kbd> | Show the next view: the diff of a changed file, then the details |
+| <kbd>Tab</kbd> | Move the keyboard into the file |
+| <kbd>f</kbd> | Fill the area of the panes, or go back |
+
+Inside the file, every key acts on the preview:
+
+| Key | Action |
+| --- | --- |
+| <kbd>j</kbd> <kbd>k</kbd> | Move one line, one page of a PDF, or 1 second of a film |
+| <kbd>h</kbd> <kbd>l</kbd> | Move 1 second of a film, or one column of a table |
+| <kbd>v</kbd> | Show the next view: the diff of a changed file, then the details |
+| <kbd>t</kbd> | Show or hide the small frames of a film |
+| <kbd>d</kbd> <kbd>u</kbd> | Move half a page |
+| <kbd>g</kbd> <kbd>G</kbd> | Go to the start or the end, or the first or last page |
+| <kbd>/</kbd> | Search in a text. Lower case ignores case |
+| <kbd>n</kbd> <kbd>N</kbd> | Go to the next match, or the one before |
+| <kbd>:</kbd> | Go to a line number, or a page of a PDF |
+| <kbd>w</kbd> | Wrap long lines, or cut them |
+| <kbd>f</kbd> | Fill the area of the panes, or go back |
+| <kbd>Esc</kbd> or <kbd>Tab</kbd> | Move the keyboard back to the list |
+| <kbd>Space</kbd> | Close the preview |
+
+Change these keys in `[keybindings.quick_look]` <Since config="keybindings.quick_look.*" /> and `[keybindings.quick_look_inside]`.
 
 ## Drag a file into a pane <Since config="appearance.sidebar.file_drag" /> [#drag-a-file-into-a-pane]
 
@@ -231,7 +272,7 @@ Press a row of the files section, move the pointer out of the rail, and release 
 - <kbd>Esc</kbd> cancels the drag. A release over the rail, the dock or an empty area does nothing.
 - After the drop, the pane has the focus and the mode does not change.
 
-tuios quotes the path for the program in the pane. It knows sh, bash, zsh, dash, ksh, fish, nu, csh, PowerShell, elvish and cmd. Other programs get POSIX single quotes. A folder path ends in `/`, and a space follows the path. Hold <kbd>Alt</kbd> when you release a folder to type a `cd` to it.
+tuios quotes the path for the program in the pane. It knows sh, bash, rbash, zsh, dash, ksh, ksh93, mksh, lksh, oksh, loksh, pdksh, posh, yash, ash, hush, fish, nu, csh, PowerShell, elvish and cmd. Other programs get POSIX single quotes. A name with a backslash before a quote or another backslash, or a name that ends in a backslash, gets its quotes and backslashes outside the single quotes. Then fish behind tmux or `script` reads the path as a POSIX shell does. A folder path ends in `/`, and a space follows the path. Hold <kbd>Alt</kbd> when you release a folder to type a `cd` to it.
 
 tuios does not paste the path in these cases. The label and a dock note say why:
 

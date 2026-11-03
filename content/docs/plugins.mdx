@@ -1,6 +1,6 @@
 ---
 title: Plugins
-description: Install plugins from git and pin them in plugins.lock. Run herdr plugins unchanged, and native plugins that say which grants they need.
+description: Install plugins from git and pin them in plugins.lock. Write a plugin in minutes with tuios plugins new. Run herdr plugins unchanged, and native plugins that say which grants they need.
 icon: Puzzle
 ---
 
@@ -8,12 +8,16 @@ import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Since } from '@/components/mdx/since';
 
-A plugin adds actions, panes, startup services and event hooks to tuios. tuios runs two kinds:
+A plugin adds actions, panes, startup services, event hooks and dock cells to tuios. tuios runs two kinds:
 
 - **herdr plugins**: a folder with a `herdr-plugin.toml`, in the format of [herdr](https://herdr.dev) 0.9.5. tuios runs them unchanged.
 - **Native plugins** <Since feature="native-plugins" />: a folder with a `tuios-plugin.toml`. A native plugin says which grants it needs, and the daemon holds it to them. It runs only after you [approve it](#approving-a-native-plugin) on this machine.
 
 `tuios plugins install` <Since command="plugins install" /> gets a plugin with git, shows what it runs, builds it and pins its commit in `plugins.lock`. The daemon never fetches and never builds.
+
+<Callout type="warn" title="A plugin is not sandboxed">
+An enabled plugin runs with your rights. It can read your files, change your dotfiles and run any program. Grants limit what a plugin can ask of tuios. They do not stop a program that tries to escape. Install only plugins that you trust.
+</Callout>
 
 <Shot
   name="plugins-grants"
@@ -26,7 +30,7 @@ A plugin adds actions, panes, startup services and event hooks to tuios. tuios r
 
 ## Quickstart
 
-Run these in a terminal outside tuios. tuios refuses `install`, `link`, `unlink`, `enable`, `disable` and `build` inside a tuios pane, and from a process that a plugin started.
+Run these in a terminal outside tuios. tuios refuses `install`, `update`, `uninstall`, `link`, `unlink`, `enable`, `disable`, `build` and `dev` inside a tuios pane, and from a process that a plugin started.
 
 ```bash
 tuios plugins install alexarthurs/herdr-sidebar/plugins/herdr-sidebar   # get, build, pin and enable
@@ -38,9 +42,62 @@ A running daemon starts an enabled plugin at once. Without a daemon, the plugin 
 
 herdr-sidebar is a file explorer in a pane. A click on a file opens its preview.
 
+## Writing a plugin [#writing-a-plugin]
+
+`tuios plugins new NAME` <Since command="plugins new" /> makes a plugin folder that works. `tuios plugins dev` <Since command="plugins dev" /> runs it and reloads it when you save a file.
+
+```bash
+tuios plugins new weather      # make the folder weather, with the plugin you.weather
+tuios plugins dev weather      # install it in place, reload it on each change, until Ctrl-C
+```
+
+```
+Made the plugin you.weather in weather.
+Try it: tuios plugins dev weather
+```
+
+The folder holds four files:
+
+| File | What it holds |
+| --- | --- |
+| `tuios-plugin.toml` | The manifest. It asks for the `ui` grant and names one action, **Say hello** |
+| `hello.sh` | The script that the action runs. It shows a notification |
+| `README.md` | How to try, check and install the plugin |
+| `.github/workflows/plugin.yml` | A GitHub workflow. It runs `tuios plugins check` on each push, and attaches the plugin to the release of each tag |
+
+Open the command palette in tuios and choose **weather: Say hello**. `--id` sets another plugin id. The default is `you.NAME`.
+
+`dev` asks once when it starts. After that it gives the new approval for each change to the manifest, for the folder you named and nothing else. Run it from a terminal outside tuios.
+
+To start on GitHub instead, use the template repository [Gaurav-Gosain/tuios-plugin-template](https://github.com/Gaurav-Gosain/tuios-plugin-template). It holds the same files.
+
+### Checking a plugin <Since command="plugins check" /> [#checking-a-plugin]
+
+`tuios plugins check [PATH]` reads a plugin folder as tuios does. It runs nothing and needs no daemon. It prints each problem and warning, and exits `1` when the plugin cannot load:
+
+```
+you.weather 0.1.0 (tuios plugin)
+  actions  hello (1)
+warning: schema is an old name. Use api = 1
+The plugin loads.
+```
+
+```
+the plugin cannot load: unknown key process.bogus in tuios-plugin.toml. Check the spelling. If the plugin needs a newer tuios, run tuios update
+```
+
+Run it in your CI. The workflow from `tuios plugins new` does that.
+
+### Publishing a plugin
+
+A plugin is a git repository. People install it with `tuios plugins install OWNER/REPO`, and `tuios plugins update` follows its default branch. To publish a version, push a tag such as `v0.1.0`. People install it with `tuios plugins install OWNER/REPO@v0.1.0`.
+
+Keep `version` in the manifest in step with the tag. Change the manifest only when you must: a new grant or a new command asks every person again.
+
 ## Installing a plugin
 
 ```bash
+tuios plugins install pr-status                   # a plugin of the tuios release
 tuios plugins install owner/repo                  # github.com, the default branch
 tuios plugins install owner/repo@v0.3             # a tag, a branch or a full commit
 tuios plugins install owner/repo/plugins/notes    # the plugin folder, when it is not the top of the repository
@@ -65,6 +122,7 @@ Runs when enabled, outside every pane, with your rights:
 
 It can call tuios with these grants, in every session:
   read   Reads every session and pane on this machine.
+Grants are not a sandbox. The plugin can read your files and run any program as you.
 tuios enables the plugin after the install.
 ```
 
@@ -79,6 +137,21 @@ tuios enables the plugin after the install.
 | `--grant admin` | Give the `admin` grant to a native plugin that asks for it. See [Grants](#grants) |
 
 Each install builds into a new folder. When the build fails, or you stop it, nothing that runs changes: the plugin keeps its old folder and its old pin. After a good build, tuios writes the pin, and the daemon restarts the plugin from the new folder. tuios keeps the new folder and the one before it, and removes older ones.
+
+A plugin that is installed from the same source and ref already: `install` tells you to run `update`. To follow another ref, run `tuios plugins install SOURCE@REF`.
+
+### Plugins of the tuios release <Since feature="release-plugins" /> [#plugins-of-the-tuios-release]
+
+Each tuios release carries its own plugins:
+
+| Name | What it does |
+| --- | --- |
+| `pr-status` | Shows the pull request and CI state of the focused pane's folder in the dock |
+| `sketch` | Draws every Mermaid diagram type in [`tuios mermaid`](/docs/cli-reference#mermaid). tuios draws eight types itself |
+
+`tuios plugins install pr-status` takes the plugin from the release of the tuios that runs. It needs no git and no build. tuios checks each file against the `checksums.txt` of the release, and `plugins.lock` pins the version and a hash of the files. On another machine, `tuios plugins install` gets the same files or nothing.
+
+`tuios plugins update` moves these plugins to the release of the tuios that runs. `tuios update` does that after it installs a new tuios. When a package manager updates tuios, run `tuios plugins update` after it. A tuios that you built yourself has no release. Install the plugin from its folder: `tuios plugins install Gaurav-Gosain/tuios/plugins/pr-status`.
 
 ### plugins.lock <Since feature="plugins-lock" /> [#plugins-lock]
 
@@ -107,12 +180,32 @@ tuios plugins install          # each plugin in plugins.lock, at its commit
 
 This does not enable a plugin. `[plugins] enabled` in `config.toml` does that. A native plugin from the lock also waits for your [approval](#approving-a-native-plugin) on each machine. With `--yes` you trust the person who wrote the lock file. tuios still asks, also with `--yes`, when a manifest differs from the one the lock approved. The hash keeps the question honest. It is not a sandbox.
 
-### Updating and removing
+### Updating a plugin <Since command="plugins update" /> [#updating-a-plugin]
 
-`tuios plugins update` and `tuios plugins uninstall` are not in this release. Until they are:
+`tuios plugins update [ID...]` moves each installed plugin to the newest commit of the ref it follows. Give ids to update only those. tuios shows the new commits, the build commands and what the plugin runs, and asks. `--yes` skips the question.
 
-- **To update**, install the same source again at the new ref, such as `tuios plugins install owner/repo@v0.4`. tuios shows the plan, builds the new commit and moves the pin.
-- **To remove**, run `tuios plugins disable ID`, then delete the plugin's `[[plugin]]` entry from `plugins.lock`.
+tuios asks again, also with `--yes`, in three cases. With no terminal, tuios refuses these updates.
+
+- What the plugin runs or asks for changes. tuios shows the lines that change.
+- The history of the branch was rewritten.
+- The tag that the plugin follows points to a different commit.
+
+A change to the code alone does not ask again with `--yes`. Read the commits.
+
+- When the plugin's folder did not change, tuios says `up to date`.
+- The update builds into a new folder, so a failed build changes nothing that runs. The daemon then restarts the plugin.
+- An open plugin pane keeps its old folder until you open it again. A plugin that is off stays off.
+- `--check` shows the same facts and changes nothing.
+- When tuios cannot reach a source, that plugin stays at its commit. tuios goes on to the next one, and the command exits `3`.
+- A plugin from a folder has no update. A plugin pinned to a commit stays there.
+
+### Removing a plugin <Since command="plugins uninstall" /> [#removing-a-plugin]
+
+`tuios plugins uninstall ID` undoes the install. It disables the plugin, stops its processes and closes its panes. Then it removes the plugin from `plugins.lock`, removes its approval, and removes `$XDG_DATA_HOME/tuios/plugins/<id>/`. `--yes` skips the question.
+
+- `ID` can also be the source you installed from, such as `owner/repo`.
+- tuios keeps the config and state folders of the plugin. For a plugin installed from a local folder, tuios keeps that folder.
+- tuios refuses a plugin that it did not install. For a linked folder or a folder in `[plugins] dirs`, use `tuios plugins unlink ID`.
 
 ## Approving a native plugin <Since command="plugins approve" /> [#approving-a-native-plugin]
 
@@ -124,11 +217,11 @@ A native plugin runs only after you approve it on this machine. `tuios plugins i
 
 `tuios plugins install` asks a running tuios daemon to confirm that the command runs outside every pane. With no daemon to ask, the plugin also waits for you.
 
-`tuios plugins list` shows a plugin that waits as `waiting for approval`, and a plugin you denied as `denied`:
+`tuios plugins list` shows a plugin that waits as `waiting for approval`, and a plugin you denied as `denied`. The last column gives the reason for the state:
 
 ```
-ID             STATE                 FROM     VERSION  SOURCE                            NAME
-example.notes  waiting for approval  config   0.2.0                                      example.notes waits for your approval on this machine. Allow it in tuios, or run tuios plugins approve example.notes
+ID             STATE                 FROM     VERSION  SOURCE                            NAME   REASON
+example.notes  waiting for approval  config   0.2.0                                      Notes  example.notes waits for your approval on this machine. Allow it in tuios, or run tuios plugins approve example.notes
 example.panes  on                    managed  0.2.0    https://github.com/example/panes  Panes
 ```
 
@@ -161,7 +254,7 @@ Nothing runs until you enable it. To find and list a plugin runs none of its cod
 tuios plugins enable example.panes     # add it to [plugins] enabled, start it now
 tuios plugins disable example.panes    # remove it, and stop its processes
 tuios plugins link ~/src/my-plugin     # use a folder in place, off until you enable it
-tuios plugins unlink my-plugin
+tuios plugins unlink my-plugin         # stop using the folder, and close the plugin's panes
 ```
 
 A change to `config.toml` that removes a plugin from `enabled` applies at once. A change that adds one waits for `tuios config apply` or a daemon restart.
@@ -188,11 +281,11 @@ tuios only reads herdr's files. A plugin that herdr installed stays off in tuios
 
 | Entry | When it runs |
 | --- | --- |
-| Build | Only at `tuios plugins install` or `tuios plugins build ID`. tuios shows each command first |
+| Build | Only at `tuios plugins install`, `tuios plugins update` or `tuios plugins build ID`. tuios shows each command first |
 | Startup | When the daemon starts, and when you enable the plugin |
 | Action | From the command palette, a command key, or `tuios plugins run ID ACTION` |
 | Pane | From the command palette, or `tuios plugins open ID PANE` |
-| Event hook | When the herdr event stream sends the event it names |
+| Event | Each time an event that the entry names happens, such as a focus |
 
 A command is an argv list. No shell reads it. It runs in the plugin folder, outside every pane, as your user. `tuios plugins log` shows the last runs, with exit codes and the start of their output.
 
@@ -206,12 +299,16 @@ command = "example.layout.apply"
 description = "Apply layout"
 ```
 
+### What a plugin costs <Since command="plugins stats" /> [#what-a-plugin-costs]
+
+`tuios plugins stats` shows each plugin's processes and memory now, and its runs and run time since the daemon started. It needs a running daemon. macOS shows no memory. `--json` prints the same data for a script. From a pane, the command needs the `admin` grant.
+
 ## Native plugins
 
 A native plugin is a folder with `tuios-plugin.toml`:
 
 ```toml
-schema = 1
+api = 1
 id = "example.panes"
 name = "Panes"
 version = "0.2.0"
@@ -220,14 +317,14 @@ min_tuios = "0.11.0"             # optional
 platforms = ["linux", "macos"]
 
 [permissions]
-grants = ["read"]                # read, write, fan or admin
+grants = ["read"]                # read, write, fan, ui or admin
 
 [[build]]
 command = ["go", "build", "-o", "bin/panes", "."]
 
 [[process]]
 id = "list"
-run = "pane"                     # startup, action or pane
+run = "pane"                     # action, pane, event or startup
 title = "Panes"
 placement = "popup"
 width = 100
@@ -235,9 +332,35 @@ height = 22
 command = ["bin/panes"]
 ```
 
-- `run = "action"` and `run = "pane"` take the keys of herdr's `[[actions]]` and `[[panes]]`: `title`, `description`, `contexts`, `placement`, `width` and `height`.
-- tuios refuses a key it does not know. tuios refuses `[[wasm]]` and `run = "event"`. They fail with `plugin_requires_newer_tuios`.
-- `tuios plugins info ID` shows the grants the plugin asks for and the ones it holds.
+| Key | Required | What it holds |
+| --- | --- | --- |
+| `api` | yes | The plugin API version. Write `1`. `schema = 1` still works, and `tuios plugins check` warns |
+| `id` | yes | Letters, digits, `.`, `-` and `_`. Use `yourname.plugin` |
+| `name` | yes | The name people see |
+| `version` | yes | The version of the plugin, such as `0.1.0` |
+| `description` | no | One sentence |
+| `min_tuios` | no | The oldest tuios that runs this plugin |
+| `platforms` | no | `linux`, `macos`, `windows`. Leave it out for every platform |
+| `[permissions] grants` | no | The grants the plugin asks for. Leave it out for none |
+| `[[build]] command` | no | A command that `install` runs in the plugin folder |
+| `[[process]]` | no | A program that tuios runs. See below |
+| `[[cell]]` | no | A dock cell. See [Showing something](#showing-something) |
+| `[herdr] manifest` | no | Take the commands from a `herdr-plugin.toml` |
+
+tuios refuses a key it does not know, so a typo fails at once. A manifest that uses a newer `api`, key, grant or `run` value fails with `plugin_requires_newer_tuios`, and tuios tells you to run `tuios update`. `tuios plugins info ID` shows the grants the plugin asks for and the ones it holds.
+
+A `[[process]]` has `id`, `run` and `command`. `run` says when it runs:
+
+| `run` | When it runs | Other keys | Cost when idle |
+| --- | --- | --- | --- |
+| `action` | When you run it from the palette, a key or `tuios plugins run` | `title`, `description`, `contexts` | None |
+| `pane` | When you open it from the palette or `tuios plugins open` | `title`, `description`, `placement`, `width`, `height` | None |
+| `event` <Since feature="plugin-events" /> | Each time an event in `on` happens. The command runs and exits | `on` | None. One run each time the event happens |
+| `startup` | Once, when the daemon starts or you enable the plugin | | A process for as long as it runs |
+
+`placement` is `popup`, `overlay`, `split`, `tab` or `zoomed`. A program with a `/` in its name is found from the plugin folder. A program without one is found on `PATH`.
+
+Use an action, a pane or an event when you can. They cost nothing until you use them or the event happens. A `startup` process stays in memory for as long as it runs. Use one only when the plugin must watch something all the time.
 
 <Shot
   name="plugins-info"
@@ -248,12 +371,92 @@ command = ["bin/panes"]
   caption="plugins list and plugins info for an installed native plugin."
 />
 
+### Events
+
+An `event` process names its events in `on`:
+
+```toml
+[[process]]
+id = "focus"
+run = "event"
+on = ["pane.focused", "tab.focused", "workspace.focused"]
+command = ["sh", "pr-status.sh"]
+```
+
+| Kind | Events |
+| --- | --- |
+| `pane` | `pane.created`, `pane.closed`, `pane.focused`, `pane.moved`, `pane.exited`, `pane.agent_detected`, `pane.agent_status_changed` |
+| `tab` | `tab.created`, `tab.closed`, `tab.renamed`, `tab.moved`, `tab.focused` |
+| `workspace` | `workspace.created`, `workspace.updated`, `workspace.closed`, `workspace.renamed`, `workspace.moved`, `workspace.reordered`, `workspace.focused` |
+| `worktree` | `worktree.created`, `worktree.opened`, `worktree.removed` |
+
+A plugin runs at most 20 event commands in 10 seconds. tuios drops the rest and logs them. tuios stops an action or an event command after 10 minutes.
+
+### The environment
+
+Every process of a native plugin gets these variables:
+
+| Variable | Value |
+| --- | --- |
+| `TUIOS_BIN` | The tuios binary that runs the plugin. Use it instead of `tuios`, which depends on `PATH` |
+| `TUIOS_SOCKET` | The socket of that daemon. The command line reads it |
+| `TUIOS_PLUGIN_ROOT` | The plugin folder |
+| `TUIOS_PLUGIN_CONFIG_DIR` | A folder for the plugin's settings. An update keeps it |
+| `TUIOS_PLUGIN_STATE_DIR` | A folder for the plugin's data. An update keeps it |
+| `TUIOS_PLUGIN_ENTRY` | The `id` of the `[[process]]`, for an action or a pane |
+| `TUIOS_PLUGIN_EVENT` | The event that ran an `event` process, such as `pane.focused` |
+| `TUIOS_PLUGIN_EVENT_JSON` | The event as JSON |
+| `TUIOS_PLUGIN_SESSION` | The session of the focused pane. `-s` takes it |
+| `TUIOS_PLUGIN_PANE` | The focused pane. `-w` takes it |
+| `TUIOS_PLUGIN_CWD` | The folder of the focused pane |
+| `TUIOS_PLUGIN_CONTEXT_JSON` | All of the context above as JSON, with the agent and the selected text |
+| `TUIOS_PLUGIN_ID`, `TUIOS_PLUGIN_TOKEN` | Who the process is. A pane of the plugin does not get these. Do not print the token |
+
+A background process runs in the plugin folder, with no terminal and stdin closed. tuios keeps the first 64 KiB of its output. `tuios plugins log` shows it. A pane starts in the plugin folder too.
+
+To call tuios, use the command line. `"$TUIOS_BIN" list-verbs` lists every verb of the JSON socket, and `"$TUIOS_BIN" call VERB` calls one. Add `--json` to read a listing in a script.
+
+```sh
+"$TUIOS_BIN" list-agents -s "$TUIOS_PLUGIN_SESSION" --json
+"$TUIOS_BIN" capture-pane -s "$TUIOS_PLUGIN_SESSION" -w "$TUIOS_PLUGIN_PANE"
+```
+
+### Showing something <Since command="plugin-notify" /> [#showing-something]
+
+A plugin with the `ui` grant shows text in the dock and sends notifications. Name each cell in the manifest:
+
+```toml
+[permissions]
+grants = ["ui"]
+
+[[cell]]
+id = "status"
+side = "right"    # left, center or right
+```
+
+Set the cell from any command of the plugin, then let the command exit. The daemon keeps the text, so no process waits.
+
+```sh
+"$TUIOS_BIN" plugin-cell set status "CI ok" --action open
+"$TUIOS_BIN" plugin-cell clear status
+"$TUIOS_BIN" plugin-notify "The build failed" --level error
+```
+
+- `--action` names an action of the plugin. A click on the cell runs it.
+- A cell is one line of at most 512 bytes. SGR colour stays. tuios removes other control sequences, and cuts the cell to 24 cells on the dock.
+- A plugin can name 8 cells. It can change cells and send notifications 8 times a second.
+- tuios puts the plugin's name before a notification. The level is `info`, `warning` or `error`.
+- The cells go when the plugin stops. A new daemon starts with no cells. Set them again from a `startup` process or the next action.
+- To place a cell yourself, add `plugin/ID/CELL` to a list in [`[dock]`](/docs/configuration#the-dock-table).
+
+`"$TUIOS_BIN" tml show FILE -s "$TUIOS_PLUGIN_SESSION"` opens a panel. With `ui`, a plugin opens, changes and closes its own panels. Only a plugin's process can set a cell or send a notification. From a pane or a shell, the commands fail.
+
 ### A herdr plugin with grants
 
 To give a herdr plugin grants without changing it, add a `tuios-plugin.toml` beside its `herdr-plugin.toml` that points at it:
 
 ```toml
-schema = 1
+api = 1
 id = "herdr-sidebar"
 
 [herdr]
@@ -271,9 +474,11 @@ A plugin's processes call tuios to read panes, type into them and open new ones.
 
 | Grant | Lets the plugin |
 | --- | --- |
+| none | Do what every pane may do. A plugin that only opens a pane needs no grant |
 | `read` | List sessions and panes, read a pane's screen, and follow events in every session |
 | `write` | Type into your panes and shells, so it can run commands as you. It stops at an agent's approval prompt |
 | `fan` | Start agents with `fan` and `start-agent` |
+| `ui` | Show dock cells, panels and notifications. It cannot type into or read a pane |
 | `admin` | Everything else. It implies `read`, `write` and `fan`, never `respond`. It needs your approval on this machine |
 | `respond` | Refused. Only you answer an agent's prompt |
 
@@ -281,6 +486,7 @@ A plugin's processes call tuios to read panes, type into them and open new ones.
 - A herdr plugin with no native file holds the default grants of `[agents.permissions]`. To give it fewer, add a native file. See [A herdr plugin with grants](#a-herdr-plugin-with-grants).
 - A pane that a native plugin opens holds no more than the plugin.
 - No plugin process can act as you. It cannot enable a plugin or answer a prompt.
+- Ask for the least you need. A plugin that shows a status needs `ui`, not `write`.
 
 A plugin with `write` types into a pane whatever that pane holds, your own shells included. tuios refuses its keys for a pane that waits on a prompt tuios knows of: an agent's approval that the harness reports or a screen rule finds. tuios checks again right before the <kbd>Enter</kbd> of `send-text --submit`, `ask-agent` and `run`. tuios does not know a plain question in a shell, such as `read -p`, `sudo`, `rm -i` or an ssh host key question. A plugin with `write` can answer it. A plugin cannot queue with `queue-prompt` or `send-review`.
 
@@ -305,6 +511,14 @@ Grants keep a plugin's mistakes, and a tool that a prompt misled, inside what yo
 
 Install plugins that you trust, from sources you trust.
 
+### What tuios promises
+
+- **`api = 1` stays.** A plugin written for `api = 1` keeps working in every later tuios that reads `api = 1`. The manifest keys, the `TUIOS_*` variables, the `tuios plugins` commands and the JSON verbs keep their meaning.
+- **New things are additions.** A tuios can add a key, a grant, a `run` value or a variable in `api = 1`. It does not change what an old one means. A plugin that uses a new one sets `min_tuios`.
+- **A removal has a warning first.** A name that goes away stays as an alias for at least one minor release, and `tuios plugins info` shows a warning. Only a new `api` number removes a name.
+- **An older tuios never guesses.** It refuses a manifest with something it does not know, and says what to do. It does not ignore a grant.
+- **Before v1.0, the rest can move.** The output of `tuios plugins list` is for people. Use `--json` in a script.
+
 ### Platforms
 
 tuios runs each command of a native plugin under a small tuios process. That process leads the command's process session, and it waits until nothing the command started is left. On Linux this costs about 2.7 MB of memory for each running command, and it wakes only when a process ends. macOS has no subreaper. There, when the command has ended and something it started still runs, the process checks once a second.
@@ -323,11 +537,14 @@ On Windows and the BSDs, tuios cannot tell which process calls, so it does not r
 ## How do I
 
 - **Install a herdr plugin?** Run `tuios plugins install owner/repo` from a terminal outside tuios.
+- **Write my first plugin?** Run `tuios plugins new NAME`, then `tuios plugins dev NAME`.
 - **Run a plugin that says "waiting for approval"?** Attach to tuios and answer the dialog, or run `tuios plugins approve ID`.
 - **Get the same plugins on a second machine?** Copy `plugins.lock` with your config, then run `tuios plugins install`.
-- **Move a plugin to a new version?** Install it again at the new ref: `tuios plugins install owner/repo@v0.4`.
+- **Move a plugin to a new version?** Run `tuios plugins update ID`. To follow another ref, run `tuios plugins install owner/repo@v0.4`.
+- **Remove a plugin?** Run `tuios plugins uninstall ID`.
 - **Stop a plugin from typing into my panes?** Give it a `tuios-plugin.toml` with `grants = ["read"]`, then install it again.
-- **See why a plugin did nothing?** Run `tuios plugins log ID`, then `tuios plugins info ID`.
+- **See why a plugin did nothing?** Run `tuios plugins list`, then `tuios plugins log ID` and `tuios plugins info ID`.
+- **See what a plugin costs?** Run `tuios plugins stats`.
 
 ## Related
 

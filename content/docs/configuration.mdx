@@ -92,7 +92,7 @@ tuios config browse                      # search the options and set one, in an
 
 `tuios config browse` shows each option with its type, default, current value and source. Press <kbd>/</kbd> to search. Press <kbd>Enter</kbd> on an option to set it the same way as `set-config`. <kbd>q</kbd> or <kbd>Esc</kbd> leaves it. It needs a running daemon. See [Explorers](/docs/cli-reference#explorers).
 
-`set-config` changes a running session. With a client attached, the client applies the value and writes it to the config. With no client attached, the daemon keeps the value for this session and does not write the file. A path the registry does not know is refused. An `[appearance]` option also answers to its bare name, so `border_style` and `appearance.border_style` are the same path. `set-config` cannot reach `[keybindings]`, `[hooks]`, `[hosts]`, `[tailscale]`, `[agents]` or the `[dock]` lists, because those are maps and lists rather than single values. For `[agents]` this is also a safeguard: a program in a pane cannot loosen it through TUIOS. `dock.clock.format` is the one `[dock]` key it can set.
+`set-config` changes a running session. With a client attached, the client applies the value and writes it to the config. With no client attached, the daemon keeps the value for this session. The next client that attaches applies it and writes it to the config. A path the registry does not know is refused. An `[appearance]` option also answers to its bare name, so `border_style` and `appearance.border_style` are the same path. `set-config` cannot reach `[keybindings]`, `[hooks]`, `[hosts]`, `[tailscale]`, `[agents]` or the `[dock]` lists, because those are maps and lists rather than single values. For `[agents]` this is also a safeguard: a program in a pane cannot loosen it through TUIOS. `dock.clock.format` is the one `[dock]` key it can set.
 
 ### The in-app settings page
 
@@ -289,6 +289,7 @@ While the pane background paints a colour, a program that asks the terminal for 
 |-----|---------|--------|--------------|
 | `window_title_position` <Since config="appearance.window_title_position" /> | `"top"` | `top`, `bottom`, `hidden` | Where the title is drawn. `hidden` also disables rename |
 | `window_title_format` <Since config="appearance.window_title_format" /> | `""` | template | Title template. See [below](#window_title_format) |
+| `host_title` <Since config="appearance.host_title" /> | `""` | template | The title of the terminal that tuios runs in, from the focused pane. Empty sets no title. See [below](#host_title) |
 | `window_button_style` <Since config="appearance.window_button_style" /> | `"dots"` | `dots`, `pill` | macOS-style traffic lights, or a filled pill. On the left, the pill puts close at the outer corner: close, zoom, minimize |
 | `window_button_position` <Since config="appearance.window_button_position" /> | `"left"` | `left`, `right` | Which end of the title bar holds the buttons |
 | `hide_window_buttons` <Since config="appearance.hide_window_buttons" /> | `false` | bool | Hide the minimize, zoom and close buttons |
@@ -316,6 +317,31 @@ window_title_format = "{index}: {title} ({cwd})"
 ```
 
 Any other `{...}` produces a validation warning and is drawn as written.
+
+#### host_title
+
+`host_title` sets the title of the terminal that tuios runs in, such as the title bar of Ghostty. It is the same as `set-titles` in tmux. The title follows the focused pane, the workspace and the session, and it changes when the pane's own title changes.
+
+| Placeholder | What it holds |
+| --- | --- |
+| `{title}` | The focused pane's name, as the title on its border shows it |
+| `{index}` | The pane's position in its workspace, from 1 |
+| `{cwd}` | The pane's working directory |
+| `{session}` | The session's name as the rail shows it. Without a daemon, `tuios` |
+| `{workspace}` | The workspace's name, or its number. With a scratch group open, the workspace that it shows over |
+
+```toml
+[appearance]
+host_title = "{title} · {session}"
+```
+
+- With no focused pane on the workspace in view, the title is the session's name.
+- The title is also the session's name when the template uses `{title}` and the pane has no name, as for a new shell, and when the template comes out empty.
+- A title that a tool sets with herdr's `terminal title set` wins while it is set.
+- Each client sets the title of its own terminal.
+- When you empty the option while a client is attached, tuios clears the title that it set.
+
+The option is on the settings page, in the Appearance section. `tuios set-config` applies it at once.
 
 ### Mouse and input
 
@@ -1338,8 +1364,25 @@ See [What hints mode finds](/docs/hints#what-hints-mode-finds) for the pattern n
 | `navigator_layout` <Since config="panes.navigator_layout" /> | `"tree"` | `tree`, `flat`, `cards` | The layout the pane navigator opens in. <kbd>v</kbd> changes it while the navigator is open |
 | `navigator_search` <Since config="panes.navigator_search" /> | `false` | `true`, `false` | Open the navigator ready to type a search. <kbd>Esc</kbd> with nothing typed closes it |
 | `drag_and_drop` <Since config="panes.drag_and_drop" /> | `false` | `true`, `false` | Turn on drag and drop between panes over kitty's protocol (OSC 72) |
+| `drag_and_drop_desktop` <Since config="panes.drag_and_drop_desktop" /> | `false` | `true`, `false` | With `drag_and_drop`, drag files between the desktop and the panes. Needs kitty 0.47 or later. See [below](#drag-and-drop-with-the-desktop) |
 
 With `drag_and_drop` on, a program that speaks the protocol, such as yazi 26.9 or later, can drag files from its pane. Hold the left button on a file in terminal mode, and carry it to another pane. A pane whose program speaks the protocol takes the drop itself. Any other pane gets the paths as a paste, quoted for its shell, by the rules of [a drag from the rail](/docs/session-rail#drag-a-file-into-a-pane). tuios reads no file, and refuses a drop back into the pane the drag came from. The switch is off because the protocol is still settling.
+
+### Drag and drop with the desktop <Since config="panes.drag_and_drop_desktop" /> [#drag-and-drop-with-the-desktop]
+
+Set `drag_and_drop_desktop = true` with `drag_and_drop = true` to drag files between the desktop and the panes. The terminal that tuios runs in must speak the same protocol. Today that is kitty 0.47 or later. tuios asks the terminal once at startup.
+
+```toml
+[panes]
+drag_and_drop = true
+drag_and_drop_desktop = true
+```
+
+- **From the desktop**: drag a file from a file manager or a browser onto the tuios window. It lands on the pane under the pointer. A program that speaks the protocol takes it. Any other pane gets the path as a paste, by the rules above.
+- **To the desktop**: a file that a program in a pane drags, such as yazi, becomes a drag on the desktop. Drop it on any other window. The desktop shows the file names and the pane they come from.
+- tuios takes a drag only when the press went to a pane that offers drags. You still move a pane, select text and drag a row of the rail as before.
+- The bridge is for a terminal on this machine. A client over SSH, through tuios-web, or attached to the daemon of another machine does not use it.
+- Both switches apply without a restart.
 
 ## The path_picker table <Since config="path_picker" /> [#the-path_picker-table]
 

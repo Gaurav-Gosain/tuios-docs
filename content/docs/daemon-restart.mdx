@@ -157,6 +157,32 @@ The stop and the start run in a process of their own, in a session of its own. S
 | "Another restart of the daemon is running." | Wait for it to end. `tuios restart-server --last` shows its steps. |
 | "The restart stopped before it finished." | Run `tuios restart-server --last`, then `tuios ls`. |
 
+## Upgrade in place <Since command="daemon upgrade" /> [#upgrade-in-place]
+
+`tuios daemon upgrade` moves the running daemon to another tuios binary and ends no program. Every program in a pane keeps its pid, its terminal and its screen. The daemon keeps its pid too. Live upgrades are experimental, and only on macOS and Linux.
+
+```bash
+tuios daemon upgrade                             # the tuios that runs the command
+tuios daemon upgrade --binary ~/bin/tuios-next   # another binary
+tuios daemon upgrade --json                      # one JSON object with the result
+```
+
+```
+Checking /usr/local/bin/tuios (v0.10.1) accepts this daemon's state (handoff v3)... ok
+Paused 4 panes, saved their screens (34.3 KB).
+Starting v0.10.1 in place (pid 8615 kept)...
+Upgraded in 0.06 s. 4 panes and their programs kept.
+```
+
+- tuios first runs the new binary once to check that it can take the panes. When the check fails, nothing changes.
+- tuios refuses a binary that neither you nor root owns, and a binary that its group or other users can write.
+- On Linux, the daemon runs the same file that it checked. When a folder on the path is renamed after the check, no other file takes its place. On other systems the daemon runs the path, so upgrade only to a binary in folders that no other user can write.
+- Each pane keeps its screen, the alternate screen, its modes and titles, and the last 1000 rows of its history. Agent state, mail and the event stream carry over.
+- Attached clients are dropped. A tuios client says that your programs still run, and tells you to run `tuios attach`.
+- When the new binary cannot take the panes, the daemon goes back to the old binary, and every program still runs. The command then exits `1`. Run `tuios logs` to see why.
+
+From a pane, the upgrade waits for you. Each attached client shows a dialog with the binary's path and version, and the pane that asked. No is the default. On Windows, and for a daemon that runs inside `tuios-web` or the SSH server, use `tuios restart-server`. See [daemon upgrade](/docs/cli-reference#daemon-upgrade) for every refusal.
+
 ## How do I
 
 - **Move to a new build after `tuios update`?** Run `tuios restart-server`, or click the version notice in the app.
@@ -164,6 +190,7 @@ The stop and the start run in a process of their own, in a session of its own. S
 - **Restart from a deploy script?** Run `tuios restart-server --yes --json` and read the `done` line.
 - **Stop the daemon and keep the clients from waiting?** Run `tuios kill-server`. The clients quit at once.
 - **Start with no sessions at all?** Run `tuios kill-server`, then `tuios daemon --no-restore`.
+- **Move to a new build and keep every program running?** Run `tuios daemon upgrade`. It is experimental.
 
 ## Related
 
