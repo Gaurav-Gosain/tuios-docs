@@ -71,6 +71,66 @@ Open the command palette in tuios and choose **weather: Say hello**. `--id` sets
 
 To start on GitHub instead, use the template repository [Gaurav-Gosain/tuios-plugin-template](https://github.com/Gaurav-Gosain/tuios-plugin-template). It holds the same files.
 
+### Themes in a plugin <Since feature="plugin-themes" /> [#themes-in-a-plugin]
+
+A plugin can bring themes. Name each theme file in the manifest:
+
+```toml
+[[theme]]
+file = "themes/dusk.json"
+```
+
+A theme file has the format on the [Themes](/docs/themes#writing-a-theme) page. When the plugin is on, its themes load with your own themes. The theme picker and `[appearance] theme` show them. A theme file of your own in `~/.config/tuios/themes/` with the same id wins over the theme of a plugin.
+
+`tuios plugins install themes` installs the themes that ship with tuios.
+
+### A screen saver in a plugin <Since feature="plugin-savers" /> [#a-screen-saver-in-a-plugin]
+
+A plugin can bring a screen saver as a frames file. The file holds text frames with times and colours. tuios plays the file, and no program runs. A tool, such as an editor for ASCII art, can write the file.
+
+```toml
+[[saver]]
+id = "blink"
+file = "savers/blink.txt"
+```
+
+To use it, set `effect = "plugin/ID/SAVER"` in [`[screensaver]`](/docs/configuration#the-screensaver-table), such as `plugin/you.faces/blink`. `tuios plugins check` reads each frames file and names the line that is wrong.
+
+```text
+tuios-saver 1
+size 7 3
+fps 4
+color e #5fd7ff
+color m bright_red
+
+frame
+ o   o
+   ^
+ \___/
+colors
+ e   e
+
+ mmmmm
+
+frame 300
+ -   -
+   ^
+ \___/
+```
+
+- The first line is `tuios-saver 1`.
+- `size COLS ROWS` comes once, before the first frame. The maximum is 400 by 200.
+- `fps N` sets the time of each frame after it, from 1 to 50. The default is 10.
+- `color LETTER COLOUR` gives a letter a colour: `#rrggbb`, or an ANSI name from `black` to `bright_white`. An ANSI name follows the theme.
+- `frame` starts a frame of ROWS lines. `frame MS` shows that frame for MS milliseconds.
+- `colors` after a frame gives a letter for each cell, in ROWS lines. A space keeps the default colour.
+- A line that starts with `#` outside a frame is a comment.
+- A file has at most 2,000 frames and 4 MB. The drawn frames can have at most 16 MB.
+- The file must be in the plugin folder. A link to a file outside the folder stops the plugin from loading.
+- tuios puts the frames in the centre of the screen and loops them until you press a key or move the mouse.
+
+A plugin that has only themes and savers runs no program and asks for no grant. It needs no approval after the install.
+
 ### Checking a plugin <Since command="plugins check" /> [#checking-a-plugin]
 
 `tuios plugins check [PATH]` reads a plugin folder as tuios does. It runs nothing and needs no daemon. It prints each problem and warning, and exits `1` when the plugin cannot load:
@@ -147,7 +207,8 @@ Each tuios release carries its own plugins:
 | Name | What it does |
 | --- | --- |
 | `pr-status` | Shows the pull request and CI state of the focused pane's folder in the dock |
-| `sketch` | Draws every Mermaid diagram type in [`tuios mermaid`](/docs/cli-reference#mermaid). tuios draws eight types itself |
+| `sketch` | Draws every Mermaid diagram type in [`tuios mermaid`](/docs/cli-reference#mermaid) and in TML panels. tuios draws eight types itself |
+| `themes` | Adds the themes Dusk and Paper. See [Themes in a plugin](#themes-in-a-plugin) |
 
 `tuios plugins install pr-status` takes the plugin from the release of the tuios that runs. It needs no git and no build. tuios checks each file against the `checksums.txt` of the release, and `plugins.lock` pins the version and a hash of the files. On another machine, `tuios plugins install` gets the same files or nothing.
 
@@ -344,6 +405,8 @@ command = ["bin/panes"]
 | `[permissions] grants` | no | The grants the plugin asks for. Leave it out for none |
 | `[[build]] command` | no | A command that `install` runs in the plugin folder |
 | `[[process]]` | no | A program that tuios runs. See below |
+| `[[theme]] file` | no | A theme file in the plugin folder. See [Themes in a plugin](#themes-in-a-plugin) |
+| `[[saver]]` | no | `id` and `file`, a frames file in the plugin folder. See [A screen saver in a plugin](#a-screen-saver-in-a-plugin) |
 | `[[cell]]` | no | A dock cell. See [Showing something](#showing-something) |
 | `[herdr] manifest` | no | Take the commands from a `herdr-plugin.toml` |
 

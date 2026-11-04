@@ -49,6 +49,7 @@ Two things live outside the file: custom themes in `~/.config/tuios/themes/` and
 | [`[debug]`](#the-debug-table) | The keycast overlay |
 | [`[screenshot]`](#the-screenshot-table) | Capture format, frame and fonts |
 | [`[screensaver]`](#the-screensaver-table) | The idle animation |
+| [`[review]`](#the-review-table) | How a review of an agent's changes opens |
 | [`[hints]`](#the-hints-table) | What hints mode labels, the label letters and how much the pane dims |
 | [`[panes]`](#the-panes-table) | The keys of the pane labels that <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Q</kbd> shows |
 | [`[scratch]`](#the-scratch-table) | The size of the scratch terminal that <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>g</kbd> shows |
@@ -477,7 +478,7 @@ To reorder the dock or add your own cells, see [The dock table](#the-dock-table)
 
 ### Calm mode <Since config="appearance.calm" /> [#calm-mode]
 
-`appearance.calm` turns [calm mode](/docs/keybindings#calm-mode) on. Nothing moves or blinks, and only the messages that need you show in the dock. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Z</kbd> turns it on and off and saves the choice here. Calm mode sits over `appearance.motion`. When you turn calm mode off, your motion level comes back.
+`appearance.calm` turns [calm mode](/docs/keybindings#calm-mode) on. Nothing moves or blinks, and only the messages that need you show in the dock. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>Z</kbd> turns it on and off and saves the choice here. Calm mode sits over `appearance.motion`. When you turn calm mode off, your motion level comes back. Calm mode and `appearance.motion = "none"` also stop the [motion of TML surfaces](/docs/libraries/tml#motion). A surface then shows each part at once.
 
 ```toml
 [appearance]
@@ -1335,7 +1336,7 @@ idle_minutes = 5
 effect = "matrix"
 ```
 
-There are 36 effects. `tuios list-options screensaver.effect` prints them. The settings page previews each effect on your current screen.
+There are 36 effects. `tuios list-options screensaver.effect` prints them. A plugin can add a saver <Since feature="plugin-savers" />: set `effect = "plugin/ID/SAVER"`. See [A screen saver in a plugin](/docs/plugins#a-screen-saver-in-a-plugin). The settings page previews each effect on your current screen.
 
 <kbd>S</kbd> in window mode starts the screen saver now, whatever `enabled` says.
 
@@ -1396,6 +1397,25 @@ drag_and_drop_desktop = true
 [worktree]
 path = "{{ repo_path }}/.worktrees/{{ branch | slug }}"
 ```
+
+## The review table <Since config="review" /> [#the-review-table]
+
+`[review]` sets how a [review](/docs/agent-inbox#reviewing-an-agents-changes) opens.
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `focus` <Since config="review.focus" /> | `"diff"` | The side that has the keys when a review opens: `diff` or `files` |
+| `scope` <Since config="review.scope" /> | `"base"` | What a review shows when it opens: `base` or `uncommitted` |
+
+```toml
+[review]
+focus = "files"
+scope = "uncommitted"
+```
+
+`base` shows the changes since the base. In a plain repository, the base is the merge base with the upstream branch, so commits that you did not push yet are part of the review. `uncommitted` shows only the changes that are not committed. In the review, <kbd>u</kbd> still switches between the two, and <kbd>b</kbd> still sets another base. The compare view of two attempts does not use `scope`.
+
+Both keys are on the settings page, in the Behavior section. `tuios set-config review.scope uncommitted` applies from the next review. tuios reads another value as the default and shows a warning when the config loads. `tuios set-config` refuses it.
 
 ## The tasks table <Since config="tasks" /> [#the-tasks-table]
 

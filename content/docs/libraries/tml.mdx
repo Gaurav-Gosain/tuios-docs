@@ -184,6 +184,8 @@ A `card` is a titled block that a person can fold. `tabs` shows one `tab` at a t
 
 `mermaid` holds a Mermaid diagram. loom draws it as text with [sketch](/docs/libraries/sketch), fitted to the width of the element, in the theme's colours. A diagram taller than its box scrolls with the wheel. A diagram that sketch cannot draw shows its source under a note that says why.
 
+tuios draws eight diagram types itself. In tuios, a panel draws the other types through the [sketch plugin](/docs/plugins#plugins-of-the-tuios-release) <Since feature="release-plugins" />. Run `tuios plugins install sketch` to get it. Without the plugin, the panel shows the source, and a notice says what to run.
+
 ```xml
 <tml version="1">
   <mermaid>
@@ -208,6 +210,35 @@ The text of a `mermaid` element is kept as written. Bindings do not apply in it.
 ### Forms
 
 `form`, `input`, `textarea`, `select`, `checkbox`, `toggle` and `slider` collect values, and `button` with `submit` sends them. loom shows each field with its label and value. Editing comes in a later release.
+
+## Motion <Since feature="tml-motion" /> [#motion]
+
+A node can play an effect when it shows and when it goes away. A container can start the effects of its children one after the other.
+
+```xml
+<tml version="1" title="Jobs">
+  <state>{"loading": true, "jobs": [{"name": "build"}, {"name": "test"}], "saved": "Saved", "cpu": "12%"}</state>
+  <col pad="1" gap="1" stagger="60ms">
+    <card each="state.jobs" key="{item.name}" title="{item.name}" enter="slide-up" exit="fade">
+      <text>Running</text>
+    </card>
+    <card title="Host" skeleton="{state.loading}" h="4">
+      <text>CPU {state.cpu}</text>
+    </card>
+    <toast role="success" ttl="4s">{state.saved}</toast>
+  </col>
+</tml>
+```
+
+| Attribute | What it does |
+| --- | --- |
+| `enter` | Plays when the node shows: `fade`, `slide-up`, `slide-down`, `slide-left`, `slide-right`, `iris` or `decode`. A surface that opens plays the `enter` of each node in it |
+| `exit` | Plays when the node goes away: its `if` turns false, its item leaves an `each`, or a modal closes. A node that goes away with its parent, such as the content of a closed tab, plays no exit |
+| `stagger` | On a container. Starts the `enter` of each child this much time after the child before it |
+| `skeleton` | Draws placeholder bars in the space of the node while it is true. The content fades in when it turns false. Give the node an `h`, so that its space stays the same |
+| `ttl` | On a `toast`. The toast goes away at the end of this time. A new text shows it again |
+
+Every component takes `enter`, `exit`, `skeleton` and `stagger`. With `appearance.motion = "none"` or [calm mode](/docs/configuration#calm-mode), nodes show at once, and a toast still goes away at the end of its `ttl`. `tuios tml render` draws the last frame.
 
 ## State and bindings
 
