@@ -1,6 +1,6 @@
 ---
 title: Remote Hosts
-description: Open sessions on other machines in your own client, run panes on another machine, and script across hosts.
+description: Set up another machine in one command with tuios hosts setup, then open its sessions in your own client, run panes on it, and script across hosts.
 icon: Network
 ---
 
@@ -13,6 +13,49 @@ TUIOS can reach other machines over ssh. Once a machine is added as a host, you 
 Each host needs TUIOS installed. Your daemon holds one ssh link to each host and talks to the TUIOS daemon on the other side. There is no new listening port and no second login system: ssh decides who can connect.
 
 <SessionDiagram />
+
+## Set up a machine
+
+One command sets up another machine from nothing:
+
+```bash
+tuios hosts setup gaurav@buildbox
+```
+
+The address is anything ssh understands. On a terminal, the setup asks each question in place:
+
+1. It tests ssh. When ssh fails, it says what happened and gives the one fix, such as `ssh-copy-id gaurav@buildbox`. A fix that needs your password or a host key to check runs in your terminal. TUIOS never takes a password, and it never accepts a changed host key.
+2. When TUIOS is missing there, you pick how to install it: a copy of the TUIOS on this machine, the release of the same version (checked with its sha256), the package manager of that machine (yay, paru, brew, nix or go), or the install script. Each choice shows its exact commands.
+3. It starts the daemon there, and at boot if you say yes.
+4. It adds the machine here and tests the link. The machine is added only when its daemon answers.
+5. It can add this machine on the other one too. The other machine tests its way back first. When it cannot reach this machine, for example behind a NAT, nothing is added there, and the link from here still carries its agents to your Inbox.
+
+<Callout>
+In TUIOS, open the palette and run "Add a machine", or use "Add a machine" on the Hosts page of the settings. When a pane runs `ssh` to a machine that you have not added, TUIOS offers to add it. Turn the offer off with `notifications.machine_offer = false`.
+</Callout>
+
+### For scripts and agents
+
+Every choice can come from a flag. Without a terminal, nothing waits on a prompt:
+
+```bash
+tuios hosts setup gaurav@buildbox --dry-run          # test ssh and print every command, change nothing
+tuios hosts setup gaurav@buildbox --name build --install copy --service --both-ways --yes --json
+```
+
+- `--install copy|release|pkg|script` is the one choice that is required when TUIOS is missing. Without it, the command exits with status 2 and names the flag.
+- `--service` (start at boot) and `--both-ways` are off unless you pass them.
+- Status 3 means a step needs a person: a password, a host key to check, or a Tailscale sign-in. The JSON names the command to run.
+
+### Your whole tailnet
+
+```bash
+tuios hosts setup --tailnet --dry-run                              # every machine and its state
+tuios hosts setup --tailnet --only nas,gpu --install copy --yes    # set up two of them
+tuios hosts setup --tailnet --all --install copy --service --yes   # every machine that can be set up
+```
+
+The list shows each machine of your tailnet: TUIOS and its version, no TUIOS, a Tailscale sign-in first, no ssh, offline, or already added. An offline machine is never dialed. At most four machines are set up at once, and one failure does not stop the others. In a tailnet run, `--install copy` sends the release of the same version to a machine of another platform.
 
 ## Adding a host
 
