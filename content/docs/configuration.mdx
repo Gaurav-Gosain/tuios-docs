@@ -172,6 +172,49 @@ All keys below go under `[appearance]`.
 
 `animations_enabled`, the key `motion` replaces, is still read from older files: `false` reads as `motion = "none"`, and `true` changes nothing. Where both are set, `motion` wins.
 
+### Each motion on its own <Since config="motion" /> [#each-motion]
+
+The `[motion]` table turns each motion on or off by itself and sets how long it takes. `appearance.motion` and `animation_speed` stay on top: `motion = "none"` and calm mode stop every motion below, and the speed divides every length.
+
+| Key | Values | Motion |
+|-----|--------|--------|
+| `workspace` <Since config="motion.workspace" /> | `slide` (default), `fade`, `none` | The switch between workspaces. `fade` is a cut at 16 colours |
+| `layout` <Since config="motion.layout" /> | `on`, `off` | A pane that opens, closes, splits, swaps, snaps, minimizes or restores |
+| `zoom` <Since config="motion.zoom" /> | `on`, `off` | A pane growing to the zoom box and back |
+| `overlays` <Since config="motion.overlays" /> | `on`, `off` | A palette or dialog fading in. Needs `motion = "full"` and truecolor |
+| `sidebar` <Since config="motion.sidebar" /> | `on`, `off` | The shimmer on a working agent row. Needs `motion = "full"` |
+| `scroll` <Since config="motion.scroll" /> | `on`, `off` | The slide of the scrolling layout |
+| `copy` <Since config="motion.copy" /> | `on`, `off` | The sweep over the cells a copy took |
+| `confetti` <Since config="motion.confetti" /> | `on`, `off` | The confetti burst. Needs `motion = "full"` |
+
+`workspace`, `layout`, `zoom`, `overlays` and `scroll` also take `NAME_ms`, the length in milliseconds at speed 100, from 0 to 1000. `0` is a cut. The defaults are 200 for `workspace` and `zoom`, 300 for `layout` and `scroll`, and 120 for `overlays`. `layout_ms` also sets the snap and swap length, which is two thirds of it.
+
+```toml
+[motion]
+workspace = "fade"
+workspace_ms = 250
+zoom = "off"        # zoom is a cut. The workspace switch still fades.
+```
+
+The old keys `appearance.workspace_transition`, `workspace_transition_ms` and `zoom_animation` still read: TUIOS folds them into `motion.workspace`, `motion.workspace_ms` and `motion.zoom` on load. A `[motion]` key that is set wins.
+
+### Confirm a pane close <Since config="appearance.confirm_close" /> [#confirm-close]
+
+`appearance.confirm_close` sets when closing a pane by hand asks first: the close key, `prefix_close_window`, the pane menu's Close pane, or the close control in the title bar.
+
+| Value | What it does |
+|-------|--------------|
+| `never` | Close the pane at once. The default |
+| `busy` | Ask when the pane runs something besides its shell |
+| `always` | Ask for every pane |
+
+```toml
+[appearance]
+confirm_close = "busy"
+```
+
+The commands, such as `tuios close-window`, never ask.
+
 #### border_style
 
 Values: `rounded` (default), `normal`, `thick`, `double`, `block`, `outer-half-block`, `inner-half-block`, `ascii`, `hidden`, `glyphs`.
@@ -362,6 +405,7 @@ The option is on the settings page, in the Appearance section. `tuios set-config
 | `link_hover` <Since config="appearance.link_hover" /> | `"safe"` | `safe`, `always` | The hover underline and label on a link. `safe` skips a pane whose program tracks the mouse. `always` draws them in every pane |
 | `kitty_placeholders` <Since config="appearance.kitty_placeholders" /> | `"auto"` | `auto`, `on`, `off` | Draw images placed with kitty Unicode placeholders |
 | `image_symbols` <Since config="appearance.image_symbols" /> | `"auto"` | `auto`, `octant`, `sextant`, `quadrant`, `half`, `off` | The block characters for a sixel image on a terminal without graphics. See [Images Without Graphics](/docs/images-without-graphics) |
+| `paste_preview` <Since config="appearance.paste_preview" /> | `true` | bool | Show a pasted image in a card at the cursor for a few seconds |
 
 #### Links
 
@@ -392,7 +436,7 @@ The option is on the settings page, in the Appearance section. `tuios set-config
 | `zoom_size` <Since config="appearance.zoom_size" /> | `95` | 50 to 100 | Share of the screen a zoomed pane takes, in percent. Below 100 the layout stays visible at the edges. `100` is fullscreen |
 | `zoom_max_width` <Since config="appearance.zoom_max_width" /> | `0` | cells | Width cap for a zoomed pane. `0` means no cap |
 | `zoom_borderless` <Since config="appearance.zoom_borderless" /> | `false` | bool | Show a zoomed pane on the whole pane region, with no border and no title bar. The pane's program gets the full size. With it on, `zoom_size` and `zoom_max_width` have no effect |
-| `zoom_animation` <Since config="appearance.zoom_animation" /> | `true` | bool | Slide a pane into and out of zoom |
+| `zoom_animation` <Since config="appearance.zoom_animation" /> | `true` | bool | Slide a pane into and out of zoom. An old key: `motion.zoom` replaces it. See [Each motion on its own](#each-motion) |
 | `zoom_follows_focus` <Since config="appearance.zoom_follows_focus" /> | `true` | bool | Moving focus while zoomed zooms the pane you move to |
 | `drop_preview` <Since config="appearance.drop_preview" /> | `"fill"` | `fill`, `outline`, `off` | The highlight while you drag a pane in BSP. `fill` draws a frame and tints the area inside it. `outline` draws only the frame. `off` draws nothing, and a drop still splits or swaps. See [Moving a window with the mouse](/docs/bsp-tiling#moving-a-window-with-the-mouse) |
 | `drop_preview_delay` <Since config="appearance.drop_preview_delay" /> | `"120ms"` | a duration, or `0` | How long the pointer stays on one drop zone before its highlight shows. `0` shows it at once |
@@ -560,6 +604,7 @@ Pastes, notifications, OSC 66 text and link addresses lose their control charact
 | Key | Default | Values | What it does |
 |-----|---------|--------|--------------|
 | `enabled` <Since config="appearance.sidebar.enabled" /> | `true` | bool | Show the rail |
+| `per_session` <Since config="appearance.sidebar.per_session" /> | `false` | bool | Each session keeps its own shown or hidden rail. Off, showing or hiding the rail applies to every session |
 | `position` <Since config="appearance.sidebar.position" /> | `"right"` | `right`, `left`, `hidden` | Edge the rail sits on |
 | `width` <Since config="appearance.sidebar.width" /> | `24` | columns | Preferred width on a wide screen |
 | `background` <Since config="appearance.sidebar.background" /> | `""` | `off`, `theme`, `#RRGGBB` | The rail's background. Empty follows `appearance.background`. See [Backgrounds](#backgrounds) |
@@ -952,6 +997,7 @@ Selecting an id that is not registered yet, with `set-config` or the settings pa
 | `style` <Since config="notifications.style" /> | `"full"` | `full` shows a coloured bar and a line that counts down. `plain` shows the icon and the text only |
 | `level` <Since config="notifications.level" /> | `"info"` | The least severe message the dock shows: `info`, `warning` or `error` |
 | `log_hidden` <Since config="notifications.log_hidden" /> | `true` | `false` keeps the messages that `level` hides out of the log too |
+| `machine_offer` <Since config="notifications.machine_offer" /> | `true` | Offer to add a machine when a pane logs in to it with ssh or mosh and no `[hosts]` entry reaches it. See [From the app](/docs/remote-hosts#from-the-app) |
 
 A message that `level` hides still goes to the log viewer (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>l</kbd>). Warnings and errors always go to the log. A message from a pane, an agent or mail does not use `level`. `[notifications.agent]` and `[notifications.mail]` control those messages.
 
@@ -1142,6 +1188,7 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 | `persist_scrollback` <Since config="daemon.persist_scrollback" /> | `true` | Save each pane's history with its session, and show it above a divider after a daemon restart or a reboot. The files can hold secrets. `false` stops this, and the daemon deletes the saved history when it next starts. See [Pane history](/docs/sessions#pane-history) |
 | `persist_scrollback_lines` <Since config="daemon.persist_scrollback_lines" /> | `0` | Most history lines one pane saves. `0` means 1000 |
 | `persist_scrollback_kb` <Since config="daemon.persist_scrollback_kb" /> | `0` | Most KiB one pane's saved history takes on disk, compressed. `0` means 2048 |
+| `keep_awake` <Since config="daemon.keep_awake" /> | `"off"` | Keep the machine from sleeping: `agents` while an agent works on this machine, `on` while the daemon runs, `off` never. The display can still lock. See [keep-awake](/docs/cli-reference#keep-awake) |
 | `window_size` <Since config="daemon.window_size" /> | `"latest"` | The size of a session that has more than one client: `latest` (the client that last had input), `smallest` or `largest`. The names are those of the tmux `window-size` option. See [Session size](/docs/sessions#session-size-with-more-than-one-client) |
 | `single_client` <Since config="daemon.single_client" /> | `false` | Keep one client for each session. Each attach detaches the other clients of the session, as `tuios attach -d` does. See [One client for each session](/docs/sessions#one-client-for-each-session) |
 | `ssh_agent` <Since config="daemon.ssh_agent" /> | `"off"` | `"follow"` gives each session a stable link to the ssh agent of the client used last. New panes get `SSH_AUTH_SOCK` set to the link. See [SSH Agent](/docs/ssh-agent) |
@@ -1436,6 +1483,16 @@ machine_cap = 4
 
 The dispatch settings (mode, preset, caps, quiet hours, verify) are not in the config file. `tuios task dispatch` sets them, and the daemon saves them. See [Dispatch](/docs/task-boards#dispatch).
 
+
+## The files table <Since config="files.open_copy_ask_mb" /> [#the-files-table]
+
+`[files]` sets the copies that <kbd>o</kbd> on a file of another machine makes here, in the rail's files section.
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `open_copy_ask_mb` <Since config="files.open_copy_ask_mb" /> | `200` | Above this size in MiB, <kbd>o</kbd> shows the size and asks again before it copies the file here. `0` uses 200 |
+| `open_copy_max_mb` <Since config="files.open_copy_max_mb" /> | `4096` | Above this size in MiB, <kbd>o</kbd> does not copy the file. `0` uses 4096 |
+| `open_copy_keep_days` <Since config="files.open_copy_keep_days" /> | `7` | Days a copy stays when nobody opens it again. `0` uses 7, and `-1` keeps every copy. `tuios transfers clear-opened` deletes them all now |
 
 ## The scratch table
 
