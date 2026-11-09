@@ -7,6 +7,7 @@ icon: Network
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Since } from '@/components/mdx/since';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
 
 TUIOS can reach other machines over ssh. Once a machine is added as a host, you can list its sessions and agents, open one of its sessions in your own client, run a single pane on it inside a local session, and send commands and messages to it.
 
@@ -15,6 +16,63 @@ Each host needs TUIOS installed. Your daemon holds one ssh link to each host and
 <SessionDiagram />
 
 ## Adding a host
+
+### Set up a machine in one command <Since command="hosts setup" /> [#hosts-setup]
+
+`tuios hosts setup` takes a machine from nothing to linked. It reads the machine over ssh with `BatchMode` on, and changes nothing there until you agree.
+
+```bash
+# See what the setup would do, and change nothing
+tuios hosts setup gaurav@buildbox --dry-run
+
+# Copy this tuios there, start it at boot, add it both ways
+tuios hosts setup gaurav@buildbox --name build \
+  --install copy --service --both-ways --yes
+```
+
+<Steps>
+<Step>
+### Test ssh
+
+A failure gets its one fix, such as `ssh-copy-id`. A fix that needs you, such as a password or a host key to check, stops the setup with the command to run.
+</Step>
+<Step>
+### Install tuios when it is missing
+
+`--install` picks how: `copy` (a copy of this tuios), `release` (the release of this version), `pkg` (the package manager there, with `--pkg yay|paru|brew|nix|go`), `script` (the install script) or `none`.
+</Step>
+<Step>
+### Start the daemon there
+
+`--service` also starts it at boot. See [Start the daemon at login](#start-the-daemon-at-login).
+</Step>
+<Step>
+### Add the machine here and test the link
+
+`--name` names it here. A link that does not come up is removed again, unless you pass `--keep`.
+</Step>
+<Step>
+### Add this machine there too
+
+With `--both-ways`, the other machine tests its way back first. Nothing is added there when it cannot connect. `--as` and `--address` say how that machine names and reaches this one.
+</Step>
+</Steps>
+
+On a terminal, tuios asks for each choice the flags do not make, and <kbd>Ctrl</kbd>+<kbd>C</kbd> stops the setup at the end of the step. Without a terminal every choice comes from a flag: a missing choice stops the command before it changes anything (exit 2), and a fix that needs you stops it with the command to run (exit 3). `--json` prints the steps and the result for a script.
+
+<Callout type="warn" title="No passwords, no changed keys">
+tuios never takes a password, and it never accepts a changed host key.
+</Callout>
+
+`--tailnet` lists the machines on your tailnet with their state. On a terminal it is a checklist: <kbd>Space</kbd> ticks a machine, <kbd>a</kbd> ticks every machine that can be set up, and <kbd>Enter</kbd> sets them up with one set of answers. <kbd>o</kbd> gives one machine its own answers. Each machine then gets a line with its step and a bar. `--all`, or `--only` with names, skips the checklist. At most 4 machines are set up at once, and one failure does not stop the others.
+
+### From the app
+
+"Add a machine" in the palette, or the row of that name on the Hosts page of Settings, opens the same setup as a sheet in five steps: Pick, Test, Set up tuios, Both ways and Done. Pick has three tabs: an address, the machines on the tailnet, and the names in your ssh config. A step that needs you opens a pane that shows the command and runs it on <kbd>Enter</kbd>, and the sheet tests again when that pane ends. <kbd>Esc</kbd> stops it, and the config file stays as it was before the add step.
+
+When a pane logs in with ssh or mosh to a machine that no `[hosts]` entry reaches, the dock offers it: "buildbox is not a machine here. Add it?", with Add, Not now and Never. Add opens a pane that runs `tuios hosts setup` for that machine. Never is kept, and the Alerts tab of Settings lists it with a row that removes it. A tunnel, a remote command without `-t`, and the ssh that scp, rsync, git, sftp or sshfs start do not count.
+
+### Add a host by hand
 
 ```bash
 tuios hosts add build gaurav@buildbox
@@ -250,6 +308,25 @@ tuios kill-session build:api
 
 The CLI says which host answered, and `--json` adds a `host` field. A host name is matched exactly. An unknown name fails with `unknown_host` and lists the configured names, and a host that is down fails with `host_unreachable`. A command is not queued for later.
 
+### Run one command on a host <Since verb="exec" /> [#run-on-a-host]
+
+`tuios run --host` runs one shell line on a linked machine, with no pane, and exits with its status:
+
+```bash
+tuios run --host build -- uname -a
+tuios run --host build --timeout 60000 -- fc-list : family
+tuios run --host build --cwd ~/src/api -- git status --short
+```
+
+The host's daemon runs the line under `sh -c`, with no input. tuios prints what it wrote to stdout and stderr on its own stdout and stderr.
+
+- `--cwd` sets the folder there. The default is its home.
+- `--timeout` stops the command and everything it started, and tuios exits 124. A command stopped by a signal exits 128 plus the signal's number.
+- Each stream keeps its last 1 MiB. At most 8 run at once on one machine.
+- The link needs `open` in the host's policy, as `new-window --host` does. See [What another machine may do here](#what-another-machine-may-do-here).
+
+Without `--host`, `tuios run -w PANE` types the line at a pane's shell prompt here instead. See [run](/docs/cli-reference#run).
+
 Messages and files cross links too. Mail to a host whose link is down waits on this machine, under Waiting to send in the Inbox, and goes when the link is back. See [Agent Messaging](/docs/agent-messaging#across-machines).
 
 Agents on every linked host appear on the rail and in your [Inbox](/docs/agent-inbox), and `fan`, `worktree` and `start-agent` can run there. See [Worktrees](/docs/worktrees#work-from-another-machine).
@@ -335,11 +412,32 @@ Or start it from this machine:
 To start it from this machine, add `--start`. It runs that command over ssh and tests the host again. `--dry-run` shows the command and changes nothing.
 
 ```bash
-tuios hosts test build --start    # start the daemon on build if it does not run
-tuios hosts sync build --start    # install TUIOS on build if needed, then start it
+# Start the daemon on build if it does not run
+tuios hosts test build --start
+
+# Install TUIOS on build if needed, then start it
+tuios hosts sync build --start
 ```
 
 `hosts test --start` does not install TUIOS. On a host with no TUIOS, use `hosts sync --start`.
+
+A link to a host that is up with no daemon keeps its ssh connection, and asks again over it on the same backoff. A daemon that starts there later is found with no new login. So an ssh agent that asks you for each key use, such as 1Password, asks once, not every minute. When the ssh connection drops, the link dials again as before. <Since feature="no-daemon-redial" />
+
+### Start the daemon at login <Since command="daemon install-service" /> [#start-the-daemon-at-login]
+
+`tuios daemon install-service` starts the daemon when you log in, with no client: a systemd user unit on Linux (at boot, with linger), a launchd agent on macOS and a Task Scheduler task on Windows.
+
+```bash
+tuios daemon install-service
+
+# The unit, and whether the running daemon is the service's
+tuios daemon service-status
+
+# Remove it, and leave the running daemon
+tuios daemon uninstall-service
+```
+
+The service runs the daemon through your login shell, so panes get the login `PATH`. A crash restarts it. A `tuios kill-server` stop does not. A live upgrade keeps the same process, so the service sees no change.
 
 ## Your ssh agent on a host
 
