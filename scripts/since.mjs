@@ -218,10 +218,22 @@ function refActions(files) {
 // ---- commands --------------------------------------------------------------
 
 function usesOn(rev) {
-  const out = git("grep", "-E", 'Use: +"[a-z0-9-]+', rev, "--", "cmd/tuios");
+  // A command is declared by its Use: line, or by a helper that takes the
+  // same string first, as add("resize-window <left|right>", ...) does in
+  // layout_commands.go.
+  const out = git(
+    "grep",
+    "-E",
+    '(Use: +|add\\()"[a-z0-9-]+',
+    rev,
+    "--",
+    "cmd/tuios",
+  );
   const pairs = [];
   for (const line of out.split("\n")) {
-    const m = /^[^:]+:cmd\/tuios\/([^:]+):.*Use: +"([a-z0-9-]+)/.exec(line);
+    const m = /^[^:]+:cmd\/tuios\/([^:]+):.*(?:Use: +|add\()"([a-z0-9-]+)/.exec(
+      line,
+    );
     if (m && !m[1].endsWith("_test.go")) pairs.push({ file: m[1], leaf: m[2] });
   }
   return pairs;
