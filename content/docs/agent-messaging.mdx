@@ -7,6 +7,7 @@ icon: MessagesSquare
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Since } from '@/components/mdx/since';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
 
 Agents in the same session can work together. One agent can find the others, leave a message in another's inbox, ask a question and wait for the answer, or hand over a file. You can read and answer their messages too.
 
@@ -125,6 +126,33 @@ A message goes from unread to seen to read:
 - **Read:** the recipient read its inbox without `--peek`.
 
 The sender sees the state in the header of `read-agent-messages` on the session. `--json` has `seen_at` and `read_at`. Seen means that the recipient looked at the message. It does not mean that the recipient acted on it. A seen message still counts as unread: `--unread` returns it, and the `MAIL` column of `list-agents` shows it as `1 (1 seen)`. The mailbox and the Inbox row also say `seen`.
+
+### Did my mail arrive <Since verb="agent-message-receipts" /> [#did-my-mail-arrive]
+
+A sender reads the state of all the mail it sent with `--sent`. It covers every session and every linked machine, and it marks nothing:
+
+```bash
+tuios read-agent-messages --sent -w "$TUIOS_PANE_ID"
+```
+
+```
+#1  to review (1ce7d2a7) in work  sent just now  read just now
+    rebased onto main, please retest
+#2  to docs (1342e967) in work  sent just now  delivered, unread
+    changelog
+```
+
+Each line ends in one state:
+
+| State | What it means |
+|-------|---------------|
+| `delivered, unread` | The message is in the recipient's inbox |
+| `seen 2m ago, not read yet` | The recipient peeked its inbox and has not read it |
+| `read 2m ago` | The recipient read it |
+| `undeliverable` | The recipient window is gone |
+| `queued ... waiting for the link` | The message is for a machine whose link is down. It waits here |
+
+A machine that cannot be asked now is named under the list. Check `--sent` before you mail again to ask whether a message arrived. The send itself already says `delivered` when the message is in the recipient's inbox.
 
 Wait for mail instead of polling:
 
@@ -258,9 +286,62 @@ path=$(tuios stash put -s build:api /tmp/flame.png)
 
 A message from another machine is marked as such where it lands. A file crosses machines only through the stash, capped at 8 MB. Each host accepts at most 32 unread messages and 32 notices from other machines per session.
 
+### When the link is down [#when-the-link-is-down]
+
+A message to a machine whose link is down waits here and goes when the link is back, in order. The send answers `queued`. Do not send it again.
+
+- The Inbox here has an item for the waiting mail: how many messages wait, and why the link is down. A link that waits for a Tailscale sign-in says so, and the item's key opens the sign-in page.
+- When the other machine's own link to this one is up, its Inbox says too: how many messages wait for it, and why. It shows nothing of the mail itself, no sender, subject or text.
+- Both items close when the mail goes or the count goes to zero.
+
+`read-agent-messages --sent` lists the waiting mail as `queued`, with the time it started to wait. See [Remote Hosts](/docs/remote-hosts) for the sign-in.
+
 ### Without ssh
 
 Remote hosts need ssh. Where ssh is blocked, [tuios-courier](https://github.com/Gsirawan/tuios-courier) carries agent mail between machines through a relay over HTTPS. It is a separate community project by [Gsirawan](https://github.com/Gsirawan), not part of TUIOS. It holds new mail until you release it, and agents read the mail inside the same untrusted fence.
+
+## Hand a task to a child agent <Since command="delegate" /> [#delegate]
+
+`tuios delegate` starts a new agent for one task, links it to you as its parent, and types the task as its first prompt. Its answer comes back to you as mail.
+
+```bash
+# A reviewer, from an agent pane. End your turn after this.
+tuios delegate --role review 'Review the diff on this branch and list the bugs.'
+
+# A codex child in its own worktree, and wait up to 10 minutes for its answer
+tuios delegate --agent codex --isolation worktree --role test --wait 10m \
+  'Add tests for the parser.'
+```
+
+<Steps>
+<Step>
+### The child starts
+
+tuios starts the agent as `start-agent` does. `--agent` picks it, and from an agent pane it defaults to your own harness. `--isolation shared`, the default, starts it in your folder. `--isolation worktree` starts it in a new worktree from your checkout's commit, in a session of its own. The worktree does not have your uncommitted changes.
+</Step>
+<Step>
+### You end your turn
+
+Without `--wait`, the command returns at once. When the child finishes, tuios sends its answer to you as mail from the child, and wakes you with one line once you are at rest. With `--wait 5m` (at most 10 minutes) the command waits for the outcome instead. The end of the wait does not stop the child.
+</Step>
+<Step>
+### Questions and approvals
+
+A question the child asks goes to you by mail first. The Inbox holds it for 10 minutes as "With the parent agent": listed and answerable, but not counted and with no alert. Then it alerts like a new item. `[agents.mail] questions_to_parent = false` sends every such question to the Inbox at once.
+
+An approval of a child agent is the person's alone. No pane, whatever its grants, may type into it or answer it with `respond`.
+
+When several children finish together, you still get one wake line, which counts them by state: `Child agents finished: 2 done.`
+</Step>
+</Steps>
+
+`--role` names the job: `implementation`, `research`, `review`, `design`, `test` or `general`. It names the child's window and shows in `list-agents`. A child is never wider than its parent: it gets no grant you do not hold, and no permission mode wider than yours. `research` and `review` get the `read` grant only, unless you pass `--grants`. From outside every pane, name the parent with `--parent WINDOW_ID`, or pass `--wait`.
+
+In the rail, a parent's row gets a headline over the rows of the agents it started, such as `4 agents · 1 needs you · 2 working · 1 done`. A click or <kbd>Enter</kbd> on it folds the child rows. In the parent's thread, the card that ran `delegate`, `start-agent` or `fan` shows a pill for each child with its state. <kbd>.</kbd> steps through the pills, and <kbd>Enter</kbd> opens that agent's thread.
+
+## Leading a crew [#leading-a-crew]
+
+One agent can run several long-lived workers across sessions and machines. `tuios --skill lead` prints the loop for that agent: start a worker and keep its id, watch the crew, read reports, unstick a blocked worker, run work on another machine, and clean up. Its first rule is that a lead never answers a prompt that is the person's.
 
 ## Safety
 
