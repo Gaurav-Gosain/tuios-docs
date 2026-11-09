@@ -353,16 +353,19 @@ The daemon answers with one JSON line. After that line, the connection carries b
 | `S` | daemon | A snapshot of the screen, as bytes that any xterm-compatible emulator reads |
 | `O` | daemon | Output |
 | `R` | daemon | A resize |
-| `E` | daemon | An error for one frame, such as `busy` or `lease_expired` |
+| `E` | daemon | An error for one frame, such as `busy` or `lease_expired`. A `busy` error carries `accepted` |
 | `X` | daemon | The end of the stream |
 | `I` | client | Input. It passes the checks of `send-text` |
+| `J` <Since feature="stream-input-offsets" /> | client | Input that starts at a stream input offset: a u64 offset, then the bytes. Typed only at the offset the daemon expects |
 | `L` | client | A size lease: u16 cols and u16 rows. `0 0` releases it |
 
 - Skip a frame type that you do not know. Read its length, then read and drop the payload.
 - Keep the `seq` of the last frame you applied. Send it back as `from_seq` with `boot_id` to resume after a dropped connection. The reply `mode` is `resume` or `snapshot`.
-- At most 4 `I` frames wait for a pane that does not read its input. The next one gets an `E` frame with `busy`.
+- Up to 256 KiB of input, in up to 4096 frames, waits for a pane that does not read its input, so a client may send one frame per key. When more waits, the next frame gets an `E` frame with `busy` and `accepted`: the number of input bytes the stream took so far, in order. Every frame after it is refused the same way until the pane has read what waits, so nothing is typed out of order. Send again from byte `accepted`.
+- A frame sent before the refusal arrived can still reach the daemon after the pane read what waited, and an `I` frame is then typed after the refused bytes. To resend safely, use `J` frames when the reply says `input_offsets: true`. A `J` frame names the input byte it starts at, and the daemon types it only at `accepted`. A `J` frame at any other offset gets `busy` and nothing of it is typed. So a resend is typed once, and a frame from before it never is. `I` and `J` frames count toward the same offset.
+- A frame larger than 64 KiB ends the stream. Send a longer paste as more than one frame.
 - A lease holds the pane at most at that size. It lasts 30 seconds, so send the same `L` frame again every 10 seconds. When it ends, the pane goes back to the size its clients asked for. A lease never changes the session size or another pane.
-- `list` on a linked machine allows the stream. `I` frames need `write`.
+- `list` on a linked machine allows the stream. `I` and `J` frames need `write`. A daemon without `input_offsets` refuses a `J` frame as an unknown type: send `I` frames to it.
 
 `tuios pane-view` is a client of `stream-pane`. It shows one pane in a terminal, with no tuios around it. See [`pane-view`](/docs/cli-reference#pane-view) in the CLI reference.
 
