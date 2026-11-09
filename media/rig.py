@@ -11,7 +11,8 @@ A scene is a folder under media/scenes/ with:
                "steps" in scene.json replaces it with a list of tape names
                and pastes, {"paste": TEXT} or {"paste_file": PATH in the
                work folder}, which the rig writes to the client as the
-               terminal would.
+               terminal would, and {"keys": TEXT}, written as typed keys,
+               for a prompt that answers only the person's keys.
                A shot scene ends its tape with `Action screenshot_screen`,
                once per name in "shots".
   setup.sh     optional. Runs before tuios starts, in the scene's work
@@ -375,6 +376,12 @@ def main():
         for step in scene.get("steps", ["scene.tape"]):
             if isinstance(step, str):
                 run_tape(step, scene.get("limit", 120))
+                continue
+            if "keys" in step:
+                # Keys as the person types them, not a paste: some prompts
+                # answer only keys from the terminal, never a tape's.
+                os.write(fd, step["keys"].encode())
+                pump(now() + step.get("settle", 0.8))
                 continue
             if "paste_file" in step:
                 text = open(os.path.join(work, step["paste_file"]), encoding="utf-8").read()

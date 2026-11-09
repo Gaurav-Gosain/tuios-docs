@@ -8,6 +8,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Since } from '@/components/mdx/since';
 import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 TUIOS can reach other machines over ssh. Once a machine is added as a host, you can list its sessions and agents, open one of its sessions in your own client, run a single pane on it inside a local session, and send commands and messages to it.
 
@@ -29,6 +30,15 @@ tuios hosts setup gaurav@buildbox --dry-run
 tuios hosts setup gaurav@buildbox --name build \
   --install copy --service --both-ways --yes
 ```
+
+<Shot
+  name="hosts-dry-run"
+  width={1802}
+  height={740}
+  light
+  alt="tuios hosts setup gaurav@buildbox --name build --install copy --both-ways --dry-run in a pane. It reads buildbox as Debian 12 on arm64 with apt and systemd and no tuios, says it changed nothing, and lists the plan in eight numbered steps, each with where it runs: send this tuios to build, start the daemon there, write the [hosts.build] entry here, test the link, then on build test ssh back to laptop, add laptop and test that link."
+  caption="--dry-run reads the machine and prints the plan. Nothing runs."
+/>
 
 <Steps>
 <Step>
@@ -70,7 +80,94 @@ tuios never takes a password, and it never accepts a changed host key.
 
 "Add a machine" in the palette, or the row of that name on the Hosts page of Settings, opens the same setup as a sheet in five steps: Pick, Test, Set up tuios, Both ways and Done. Pick has three tabs: an address, the machines on the tailnet, and the names in your ssh config. A step that needs you opens a pane that shows the command and runs it on <kbd>Enter</kbd>, and the sheet tests again when that pane ends. <kbd>Esc</kbd> stops it, and the config file stays as it was before the add step.
 
+<Tabs items={['Address', 'Tailnet', 'ssh config']}>
+<Tab value="Address">
+<Shot
+  name="hosts-sheet-address"
+  width={1700}
+  height={1184}
+  light
+  alt="The Add a machine sheet on its Pick step, Address tab. The address field holds gaurav@buildbox, the name field suggests buildbox, and the field for this machine's address is empty, as it is optional. The keys are enter to test and add, and tab for the next field."
+  caption="The Address tab takes an ssh destination. The name defaults to the host."
+/>
+</Tab>
+<Tab value="Tailnet">
+<Shot
+  name="hosts-sheet-tailnet"
+  width={1700}
+  height={1184}
+  light
+  alt="The Tailnet tab lists the machines on the tailnet, each after one short test. buildbox, gpu-box and mac-mini have no tuios and a box to tick. nas is offline and pixel is an Android phone tuios does not run on, so neither can be ticked. Under the list: each ticked machine gets this version of tuios, starts it at boot (b) and is added both ways (w)."
+  caption="The Tailnet tab tests each machine once and sets up the ticked ones with one set of answers."
+/>
+</Tab>
+<Tab value="ssh config">
+<Shot
+  name="hosts-sheet-ssh"
+  width={1700}
+  height={1184}
+  light
+  alt="The ssh config tab lists the Host names in the ssh config: buildbox, gpu-box, nas and oldbox, with the cursor on buildbox. Enter tests and adds the one under the cursor, and ctrl+r reads the file again."
+  caption="The ssh config tab lists the Host names of your ssh config."
+/>
+</Tab>
+</Tabs>
+
+The sheet then goes through the steps with the same engine as `tuios hosts setup`. A failed test shows the reason, what ssh said, and the fix, with the command to run when there is one. <kbd>Enter</kbd> runs that command in a pane, <kbd>t</kbd> tests again and <kbd>s</kbd> skips the machine.
+
+<Tabs items={['Test fails', 'Set up tuios', 'Both ways', 'Done']}>
+<Tab value="Test fails">
+<Shot
+  name="hosts-sheet-fail"
+  width={1700}
+  height={1184}
+  light
+  alt="The sheet on its Test step for gaurav@oldbox. The test failed: oldbox refused your ssh key, and ssh said Permission denied (publickey). The fix is to copy your ssh key to oldbox, with the command ssh-copy-id gaurav@oldbox, which asks for the password on oldbox one time. The keys are enter to run it here, t to test again, s to skip oldbox and ctrl+c to stop."
+  caption="A key that the machine refuses: the fix is ssh-copy-id, which runs in a pane on enter."
+/>
+</Tab>
+<Tab value="Set up tuios">
+<Shot
+  name="hosts-sheet-install"
+  width={1700}
+  height={1184}
+  light
+  alt="The sheet on its Set up tuios step. The test of buildbox passed: Debian 12 on arm64, with apt and systemd, and tuios is not installed. It asks how to install tuios on buildbox, with two choices and the command of each: copy this tuios, which sends this binary to ~/.local/bin/tuios on buildbox, or the install script, which needs internet on buildbox. The button reads Install on buildbox."
+  caption="The test passed. The sheet asks how to install tuios, and shows the command of each choice."
+/>
+</Tab>
+<Tab value="Both ways">
+<Shot
+  name="hosts-sheet-both-ways"
+  width={1700}
+  height={1184}
+  light
+  alt="The sheet on its Both ways step. Done so far: test, install at ~/.local/bin/tuios, start at boot skipped, start the daemon, add buildbox here and test the link, which is up. It asks: add this machine on buildbox too? Then a client on buildbox sees your sessions here. Your Inbox needs only this direction, and it works already."
+  caption="After the link is up, the sheet asks to add this machine on the other one too."
+/>
+</Tab>
+<Tab value="Done">
+<Shot
+  name="hosts-sheet-done"
+  width={1700}
+  height={1184}
+  light
+  alt="The sheet on its Done step: buildbox is ready, and its agents reach your Inbox. Under it are the steps with their results, the last one being Both ways: laptop is added on buildbox and its link is up. The buttons are Close and Open a session on buildbox."
+  caption="Done: the machine is added both ways. Enter opens a session on it."
+/>
+</Tab>
+</Tabs>
+
 When a pane logs in with ssh or mosh to a machine that no `[hosts]` entry reaches, the dock offers it: "buildbox is not a machine here. Add it?", with Add, Not now and Never. Add opens a pane that runs `tuios hosts setup` for that machine. Never is kept, and the Alerts tab of Settings lists it with a row that removes it. A tunnel, a remote command without `-t`, and the ssh that scp, rsync, git, sftp or sshfs start do not count.
+
+<Shot
+  name="hosts-offer"
+  width={1802}
+  height={518}
+  light
+  alt="A pane that ran ssh buildbox shows the shell on buildbox. The dock reads: buildbox is not a machine here. Add it? with the choices Add, Not now and Never."
+  caption="The dock offers a machine that a pane logged in to."
+/>
 
 ### Add a host by hand
 
