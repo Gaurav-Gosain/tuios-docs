@@ -1499,6 +1499,25 @@ The dispatch settings (mode, preset, caps, quiet hours, verify) are not in the c
 | `open_copy_max_mb` <Since config="files.open_copy_max_mb" /> | `4096` | Above this size in MiB, <kbd>o</kbd> does not copy the file. `0` uses 4096 |
 | `open_copy_keep_days` <Since config="files.open_copy_keep_days" /> | `7` | Days a copy stays when nobody opens it again. `0` uses 7, and `-1` keeps every copy. `tuios transfers clear-opened` deletes them all now |
 
+## Shell prompt marks <Since config="shell.integration" /> [#shell-prompt-marks]
+
+TUIOS turns on OSC 133 prompt marks in the bash and zsh shells it starts in panes, as Ghostty and kitty do. The marks say where a prompt starts, where a command starts, and how it ended. `tuios run`, `wait-for command-finished`, `capture-pane --last-command`, the scrollback browser and copy mode read them. A pane with marks also keeps one copy of its prompt when you make the pane narrower.
+
+TUIOS does not change your files:
+
+- **zsh** starts with `ZDOTDIR` set to a folder of TUIOS's own. Its `.zshenv` sets `ZDOTDIR` back to your value, reads your `.zshenv`, and adds the marks. zsh then reads your `.zprofile`, `.zshrc` and `.zlogin` as usual.
+- **bash** starts with `--rcfile` set to a file that reads your `~/.bashrc` and then adds the marks. Your `PS1`, `PROMPT_COMMAND`, traps and `set -e` stay as they are. This needs bash 4.4 or newer.
+- **fish 4** and **nushell** send the marks themselves, so TUIOS adds nothing. Other shells start as they are.
+
+When your own prompt already sends a mark, TUIOS does not send that mark again. A shell starts less than 1 ms slower. To turn it off:
+
+```toml
+[shell]
+integration = "off"   # default: "auto"
+```
+
+The change applies to new panes. `tuios new-window --shell-integration off` chooses for one pane, and `tuios doctor shell` shows which panes send marks. A pane that runs `ssh`, or a window on another machine, gets no marks from TUIOS: add the lines `tuios doctor shell` prints to the rc file there.
+
 ## The scratch table
 
 `[scratch]` sets the size of the scratch terminal that <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>g</kbd> shows in a popup. See [Scratch terminal](/docs/sessions#scratch-terminal).
