@@ -1787,11 +1787,11 @@ Answering a prompt is acting as you. `respond` works from a shell outside every 
 
 ### task <Since command="task" /> [#task]
 
-Hand out a session's work as task cards. A card is one unit of work: a title, the prompt for the pane that takes it, a stage and the pane that holds it. The daemon keeps the cards with the session. After a daemon restart they come back with every holder let go. See [The task board](/docs/agent-inbox#the-task-board).
+Hand out work as task cards. A card is one unit of work: a title, the prompt for the pane that takes it, a stage and the pane that holds it. The daemon keeps the cards. After a daemon restart they come back with every holder let go. [Task Boards](/docs/task-boards) explains the board, the stages and dispatch.
 
 ```bash
-tuios task add [-p PROMPT] [--stage STAGE] TITLE...
-tuios task ls [--stage STAGE] [--open] [--all-sessions]
+tuios task add [-p PROMPT] [--stage STAGE] [--project URL] [--harness ID] [--machine M] [--ask-first] TITLE...
+tuios task ls [--stage STAGE] [--open] [--all-sessions] [--project URL [--hosts]]
 tuios task get ID
 tuios task claim ID | --next [-w WINDOW]
 tuios task done ID
@@ -1799,13 +1799,32 @@ tuios task stage ID STAGE
 tuios task block ID REASON... | --clear
 tuios task release ID
 tuios task rm ID
+tuios task dispatch [status | pause | resume | mode manual|pull|auto | preset | cap N | quiet SPAN|off | verify COMMAND|off] [--project URL]
 ```
 
-- The stages are `todo`, `plan`, `doing`, `verify`, `review`, `shipped` and `done`. `claim` moves a card in `todo` or `plan` to `doing`. `done` moves it to `done` and lets it go.
-- `-s` names the session. The default is this pane's session, else the most recently active.
+- The stages are `todo`, `plan`, `doing`, `verify`, `review`, `shipped` and `done`. `claim` moves a card in `todo` or `plan` to `doing`.
+- `done` from the pane that holds the card lets it go and moves it to `verify` when the board has a verify command, else to `review`. `done` from you, a shell outside the panes, or a pane that holds `admin` closes it. With `auto_stage = false`, or `stages` without `review`, `done` closes it as before.
+- `-s` names the session. The default is this pane's session, else the most recently active. `-s HOST:SESSION` reaches a card that a linked machine owns.
 - `-p` takes at most 16 KiB. `-` reads it from standard input.
+- `--project` names a repository by its origin URL, or `.` for the current folder's. `ls --project` lists that repository's cards from every session, and `--hosts` adds each linked machine's.
+- `--machine` (`add`): where the card's agent starts: `any`, or a linked machine's name. The default is this machine.
+- `--ask-first` (`add`): dispatch never gives the card to an agent. A person starts it.
 - `claim --next` takes the oldest open card. A card that a pane holds, a blocked card, and a card that a fan of another session works on are skipped. With nothing to take, it fails with `no_task`. A card another pane holds fails with `task_held`.
 - From inside a pane, a change needs the `task` grant. A pane claims only for itself and changes only the card it holds, unless it holds `admin`. `rm` from a pane needs `admin`.
+
+`dispatch` <Since command="task dispatch" /> shows and changes how cards reach agents:
+
+| Command | What it does |
+|---------|--------------|
+| `tuios task dispatch` | The boards' modes and the switches |
+| `tuios task dispatch mode pull --project .` | An agent that finishes its card gets the board's next open card, as mail |
+| `tuios task dispatch mode auto --agent claude --effort high --project .` | Start an agent for each open card in a new worktree. Also takes `--model`, `--permission-mode` and `--machine` |
+| `tuios task dispatch cap 4 --machine-cap 2` | At most 4 agents at once, 2 on one machine (default 3 and 2) |
+| `tuios task dispatch quiet 22:00-07:00` | No card in those hours, local time. `off` clears it |
+| `tuios task dispatch verify "go test ./..." --verify-timeout 900` | Run a check on each card its agent is done with (default limit 600 s, at most 3600) |
+| `tuios task dispatch pause`, `resume` | Stop all dispatch, and start it again after a pause or a stop |
+
+From inside a pane, every `dispatch` action but `pause` needs `admin`, and `verify` is refused.
 
 `tuios fan --task ID` and `tuios start-agent --task ID` connect a card to the new work. `fan` stamps the card with the fan. `start-agent` claims the card for the new pane.
 
