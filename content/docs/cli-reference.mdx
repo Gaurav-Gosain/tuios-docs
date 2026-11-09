@@ -1628,12 +1628,20 @@ tuios start-agent <agent> [-- args...] [flags]
 - `--cwd <dir>` or `--repo <dir>`: where it starts. Default: the focused pane's directory.
 - `--grants <list>`: what the agent may do through TUIOS.
 - `--protocol acp|codex`: run the agent headless over the Agent Client Protocol or the Codex app-server. The pane shows the conversation as a transcript you type into.
+- `--model`, `--effort`, `--permission-mode`: pass the harness's own flags. A choice the harness does not list is refused.
+- `--preset <name>`: start from `[agents.presets.NAME]` of your config. The agent may then be left out. A flag you pass wins over the preset's. See [Presets](/docs/new-agent#presets).
+- `--print-id`: print only the new pane's full id, for `id=$(tuios start-agent --preset worker --print-id)`. When the agent is not ready, the id is still printed and the command exits non-zero.
+- `--task <id>`: claim a task card of the session for the new pane as soon as it exists.
+- `--parent <id>`: the agent pane the new agent reports to.
+- `-s any:SESSION`: let the daemon pick the machine. See [Any machine](/docs/new-agent#any-machine).
 - `--env`, `--focus`, `--workspace <n>`, `--ready-timeout <ms>` (default `120000`), `--clone`, `--json`.
 
 ```bash
 tuios start-agent claude --name reviewer
 tuios ask-agent -w reviewer 'review the diff on this branch'
 tuios start-agent --protocol acp 'opencode acp' --name helper --prompt 'Summarise the TODOs.'
+tuios start-agent claude --model opus --effort high --permission-mode plan
+id=$(tuios start-agent --preset worker --name w3 --print-id)
 ```
 
 An agent that stops on a question of its own, such as whether to trust the folder, is not ready: the command says what it waits on and exits non-zero, and the pane is kept for you to answer.

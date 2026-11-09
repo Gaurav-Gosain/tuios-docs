@@ -1,6 +1,6 @@
 ---
 title: Starting an Agent
-description: The New agent sheet in the agents view starts an agent with a task. Pick the agent, the model, the machine and where it works, and ask for up to 8 attempts.
+description: The New agent sheet in the agents view starts an agent with a task. Pick the agent, its model, effort and permission mode, the machine and where it works, and ask for up to 8 attempts. Presets in the config start the same agent the same way from a shell.
 icon: SquarePlus
 ---
 
@@ -15,7 +15,7 @@ The New agent sheet <Since action="inbox_new_agent" /> starts a coding agent wit
   width={1700}
   height={1110}
   light
-  alt="The New agent sheet over the agents view. The task reads: Make the LRU cache safe for concurrent reads. claude is the picked agent, with codex and crush beside it. Where it works is New worktree, the branch is agent/lru-cache-safe from the task, the base is main, the machine is this one, and there is one attempt."
+  alt="The New agent sheet over the agents view. The task reads: Make the LRU cache safe for concurrent reads. claude is the picked agent, with codex and opencode beside it. Model, Effort and Permissions are at their defaults. Where it works is New worktree, the branch is agent/lru-cache-safe from the task, the base is main, the machine is this one, and there is one attempt."
 />
 
 ## Quickstart
@@ -31,14 +31,18 @@ tuios makes the worktree and its branch, starts the agent in a new pane, and typ
 
 | Field | What it does |
 | --- | --- |
-| Task | The first prompt. tuios types it when the agent is at its prompt. <kbd>Ctrl</kbd>+<kbd>J</kbd> adds a line |
+| Task | The first prompt. tuios types it when the agent is at its prompt. <kbd>Ctrl</kbd>+<kbd>J</kbd> adds a line, <kbd>@</kbd> names a file of the folder or an agent, and a pasted image path or <kbd>Ctrl</kbd>+<kbd>V</kbd> adds an image |
 | Agent | The agents that run now come first, then the ones installed on this machine. `more` lists every agent |
 | Model | Passed to the agent as `--model`. Type one, or pick one that a running agent of the same kind reports. Empty uses the agent's default |
+| Effort | The agent's own effort levels, such as `low`, `medium` or `high`. `default` passes no flag |
+| Permissions | The agent's own permission modes, such as `plan` or `acceptEdits`. `default` passes no flag. A mode that turns approvals off, such as Claude Code's `bypassPermissions`, says `approvals off` beside it |
 | Where it works | New worktree, on its own branch, or This folder |
 | Branch | The new branch. It is named after the task, such as `agent/lru-cache-safe`, until you change it |
 | Base | Where the branch starts. Type it, or pick a local branch |
-| Machine | This machine and your linked hosts. The machine with the most free cores is first |
+| Machine | This machine and your linked hosts. With a linked host, the first row is Any machine. When the rows have room for two lines, each says what that machine's daemon finds: `claude ready`, `claude not signed in` or `claude not installed` |
 | Attempts | 1 to 8. Each attempt gets its own worktree and branch |
+
+The model, effort and permission choices come from the `[launch]` table of the agent's manifest, so a choice the agent does not have is not shown. An image goes to the session's file store when the agent starts, and the task names it by its stored path. Only an agent on this machine takes an image.
 
 Uncommitted files stay in this folder. A new worktree starts from the base, not from your working tree.
 
@@ -76,6 +80,18 @@ Pick a linked host in Machine to start the agent there. The agent works in a new
 
 Each machine row shows its cores, how many agents work there, and its load as a bar. The machine with the most free cores is first. A machine that does not report its load says "no load report". The order holds still while the sheet is open.
 
+### Any machine [#any-machine]
+
+With a linked host, the first machine row is Any machine. It names the machine the daemon would pick and why, in one line, such as `build: 16 cores, 0 working, the repo is there.` This machine stays picked unless you pick another row, so an agent never moves on its own. With Any machine picked, Start asks again and starts the agents there.
+
+The daemon picks in three steps:
+
+1. It leaves a machine out when its link is not up, the agent is not installed or not signed in there, the agent reached its usage limit there, it has no checkout of the repository, its memory is 95% used, or it is at its `[tasks] machine_cap`.
+2. Of the rest, the most spare cores wins: the cores times the share the one-minute load leaves free, less half a core for each agent that works, starts or was just picked there. Memory over 80% used lowers it.
+3. Two machines within one core tie: the one with the checkout wins, then this machine.
+
+The pick counts as a busy agent on that machine for 90 seconds, so a burst of starts spreads out. From a shell, `tuios start-agent -s any:SESSION` and `tuios fan --host any` use the same rule, and `tuios call place-agent '{"agent":"claude"}'` asks it without starting anything.
+
 ## From a shell
 
 The sheet runs two commands that you can run yourself:
@@ -88,7 +104,55 @@ tuios start-agent claude --prompt "Make the LRU cache safe for concurrent reads.
 tuios fan 3 --agent claude,claude,codex "Make the LRU cache safe for concurrent reads."
 ```
 
-See [start-agent](/docs/cli-reference#start-agent) and [fan](/docs/cli-reference#fan) for their flags.
+See [start-agent](/docs/cli-reference#start-agent) and [fan](/docs/cli-reference#fan) for their flags. `--model`, `--effort` and `--permission-mode` pass the agent's own flags:
+
+```bash
+tuios start-agent claude --model opus --effort high --permission-mode plan
+```
+
+## Presets <Since config="agents.presets.*" /> [#presets]
+
+A preset names how you start one kind of agent, so a script or another agent starts it with one flag. Write it in `config.toml`:
+
+```toml
+[agents.presets.worker]
+agent = "claude"
+args = ["--verbose"]
+add_dirs = ["~/notes"]
+grants = ["read", "write", "task"]
+model = "opus"
+env = ["GOMAXPROCS=4"]
+after_ready = ["/remote-control", "Enter", "Escape"]
+ready_timeout = 180000
+```
+
+Then start it:
+
+```bash
+tuios start-agent --preset worker --prompt 'Read ~/notes/briefs/api.md and do it.'
+
+# Its pane id in a variable
+id=$(tuios start-agent --preset worker --name w3 --print-id)
+```
+
+| Key | What it does |
+|-----|--------------|
+| `agent` | The agent. With a preset, `start-agent` may leave it out |
+| `args` | More arguments for the agent |
+| `add_dirs` | Folders the agent may read too. Each is one `--add-dir` (the harness's `[launch] add_dir_flag`), before `args`. `~` is the home folder of the machine the agent starts on. A harness with no such flag refuses it |
+| `grants` | What the pane may do through tuios |
+| `model`, `effort`, `permission_mode` | As the flags of the same names |
+| `env` | Variables for the agent, each `NAME=VALUE` |
+| `after_ready` | Steps sent once the agent is ready, before `--prompt`. A step that is one key name (`Enter`, `Escape`, `Tab`, `C-c`) is that key. Anything else is typed as text. A step is refused while the agent waits on a prompt of its own, and that stops the rest |
+| `ready_timeout` | Milliseconds to wait for the agent to be ready |
+
+A flag you pass wins over the preset's. `args`, `env` and `after_ready` are the preset's, then yours. The preset is read from this machine's config and sent in full to a session on another machine. An unknown preset is refused with the names there are. A change to the file applies at once.
+
+`--print-id` prints the new pane's full id alone. When the agent is not ready, the pane is kept for you, the id is still printed, and the command exits non-zero.
+
+<Callout title="The sheet's own preset">
+<kbd>Ctrl</kbd>+<kbd>S</kbd> in the sheet ("save as preset") keeps the sheet's choices for the next sheet. It is not an `[agents.presets]` entry: those are for `start-agent`, and you write them in the config. A mode that turns approvals off is never kept by <kbd>Ctrl</kbd>+<kbd>S</kbd>.
+</Callout>
 
 ## How do I
 
@@ -97,6 +161,8 @@ See [start-agent](/docs/cli-reference#start-agent) and [fan](/docs/cli-reference
 - **Race two agents on one task?** Set Attempts to 2 and press <kbd>v</kbd> on it to give each attempt a different agent.
 - **Use the same agent and model every time?** Pick them once and press <kbd>Ctrl</kbd>+<kbd>S</kbd>.
 - **Run the agent on my build machine?** Pick the host in Machine. It needs a checkout of the repository.
+- **Let tuios pick the machine?** Pick Any machine, or use `-s any:SESSION` from a shell.
+- **Start the same worker from a script every time?** Write an `[agents.presets.NAME]` and run `tuios start-agent --preset NAME`.
 
 ## Related
 
