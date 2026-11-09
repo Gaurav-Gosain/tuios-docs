@@ -22,6 +22,9 @@ export const InboxDemo = dynamic(() =>
 export const KeybindingExplorer = dynamic(() =>
   import("../docs/keybinding-explorer").then((m) => m.KeybindingExplorer),
 );
+export const OptionExplorer = dynamic(() =>
+  import("../docs/option-explorer").then((m) => m.OptionExplorer),
+);
 export const LayoutModes = dynamic(() =>
   import("../docs/layout-modes").then((m) => m.LayoutModes),
 );
