@@ -534,6 +534,26 @@ tuios worktree ls
 tuios worktree rm api-feat-retry --stash
 ```
 
+### delegate <Since command="delegate" /> [#delegate]
+
+Hand a task to a child agent. tuios starts the agent with `start-agent`, links it to you as its parent, and types the task as its first prompt. Its answer comes back as mail. See [Hand a task to a child agent](/docs/agent-messaging#delegate).
+
+```bash
+tuios delegate [--role ROLE] [--agent AGENT] [--isolation shared|worktree] [--wait DURATION] '<task>' [-- args...]
+```
+
+| Flag | What it does |
+|------|--------------|
+| `--role` | The job: `implementation`, `research`, `review`, `design`, `test` or `general` (default). It names the child's window. `research` and `review` get the `read` grant only |
+| `--agent` | The child agent, such as `claude` or `"codex --model o5"`. Default: your own harness |
+| `--isolation` | `shared` (default): your folder. `worktree`: a new worktree from your commit, in a session of its own |
+| `--wait` | Wait this long for the outcome, at most `10m`. Default: return at once |
+| `--parent` | The agent pane that gets the answer, by window id. Default: the agent pane this runs in |
+| `--grants` | What the child may do through tuios. Default: `read` for research and review, else your own |
+| `--cwd`, `-s`, `--name`, `--env`, `--ready-timeout` | As for `start-agent` |
+
+Arguments after `--` go to the agent. A child gets no grant you do not hold and no permission mode wider than yours. From outside every pane, pass `--parent` or `--wait`.
+
 ### fan <Since command="fan" /> [#fan]
 
 Start the same prompt in several agents, each in its own worktree.
