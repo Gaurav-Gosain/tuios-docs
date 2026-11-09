@@ -1,0 +1,108 @@
+---
+title: Adding a machine in one command
+description: To link a second machine, you had to know four things first, and a failed link said only that the host did not answer. tuios hosts setup now reads the machine over ssh, shows a plan, installs and starts tuios, and names each ssh failure with the one command that fixes it. The app has the same steps as a sheet, and offers them when a pane logs in with ssh.
+date: '2026-11-05'
+author: Gaurav Gosain
+tags: [sessions]
+---
+
+tuios can link machines: a session on your build box shows up in the rail, its
+agents land in your Inbox, and `fan`, `start-agent` and `cp` work across. It
+was also one of the hardest parts to start using, because a link needs four
+things, and nothing told you about them:
+
+1. That `[hosts]` exists at all.
+2. That the other machine needs tuios, and a tuios daemon running.
+3. That ssh must log in with a key, because the link runs ssh with `BatchMode`
+   on and can never type a password.
+4. That the host key must already be known, for the same reason.
+
+Miss one, and the link said "The host did not answer." That was the message
+for an unknown host key, a refused key, a name that does not resolve, a closed
+port and a machine that is off. Each one has a different fix, and the only way
+to find out which was to run ssh by hand.
+
+## One command, with a plan first
+
+`tuios hosts setup` takes the machine as ssh takes it, `user@machine` or a name
+from your ssh config, and does the steps. It reads the machine over ssh before
+it changes anything there. Here is a real dry run, against a test machine in a
+container that already has tuios, with no daemon running:
+
+```
+$ tuios hosts setup buildbox --name build --install copy --dry-run
+Debian GNU/Linux 12 (bookworm), arm64. apt, systemd. tuios dev is installed on build. Its daemon does not run.
+This changed nothing.
+
+The plan. Nothing runs.
+   1  build      /usr/local/bin/tuios start-server
+   2  here       write [hosts.build] addr = "buildbox" to /home/me/.config/tuios/config.toml
+   3  here       Test the link to build.
+
+Run it again without --dry-run, with --yes, to do it.
+```
+
+The plan has only the steps this machine needs. A machine without tuios gets an
+install step first, and `--install` says how: a copy of the tuios you run, the
+release of your version, the package manager there, or the install script.
+`--service` adds a step that starts the daemon at boot, and `--both-ways` adds
+this machine on the other one too, once that machine has tested its own way
+back.
+
+The order matters. `[hosts.build]` is written only after the daemon there
+answers, and a link that does not come up is removed again. So a setup that
+fails halfway does not leave a half-configured host in your config.
+
+## A failure with its fix
+
+The other half of the work was in the link itself. When ssh gives up (exit 255),
+tuios now reads what ssh said and puts it in one of six classes: a new host
+key, a changed host key, a refused key, a name that does not resolve, a refused
+connection, and a timeout. Each class has its own words, and two of them come
+with the exact command. From the same container, with a user that has no key
+there (the empty plan lines are cut, and the last line is wrapped):
+
+```
+$ tuios hosts setup nobody@buildbox --dry-run
+buildbox refused your ssh key.
+This changed nothing.
+...
+buildbox refused your ssh key. Copy your ssh key to buildbox with this
+command. It asks for your password on buildbox one time: ssh-copy-id nobody@buildbox
+```
+
+`tuios hosts`, `hosts test` and `hosts sync` print the same fix, and their JSON
+has `failure`, `fix` and `fix_command`, so an agent can show it to you.
+
+Two things it never does: it never takes a password, and it never accepts a
+changed host key. Those stay with you, and the setup stops with the command to
+run (exit 3). Without a terminal, every choice comes from a flag, and a missing
+one stops the setup before it changes anything (exit 2). That is the form an
+agent or a script uses.
+
+## The same steps, three front ends
+
+On a terminal, `tuios hosts setup` asks for each choice the flags leave open.
+`--tailnet` shows the machines on your tailnet as a checklist: tick the ones
+you want, give them one set of answers, and up to four are set up at once.
+
+The app has it too. "Add a machine" in the palette, or on the Hosts page of
+Settings, opens the setup as a sheet in five steps. And when a pane logs in to
+a machine with ssh or mosh, and no `[hosts]` entry reaches that machine, the
+dock asks: "buildbox is not a machine here. Add it?". Add opens a pane that
+runs the setup for it. Never remembers your answer.
+
+All three draw the same steps. The setup engine holds the flow, the text of
+each step and each question, and the front ends only draw it. At first the
+terminal setup and the app's sheet each kept their own copy of the steps and
+their words, and the second front end was the moment to make it one.
+
+## What I got wrong along the way
+
+A tuios built from a commit has a version like
+`v0.12.2-0.20261105101010-abcdef123456`, and the first version of the setup
+took that for a release. So on a dev build it offered to install a release
+that does not exist. A dev build now offers a copy of itself or the
+package manager, and never a release.
+
+The commands are on the [Remote Hosts](/docs/remote-hosts#hosts-setup) page.
