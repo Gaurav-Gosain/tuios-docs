@@ -43,6 +43,26 @@ printf '\e]8;;tuios://window/%s\e\\go to the build\e]8;;\e\\\n' 7e02c4a1
 
 TUIOS does not send a `tuios://` link to your terminal, so your terminal never opens one.
 
+## Link rules <Since config="links.rules" /> [#link-rules]
+
+A link rule turns text that is not a URL into a link, such as a ticket ID that opens its page in an issue tracker. It works like [WezTerm's implicit hyperlinks](https://wezterm.org/hyperlinks.html#implicit-hyperlinks).
+
+```toml
+[[links.rules]]
+regex = '\b([A-Z][A-Z0-9_]+-[1-9][0-9]*)\b'
+url = "https://jira.example.com/browse/$1"
+```
+
+- `regex` is a regular expression in Go syntax.
+- `url` is the address a match opens. `$0` is the whole match, and `$1`, `$2` and so on are its groups. A named group is `${name}`. A group followed by a letter, a digit or `_` needs braces: write `${1}_x`. TUIOS warns about a `url` that names a group the regex does not have.
+- A match is a link like a bare URL: the hover underline and label, the click, `link_opener`, and hints mode.
+- Rules apply when `links` is `all`, as bare URLs do. A real URL wins when a rule matches text inside it, and an earlier rule wins over a later one.
+- A rule that does not compile, or that matches empty text, is skipped with a warning.
+
+<Callout type="warn" title="Keep the host fixed">
+Keep the scheme and the host fixed in `url`, and put groups in the path or the query only, as in the example. A group before the path, such as `https://example.com$1`, lets the text on screen choose the host. The address a rule builds goes through the same check as every link: one that is not `http`, `https`, `mailto`, `ftp` or `ftps`, or that holds a byte a bare URL cannot hold, makes no link.
+</Callout>
+
 ## Where a URL ends
 
 - A URL ends at a space, a quote, a backtick or an angle bracket.

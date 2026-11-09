@@ -412,6 +412,19 @@ tuios kill-session <session-name>
 This also deletes the session's saved state, so it cannot be resurrected.
 </Callout>
 
+### keep-awake <Since command="keep-awake" /> [#keep-awake]
+
+Keep the machine awake while agents work. With no argument it shows the mode and the hold. With a mode it sets `daemon.keep_awake`, applies it at once and saves it to `config.toml`.
+
+```bash
+tuios keep-awake            # the mode and the hold
+tuios keep-awake agents     # awake while an agent pane on this machine works
+tuios keep-awake on         # awake while the daemon runs
+tuios keep-awake off        # sleep as the machine's own settings say (default)
+```
+
+The daemon holds the machine awake, so it works with no client attached and on a host. Only sleep is held off: the display can still dim and lock. On Linux the daemon uses `systemd-inhibit`, on macOS `caffeinate`, and on Windows `SetThreadExecutionState`. `tuios doctor keep-awake` checks that the program is there.
+
 ### kill-server <Since command="kill-server" /> [#kill-server]
 
 Stop the daemon and every session in it.
@@ -493,6 +506,8 @@ tuios logs [flags]
 - `--clear`: empty the log after printing it.
 
 The daemon keeps the last 1000 entries in memory. It also appends errors and basic events to `$XDG_STATE_HOME/tuios/daemon.log`, so a crash leaves a record. To log more, run `tuios set-config daemon.log_level messages`. The levels `verbose` and `trace` also record pane content, titles and paths.
+
+When a pane goes, the log says why. <Since feature="pane-exit-log" /> Each process that ends gets a line with its pane, window and session, and its exit code or signal, and says when it ended because its pane was closed. Each window close names who asked for it: the pane a CLI call ran in, by short id and name, a client, or the daemon and its reason, such as a scratch command that ended or a worktree setup that passed. Both are basic events, so they reach `daemon.log` at the default level. `tuios logs` shows them too.
 
 ## Worktrees
 
@@ -649,17 +664,46 @@ tuios new-window --json | jq -r .window_id
 
 ### split-window <Since command="split-window" /> [#split-window]
 
-Split a pane and print the new pane's ID. Needs an attached client with tiling on.
+Split a pane and print the new pane's ID. It works with no client attached, and turns tiling on. <Since feature="layout-verbs-headless" />
 
 ```bash
-tuios split-window <horizontal|vertical|left|right|up|down> [flags]
+tuios split-window <horizontal|vertical|left|right|up|down> [command...] [flags]
 ```
+
+Words after the side are the command the new pane runs, as for `new-window`. Without `-w`, it splits the pane you run it in, or the focused pane outside every pane.
 
 `horizontal` and `vertical` put the new pane below or to the right. <Since feature="split-side" /> `left`, `right`, `up` and `down` name the side of the pane that the new pane takes.
 
 - `-w, --window <target>`: the pane to split.
 - `--name <name>`: a name for the new pane.
 - `--json`: print JSON.
+
+### zoom-window <Since command="zoom-window" /> [#zoom-window]
+
+Zoom a pane so it fills its workspace, or end the zoom. Without `--on` or `--off` it toggles. Zooming a pane on the workspace you see focuses it. Works with no client attached.
+
+```bash
+tuios zoom-window -w build --on
+tuios zoom-window -w build --off
+```
+
+### swap-window <Since command="swap-window" /> [#swap-window]
+
+Swap two tiled panes of one workspace. Each pane takes the place of the other, and the focus stays where it is. Works with no client attached.
+
+```bash
+tuios swap-window -w build logs
+```
+
+### resize-window <Since command="resize-window" /> [#resize-window]
+
+Move one border of a tiled pane by a percent of the layout, from 1 to 50 (default 5). `right` and `down` move a border right or down, `left` and `up` move it left or up. The border is the one on that side of the pane, or the other one when the pane is at the edge there. Works with no client attached.
+
+```bash
+tuios resize-window up 10 -w logs
+```
+
+For `zoom-window`, `swap-window` and `resize-window`, `-w` names the pane: by default the pane you run it in, or the focused pane outside every pane. `-s` names the session and `--json` prints JSON.
 
 ### popup <Since command="popup" /> [#popup]
 
@@ -949,10 +993,10 @@ The words after `--` are joined with spaces into one line that the shell parses,
 Print a pane's content.
 
 ```bash
-tuios capture-pane [flags]
+tuios capture-pane [window] [flags]
 ```
 
-- `-w, --window <target>`: the pane.
+- `-w, --window <target>`: the pane. The pane can also be the argument: `tuios capture-pane build` is `tuios capture-pane -w build`. <Since feature="capture-pane-arg" />
 - `-S, --scrollback`: include the scrollback, not only the screen. Without `--lines`, the capture keeps the last 3 commands in at most 2000 lines.
 - `--commands <n>`: keep the last `n` commands of the scrollback, in at most 2000 lines. It needs the shell's OSC 133 marks. It does not take `--lines`, `--last-command` or `--unwrap`.
 - `--lines <n>`: keep only the last `n` lines. `0` keeps all.
@@ -1409,6 +1453,12 @@ A path is the option's dotted name, such as `screenshot.format`. An `[appearance
 
 `set-config` cannot change `[keybindings]`, `[hooks]`, `[hosts]`, `[tailscale]`, `[agents]` or the `[dock]` lists. Edit the file for those.
 
+`--no-save` <Since feature="set-config-no-save" /> applies the value and does not write it to a config file. Later saves of other settings do not write it either. The value stays until the client exits, or until you set the option again without `--no-save`. Use it in a hook that changes the display for a moment:
+
+```bash
+tuios set-config --no-save appearance.sidebar.enabled false
+```
+
 ### get-config <Since command="get-config" /> [#get-config]
 
 Read an option from a running session.
@@ -1599,6 +1649,17 @@ Without `-w`, a report from a pane is about that pane. From outside every pane, 
 Sources are ranked in that order, highest first. A source cannot overwrite a state set by a higher-ranked source. A refused report prints why on stderr and changes nothing. The [harness integrations](#integration) report for you.
 
 `get-agent-state --json` carries `identity`, `confidence` and `evidence_age_ms`: the milliseconds since the last evidence about the state arrived, or `null` for a pane that never had a state. It also carries `subagents`, the number of subagents the pane's agent has at work. See [Agents](/docs/agents#reading-the-state).
+
+### set-agent-quiet <Since command="set-agent-quiet" /> [#set-agent-quiet]
+
+Mark a pane quiet, for an agent that works in the background. A quiet pane opens no finished, question or errored item in the Inbox, and raises no alert. Its open items of those kinds close. The agent state, the rail mark, the events and `list-agents` do not change, and an approval or a login still reaches you. The rail row says `quiet`, and `list-agents` reports `quiet: true`.
+
+```bash
+tuios set-agent-quiet -w worker-1          # mark a background worker quiet
+tuios set-agent-quiet -w worker-1 --off    # clear the mark
+```
+
+The mark stays until you clear it, the agent leaves the pane or the pane closes. A pane that TUIOS restores after a restart is not quiet. `--off` does not open the old items again, but a question the pane waits on now opens at once. It needs an agent in the pane and the `admin` grant. A pane that runs it leaves an open question open, so mark workers before they ask.
 
 ### set-agent-meta and set-agent-session
 
@@ -2278,6 +2339,7 @@ The states are `queued`, `running`, `verifying`, `waiting` (for a host that went
 | `cancel ID...` | Cancel copies, and remove the part of the file in flight |
 | `wait [ID...]` | Wait for the copies named, or for every copy that did not end. Show the progress as `tuios cp` does |
 | `clear [ID...]` | Remove the copies that ended from the list, or only the copies named |
+| `clear-opened` <Since command="transfers clear-opened" /> | Delete the copies that <kbd>o</kbd> in the rail made of files on other machines. Close the programs that have one open first |
 
 `pause`, `resume` and `cancel` exit 1 when one id fails. `--json` prints the new rows. `clear --json` prints `{"cleared": N}`.
 
