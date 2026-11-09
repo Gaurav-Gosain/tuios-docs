@@ -1,0 +1,130 @@
+---
+title: Colour emoji in a screenshot, from three font tables
+description: tuios screenshot drew every emoji as a blank. A colour emoji font keeps its emoji as pictures, not outlines, in tables the Go font package does not read, and a flag or a family is one picture that only the font's own ligature table can find. shot reads sbix, CBDT and morx or GSUB now.
+date: '2026-11-08'
+author: Gaurav Gosain
+tags: [rendering]
+---
+
+`tuios screenshot` draws a pane with tuios's own renderer, the
+[shot](/docs/libraries/shot) library, so a capture looks the same on every
+machine and needs no screen. Agents print emoji all the time: a check mark at
+the end of a test run, a rocket in a deploy log. And in every screenshot, each
+of them was blank.
+
+Here is the same pane shot by tuios v0.12.1 and by main today:
+
+<Shot
+  name="blog-emoji-before"
+  width={1224}
+  height={518}
+  alt="The same pane shot with tuios v0.12.1: the flags, skin tones, ZWJ sequences and single emoji are blank, and each keycap is its digit followed by two empty boxes."
+/>
+
+<Shot
+  name="emoji-shot"
+  width={1224}
+  height={518}
+  light
+  alt="The pane shot with tuios main: the flags, keycaps, hands with skin tones, ZWJ sequences such as a family and a rainbow flag, and single emoji are each drawn in colour as one glyph."
+/>
+
+Two separate problems were behind the first picture. A single emoji had
+nothing to draw it, and a sequence such as a flag needs a glyph that no single
+code point names. The first fix uncovered the second.
+
+## An emoji is a picture, not an outline
+
+shot drew text through the `opentype` face of `golang.org/x/image`. That face
+draws glyph outlines, the curves a normal font is made of. A colour emoji font
+has no outlines for its emoji. It keeps a small PNG of each one, at a few sizes,
+in a table of its own:
+
+| Table | Font | What it holds |
+|---|---|---|
+| `sbix` | Apple Color Emoji, on macOS | A PNG per glyph, per size (a "strike") |
+| `CBLC` and `CBDT` | Noto Color Emoji, on most Linux systems | An index of strikes and glyph ranges, and the PNGs |
+| `COLR` and `CPAL` | Segoe UI Emoji, Twemoji | Layers of outlines, each in a palette colour |
+
+So the glyph was in the font's character map, the face had nothing to draw
+for it, and it came out blank. Worse, the check that finds missing glyphs asked
+only the character map. It saw the emoji as covered and never tried another
+font.
+
+`x/image`'s font parser gives no access to tables it does not read itself. So
+shot now reads the font's table directory, and those tables, on its own. Every
+read is bounded by its table's size, and a table that does not add up makes the
+face colourless, never a panic. For a glyph, it picks the strike that fits the
+cell, decodes that one PNG, scales it into the cell keeping its shape, and
+caches the result, so a screen full of one emoji decodes one picture.
+
+The coverage check changed with it: a face has a glyph only when it can draw
+it, from an outline or a picture. A font with a glyph it cannot draw no longer
+stops the search for one that can.
+
+### A font of 190 MB
+
+Apple Color Emoji is about 190 MB. tuios used to read every fallback font into
+memory whole. shot's font type now takes an `io.ReaderAt` as well as bytes, and
+the colour reader reads only the tables and the glyph records it needs. A
+screenshot with three emoji reads a few hundred KB of that file.
+
+`tuios screenshot` also asks fontconfig for an emoji face, after the text
+fonts. Before, it did not ask, because shot could not have drawn what it found.
+
+## A flag is one glyph that the font has to find
+
+With that, a single emoji drew in colour. A flag still drew as two letters, a
+family as its first person, and a thumbs up with a skin tone as the yellow hand.
+
+A cell holds its whole grapheme cluster, so shot had all the code points. It
+drew the first one. A flag is two "regional indicator" letters, and there is no
+code point for the German flag. The font has a picture for it, and finds that
+picture with a ligature: a rule that says these glyphs in a row become that one
+glyph.
+
+The two fonts keep their ligatures in different places:
+
+- **Noto Color Emoji** uses `GSUB`, the OpenType substitution table. A ligature
+  there is a lookup in a list, under the `ccmp`, `liga` or `rlig` features.
+- **Apple Color Emoji** has no `GSUB` at all. Its ligatures are in `morx`,
+  Apple's own table, as a state machine: it walks the glyphs, pushes some on a
+  stack, and on certain transitions replaces what is on the stack with one
+  glyph.
+
+shot now runs that table over a cluster's glyphs and draws the glyph that comes
+out. A variation selector the font does not list, such as `U+FE0F`, is dropped
+first. A cluster with no ligature draws the first glyph the table leaves, never
+a box.
+
+A state machine read from a file is font input, and font input can be wrong or
+hostile. So it has bounds: at most 4 steps per glyph plus 16, a stack of 32,
+and every read inside its table. A table that breaks one is refused, and that
+face stops shaping. A fuzz target ran the shaper on random bytes for 27 million
+executions with no failure.
+
+## How well it works
+
+I checked 780 emoji sequences against both fonts. Apple Color Emoji draws 362
+of them as one colour glyph, and Noto Color Emoji 363, every country flag among
+them, with no table refused.
+
+What it does not do yet:
+
+- **COLR layered glyphs**, the third row of the table above. No font on the
+  machines I test on uses them, and I did not want to ship a reader with no
+  test behind it.
+- **sbix pictures stored as JPEG or TIFF.** No Apple emoji uses them.
+- **A couple with two skin tones** is two glyphs side by side in Apple's font,
+  and draws its first.
+
+The SVG and HTML formats were never affected. They keep emoji as text, and the
+viewer's own fonts draw them.
+
+The pull request is
+[#1809](https://github.com/Gaurav-Gosain/tuios/pull/1809). It added about 34 KB
+to the macOS binary and 53 KB to the Linux one. The e2e test
+`TestScreenshotDrawsEmojiSequences` checks a flag, a family, a keycap and a
+skin tone on macOS and on Linux. The e2e frames also check that each emoji
+drawn alone holds coloured pixels, because a check for a glyph alone passes a
+blank.
