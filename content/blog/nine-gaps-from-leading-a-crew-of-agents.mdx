@@ -1,0 +1,182 @@
+---
+title: Nine gaps I found by leading a crew of agents over tuios
+description: For a day, one Claude agent ran three to five other Claude agents in tuios panes, across sessions and two machines, and kept notes on everything tuios made hard. Nine gaps came out of it, from an ask that returned nothing to mail nobody knew was read. All nine are fixed on main.
+date: '2026-11-08'
+author: Gaurav Gosain
+tags: [agents]
+---
+
+tuios has a lot of commands for agents: `start-agent`, `list-agents`,
+`ask-agent`, mail, task cards. Each one has tests, and each one works on its
+own. What I had not done is use them all at once, for a whole day, the way
+someone running a team of agents would.
+
+So I did that. One Claude agent was the lead. It started three to five Claude
+workers in tuios panes, spread over a few sessions and one other machine, gave
+each a brief, read their reports, and unstuck them when they got stuck. I asked
+the lead to keep notes on everything tuios made harder than it should be. At the
+end of the day there were nine items, ranked by how much time each one cost.
+This post is that list, and what changed for each.
+
+<Shot
+  name="blog-crew"
+  width={1768}
+  height={1110}
+  light
+  alt="Three worker panes across the top, one working, one waiting on an approval and one done, and the lead pane below, which lists them with tuios list-agents --json and jq: name, state and what each is doing."
+/>
+
+The picture is a staged crew in a scratch session, not the real one, but the
+commands are the real ones: the lead reads its workers as JSON, which is what
+the new `lead` topic of the skill teaches.
+
+## What already worked
+
+Before the gaps, the parts that held up, because they are why the rest was
+worth fixing:
+
+- **Mail as the backbone.** Workers mail the lead. The lead's harness hook says
+  "You have N unread tuios messages" inside its own turn, so there is no
+  polling and no missed report.
+- **`start-agent` waits.** It types the prompt only once the agent is at its
+  prompt.
+- **`list-agents` knows the states**: working, done, and `needs_input` with the
+  text of the approval the agent waits on.
+- **`tuios cp` to the other machine** kept working while plain ssh was stuck on
+  a sign-in.
+
+## The nine
+
+### 1. ask-agent returned nothing from a full-screen agent
+
+`ask-agent` typed the question and returned what the pane printed in between:
+the text of the screen after, minus the text before. Claude Code redraws its
+whole screen, so that difference can be empty. The lead asked the agent on the
+other machine a question, the agent answered, and `ask-agent` returned an empty
+reply.
+
+Now, for a harness that keeps a transcript, the reply is the agent's own text
+since the question, read from the transcript. The screen difference is the
+fallback for agents without one.
+([#1801](https://github.com/Gaurav-Gosain/tuios/pull/1801))
+
+### 2. A blocking form showed as done
+
+Claude Code sometimes asks a question of its own in a form over its input box,
+such as whether to teach auto mode about the environment. No hook fires for
+it. The last hook said done, so `list-agents` said done, and a worker sat on
+that form for many minutes. Twice.
+
+A form on screen, with numbered options and "Enter to confirm", now outranks a
+stale done or idle report, and the pane reads as `needs_input`.
+([#1803](https://github.com/Gaurav-Gosain/tuios/pull/1803))
+
+### 3. No way to run one command on another machine
+
+To run `ls` or `fc-list` on the other machine, the lead opened a window there
+with `new-window --host`, wrapped the command with a marker it could look for,
+polled `capture-pane` in a loop, and closed the window. Five times in one day.
+
+```bash
+tuios run --host build -- fc-list : family
+```
+
+`tuios run --host` runs the line on that machine with no pane, prints its
+stdout and stderr, and exits with its status.
+([#1806](https://github.com/Gaurav-Gosain/tuios/pull/1806), and the
+[docs](/docs/remote-hosts#run-on-a-host))
+
+### 4. Starting a worker took 300 characters and three more steps
+
+Every worker started the same way: a long `start-agent` line with its flags,
+then find its id by name in a table, then type a slash command once it was
+ready, then press Escape. Presets put all of that in the config:
+
+```toml
+[agents.presets.worker]
+agent = "claude"
+add_dirs = ["~/notes"]
+grants = ["read", "write", "task"]
+after_ready = ["/remote-control", "Enter", "Escape"]
+```
+
+`tuios start-agent --preset worker --print-id` starts one and prints only its
+id. ([#1807](https://github.com/Gaurav-Gosain/tuios/pull/1807), and
+[Presets](/docs/new-agent#presets))
+
+### 5. Mail sat behind a sign-in, and nobody was told
+
+The other machine's link back to this one was waiting for a Tailscale sign-in.
+Its mail to the lead sat in the outbox, and neither machine said anything.
+
+Now the outbox item says why the link is down, and its key opens the sign-in
+page. The other machine, when its own link is up, shows an item too: how many
+messages wait for it and why, with nothing of the mail itself.
+([#1812](https://github.com/Gaurav-Gosain/tuios/pull/1812))
+
+### 6. The skill had nothing for a lead
+
+The tuios skill had topics for fanning out a task and for one agent working
+beside you. Nothing for an agent that runs a crew. So the lead never found
+`list-agents --all-sessions --json` or `start-agent --json`, and spent the day
+reading box tables with grep and awk.
+
+`tuios --skill lead` is that topic now: the loop with exact commands, how to
+spot and unstick a blocked worker, reading across machines, cleanup, and the
+rules, starting with "never answer a prompt that is the person's".
+([#1802](https://github.com/Gaurav-Gosain/tuios/pull/1802))
+
+### 7. capture-pane ignored the pane you named
+
+`tuios capture-pane -s work 7e02c4a1`, with the id as a plain argument, did not
+read the id. It captured the session's focused pane, with no error. The lead
+used that form all day, so it read the right worker only when that worker
+happened to have the focus. Once it showed another agent's screen as a new
+worker's.
+
+The window is an argument now, the same as `-w`, and a verb refuses an argument
+it does not read instead of dropping it.
+([#1805](https://github.com/Gaurav-Gosain/tuios/pull/1805))
+
+### 8. Escape on a form also stopped the turn
+
+Pressing Escape in a worker's pane to close that form from item 2 also
+interrupted the turn the worker was in the middle of. There was no safe way for
+a lead to clear a form. The skill now says to leave such a form to the person,
+or to use the harness's own "not now" choice by its number.
+([#1811](https://github.com/Gaurav-Gosain/tuios/pull/1811))
+
+### 9. A sender could not see that its mail was read
+
+A worker's two reports still read back as queued on its side after the lead had
+read both and acted on them. So the worker mailed again to ask whether they had
+arrived. Now the sender can look:
+
+```bash
+tuios read-agent-messages --sent -w "$TUIOS_PANE_ID"
+```
+
+```
+#1  to review (1ce7d2a7) in work  sent just now  read just now
+    rebased onto main, please retest
+#2  to docs (1342e967) in work  sent just now  delivered, unread
+    changelog
+```
+
+That output is from a throwaway daemon, not a mock. Each line says delivered,
+seen, read or undeliverable, across sessions and machines.
+([#1810](https://github.com/Gaurav-Gosain/tuios/pull/1810), and
+[Did my mail arrive](/docs/agent-messaging#did-my-mail-arrive))
+
+## What I take from it
+
+None of these nine showed up in a test, because each command did what its test
+asked. They showed up when one agent had to use all of them together, many
+times, with real agents on the other end that redraw their screens and ask
+their own questions.
+
+Two of them are the kind I dislike most: a command that returns something
+plausible and wrong. An empty reply that looks like "the agent said nothing",
+and a capture of the wrong pane that looks like a capture of the right one.
+Both now either do the right thing or refuse. The rest were missing pieces,
+and a day of real use found them faster than I would have by guessing.
