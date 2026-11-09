@@ -194,6 +194,86 @@ export function altChordBytes(event: KeyLike, mac: boolean): string | null {
   return upper === base.toLowerCase() ? null : `\x1b${upper}`;
 }
 
+// The character Shift gives each key on a US layout.
+const US_SHIFTED: Record<string, string> = {
+  "1": "!",
+  "2": "@",
+  "3": "#",
+  "4": "$",
+  "5": "%",
+  "6": "^",
+  "7": "&",
+  "8": "*",
+  "9": "(",
+  "0": ")",
+  "-": "_",
+  "=": "+",
+  "[": "{",
+  "]": "}",
+  "\\": "|",
+  ";": ":",
+  "'": '"',
+  ",": "<",
+  ".": ">",
+  "/": "?",
+  "`": "~",
+};
+
+/**
+ * The ASCII character Alt and a key typed, when the layout types it with
+ * Option, or null. On a German Mac layout | is Option and 7, \ is Option,
+ * Shift and 7, and @ is Option and L; on French | is Option, Shift and L.
+ * Sent as ESC and the key, the reader could never type them, and the
+ * leader's | split never came (tuios discussion #850).
+ *
+ * A US Mac layout's Option characters are not ASCII, so its chords are left
+ * to altChordBytes. The character must also differ from what the key types
+ * by itself or with Shift on a US layout: Alt and a plain letter, as Linux
+ * and Windows report it, is a chord.
+ */
+export function optionTypedText(event: KeyLike): string | null {
+  if (!event.altKey || event.ctrlKey || event.metaKey) return null;
+  if (!/^[\x21-\x7e]$/.test(event.key)) return null;
+  const base = chordBase(event);
+  if (!base) return null;
+  const k = event.key;
+  if (k === base || k === base.toUpperCase() || k === US_SHIFTED[base]) {
+    return null;
+  }
+  return k;
+}
+
+// The Kitty keyboard protocol flags tuios asks for while it reads keys
+// itself (window mode, after the leader, an overlay): every key as an escape
+// code, with the text it types.
+const KITTY_REPORT_ALL = 8;
+const KITTY_ASSOCIATED_TEXT = 16;
+
+/**
+ * The bytes for an ASCII character typed with Option (see optionTypedText),
+ * as Ghostty sends them, or null when the key is not one.
+ *
+ * While tuios reads every key with its text, that is the key's code, the
+ * modifiers and the character: German Option and 7 is CSI 55;3;124u. tuios
+ * then runs a binding on the chord, such as opt+7 for workspace 7, or else
+ * the one on the character, such as the leader's | split. WebTerm's own
+ * encoder would send the character as the key code with no text, which tuios
+ * cannot tell from AZERTY's & key. Otherwise it is the character itself, so a
+ * shell gets the |.
+ */
+export function optionTypedBytes(
+  event: KeyLike,
+  kittyFlags: number,
+): string | null {
+  const typed = optionTypedText(event);
+  if (typed === null) return null;
+  const all = KITTY_REPORT_ALL | KITTY_ASSOCIATED_TEXT;
+  if ((kittyFlags & all) !== all) return typed;
+  const base = chordBase(event) as string;
+  const mods = 1 + 2 + (event.shiftKey ? 1 : 0);
+  return `\x1b[${base.codePointAt(0)};${mods};${typed.codePointAt(0)}u`;
+}
+
 /** altChordBytes as a Mac sees it: every plain Option chord. */
 export function optionAsAlt(event: KeyLike): string | null {
   return altChordBytes(event, true);

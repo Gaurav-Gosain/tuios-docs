@@ -28,7 +28,7 @@ import {
   setKeyDebugSource,
   watchTextarea,
 } from "./keydebug";
-import { altChordBytes, detectMac } from "./keys";
+import { altChordBytes, detectMac, optionTypedBytes } from "./keys";
 import type { TuiosApi, TuiosEvent } from "./types";
 
 export type EngineManifest = {
@@ -336,10 +336,11 @@ export const IS_MAC = typeof navigator !== "undefined" && detectMac(navigator);
  * The bytes for an Alt chord the page sends itself (Option+j is ESC j), or
  * null to leave the key to the terminal. See altChordBytes: on a Mac every
  * plain Option chord, and elsewhere only a key that Alt plainly composed, so
- * AltGr keeps typing what the reader means.
+ * AltGr keeps typing what the reader means. An ASCII character the layout
+ * types with Option, such as German |, goes as optionTypedBytes says.
  */
-export function optionBytes(e: KeyboardEvent, mac = IS_MAC) {
-  return altChordBytes(e, mac);
+export function optionBytes(e: KeyboardEvent, mac = IS_MAC, kittyFlags = 0) {
+  return optionTypedBytes(e, kittyFlags) ?? altChordBytes(e, mac);
 }
 
 /** F5, ctrl+r and cmd+r always reload the page, whatever tuios is doing. */
@@ -420,7 +421,7 @@ async function boot(
           noteHandler(e, "reload key, left to the browser");
           return false;
         }
-        const alt = optionBytes(e);
+        const alt = optionBytes(e, IS_MAC, term.keyboardProtocol?.flags ?? 0);
         if (alt === null) {
           noteHandler(e, "left to the terminal");
           return true;

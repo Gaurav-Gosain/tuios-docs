@@ -57,7 +57,7 @@ export const basics: Track = {
       note: "ctrl+b, let go, then a key. It works in any mode.",
       keys: ["ctrl+b", "|"],
       done: via(["prefix_split_vertical"], on("window.open")),
-      hint: "Hold ctrl, tap b, let go. A menu pops up. Now press | (shift and backslash).",
+      hint: "Hold ctrl, tap b, let go. A menu pops up. Now press |.",
       learned: "split",
     },
     {
