@@ -1,0 +1,133 @@
+---
+title: Upgrading the daemon without ending a single pane
+description: The tuios daemon owns every pane's terminal, so moving it to a new build used to end every program in every pane. tuios daemon upgrade execs the new binary in the same process instead, with the terminals still open, and each program keeps running as if nothing happened. How the handoff works, and what it took to make it safe.
+date: '2026-11-03'
+author: Gaurav Gosain
+tags: [sessions]
+---
+
+The tuios daemon holds every pane: it opened the terminal each program runs
+in, it reads what the program prints, and it is the program's parent process.
+That is what lets you detach and come back. It is also why moving the daemon to
+a new build ended every program in every pane. A new daemon is a new process,
+and the old one took the terminals with it when it stopped.
+
+[`tuios restart-server`](/blog/restarting-the-daemon-without-losing-your-place)
+made that restart tidy: it says what will stop, it restores the layout and the
+history, and it offers to resume the agents. But a build that was halfway
+through, a REPL with state in it, an agent in the middle of a turn: those were
+still gone.
+
+`tuios daemon upgrade` keeps them. Here is a real run, in a scratch daemon with
+a pane that counts once a second:
+
+```
+daemon pid 9
+Terminal f4ecc627  pid 26
+build  pid 32
+$ tuios capture-pane -s work build --lines 1
+tick 4
+
+$ tuios daemon upgrade --binary /tmp/tuios-next
+Checking /tmp/tuios-next (dev) accepts this daemon's state (handoff v3)... ok
+Paused 2 panes, saved their screens (9.6 KB).
+Starting dev in place (pid 9 kept)...
+Upgraded in 0.03 s. 2 panes and their programs kept.
+
+daemon pid 9
+Terminal f4ecc627  pid 26
+build  pid 32
+$ tuios capture-pane -s work build --lines 1
+tick 7
+```
+
+The daemon is still pid 9, the programs are still pids 26 and 32, and the
+counter went on from where it was. The new binary is a copy of the same build
+here, which is enough to show the handoff. With a real new build, the code that
+runs from then on is the new one.
+
+## The trick is exec, not a new process
+
+Most programs that reload themselves start a new process and hand it what it
+needs. nginx forks a new master that inherits the listening sockets, and
+Cloudflare's tableflip starts a child and waits for it to say it is ready. That
+works for sockets. It cannot work for terminals, because a terminal's programs
+are children of the daemon, and a process cannot change its parent.
+
+So the daemon does not start a new process. It calls `exec` on the new binary,
+in place. `exec` replaces the code of a process and keeps the process: the same
+pid, the same children, and every file descriptor not marked close-on-exec. The
+pane programs never notice. Their parent is still pid 9, and their terminal is
+still open, because the daemon cleared close-on-exec on each terminal's master
+side before the exec, and the new image adopts those descriptors as its first
+step.
+
+systemd does the same for PID 1 with `daemon-reexec`: it writes its state into
+a file descriptor, keeps the descriptors of every unit, and execs itself. That
+was the closest model.
+
+## Freeze, hand off, thaw
+
+The hard part is the moment of the exec. Anything in flight then can be lost,
+or done twice. So before it, the daemon freezes, in order, and every step has a
+time limit that cancels the upgrade if it runs out:
+
+1. It stops taking new connections and tells every client that an upgrade is
+   coming.
+2. It flushes pane input, so no keystroke is half written.
+3. It parks every pane's reader. A read either returns bytes, which are handled
+   completely, or returns nothing at all. From then on, what a program prints
+   stays in the kernel's terminal buffer, and the new daemon reads it. That is
+   the whole argument for no lost and no doubled output: every byte is either in
+   the saved state or still in the kernel.
+4. It saves each pane's screen, its modes and the end of its history, with the
+   agent states, mail and the event stream, into the handoff.
+
+Then it execs. The new image reads the handoff, takes the terminals back,
+resumes the readers, and accepts connections again. If anything fails before
+the exec, the daemon thaws: the exact reverse, and everything goes on as before.
+
+## A new binary that cannot take the panes
+
+The scariest case is a new binary that is broken. If it crashes after the exec,
+the panes' parent is gone with it.
+
+So the upgrade checks first. It runs the new binary once on its own, and asks it
+whether it can read this daemon's handoff format (that is the
+`accepts this daemon's state (handoff v3)... ok` line). When the check fails,
+nothing changes. And if the new image still cannot take the panes after the
+exec, the daemon goes back to the old binary, with every pane still running,
+and the command exits 1. `tuios logs` says why.
+
+There are a few more refusals, because the daemon holds every pane's terminal
+and the key that signs every pane's token: whatever binary it runs gets all of
+that.
+
+- It refuses a binary that neither you nor root owns, and one that other users
+  can write.
+- It runs the file it checked. A file swapped in after the check does not take
+  its place.
+- An upgrade asked from inside a pane waits for you: every attached client shows
+  a dialog with the binary and the pane that asked, and No is the default.
+
+## Where it stands
+
+The work landed as a series of pull requests by @abhijit-s, from
+[the first part](https://github.com/Gaurav-Gosain/tuios/pull/876), which parks
+a pane and hands it to a new image, through
+[`tuios daemon upgrade`](https://github.com/Gaurav-Gosain/tuios/pull/1333),
+[surviving a crash of the new image](https://github.com/Gaurav-Gosain/tuios/pull/1398)
+and [clients that follow the upgrade](https://github.com/Gaurav-Gosain/tuios/pull/1480),
+to [the installers using it](https://github.com/Gaurav-Gosain/tuios/pull/1593):
+`scripts/install.sh`, `tuios update` and `tuios hosts sync --restart` now
+upgrade live when they can, and restart when they cannot.
+[#1464](https://github.com/Gaurav-Gosain/tuios/pull/1464), by @Gsirawan, made
+the daemon run the very file it checked.
+
+It is still marked experimental, and it runs on macOS and Linux only. A Windows
+console cannot outlive an exec in place, so Windows keeps `restart-server`. The
+[docs](/docs/daemon-restart#upgrade-in-place) list every refusal.
+
+I build tuios from inside tuios, with agents working in its panes, so this is
+the feature I wanted most for myself: an upgrade used to mean stopping all of
+them. In the run above it took 0.03 seconds.
