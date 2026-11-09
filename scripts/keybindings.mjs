@@ -33,6 +33,9 @@ const linux = JSON.parse(readFileSync(linuxPath, "utf8"));
 function collect(report) {
   const rows = new Map();
   for (const b of report.bindings) {
+    // The gui scope holds the bindings of the GPU client, which is not
+    // published yet. Its keys join the explorer when it ships.
+    if (b.scope === "gui") continue;
     const id = `${b.scope} ${b.action}`;
     const row = rows.get(id) ?? {
       scope: b.scope,

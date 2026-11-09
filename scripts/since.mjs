@@ -261,11 +261,31 @@ function commandTree(bin) {
 
 // ---- verbs and features ----------------------------------------------------
 
+// The verbs of --ref. Up to tuios d390b5abb (2026-11-06) conn_scope.go held a
+// table of every verb and its scope. Since then each registry entry names its
+// own scope: `"verb": {`, then `scope:` after any comment lines, in any file
+// of internal/session. Both shapes are read, so an older ref still works.
 function refVerbs() {
-  const text = git("show", `${ref}:internal/session/conn_scope.go`);
-  return [...text.matchAll(/^\s*"([a-z][a-z0-9-]+)":\s*scope[A-Z]\w*,/gm)].map(
-    (m) => m[1],
+  const verbs = new Set();
+  const table = git("show", `${ref}:internal/session/conn_scope.go`);
+  for (const m of table.matchAll(/^\s*"([a-z][a-z0-9-]+)":\s*scope[A-Z]\w*,/gm))
+    verbs.add(m[1]);
+  const entries = git(
+    "grep",
+    "-h",
+    "-A12",
+    "-E",
+    '^[[:space:]]*"[a-z][a-z0-9-]+": [{]$',
+    ref,
+    "--",
+    "internal/session",
+    ":!*_test.go",
   );
+  for (const m of entries.matchAll(
+    /^\s*"([a-z][a-z0-9-]+)": \{\n(?:\s*\/\/[^\n]*\n)*\s*scope:/gm,
+  ))
+    verbs.add(m[1]);
+  return [...verbs];
 }
 
 function stringsOn(rev, dir, list) {
@@ -408,6 +428,28 @@ for (const tag of tags) {
 }
 for (const [kind, left] of Object.entries(pending)) {
   for (const id of left) result[kind][id] = "unreleased";
+}
+
+// A tag's source never changes, so a version the last run found stays true. A
+// later move of the declaring file can hide an item from the walk above (the
+// root commands left main.go for root_commands.go after v0.12.1, which made
+// `update` read as unreleased). Keep the older of the two.
+const older = (a, b) => {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] < pb[i] ? a : b;
+  return a;
+};
+let last = {};
+try {
+  last = JSON.parse(readFileSync(outPath, "utf8"));
+} catch {}
+for (const kind of Object.keys(result)) {
+  for (const [id, v] of Object.entries(result[kind])) {
+    const was = last[kind]?.[id];
+    if (!was || was === "unreleased") continue;
+    result[kind][id] = v === "unreleased" ? was : older(was, v);
+  }
 }
 
 const sorted = (o) =>
