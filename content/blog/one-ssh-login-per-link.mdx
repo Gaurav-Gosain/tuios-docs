@@ -1,0 +1,119 @@
+---
+title: One ssh login per link, not one a minute
+description: A 1Password user got a prompt to approve their ssh key every few minutes, for a host that tuios said had no daemon. The link logged in, saw no daemon, hung up and tried again, forever. Now it keeps the one ssh connection and asks again over it.
+date: '2026-11-09'
+author: Gaurav Gosain
+tags: [sessions]
+---
+
+[#1820](https://github.com/Gaurav-Gosain/tuios/issues/1820) came from
+@masterof0, and it was short and clear. They keep their ssh keys in 1Password,
+which asks you to approve each use of a key. With a host linked in tuios, they
+got that prompt every couple of minutes. And, as they pointed out, `tuios hosts`
+showed that no tuios daemon was even running on that host.
+
+They expected a prompt when a session starts, or when it reconnects after a
+long break. Not one every few minutes for a link that was not doing anything.
+That is a fair thing to expect.
+
+## What was asking for the key
+
+A linked host in `[hosts]` gets a link: the daemon here runs
+`ssh host tuios stdio-proxy`, and the proxy on the far side connects to the
+tuios daemon there. When the host is down, the link waits and tries again, with
+a backoff that doubles from 1 second up to 60.
+
+Nothing else runs ssh on a timer. `tuios hosts`, the rail's machine row and the
+status commands only read what the link reports. So it had to be the link.
+
+Here is what happened when the host was up and had no tuios daemon:
+
+1. ssh logs in, with a full key authentication, and runs `tuios stdio-proxy`.
+2. The proxy finds no daemon socket and closes the stream. It never starts a
+   daemon by itself, on purpose.
+3. The link reads that as `no_daemon`, closes the connection, and ssh exits.
+4. The backoff doubles up to 60 seconds and stays there. Then step 1 again.
+
+The link treated "no daemon" like "host unreachable". But nothing is wrong
+with the connection in that case. The host is up, the login works, and only the
+program on the other side is missing.
+
+Each try was a new ssh process, and so a new authentication. The link runs ssh
+with `BatchMode=yes`, which stops ssh's own prompts, such as a password. It does
+not stop the agent's: ssh asks the agent to sign, and 1Password shows its
+approval for each sign request. So: one prompt a minute, forever, for a host
+with nothing to connect to.
+
+## Counting the logins
+
+The fix came with an e2e test, `TestAHostWithNoDaemonCostsOneLogin`. It runs a
+hub with one linked host whose far side has no daemon, through a stand-in for
+ssh that counts its own runs. One run is one login. I ran it against tuios
+v0.12.1, the version in the report, and against main:
+
+```
+$ tuios hosts
+╭───────┬──────────────────┬───────────┬─────────┬───────┬──────────┬──────┬─────────╮
+│ HOST  │ ADDRESS          │ STATUS    │ VERSION │ PROTO │ SESSIONS │ LOAD │ LAST OK │
+├───────┼──────────────────┼───────────┼─────────┼───────┼──────────┼──────┼─────────┤
+│ build │ someone@buildbox │ no_daemon │ -       │ -     │ -        │ -    │ -       │
+╰───────┴──────────────────┴───────────┴─────────┴───────┴──────────┴──────┴─────────╯
+build: The host is up and no tuios daemon is running on it.
+```
+
+That listing is the test's own artifact. Then it counts the logins in the 20
+seconds after the host lists as `no_daemon`:
+
+| tuios | ssh logins in 20 s |
+|-------|--------------------|
+| v0.12.1 | 4 |
+| main | 1 |
+
+On v0.12.1 the test fails at its first check: "the hub ran ssh 4 times in 20s
+to a host with no daemon, want 1". Four logins in twenty seconds is the
+backoff climbing. Left alone, it settles at one a minute.
+
+## Keep the connection, ask again over it
+
+I thought about three ways to fix it:
+
+- **A long backoff for `no_daemon` only**, say 10 to 30 minutes. Cheap, but it
+  still prompts, and a daemon you start on the host is seen late.
+- **An ssh master of the link's own** (`ControlMaster=auto` with
+  `ControlPersist`). It still logs in again each time the master expires, it
+  does not apply to a host with `ForwardAgent`, and it brings back the stale
+  master problems after a laptop sleeps.
+- **Keep the ssh connection the link already has**, and ask again over it.
+
+The third one is the root fix, and it is what
+[#1822](https://github.com/Gaurav-Gosain/tuios/pull/1822) does. On `no_daemon`,
+the link keeps its ssh connection open. On the same backoff, it opens a new
+stream through it, instead of closing ssh and dialing again. The proxy on the
+far side connects to the daemon socket for each new stream, so when you start a
+daemon there, the next stream finds it, with no new login.
+
+A few details matter:
+
+- The Try again action (`retry-host`) and `tuios hosts` ask at once, over the
+  held connection, so a daemon you just started shows up without a wait.
+- When the held connection drops (the network, a sleep), the link dials again
+  as before, under the same backoff. A host that keeps dropping still costs at
+  most one login per backoff step.
+- After a sleep, a connection that does not answer is not reused, and the next
+  dial skips any shared master.
+
+The cost is one idle ssh connection per host that has no daemon, kept alive by
+the link's `ServerAlive` options. The change added about 12 KB to the Linux
+binary and 17 KB to the macOS one.
+
+## What I learned
+
+The backoff was right for a broken link. The bug was that "the host is up, the
+program is not" took the same path as "the host is down". Those two need
+different answers: one needs a new connection, the other just needs a new
+question over the connection you have.
+
+And this one needed the report. With an ssh agent that signs without asking,
+each of those once-a-minute logins is silent, so nothing looks wrong. With an
+agent that asks, each one is a prompt. Thanks, @masterof0. The fix is in the
+next release.
