@@ -1,12 +1,13 @@
 ---
 title: Images Without Graphics
-description: How TUIOS shows sixel images as block characters on kmscon, the Linux console and other terminals without graphics.
+description: How TUIOS shows sixel and kitty graphics pictures as block characters on kmscon, the Linux console and other terminals without graphics.
 icon: Image
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Since } from '@/components/mdx/since';
 
-A program in a pane can draw a picture with sixel. Your terminal shows the real picture when it supports sixel or kitty graphics. Some terminals support neither: kmscon, the Linux console, Alacritty, Terminal.app and many SSH clients. On these terminals, TUIOS draws the picture with Unicode block characters. Terminals built on xterm.js, such as VS Code, Tabby and Hyper, get block characters too, because they cannot move or remove a picture cleanly. See [Graphics](/docs/architecture#graphics). Before this, TUIOS showed a box with "image" in it.
+A program in a pane can draw a picture with sixel or with kitty graphics. Your terminal shows the real picture when it supports sixel or kitty graphics. Some terminals support neither: kmscon, the Linux console, Alacritty, Terminal.app and many SSH clients. On these terminals, TUIOS draws the picture with Unicode block characters. Terminals built on xterm.js, such as VS Code, Tabby and Hyper, get block characters too, because they cannot move or remove a picture cleanly. See [Graphics](/docs/architecture#graphics). Before this, TUIOS showed a box with "image" in it.
 
 ## What you see
 
@@ -85,7 +86,25 @@ With block characters on, TUIOS tells the program in the pane that sixel works (
 
 ![chafa in a pane: on the left, sixel drawn as octants by TUIOS. On the right, chafa's own text output with image_symbols set to off](/shots/image-glyphs-chafa.png)
 
-TUIOS does not draw kitty graphics images as block characters yet. On a terminal without graphics, a program that only uses kitty graphics uses its own text output.
+### Kitty graphics pictures <Since feature="kitty-image-symbols" /> [#kitty-graphics-pictures]
+
+A picture a program sends with kitty graphics is drawn as block characters too, on a terminal with no kitty graphics. `chafa -f kitty` and `timg` show their picture there, on xterm.js terminals such as VS Code too. Before, TUIOS dropped the kitty commands, and the program showed nothing.
+
+<Shot
+  name="kitty-glyphs"
+  width={1700}
+  height={962}
+  light
+  alt="A pane that sent the tuios app icon with kitty graphics, on a terminal with no graphics. tuios draws the picture with block characters: Tilly, a small CRT with a tiled face, in its colours."
+/>
+
+- TUIOS puts the upload together from its chunks, decodes it (RGB, RGBA, PNG, zlib), cuts it to its source rectangle and scales it to its cells.
+- The picture scrolls, clips and clears with the text, as a sixel picture does. The cursor ends where it ends on a terminal that draws kitty graphics.
+- A delete of all pictures or of one id blanks its cells.
+- A picture drawn this way is dropped when a terminal with graphics attaches. It is never sent as sixel.
+- What a pane holds is bounded: one upload of 64 MiB, 16 stored pictures in 64 MiB, and 256 drawn pictures.
+
+Unicode placeholders, and a terminal with sixel but no kitty graphics, work as before.
 
 In daemon mode, the client tells the daemon that it draws block characters. An older daemon ignores this and tells programs that sixel does not work.
 

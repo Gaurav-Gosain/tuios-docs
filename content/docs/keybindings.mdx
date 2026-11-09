@@ -539,6 +539,7 @@ The dock shows `calm` while it is on. `calm 3` means that 3 messages are in the 
 | <kbd>m</kbd> | `minimize_prefix_focused` <Since action="minimize_prefix_focused" /> | Minimize the focused window |
 | <kbd>1</kbd> to <kbd>9</kbd> | `minimize_prefix_restore_1` to `minimize_prefix_restore_9` | Restore a minimized window by position |
 | <kbd>M</kbd> | `minimize_prefix_restore_all` <Since action="minimize_prefix_restore_all" /> | Restore all minimized windows |
+| <kbd>f</kbd> | `minimize_prefix_focus_only` <Since action="minimize_prefix_focus_only" /> | Focus only: minimize every other pane on the workspace and keep the focused one. Press it again to restore the panes it minimized, and only those. Scratch panes and popups are left alone |
 | <kbd>Esc</kbd> | `minimize_prefix_cancel` <Since action="minimize_prefix_cancel" /> | Cancel |
 
 ### Workspace prefix
@@ -983,6 +984,7 @@ clear_scrollback = ["K"]
 
 ### Leave copy mode, and other keys
 
+- <kbd>Enter</kbd> leaves copy mode and gives the pane the keyboard back. From a selection it copies the selection first, as <kbd>y</kbd> does and as tmux's copy-mode-vi does. In the search prompt and after <kbd>f</kbd> or <kbd>t</kbd>, <kbd>Enter</kbd> still runs the search. The action is `copy_mode_exit` <Since feature="copy-mode-exit" />. Set `copy_mode_exit = []` in `[keybindings.copy_mode]` to give <kbd>Enter</kbd> its old meaning, which was nothing.
 - <kbd>Ctrl</kbd>+<kbd>C</kbd> leaves copy mode from normal mode, a selection, the search prompt or <kbd>f</kbd>/<kbd>t</kbd>. Nothing is copied.
 - In a <kbd>v</kbd> or <kbd>V</kbd> selection, <kbd>o</kbd> moves the copy cursor to the other end of the selection. The selected text does not change. If the other end is outside the pane, the pane scrolls to show it.
 - `terminal_focus_left`, `terminal_focus_right`, `terminal_focus_up` and `terminal_focus_down` also work in copy mode. In window mode, the window mode focus keys work. Focus moves to the next pane, and the old pane stays in copy mode. A focus key that copy mode also uses keeps its copy mode action. A key under the leader does not work in copy mode, because copy mode uses <kbd>Ctrl</kbd>+<kbd>B</kbd> for page up.
@@ -1300,6 +1302,59 @@ mark_pane = ["m"]
 join_marked_right = ["J"]
 ```
 
+## Menus of your own <Since config="keybindings.menus.*" /> [#menus-of-your-own]
+
+A key can open a menu that you declare, so a keymap can nest as deep as a tmux which-key tree. Declare the menu, then bind the action `open_menu:NAME` to the key that opens it. TUIOS has no menus of this kind until you declare one.
+
+```toml
+[keybindings.window_prefix]
+"open_menu:split" = ["s"]
+
+[keybindings.menus.split]
+title = "Split"
+
+[keybindings.menus.split.keys]
+prefix_split_vertical = ["y"]
+prefix_split_horizontal = ["x"]
+"open_menu:resize" = ["R"]
+
+[keybindings.menus.resize]
+title = "Resize"
+sticky = true
+
+[keybindings.menus.resize.keys]
+resize_pane_left_5 = ["h"]
+resize_pane_down_5 = ["j"]
+resize_pane_up_5 = ["k"]
+resize_pane_right_5 = ["l"]
+```
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>t</kbd> <kbd>s</kbd> <kbd>y</kbd> splits the pane. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>t</kbd> <kbd>s</kbd> <kbd>R</kbd> <kbd>h</kbd> <kbd>h</kbd> <kbd>h</kbd> narrows it by three steps.
+
+- `open_menu:NAME` goes in any section: after the leader, in another menu, or in window mode or terminal mode for a menu that opens on one key.
+- A menu name has lowercase letters, digits, `-` and `_`. `title` heads the which-key panel and defaults to the name.
+- `sticky` keeps the menu open after a key runs, as tmux `bind -r` does, until <kbd>Esc</kbd> or a key the menu does not bind. In terminal mode that key goes to the pane, so the first letter you type after a resize is not lost. <kbd>Esc</kbd> and <kbd>Ctrl</kbd>+<kbd>C</kbd> close a menu and never reach the pane.
+- `tuios keybinds list`, `doctor`, `unbind` and `free` read the menus as any other section. A config warning names a key that opens a menu that is not declared, and a menu that no key opens.
+
+### Menus over the rail, the Inbox and other overlays <Since feature="overlay-menus" /> [#overlay-menus]
+
+`open_menu:NAME` also works in the section of an overlay: `sidebar`, `sidebar_files`, `sidebar_agents`, `quick_look`, `quick_look_inside`, `inbox`, `inbox_peek`, `mail`, `transfers` and `review`. The menu opens over the overlay, and its keys run that overlay's own actions, so name actions of the same section.
+
+```toml
+[keybindings.inbox]
+"open_menu:triage" = ["T"]
+
+[keybindings.menus.triage]
+title = "Triage"
+
+[keybindings.menus.triage.keys]
+inbox_dismiss = ["d"]
+inbox_snooze = ["s"]
+inbox_close = ["c"]
+```
+
+In the agents view, <kbd>T</kbd> <kbd>d</kbd> dismisses the selected item and <kbd>T</kbd> <kbd>c</kbd> closes the view. <kbd>Esc</kbd> closes the menu and leaves the overlay open. A config warning names a menu key whose action the overlay does not have. Copy mode is not one of these sections: bind its menus in `terminal_mode` or under the leader.
+
 ## Keybind presets <Since config="keybindings.preset" /> [#keybind-presets]
 
 `keybindings.preset` gives the keys of tmux, GNU screen or zellij after the leader:
@@ -1461,6 +1516,13 @@ move_and_follow_9 = ["opt+ç"]
 ```
 
 To type `[ ] { } |` with Option, set the right Option key to compose. See [One Option key for typing](#one-option-key-for-typing). With `keyboard_layout = "other"`, TUIOS sends those characters to the pane.
+
+#### A character that Option types, after the leader <Since feature="option-chord-text" /> [#option-chord-text]
+
+On a German Mac layout, `|` is <kbd>Option</kbd>+<kbd>7</kbd> and `\` is <kbd>Option</kbd>+<kbd>Shift</kbd>+<kbd>7</kbd>. After the leader, Ghostty and other terminals with the Kitty keyboard protocol report that key as <kbd>Alt</kbd>+<kbd>7</kbd> with the text `|`. TUIOS now tries that character too, so <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Option</kbd>+<kbd>7</kbd> runs the binding on `|`, the split.
+
+- TUIOS tries the character last, when the chord is <kbd>Alt</kbd> or <kbd>Alt</kbd>+<kbd>Shift</kbd> and the character is printable ASCII that the key does not give by itself or with <kbd>Shift</kbd> on a US layout.
+- A binding on the chord still wins. <kbd>Option</kbd>+<kbd>7</kbd> still goes to workspace 7 in window mode.
 
 ## Keys sent to a pane
 
