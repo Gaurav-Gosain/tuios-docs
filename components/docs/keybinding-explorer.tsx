@@ -76,6 +76,12 @@ const SECTION_LABELS: Record<string, string> = {
   tape_prefix: "Tape prefix (Ctrl+B T)",
   layout_prefix: "Layout prefix (Ctrl+B L)",
   script: "While a tape plays",
+  copy_mode: "Copy mode",
+  lists: "Lists",
+  review: "Review",
+  transfers: "File transfers",
+  quick_look: "Quick look",
+  quick_look_inside: "Quick look: inside a file",
 };
 
 const KEY_NAMES: Record<string, string> = {
