@@ -118,7 +118,7 @@ These flags change how the TUI looks for one run. They are accepted by `tuios`, 
 | [Plugins](#plugins) | `plugins`, `plugin-cell`, `plugin-notify` |
 | [Other](#other-commands) | `ssh`, `notify`, `mermaid`, `tml`, `look`, `update`, `completion`, `help` |
 
-`agent-hook`, `agent-statusline` and `agent-proto` are run by the harness integrations and by `start-agent --protocol`, not by hand. Their `--help` says what they do.
+`tuios agent-hook`, `tuios agent-statusline` and `tuios agent-proto` are run by the harness integrations and by `start-agent --protocol`, not by hand. Their `--help` says what they do.
 
 Aliases: `attach` is `a`, `new` is `n`, `ls` is `list-sessions`, `resurrect` is `restore`, `keybinds` is `keys` or `kb`, and `hosts remove` is `hosts rm`.
 
@@ -785,6 +785,17 @@ tuios xpanes -ss --interval 1 -c 'curl -s https://{}/health' web1 web2 web3
 ls /var/log/*.log | tuios xpanes -l even-horizontal --no-sync -c 'tail -f {}'
 tuios xpanes -n 2 -c 'diff {}' a.txt b.txt c.txt d.txt
 ```
+
+### close-window <Since command="close-window" /> [#close-window]
+
+Close one pane and stop its program. Name the pane by its name, its id or the number `list-windows` prints. It works with no client attached. A pane whose program has exited stays in `list-windows` until something closes it.
+
+```bash
+tuios close-window build              # the pane named build
+tuios close-window -s work 86e5e19f   # a pane by id in the session work
+```
+
+`-s` names the session. `--json` prints the result as JSON.
 
 ### close-workspace <Since command="close-workspace" /> [#close-workspace]
 
@@ -1517,6 +1528,22 @@ tuios list-themes --json | jq -r .active
 ```
 
 It reads the themes directory again on every call, so a new theme file shows up at once. <Since feature="omarchy-theme" /> On a machine with [Omarchy](/docs/omarchy), it also names the Omarchy theme it found, and says whether TUIOS follows it. Each installed Omarchy theme is in the list as `omarchy/NAME`.
+
+### theme <Since command="theme" /> [#theme]
+
+Work with theme files. See [Themes](/docs/themes).
+
+| Command | What it does |
+|---------|--------------|
+| `tuios theme export <theme> [--full] [--format tuios\|base16]` | Print a theme as a theme file. A theme from your themes folder is written against the built-in theme it starts from, with only the colours that differ. `--full` writes every colour, with no base. `--format base16` writes a base16 scheme in YAML for other programs |
+| `tuios theme share <theme>` | Print a theme as one line that starts with `tuios-theme:v1:`, to paste in a message. It holds the file that `theme export` writes |
+| `tuios theme reload` | Read the theme and glyph files again in every client on this machine, ask each terminal for its colours again, and repaint. A client also does this by itself when a file in the themes or glyphs folder changes |
+
+```bash
+tuios theme export mine > mine.json
+tuios theme export dracula --format base16
+wal -i ~/wall.png -o "tuios theme reload"   # after pywal writes a theme
+```
 
 ### import-theme <Since command="import-theme" /> [#import-theme]
 
