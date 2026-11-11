@@ -12,11 +12,12 @@ import {
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { InstallTabs } from "@/components/home/install-tabs";
-import { formatTime } from "@/lib/learn/engine";
+import { formatTime } from "@/lib/learn/lesson-state";
+import type { Track } from "@/lib/learn/lessons";
+import { trackGroups, tracks } from "@/lib/learn/lessons";
 import { type Progress, resumeStep } from "@/lib/learn/progress";
 import { runSetup, type TuiosInstance } from "@/lib/learn/runtime";
-import { trackGroups, tracks } from "@/lib/learn/tracks";
-import type { SetupCommand, Track } from "@/lib/learn/types";
+import type { SetupCommand } from "@/lib/learn/types";
 import { useEngineStatus } from "./hooks";
 import { Keycap, useHeldKeys } from "./keycaps";
 import { LiveTerminal } from "./live-terminal";

@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { coach, tracks } from "./lessons";
 import { SOUNDS } from "./sound";
 import {
-  FINISH_LINES,
   fill,
-  GREET_LINES,
   HINTED_LEAD,
+  isNudge,
   LinePicker,
   NUDGE_LINES,
-  nudgeFor,
   POKE_LINES,
   REACTION_LINES,
   type Reaction,
@@ -15,8 +14,6 @@ import {
   slotsFor,
   TillyScript,
 } from "./tilly";
-import { tracks } from "./tracks";
-import { basics } from "./tracks/basics";
 import type { TuiosEvent } from "./types";
 
 const ev = (type: string, data: Record<string, unknown> = {}): TuiosEvent => ({
@@ -146,12 +143,10 @@ describe("fill and slots", () => {
 });
 
 describe("TillyScript", () => {
-  const step = basics.steps[3]; // split
-
   test("reacts to the event that finished the step", () => {
     const script = new TillyScript(() => 0);
     const said = script.react({
-      step,
+      explainer: false,
       event: ev("window.open"),
       lastAction: "prefix_split_vertical",
       result: "clean",
@@ -165,7 +160,7 @@ describe("TillyScript", () => {
     const script = new TillyScript(seq(0, 0.5, 0.99));
     for (let i = 0; i < 6; i++) {
       const said = script.react({
-        step,
+        explainer: false,
         event: ev("workspace", { from: 1, to: 2 }),
         result: "clean",
       });
@@ -173,7 +168,7 @@ describe("TillyScript", () => {
       expect(said.text).toContain("2");
     }
     const noSlot = script.react({
-      step,
+      explainer: false,
       event: ev("layout", {}),
       result: "clean",
     });
@@ -183,7 +178,7 @@ describe("TillyScript", () => {
   test("leads with a nod when the step needed help", () => {
     const script = new TillyScript(() => 0);
     const said = script.react({
-      step,
+      explainer: false,
       event: ev("window.close"),
       result: "hinted",
     });
@@ -192,7 +187,7 @@ describe("TillyScript", () => {
 
   test("a skipped step gets no chime", () => {
     const said = new TillyScript().react({
-      step,
+      explainer: false,
       event: ev("window.open"),
       result: "skipped",
     });
@@ -201,10 +196,8 @@ describe("TillyScript", () => {
   });
 
   test("an explainer step", () => {
-    const explainer = tracks.flatMap((t) => t.steps).find((s) => s.explainer);
-    if (!explainer) throw new Error("no explainer step");
     const said = new TillyScript().react({
-      step: explainer,
+      explainer: true,
       event: null,
       result: "clean",
     });
@@ -216,12 +209,14 @@ describe("TillyScript", () => {
       const script = new TillyScript();
       const hi = script.greet(track);
       expect(hi.mood).toBe("wave");
-      expect(GREET_LINES[track.id]).toContain(hi.text);
+      expect(track.coach?.greet ?? coach.greet).toContain(hi.text);
       const bye = script.finish(track, ["clean", "hinted"]);
       expect(bye.mood).toBe("cheer");
       expect(bye.sound).toBe("fanfare");
       expect(bye.text).not.toContain("{");
-      expect(FINISH_LINES[track.id]).toBeDefined();
+      expect([...(track.coach?.finish ?? []), ...coach.finish]).toContain(
+        bye.text,
+      );
     }
   });
 
@@ -233,35 +228,23 @@ describe("TillyScript", () => {
   });
 });
 
-describe("nudgeFor", () => {
-  const base = {
-    level: 0 as const,
-    wrong: 0,
-    wrongMode: false,
-    noWindow: false,
-    altBlocked: false,
-  };
-  test("nothing while the reader is moving", () => {
-    expect(nudgeFor(base)).toBeNull();
-  });
-  test("the hint ladder", () => {
-    expect(nudgeFor({ ...base, level: 1 })).toBe("idle");
-    expect(nudgeFor({ ...base, level: 1, wrong: 2 })).toBe("wrongKeys");
-    expect(nudgeFor({ ...base, level: 2 })).toBe("showMe");
-  });
-  test("the specific notes win", () => {
-    expect(
-      nudgeFor({ ...base, level: 2, wrongMode: true, needs: "window" }),
-    ).toBe("wrongModeWindow");
-    expect(nudgeFor({ ...base, wrongMode: true, needs: "terminal" })).toBe(
+describe("isNudge", () => {
+  test("every nudge the engine names has lines", () => {
+    for (const n of [
+      "idle",
+      "wrongKeys",
+      "wrongModeWindow",
       "wrongModeTerminal",
-    );
-    expect(nudgeFor({ ...base, level: 2, altBlocked: true })).toBe(
+      "showMe",
       "altBlocked",
-    );
-    expect(nudgeFor({ ...base, altBlocked: true, noWindow: true })).toBe(
       "noWindow",
-    );
+    ]) {
+      expect(isNudge(n)).toBe(true);
+      expect(NUDGE_LINES[n as keyof typeof NUDGE_LINES].length).toBeGreaterThan(
+        0,
+      );
+    }
+    expect(isNudge("")).toBe(false);
   });
 });
 
@@ -271,8 +254,12 @@ const DASHES = /[\u2013\u2014]/;
 describe("the lines", () => {
   const all = [
     ...Object.values(REACTION_LINES).flat(),
-    ...Object.values(GREET_LINES).flat(),
-    ...Object.values(FINISH_LINES).flat(),
+    ...coach.greet,
+    ...coach.finish,
+    ...tracks.flatMap((t) => [
+      ...(t.coach?.greet ?? []),
+      ...(t.coach?.finish ?? []),
+    ]),
     ...Object.values(NUDGE_LINES).flat(),
     ...HINTED_LEAD,
     ...POKE_LINES,
@@ -291,8 +278,7 @@ describe("the lines", () => {
   });
 
   test("every track has a greeting", () => {
-    for (const t of tracks)
-      expect(GREET_LINES[t.id]?.length).toBeGreaterThan(0);
+    for (const t of tracks) expect(t.coach?.greet?.length).toBeGreaterThan(0);
   });
 });
 

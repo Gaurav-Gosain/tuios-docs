@@ -1,6 +1,6 @@
 /**
- * Types for the /learn page: what the tuios wasm build reports, and the shape
- * of a track.
+ * Types for the /learn page: what the tuios wasm build reports. The tracks'
+ * types are in lessons.ts.
  */
 
 /** The overlays tuios reports in `overlays` and the overlay events. */
@@ -187,6 +187,13 @@ export type TuiosApi = {
   unavailable(): Record<string, string>;
   /** The command names `command` accepts. */
   commands(): string[];
+  /** Every lesson as a JSON string, the same bytes as lib/learn/lessons.json. */
+  lessons(): string;
+  /**
+   * Run a lesson command: start, showMe, skip, next, back, stop or log.
+   * Returns null, or an error message.
+   */
+  lesson(cmd: string, ...args: string[]): string | null;
   /**
    * Ends the program, so its memory can be freed. An engine built before it
    * existed does not have it.
@@ -208,82 +215,51 @@ export type SetupCommand =
   /** Raw input, as if typed. */
   | { input: string; wait?: number };
 
-/** Memory the engine keeps across the events of one step. */
-export type MatchContext = {
-  /**
-   * The last registry action tuios ran since the last key, from a key, a
-   * prefix chord or a menu row. "" if the last key ran none.
-   */
-  lastAction: string;
-  /** The state after the last state event. */
-  state: TuiosState | null;
-  /** Per-step scratch space for matchers that count. */
-  mem: Record<string, number>;
-};
-
-/** Decides whether an event completes the step. */
-export type Matcher = (event: TuiosEvent, ctx: MatchContext) => boolean;
+/** A step's result. */
+export type StepResult = "clean" | "hinted" | "skipped";
 
 /**
- * A feature a browser tab cannot run, such as detaching or a second machine.
- * The step shows a short animation and a docs link, and completes when the
- * reader says they got it.
+ * The data of the lesson events the engine in tuios sends. See "Lessons" in
+ * cmd/tuios-wasm/README.md in the tuios repo.
  */
-export type Explainer = {
-  art:
-    | "detach"
-    | "clients"
-    | "remote"
-    | "agents"
-    | "mail"
-    | "fanout"
-    | "worktree"
-    | "protocol"
-    | "hooks";
-  body: string;
-  href: string;
-  linkText: string;
-};
-
-export type Step = {
+export type LessonStepData = {
+  track: string;
+  index: number;
+  total: number;
   id: string;
-  /** Six words or fewer. */
   title: string;
-  /** An optional second line, such as "tmux used %". */
   note?: string;
-  /** The keys to press, in order. */
   keys: KeyItem[];
-  /** The mode the keys work in, for the wrong-mode nudge. */
-  needs?: "window" | "terminal";
-  /** Run when the step starts, in order. */
-  setup?: SetupCommand[];
-  /** Completes the step. Not used by explainer steps. */
-  done?: Matcher;
-  /** Shown once the reader looks stuck. */
+  needs?: "window" | "terminal" | "";
   hint: string;
-  /** What "Show me" types. Defaults to the bytes of `keys`. */
-  showMe?: string;
-  explainer?: Explainer;
-  /** A short name for the keys, for the "keys learned" list. */
+  waiting?: string;
   learned?: string;
+  try?: string;
+  explainer?: {
+    art: string;
+    body: string;
+    href: string;
+    linkText: string;
+  } | null;
 };
 
-export type Track = {
+export type LessonHintData = {
+  index: number;
+  level: 0 | 1 | 2;
+  altBlocked: boolean;
+  noWindow: boolean;
+  nudge: string;
+  waiting: boolean;
+};
+
+export type LessonDoneData = {
+  index: number;
   id: string;
-  title: string;
-  /** One line on the track card. */
-  blurb: string;
-  /** Who it is for, shown as a small tag. */
-  audience: string;
-  minutes: number;
-  /** Run once when the lesson starts, before the first step. */
-  setup?: SetupCommand[];
-  steps: Step[];
-  /** Tracks to suggest when this one is done. */
-  next?: string[];
-  /** The group the hub lists the track under. */
-  group: TrackGroup;
+  result: StepResult;
+  results: StepResult[];
+  finished: boolean;
+  lastAction: string;
+  learned?: string;
+  explainer?: boolean;
+  event?: { type: string; data?: Record<string, unknown> } | null;
 };
-
-/** The hub's groups, in the order it shows them. */
-export type TrackGroup = "start" | "everyday" | "agents" | "build" | "yours";

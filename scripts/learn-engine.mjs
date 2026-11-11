@@ -1,6 +1,6 @@
 // Copies a tuios browser build into public/learn so the /learn page can run it.
 //
-//   bun scripts/learn-engine.mjs <build-dir>
+//   bun scripts/learn-engine.mjs <build-dir> [--check]
 //
 // <build-dir> is what tuios's cmd/tuios-wasm/build.sh writes: tuios.wasm.gz,
 // wasm_exec.js, webterm.js, webterm.css, xterm.css, fonts/ and manifest.json,
@@ -23,6 +23,7 @@
 // The files go under public/learn/engine/<hash>/, named by the hash of the
 // wasm, so they can be cached forever. public/learn/engine.json names that
 // folder and is the one file the page fetches first.
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   copyFile,
@@ -54,6 +55,42 @@ function font(face) {
   );
   if (!name) throw new Error(`the build has no ${face} font`);
   return name;
+}
+
+// The tracks are tuios's: lib/learn/lessons.json is the build's lessons.json,
+// committed so the hub and the metadata have them before the wasm loads. A
+// build whose lessons differ from the committed file means the pin moved
+// without them. Locally the script writes the new file to commit; with
+// --check (the deploy and the PR check) it fails instead.
+const check = process.argv.includes("--check");
+if (built.includes("lessons.json")) {
+  const fresh = await readFile(path.join(src, "lessons.json"));
+  const sum = createHash("sha256").update(fresh).digest("hex");
+  if (build.lessons && build.lessons !== sum) {
+    throw new Error("lessons.json does not match the build's manifest");
+  }
+  const target = path.resolve("lib/learn/lessons.json");
+  const have = await readFile(target, "utf8").catch(() => "null");
+  // The committed copy is formatted by biome, so compare what it says.
+  const same =
+    JSON.stringify(JSON.parse(fresh.toString("utf8"))) ===
+    JSON.stringify(JSON.parse(have));
+  if (!same) {
+    if (check) {
+      console.error(
+        "lib/learn/lessons.json differs from the lessons of the build at learn/TUIOS_REF. Run bun scripts/learn-engine.mjs <build-dir> and commit it.",
+      );
+      process.exit(1);
+    }
+    await writeFile(target, fresh);
+    spawnSync("bunx", ["biome", "format", "--write", target], {
+      stdio: "inherit",
+    });
+    console.log("wrote lib/learn/lessons.json from the build; commit it");
+  }
+} else {
+  console.error("the build has no lessons.json: learn/TUIOS_REF is too old");
+  process.exit(1);
 }
 
 const fonts = { regular: font("Regular"), bold: font("Bold") };

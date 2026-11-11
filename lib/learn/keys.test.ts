@@ -8,8 +8,8 @@ import {
   pressedNames,
   sameChord,
 } from "./keys";
+import { tracks } from "./lessons";
 import { optionBytes } from "./runtime";
-import { tracks } from "./tracks";
 
 // A key event the way Chrome on macOS sends Option and a key: key is what
 // Option types on a US layout, code is the physical key.

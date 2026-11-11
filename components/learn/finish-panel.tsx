@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InstallTabs } from "@/components/home/install-tabs";
-import { elapsed, formatTime, type LessonState } from "@/lib/learn/engine";
 import { chordParts, keyLabel } from "@/lib/learn/keys";
+import { elapsed, formatTime, type LessonView } from "@/lib/learn/lesson-state";
+import { findTrack, type Track } from "@/lib/learn/lessons";
 import { readProgress } from "@/lib/learn/progress";
 import {
   canvasBlob,
@@ -21,8 +22,6 @@ import {
   shareText,
 } from "@/lib/learn/share";
 import type { TillyScript } from "@/lib/learn/tilly";
-import { findTrack } from "@/lib/learn/tracks";
-import type { Track } from "@/lib/learn/types";
 import { TillyGuide } from "./tilly";
 
 /** Distinct chords the track taught, for the card. */
@@ -87,7 +86,7 @@ export function FinishPanel({
   script,
 }: {
   track: Track;
-  lesson: LessonState;
+  lesson: LessonView;
   /** Lets the reader poke Tilly on the panel too. */
   script?: TillyScript;
   onRestart: () => void;

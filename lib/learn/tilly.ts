@@ -4,8 +4,8 @@
  * be tested without a page. The component in components/learn/tilly.tsx only
  * draws what this returns.
  */
-import type { StepResult } from "./engine";
-import type { Step, Track, TuiosEvent } from "./types";
+import { coach, type Track } from "./lessons";
+import type { StepResult, TuiosEvent } from "./types";
 
 /**
  * How Tilly moves while a line is up. `idle` is the resting bob, `happy` a
@@ -164,295 +164,23 @@ export function reactionFor(
   }
 }
 
-/** What Tilly says after each kind of step. Keep them short and specific. */
-export const REACTION_LINES: Record<Reaction, readonly string[]> = {
-  open: [
-    "A fresh window, all yours.",
-    "New window. Every session starts like that.",
-    "There it is. A shell of your own.",
-  ],
-  split: [
-    "Nice split.",
-    "Clean split. Two panes, one screen.",
-    "Split. My face works the same way.",
-  ],
-  close: [
-    "Closed, and the rest made room.",
-    "Tidy. One less window to think about.",
-    "Gone. Nothing else moved.",
-  ],
-  focus: [
-    "Nice hop. Watch the bright border follow you.",
-    "Focus moved. You are over there now.",
-    "Smooth. No mouse needed.",
-  ],
-  zoom: [
-    "Zoom in, zoom out. Handy for a closer look.",
-    "Full screen and back again.",
-    "Zoom is the quickest way to focus on one thing.",
-  ],
-  minimize: ["Tucked away in the dock.", "Minimized, not closed."],
-  move: [
-    "Moved. The layout keeps up.",
-    "Everything shifted into place.",
-    "That window found a new spot.",
-  ],
-  swap: ["Swapped. Same panes, new seats.", "Nice swap."],
-  rotate: [
-    "Rotated. The split turned on its side.",
-    "A quarter turn for the layout.",
-  ],
-  resize: [
-    "Resized. The rest made room.",
-    "A little bigger here, a little smaller there.",
-  ],
-  float: ["Floating. It sits above the tiles now.", "That one floats free."],
-  rename: ["Named. Easier to find later."],
-  workspace: [
-    "Workspace {n}. A whole new desk.",
-    "Hello from workspace {n}.",
-    "Workspace {n}. Your other windows are safe where you left them.",
-  ],
-  send: [
-    "Sent to workspace {n}, and you followed it.",
-    "Packed up and moved to workspace {n}.",
-  ],
-  tiling: ["Tiles snapped into place.", "Tiling does the arranging for you."],
-  layout: [
-    "{layout}. Same windows, new shape.",
-    "Switched to {layout}.",
-    "{layout} suits you.",
-  ],
-  theme: ["New colours. Looks good.", "Nice pick.", "Fresh paint."],
-  look: ["Small change, different feel.", "Looking sharp.", "Very you."],
-  help: [
-    "Help is always one key away.",
-    "Now you know where the answers live.",
-  ],
-  palette: [
-    "The palette finds any action by name.",
-    "Type what you want, press enter. That is the palette.",
-  ],
-  launcher: [
-    "The launcher opens programs fast.",
-    "Launched. No typing paths needed.",
-  ],
-  copy: [
-    "Copy mode, like vim. Your hands already know it.",
-    "Found it. Search works in any pane.",
-  ],
-  scrollback: [
-    "Scrollback, with every command marked.",
-    "Your whole history, one key away.",
-  ],
-  settings: [
-    "Settings live here. Nothing to edit by hand.",
-    "That is where the knobs are.",
-  ],
-  sidebar: [
-    "The rail shows every session at a glance.",
-    "There is the rail. Everything in one list.",
-  ],
-  switcher: [
-    "Every workspace at once.",
-    "The switcher. Pick a desk, any desk.",
-  ],
-  screensaver: ["Nice screen saver. I like that one.", "Pretty, right?"],
-  typing: [
-    "Typing mode. Your keys go to the shell now.",
-    "Green badge. The shell is listening.",
-  ],
-  windowMode: [
-    "Back in window mode. Keys move windows again.",
-    "Window mode. Your keys drive tuios.",
-  ],
-  menu: [
-    "The menu shows what each key does.",
-    "That menu is there whenever you forget a key.",
-  ],
-  command: [
-    "The shell says hi back.",
-    "{command} ran in a real pane.",
-    "Nice. That ran just like on your machine.",
-  ],
-  tape: [
-    "The tape played itself. That was tuios driving.",
-    "All scripted. You just watched a tape.",
-  ],
-  agentWorking: [
-    "Your agent is working. You are free to wander.",
-    "The agent is on it.",
-  ],
-  agentDone: [
-    "The agent finished. You approved it from right here.",
-    "Done, and you never lost your place.",
-  ],
-  agent: ["The agent is moving along."],
-  showkeys: [
-    "Showkeys is on. Handy when you share your screen.",
-    "Now everyone watching can see your keys.",
-  ],
-  yank: ["Yanked. It is on your clipboard.", "Copied, vim style."],
-  explainer: [
-    "Good to know.",
-    "Worth trying once tuios is on your machine.",
-    "That one needs a real machine. Now you know where to look.",
-  ],
-  skipped: [
-    "Skipped. You can come back to it any time.",
-    "No problem. On to the next one.",
-  ],
-  generic: ["Nice.", "You got it.", "That is the one.", "Smooth."],
-};
+/**
+ * The lines come from the lessons in tuios (lessons.json, the `coach` of the
+ * document and of each track), so the page and `tuios tutor` say the same.
+ */
+export const REACTION_LINES = coach.reactions as Record<
+  Reaction,
+  readonly string[]
+>;
 
 /** Said before the reaction when the step needed the hint or Show me. */
-export const HINTED_LEAD: readonly string[] = [
-  "Got it.",
-  "There you go.",
-  "You worked it out.",
-];
-
-/** Tilly's hello at the start of each track. */
-export const GREET_LINES: Record<string, readonly string[]> = {
-  basics: [
-    "Hi, I am Tilly. We start from zero, one key at a time.",
-    "Hello. I live in a terminal too. Let us open your first window.",
-  ],
-  "from-tmux": [
-    "Coming from tmux? First we turn on your own keys.",
-    "Hi. ctrl+b leads here too, and the tmux preset does the rest.",
-  ],
-  "from-zellij": [
-    "Hi. One key turns on the zellij keys. Then panes, tabs and floats.",
-    "Coming from zellij? ctrl+g and lock mode are here too.",
-  ],
-  layouts: [
-    "Layouts are my favourite part. My face is one.",
-    "Hi. Let us move some tiles around.",
-  ],
-  workspaces: [
-    "Nine workspaces, all yours. Let us visit one.",
-    "Hi. Time to spread out a little.",
-  ],
-  "power-moves": [
-    "You know the basics. These keys save the most time.",
-    "Hi again. Palette, launcher and copy mode are next.",
-  ],
-  "pane-tricks": [
-    "A busy screen? These small tools keep it calm.",
-    "Hi. A scratch pane, a corner pane and the spotlight. Let us try them.",
-  ],
-  "your-keys": [
-    "Your keys, your rules. Let us try a few presets.",
-    "Hi. Keys from tmux, screen or zellij, one menu away.",
-  ],
-  "make-it-yours": [
-    "Let us make tuios look like yours. Colours first.",
-    "Hi. Themes, an editor, glyphs and borders. Pick what you like.",
-  ],
-  sessions: [
-    "Sessions keep your work when the terminal closes. Let us look around.",
-    "Hi. One rail for every session, every machine and your phone.",
-  ],
-  agents: [
-    "Agents live in panes here. I will show you how to keep an eye on them.",
-    "Hi. Let us start an agent and check on it from elsewhere.",
-  ],
-  cockpit: [
-    "Three agents are at work. Let us answer them all from one view.",
-    "Hi. One agent asks, one waits, one is done. You handle all three.",
-  ],
-  automation: [
-    "Tapes let tuios drive itself. Let us watch one play.",
-    "Hi. A little scripting, and then a party.",
-  ],
-  surfaces: [
-    "Forms, charts and diagrams, right in your panes. Let us draw some.",
-    "Hi. Today your shell asks you a question in a real form.",
-  ],
-  review: [
-    "Hi. Let us read a project and its change, like a reviewer.",
-    "Files on the left, the diff in the middle. Let us look.",
-  ],
-  ship: [
-    "Hi. From a new branch to a pull request, in a few steps.",
-    "Let us make a worktree and ship a small change.",
-  ],
-};
-
-const GREET_DEFAULT: readonly string[] = [
-  "Hi, I am Tilly. Let us learn this together.",
-  "Hello. {steps} short steps, and I will be right here.",
-];
-
-/** Tilly's cheer at the end of each track. */
-export const FINISH_LINES: Record<string, readonly string[]> = {
-  basics: [
-    "That is the basics. You can drive tuios now.",
-    "Windows, modes, the leader key and help. All yours.",
-  ],
-  "from-tmux": ["Done. Your tmux keys work here, and window mode is a bonus."],
-  "from-zellij": ["Done. Your zellij keys, locked and ready."],
-  layouts: ["You shaped every layout there is. My face approves."],
-  workspaces: ["Nine desks and you know your way around all of them."],
-  "power-moves": ["Those are the keys that stick. Well played."],
-  "pane-tricks": [
-    "Scratch, pin, numbers, hints and the spotlight. Your screen is tidy now.",
-  ],
-  "your-keys": ["Any preset, any action by name. The keys are yours now."],
-  "make-it-yours": [
-    "It looks like yours now. One line shares it with a friend.",
-  ],
-  sessions: ["Your work outlives the terminal now, on every machine you have."],
-  agents: ["Now you can run agents and still get your own work done."],
-  cockpit: ["You ran a whole team of agents from one view. Nice work."],
-  automation: ["You made tuios drive itself. That was fun to watch."],
-  surfaces: ["A form, a flowchart, a chart and a dashboard. Nice work."],
-  review: ["You walked the files and left a note. Good review."],
-  ship: ["Branch, change, review, pull request. You shipped it."],
-};
-
-const FINISH_DEFAULT: readonly string[] = [
-  "Track done. Take a bow.",
-  "Every step, done. I am proud of you.",
-  "That is the whole track. Come back for another when you like.",
-];
+export const HINTED_LEAD: readonly string[] = coach.hintedLead;
 
 /** When the reader seems stuck. They point at the help on the card. */
-export const NUDGE_LINES: Record<Nudge, readonly string[]> = {
-  idle: [
-    "Take your time. The hint on the card has the next key.",
-    "No rush. The glowing key is the one to press.",
-    "Still with you. Click the terminal first if keys do nothing.",
-  ],
-  wrongKeys: [
-    "Close. Check the order of the keys on the card.",
-    "Not that one. The hint on the card will help.",
-  ],
-  wrongModeWindow: [
-    "You are typing into the shell. ctrl+b, then esc, gets you to window mode.",
-  ],
-  wrongModeTerminal: [
-    "You are in window mode. Press i to type into the shell.",
-  ],
-  showMe: [
-    "Want a demo? Show me does it slowly, then it is your turn.",
-    "Stuck is fine. Show me will play the keys for you.",
-  ],
-  altBlocked: [
-    "Your Option chords are not reaching tuios. Something outside the browser may be taking them. The note on the card explains.",
-  ],
-  noWindow: ["There is no window to work with. Press n for a new one."],
-};
+export const NUDGE_LINES = coach.nudges as Record<Nudge, readonly string[]>;
 
 /** When the reader clicks Tilly. */
-export const POKE_LINES: readonly string[] = [
-  "That tickles.",
-  "My eyes are two panes and my mouth is a prompt.",
-  "You are doing fine.",
-  "Show me is there any time you want a demo.",
-  "Three esc presses take you out of the terminal.",
-];
+export const POKE_LINES: readonly string[] = coach.poke;
 
 const LAYOUT_NAMES: Record<string, string> = {
   bsp: "BSP",
@@ -538,22 +266,23 @@ export class TillyScript {
   }
 
   greet(track: Track): Speech {
-    const pool = GREET_LINES[track.id] ?? GREET_DEFAULT;
+    const pool = track.coach?.greet?.length ? track.coach.greet : coach.greet;
     const text = fill(this.picker.pick(pool), { steps: track.steps.length });
     return { text, mood: "wave", sound: "blip" };
   }
 
   /** After a step, from the event that finished it. */
   react(opts: {
-    step: Step;
+    /** The step was an explainer, read and not played. */
+    explainer: boolean;
     event: TuiosEvent | null;
     lastAction?: string;
     result: StepResult;
   }): Speech {
-    const { step, event, result } = opts;
+    const { event, result } = opts;
     let reaction: Reaction;
     if (result === "skipped") reaction = "skipped";
-    else if (step.explainer) reaction = "explainer";
+    else if (opts.explainer) reaction = "explainer";
     else reaction = reactionFor(event, opts.lastAction);
     const values = slotsFor(event);
     let pool: readonly string[] = REACTION_LINES[reaction].filter((l) =>
@@ -579,10 +308,10 @@ export class TillyScript {
   }
 
   finish(track: Track, results: StepResult[]): Speech {
-    const own = FINISH_LINES[track.id] ?? [];
+    const own = track.coach?.finish ?? [];
     const clean = results.filter((r) => r === "clean").length;
     const values = { clean, total: results.length };
-    const pool = [...own, ...FINISH_DEFAULT].filter((l) => fits(l, values));
+    const pool = [...own, ...coach.finish].filter((l) => fits(l, values));
     return {
       text: fill(this.picker.pick(pool), values),
       mood: "cheer",
@@ -595,25 +324,7 @@ export class TillyScript {
   }
 }
 
-/**
- * Which nudge the lesson's current look calls for, most specific first, or
- * null. The inputs are what the step card already shows: the hint level from
- * hintLevel, the wrong mode note, the no window note and altChordBlocked.
- */
-export function nudgeFor(opts: {
-  level: 0 | 1 | 2;
-  wrong: number;
-  wrongMode: boolean;
-  needs?: "window" | "terminal";
-  noWindow: boolean;
-  altBlocked: boolean;
-}): Nudge | null {
-  if (opts.noWindow) return "noWindow";
-  if (opts.altBlocked) return "altBlocked";
-  if (opts.wrongMode) {
-    return opts.needs === "terminal" ? "wrongModeTerminal" : "wrongModeWindow";
-  }
-  if (opts.level >= 2) return "showMe";
-  if (opts.level >= 1) return opts.wrong > 0 ? "wrongKeys" : "idle";
-  return null;
+/** Whether a nudge name from the engine is one Tilly has lines for. */
+export function isNudge(name: string): name is Nudge {
+  return name in NUDGE_LINES;
 }

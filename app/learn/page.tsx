@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { JsonLd } from "@/components/json-ld";
 import { LearnApp } from "@/components/learn/learn-app";
-import { tracks } from "@/lib/learn/tracks";
+import { tracks } from "@/lib/learn/lessons";
 import { pageMetadata } from "@/lib/metadata";
 import { absoluteUrl, site } from "@/lib/site";
 

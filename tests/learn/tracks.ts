@@ -25,8 +25,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type Page } from "playwright-core";
 import { chordParts } from "../../lib/learn/keys";
-import { findTrack, tracks } from "../../lib/learn/tracks";
-import type { KeyItem, Step, Track } from "../../lib/learn/types";
+import {
+  findTrack,
+  type Step,
+  type Track,
+  tracks,
+} from "../../lib/learn/lessons";
+import type { KeyItem } from "../../lib/learn/types";
 
 const args = process.argv.slice(2);
 function option(name: string) {

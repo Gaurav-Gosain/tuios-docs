@@ -1,6 +1,6 @@
 import { absoluteUrl } from "@/lib/site";
 import { sequenceLabel } from "./keys";
-import { tracks } from "./tracks";
+import { tracks } from "./lessons";
 
 /**
  * The markdown twin of /learn: every track and its steps as text, for agents

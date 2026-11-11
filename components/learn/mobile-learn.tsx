@@ -2,8 +2,8 @@
 
 import { Check, Link2, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { tracks } from "@/lib/learn/lessons";
 import type { EngineManifest } from "@/lib/learn/runtime";
-import { tracks } from "@/lib/learn/tracks";
 import { absoluteUrl } from "@/lib/site";
 import { ShareCanvas } from "./finish-panel";
 import { InstallBlock } from "./hub";

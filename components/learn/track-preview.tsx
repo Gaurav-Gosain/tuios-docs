@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Step, Track } from "@/lib/learn/types";
+import type { Step, Track } from "@/lib/learn/lessons";
 import { KeySequence } from "./keycaps";
 import { ModeBadge } from "./mode-badge";
 
@@ -247,7 +247,7 @@ export function TrackPreview({ track }: { track: Track }) {
 
 function startFor(track: Track): Sim {
   // Tracks that open a window in their setup start with one.
-  return track.setup?.some((c) => "command" in c && c.command === "newWindow")
+  return track.setup?.some((c) => c.command === "newWindow")
     ? { ...START, panes: 1, typing: true }
     : START;
 }

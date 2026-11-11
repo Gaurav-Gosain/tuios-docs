@@ -7,7 +7,8 @@ import {
   WORDMARK_PATH,
   WORDMARK_WIDTH,
 } from "@/lib/brand-wordmark";
-import { formatTime, type StepResult } from "./engine";
+import { formatTime } from "./lesson-state";
+import type { StepResult } from "./types";
 
 export type ShareData = {
   trackTitle: string;

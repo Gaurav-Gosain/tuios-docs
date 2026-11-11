@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { Track } from "@/lib/learn/lessons";
+import { findTrack, tracks } from "@/lib/learn/lessons";
 import { pageKeysAllowed } from "@/lib/learn/page-keys";
 import { type Progress, readProgress, resumeStep } from "@/lib/learn/progress";
 import { loadEngine } from "@/lib/learn/runtime";
-import { findTrack, tracks } from "@/lib/learn/tracks";
-import type { Track } from "@/lib/learn/types";
 import { useSmallScreen } from "./hooks";
 import { Hub } from "./hub";
 import { KeyDebugPanel } from "./key-debug";

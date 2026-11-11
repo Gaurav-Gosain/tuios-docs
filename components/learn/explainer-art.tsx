@@ -1,7 +1,7 @@
 "use client";
 
 import { Laptop, Server } from "lucide-react";
-import type { Explainer } from "@/lib/learn/types";
+import type { Explainer } from "@/lib/learn/lessons";
 
 const PANE_COLORS = ["#bb9af7", "#7aa2f7", "#9ece6a"];
 

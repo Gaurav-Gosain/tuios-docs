@@ -11,28 +11,29 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandMark } from "@/components/brand";
+import { chordParts } from "@/lib/learn/keys";
 import {
-  advance,
-  altChordBlocked,
-  currentStep,
   elapsed,
-  feed,
   formatTime,
-  hintLevel,
-  isFinished,
-  type LessonState,
-  markHinted,
-  startLesson,
-} from "@/lib/learn/engine";
-import { chordParts, keyBytes } from "@/lib/learn/keys";
+  initialView,
+  type LessonView,
+  lessonReduce,
+} from "@/lib/learn/lesson-state";
+import type { Track } from "@/lib/learn/lessons";
 import { markFinished, markStep } from "@/lib/learn/progress";
-import { runSetup, sleep, type TuiosInstance } from "@/lib/learn/runtime";
+import type { TuiosInstance } from "@/lib/learn/runtime";
 import { playSound } from "@/lib/learn/sound";
-import { nudgeFor, TillyScript } from "@/lib/learn/tilly";
+import { isNudge, TillyScript } from "@/lib/learn/tilly";
 import { hush, say } from "@/lib/learn/tilly-store";
-import type { Step, Track, TuiosEvent, TuiosState } from "@/lib/learn/types";
+import type {
+  LessonDoneData,
+  LessonStepData,
+  StepResult,
+  TuiosEvent,
+  TuiosState,
+} from "@/lib/learn/types";
 import { ExplainerArt } from "./explainer-art";
 import { FinishPanel } from "./finish-panel";
 import { useModalOverlay, useReducedMotion, useTicker } from "./hooks";
@@ -47,18 +48,14 @@ const SHELF_ROWS = 5;
 /** The least time the card shows a finished step, with its tick. */
 const DONE_MS = 700;
 
-/**
- * Events this soon after a step starts belong to the step before it, unless
- * the reader presses a key first: a key starts a new update, so it and what
- * follows it are the reader's.
- */
-const SETTLE_MS = 150;
-
-type Phase = "booting" | "running" | "finished";
+/** How long the finished lesson plays before the finish panel opens. */
+const FINISH_MS = 1700;
 
 /**
  * One track, full screen: the live terminal, the step card beside it, and the
- * finish panel at the end.
+ * finish panel at the end. The lesson engine runs in tuios: this page starts
+ * it with tuios.lesson("start"), draws the lesson.* events it sends, and
+ * passes on Show me, Skip and Got it. It keeps no step logic.
  */
 export function Lesson({
   track,
@@ -68,7 +65,7 @@ export function Lesson({
   onProgress,
   resumeFrom = 0,
 }: {
-  /** Steps already done on an earlier visit. The page plays them quickly. */
+  /** Steps already done on an earlier visit. The engine plays them quickly. */
   resumeFrom?: number;
   track: Track;
   onExit: () => void;
@@ -79,33 +76,28 @@ export function Lesson({
   const reduced = useReducedMotion();
   const held = useHeldKeys();
   const [sim, setSim] = useState<Set<string>>(() => new Set());
-  const [, rerender] = useReducer((n: number) => n + 1, 0);
   const [tstate, setTstate] = useState<TuiosState | null>(null);
-  const [phase, setPhase] = useState<Phase>("booting");
+  const [view, setView] = useState<LessonView>(initialView);
   // A step just completed. The card shows a tick; Tilly does the praising, and
   // when Tilly is hidden the card adds a plain "Done" so the reader still sees it.
   const [justDone, setJustDone] = useState(false);
-  // A finished step whose card stays up while the next step's setup runs,
-  // so the reader does not type into a scene that is about to change.
-  const [holding, setHolding] = useState<number | null>(null);
   const prefs = usePrefs();
   const [termFocused, setTermFocused] = useState(false);
   const [leftTerminal, setLeftTerminal] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [showPanel, setShowPanel] = useState(false);
   // Steps whose "alt chords not arriving" note the reader closed.
   const [altNoteClosed, setAltNoteClosed] = useState<Set<string>>(
     () => new Set(),
   );
 
-  const lessonRef = useRef<LessonState>(startLesson(track, Date.now()));
+  const viewRef = useRef<LessonView>(initialView);
   const tuiosRef = useRef<TuiosInstance | null>(null);
-  const phaseRef = useRef<Phase>("booting");
-  const settleUntil = useRef(0);
-  // True while a step's setup runs. Its keys are the page's, not the reader's.
-  const settingUp = useRef(false);
-  const busy = useRef(false);
-  const skipping = useRef(false);
   const alive = useRef(true);
+  // Events held back while a finished step's card shows its tick.
+  const holdUntil = useRef(0);
+  const held_ = useRef<TuiosEvent[]>([]);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -115,12 +107,18 @@ export function Lesson({
   // The nudges Tilly already gave, as "step:kind", so each comes once.
   const nudged = useRef(new Set<string>());
 
-  useTicker(phase === "running", 1000);
+  useTicker(view.phase === "running", 1000);
 
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+      try {
+        tuiosRef.current?.api.lesson("stop");
+      } catch {
+        // The program is gone already.
+      }
       hush();
     };
   }, []);
@@ -135,119 +133,135 @@ export function Lesson({
     focusTerminal();
   }, [focusTerminal]);
 
-  const startStep = useCallback(
-    async (index: number) => {
+  const lesson = useCallback((cmd: string, ...args: string[]) => {
+    const err = tuiosRef.current?.api.lesson(cmd, ...args);
+    if (err) console.warn(`tuios.lesson(${cmd}): ${err}`);
+  }, []);
+
+  /** What the page does beyond the card for one lesson event. */
+  const sideEffects = useCallback(
+    (event: TuiosEvent, before: LessonView) => {
       const t = tuiosRef.current;
-      const step = track.steps[index];
-      if (!t || !step || !alive.current) return;
-      // A quick reader can finish a step before it is started. Its setup
-      // would then run on top of the next step.
-      if (lessonRef.current.index !== index) return;
-      settleUntil.current = performance.now() + SETTLE_MS;
-      lessonRef.current = {
-        ...lessonRef.current,
-        stepStartedAt: Date.now(),
-        activeAt: Date.now(),
-      };
-      rerender();
-      if (step.explainer) {
-        setTimeout(
-          () =>
-            cardRef.current
-              ?.querySelector<HTMLElement>("[data-primary]")
-              ?.focus(),
-          50,
-        );
-      } else {
-        focusTerminal();
+      const d = event.data ?? {};
+      switch (event.type) {
+        case "lesson.start":
+          if (!Number(d.from ?? 0)) say(script.greet(track));
+          break;
+        case "lesson.step": {
+          const step = d as unknown as LessonStepData;
+          if (step.explainer) {
+            setTimeout(
+              () =>
+                cardRef.current
+                  ?.querySelector<HTMLElement>("[data-primary]")
+                  ?.focus(),
+              50,
+            );
+          } else {
+            focusTerminal();
+          }
+          break;
+        }
+        case "lesson.press": {
+          const chord = String(d.chord ?? "");
+          setSim(d.down ? new Set(chordParts(chord)) : new Set());
+          break;
+        }
+        case "lesson.hint": {
+          const nudge = String(d.nudge ?? "");
+          if (!nudge || !isNudge(nudge)) break;
+          const id = `${d.index}:${nudge}`;
+          if (nudged.current.has(id)) break;
+          nudged.current.add(id);
+          say(script.nudge(nudge));
+          break;
+        }
+        case "lesson.done": {
+          const done = d as unknown as LessonDoneData;
+          markStep(track.id, done.id);
+          onProgress();
+          const args: string[] = [];
+          if (done.finished) args.push("big");
+          if (reducedRef.current) args.push("still");
+          t?.api.command("celebrate", ...args);
+          if (done.finished) {
+            say(script.finish(track, done.results ?? []));
+          } else {
+            say(
+              script.react({
+                explainer: !!before.step?.explainer,
+                event: (done.event ?? null) as TuiosEvent | null,
+                lastAction: done.lastAction,
+                result: done.result,
+              }),
+            );
+          }
+          setJustDone(true);
+          setTimeout(() => alive.current && setJustDone(false), 900);
+          break;
+        }
+        case "lesson.finish":
+          markFinished(track.id, Number(d.seconds ?? 0));
+          onProgress();
+          setTimeout(() => alive.current && setShowPanel(true), FINISH_MS);
+          break;
       }
-      settingUp.current = true;
-      await runSetup(t, step.setup, () => !alive.current);
-      settingUp.current = false;
-      // A setup can take a moment. Its own events are not the reader's.
-      settleUntil.current = performance.now() + SETTLE_MS;
     },
-    [track, focusTerminal],
+    [track, script, onProgress, focusTerminal],
   );
 
-  const stepDone = useCallback(
-    (index: number, event: TuiosEvent | null = null, lastAction = "") => {
-      const t = tuiosRef.current;
-      const step = track.steps[index];
-      // The rest of this update's events, such as the focus change that
-      // follows a new window, belong to the step that just finished.
-      settleUntil.current = performance.now() + SETTLE_MS;
-      if (skipping.current) {
-        skipping.current = false;
-        const results = [...lessonRef.current.results];
-        results[index] = "skipped";
-        lessonRef.current = { ...lessonRef.current, results };
-      }
-      if (step) markStep(track.id, step.id);
-      onProgress();
-      const finished = isFinished(lessonRef.current);
-      const args: string[] = [];
-      if (finished) args.push("big");
-      if (reducedRef.current) args.push("still");
-      t?.api.command("celebrate", ...args);
-      const results = lessonRef.current.results;
-      if (finished) {
-        say(script.finish(track, results));
-      } else if (step) {
-        say(
-          script.react({
-            step,
-            event,
-            lastAction,
-            result: results[index] ?? "clean",
-          }),
-        );
-      }
-      setJustDone(true);
-      setTimeout(() => alive.current && setJustDone(false), 900);
-      rerender();
-      if (finished) {
-        markFinished(track.id, elapsed(lessonRef.current, Date.now()));
-        onProgress();
-        phaseRef.current = "finished";
-        setTimeout(() => alive.current && setPhase("finished"), 1700);
-      } else if (track.steps[index + 1]?.setup?.length) {
-        // The next step moves the scene, such as to another window. Run that
-        // now, and show its card only when it is done.
-        setHolding(index);
-        const shownAt = performance.now();
-        startStep(index + 1).then(async () => {
-          const rest = DONE_MS - (performance.now() - shownAt);
-          if (rest > 0) await sleep(rest);
-          if (alive.current) setHolding(null);
-        });
-      } else {
-        setTimeout(() => startStep(index + 1), DONE_MS);
+  const apply = useCallback(
+    (event: TuiosEvent) => {
+      const before = viewRef.current;
+      const next = lessonReduce(before, event);
+      viewRef.current = next;
+      if (next !== before) setView(next);
+      sideEffects(event, before);
+      if (event.type === "lesson.done") {
+        holdUntil.current = performance.now() + DONE_MS;
       }
     },
-    [track, onProgress, startStep, script],
+    [sideEffects],
   );
+
+  const flush = useCallback(() => {
+    flushTimer.current = null;
+    const rest = holdUntil.current - performance.now();
+    if (rest > 0) {
+      flushTimer.current = setTimeout(flush, rest);
+      return;
+    }
+    while (held_.current.length && alive.current) {
+      const e = held_.current.shift() as TuiosEvent;
+      apply(e);
+      if (holdUntil.current > performance.now()) {
+        flushTimer.current = setTimeout(flush, DONE_MS);
+        return;
+      }
+    }
+  }, [apply]);
 
   const onEvent = useCallback(
     (event: TuiosEvent) => {
       if (event.state) setTstate(event.state);
-      if (phaseRef.current !== "running") return;
-      if (event.type === "key" && !settingUp.current) settleUntil.current = 0;
-      if (performance.now() < settleUntil.current) return;
       if (event.type === "mode") {
         playSound(
           event.data?.to === "terminal" ? "tickTerminal" : "tickWindow",
         );
       }
-      const before = lessonRef.current.index;
-      // feed records the action on this context; advancing starts a new one.
-      const ctx = lessonRef.current.ctx;
-      const { state, completed } = feed(lessonRef.current, event, Date.now());
-      lessonRef.current = state;
-      if (completed) stepDone(before, event, ctx.lastAction);
-      else if (event.type === "key") rerender();
+      if (!event.type.startsWith("lesson.")) return;
+      // A finished step keeps its card, with the tick, a moment before the
+      // next step's card replaces it. Show me's key presses still light caps.
+      const waiting =
+        held_.current.length > 0 || holdUntil.current > performance.now();
+      if (waiting && event.type !== "lesson.press") {
+        held_.current.push(event);
+        if (!flushTimer.current) flushTimer.current = setTimeout(flush, 0);
+        return;
+      }
+      apply(event);
     },
-    [stepDone],
+    [apply, flush],
   );
 
   const onReady = useCallback(
@@ -260,129 +274,24 @@ export function Lesson({
         // Not ready to answer yet; the first event fills it in.
       }
       await new Promise<void>((resolve) => t.onFirstFrame(resolve));
-      await runSetup(t, track.setup, () => !alive.current);
       if (!alive.current) return;
-      lessonRef.current = startLesson(track, Date.now());
-      phaseRef.current = "running";
-      setPhase("running");
-      if (resumeFrom > 0) {
-        await catchUpRef.current(resumeFrom);
-        return;
-      }
-      startStep(0);
-      say(script.greet(track));
+      if (resumeFrom > 0) lesson("start", track.id, String(resumeFrom));
+      else lesson("start", track.id);
     },
-    [onEvent, startStep, track, script, resumeFrom],
+    [onEvent, track, resumeFrom, lesson],
   );
-
-  /** Type the step's keys for the reader, lighting each cap as it goes. */
-  const play = useCallback(
-    async (fast: boolean) => {
-      const t = tuiosRef.current;
-      const lesson = lessonRef.current;
-      const step = currentStep(lesson);
-      if (!t || !step || busy.current) return;
-      busy.current = true;
-      focusTerminal();
-      if (lacksWindow(step, t.api.state())) {
-        t.api.command("newWindow");
-        await sleep(fast ? 150 : 400);
-      }
-      const mode = t.api.state().mode;
-      if (step.needs && step.needs !== mode) {
-        t.api.command("mode", step.needs);
-        await sleep(fast ? 80 : 300);
-      }
-      const hold = fast ? 90 : 380;
-      const between = fast ? 60 : 260;
-      const typeDelay = fast ? 12 : 55;
-      // Once the step is done, the keys left over belong to no step.
-      const moved = () => lessonRef.current.index !== lesson.index;
-      if (step.showMe) {
-        for (const ch of step.showMe) {
-          if (moved()) break;
-          t.api.input(ch);
-          await sleep(typeDelay);
-        }
-      } else {
-        for (const item of step.keys.slice(lesson.pressed)) {
-          if (moved()) break;
-          if (typeof item === "string") {
-            setSim(new Set(chordParts(item)));
-            t.api.input(keyBytes(item));
-            await sleep(hold);
-            setSim(new Set());
-          } else {
-            for (const ch of item.text) {
-              t.api.input(ch);
-              await sleep(typeDelay);
-            }
-          }
-          await sleep(between);
-        }
-      }
-      busy.current = false;
-    },
-    [focusTerminal],
-  );
-
-  // Resume: play the steps done on an earlier visit at speed, so the scene
-  // on screen is the one the next step expects.
-  const [catching, setCatching] = useState<number | null>(null);
-  const catchUpRef = useRef<(n: number) => Promise<void>>(async () => {});
-  catchUpRef.current = async (n: number) => {
-    setCatching(n);
-    await startStep(0);
-    for (let i = 0; i < n && alive.current; i++) {
-      await sleep(250);
-      const step = track.steps[i];
-      if (!step) break;
-      if (!step.explainer) {
-        await play(true);
-        const until = performance.now() + 3000;
-        while (lessonRef.current.index === i && performance.now() < until) {
-          await sleep(50);
-        }
-      }
-      if (lessonRef.current.index === i) {
-        lessonRef.current = advance(lessonRef.current, "clean", Date.now());
-        stepDone(i);
-      }
-      await sleep(800);
-    }
-    setCatching(null);
-  };
 
   const showMe = () => {
-    lessonRef.current = markHinted(lessonRef.current);
-    rerender();
-    play(false);
+    focusTerminal();
+    lesson("showMe");
   };
 
   const skip = () => {
-    const index = lessonRef.current.index;
-    const step = currentStep(lessonRef.current);
-    if (!step) return;
-    if (step.explainer) {
-      gotIt("skipped");
-      return;
-    }
-    skipping.current = true;
-    play(true);
-    // If playing the keys did not finish it, move on anyway.
-    setTimeout(() => {
-      if (!alive.current || lessonRef.current.index !== index) return;
-      lessonRef.current = advance(lessonRef.current, "skipped", Date.now());
-      skipping.current = false;
-      stepDone(index);
-    }, 2500);
+    focusTerminal();
+    lesson("skip");
   };
 
-  const gotIt = (result: "clean" | "skipped" = "clean") => {
-    const index = lessonRef.current.index;
-    lessonRef.current = advance(lessonRef.current, result, Date.now());
-    stepDone(index);
-  };
+  const gotIt = () => lesson("next");
 
   // Esc three times inside a second leaves the terminal. Esc alone is a real
   // tuios key, so it cannot be the way out.
@@ -409,50 +318,29 @@ export function Lesson({
   // The page behind neither scrolls nor takes focus while the lesson is open.
   useModalOverlay(rootRef);
 
-  const lesson = lessonRef.current;
-  const holdingCard = holding !== null;
-  const shownIndex = holding ?? lesson.index;
-  const step = holdingCard
-    ? (track.steps[shownIndex] ?? null)
-    : currentStep(lesson);
-  const now = Date.now();
+  const phase = view.phase;
+  const step = view.step;
+  const holdingCard = view.done;
+  const shownIndex = view.index;
+  const hint = view.hint;
   const level =
     phase === "running" && step && !step.explainer && !holdingCard
-      ? hintLevel(lesson, now)
+      ? (hint?.level ?? 0)
       : 0;
   const altBlocked =
     phase === "running" &&
     !holdingCard &&
     !!step &&
     !altNoteClosed.has(step.id) &&
-    altChordBlocked(lesson, now);
-  const noWindow = !!step && lacksWindow(step, tstate);
-  const nudge =
-    phase === "running" && step && !step.explainer && !holdingCard
-      ? nudgeFor({
-          level,
-          wrong: lesson.wrong,
-          wrongMode: lesson.wrongMode,
-          needs: step.needs,
-          noWindow,
-          altBlocked,
-        })
-      : null;
+    !!hint?.altBlocked;
+  const noWindow = !holdingCard && !!hint?.noWindow;
+  const waitingLine = !holdingCard && hint?.waiting ? step?.waiting : "";
   const allHeld = new Set([...held, ...sim]);
-  const stepIndex = lesson.index;
-
-  // Tilly speaks up once per kind of trouble in a step, reusing what the
-  // card already works out: the hint ladder, the wrong mode, no window and
-  // the alt chord note.
-  useEffect(() => {
-    if (!nudge) return;
-    const id = `${stepIndex}:${nudge}`;
-    if (nudged.current.has(id)) return;
-    nudged.current.add(id);
-    say(script.nudge(nudge));
-  }, [nudge, stepIndex, script]);
-  const seconds = phase === "booting" ? 0 : elapsed(lesson, now);
-  const doneCount = lesson.results.length;
+  const catching = view.catchingUp;
+  const seconds = phase === "booting" ? 0 : elapsed(view, Date.now());
+  const doneCount = view.results.length;
+  const results: StepResult[] = view.results;
+  const total = view.total || track.steps.length;
 
   return (
     <div
@@ -460,7 +348,7 @@ export function Lesson({
       className="fixed inset-0 z-[60] flex flex-col bg-fd-background"
       // For tests/learn/tracks.mjs, which drives every track in a browser.
       data-learn-phase={phase}
-      data-learn-step={lesson.index}
+      data-learn-step={view.index}
       data-learn-holding={holdingCard ? "" : undefined}
     >
       <header className="flex h-14 shrink-0 items-center gap-4 border-fd-border border-b px-4 md:px-6">
@@ -483,8 +371,8 @@ export function Lesson({
           aria-label="Progress"
         >
           {track.steps.map((s, i) => {
-            const r = lesson.results[i];
-            const current = i === lesson.index && phase !== "finished";
+            const r = results[i];
+            const current = i === view.index && phase !== "finished";
             return (
               <li
                 key={s.id}
@@ -582,7 +470,7 @@ export function Lesson({
                 {phase === "booting"
                   ? "GETTING READY"
                   : step
-                    ? `STEP ${shownIndex + 1} / ${track.steps.length}`
+                    ? `STEP ${shownIndex + 1} / ${total}`
                     : "DONE"}
               </span>
               {justDone ? (
@@ -621,7 +509,7 @@ export function Lesson({
                       <button
                         type="button"
                         data-primary
-                        onClick={() => gotIt()}
+                        onClick={gotIt}
                         className="inline-flex items-center gap-2 rounded-lg bg-fd-primary px-4 py-2 font-medium font-mono text-fd-primary-foreground text-sm transition-opacity hover:opacity-90"
                       >
                         Got it
@@ -643,14 +531,12 @@ export function Lesson({
                       <KeySequence
                         items={step.keys}
                         size="xl"
-                        pressed={
-                          holdingCard ? step.keys.length : lesson.pressed
-                        }
+                        pressed={holdingCard ? step.keys.length : view.pressed}
                         held={allHeld}
                         pulseNext={level >= 1}
                       />
                     </div>
-                    {lacksWindow(step, tstate) ? (
+                    {noWindow ? (
                       <p className="learn-fade rounded-lg border border-[#e0af68]/40 bg-[#e0af68]/10 px-3 py-2 text-sm">
                         No window open. Press{" "}
                         <kbd className="lk" data-size="sm">
@@ -658,11 +544,15 @@ export function Lesson({
                         </kbd>{" "}
                         to open one.
                       </p>
-                    ) : lesson.wrongMode ? (
+                    ) : view.wrongMode ? (
                       <p className="learn-fade rounded-lg border border-[#e0af68]/40 bg-[#e0af68]/10 px-3 py-2 text-sm">
                         {step.needs === "window"
                           ? "You are typing into the shell. Press ctrl+b, then esc, to get to window mode."
                           : "You are in window mode. Press i to type into the shell."}
+                      </p>
+                    ) : waitingLine ? (
+                      <p className="learn-fade text-fd-muted-foreground text-sm leading-relaxed">
+                        {waitingLine}
                       </p>
                     ) : level >= 1 ? (
                       <p className="learn-fade text-fd-muted-foreground text-sm leading-relaxed">
@@ -731,7 +621,7 @@ export function Lesson({
                   {doneCount} steps in {formatTime(seconds)}. Keep playing as
                   long as you like.
                 </p>
-                {phase === "finished" && !panelOpen ? (
+                {phase === "finished" && showPanel && !panelOpen ? (
                   <button
                     type="button"
                     onClick={() => setPanelOpen(true)}
@@ -745,7 +635,7 @@ export function Lesson({
             )}
           </div>
 
-          <LearnedShelf track={track} lesson={lesson} />
+          <LearnedShelf track={track} done={doneCount} />
 
           <p className="hidden px-1 font-mono text-fd-muted-foreground text-xs lg:block">
             <kbd className="lk" data-size="sm">
@@ -767,10 +657,10 @@ export function Lesson({
         </aside>
       </div>
 
-      {phase === "finished" && panelOpen ? (
+      {phase === "finished" && showPanel && panelOpen ? (
         <FinishPanel
           track={track}
-          lesson={lesson}
+          lesson={view}
           script={script}
           onRestart={onRestart}
           onExit={onExit}
@@ -782,26 +672,9 @@ export function Lesson({
   );
 }
 
-/**
- * True when the step works on a window and there is none, such as after the
- * reader pressed x on the last one or typed exit. A step that opens one with n
- * is fine with none. A step with no mode set may be the one that moves to an
- * empty workspace, so it only counts when there is no window anywhere.
- */
-function lacksWindow(step: Step, state: TuiosState | null): boolean {
-  if (!state || step.explainer || step.keys.includes("n")) return false;
-  return step.needs ? state.windows === 0 : state.totalWindows === 0;
-}
-
-function LearnedShelf({
-  track,
-  lesson,
-}: {
-  track: Track;
-  lesson: LessonState;
-}) {
+function LearnedShelf({ track, done }: { track: Track; done: number }) {
   const learned = track.steps
-    .slice(0, lesson.results.length)
+    .slice(0, done)
     .filter((s) => s.learned && !s.explainer);
   if (learned.length === 0) return null;
   // The newest few, so the list stays short enough to keep the esc tip in view.
