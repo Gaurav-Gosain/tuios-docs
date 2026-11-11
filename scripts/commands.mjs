@@ -55,19 +55,34 @@ for (const line of readFileSync(page, "utf8").split("\n")) {
       .trim()
       .toLowerCase();
     current = m[2] ?? slug(text);
-    if (!anchors.has(text)) anchors.set(text, current);
+    // A heading may name several commands: "get-agent-state and set-agent-state".
+    for (const name of [text, ...text.split(/,\s*|\s+and\s+/)]) {
+      if (name && !anchors.has(name)) anchors.set(name, current);
+    }
     continue;
   }
   if (!current) continue;
-  for (const hit of line.matchAll(
-    /`tuios ([a-z][a-z0-9-]*(?: [a-z][a-z0-9-]*)*)/g,
-  )) {
-    if (!mentions.has(hit[1])) mentions.set(hit[1], current);
+  // An inline `tuios ...`, or a line of a code block that starts with tuios.
+  const hits = [
+    ...line.matchAll(/`tuios ([a-z][a-z0-9-]*(?: [a-z][a-z0-9-]*)*)/g),
+    ...line.matchAll(/^\s*tuios ([a-z][a-z0-9-]*(?: [a-z][a-z0-9-]*)*)/g),
+  ];
+  for (const hit of hits) {
+    // `tuios plugin-cell set` also names its parent, plugin-cell.
+    const words = hit[1].split(" ");
+    for (let n = words.length; n > 0; n--) {
+      const name = words.slice(0, n).join(" ");
+      if (!mentions.has(name)) mentions.set(name, current);
+    }
   }
 }
 
+// Commands whose page is not the CLI reference.
+const elsewhere = { status: "/docs/program-status#report-from-a-script" };
+
 function docFor(path) {
   const words = path.split(" ").slice(1);
+  if (elsewhere[words[0]]) return elsewhere[words[0]];
   for (const map of [anchors, mentions]) {
     for (let n = words.length; n > 0; n--) {
       const id = map.get(words.slice(0, n).join(" "));
