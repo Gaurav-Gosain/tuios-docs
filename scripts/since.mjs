@@ -275,7 +275,8 @@ function commandTree(bin) {
 
 // The verbs of --ref. Up to tuios d390b5abb (2026-11-06) conn_scope.go held a
 // table of every verb and its scope. Since then each registry entry names its
-// own scope: `"verb": {`, then `scope:` after any comment lines, in any file
+// own scope: `"verb": {`, then `scope:` after any comment lines and other
+// fields (since 5f4598072 a stream verb names `stream:` first), in any file
 // of internal/session. Both shapes are read, so an older ref still works.
 function refVerbs() {
   const verbs = new Set();
@@ -294,7 +295,7 @@ function refVerbs() {
     ":!*_test.go",
   );
   for (const m of entries.matchAll(
-    /^\s*"([a-z][a-z0-9-]+)": \{\n(?:\s*\/\/[^\n]*\n)*\s*scope:/gm,
+    /^\s*"([a-z][a-z0-9-]+)": \{\n(?:\s*(?:\/\/[^\n]*|[a-z]\w*:[^\n]*)\n){0,8}\s*scope:/gm,
   ))
     verbs.add(m[1]);
   return [...verbs];
