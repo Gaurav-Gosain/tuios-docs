@@ -2,6 +2,7 @@
 
 import { Check, Copy, Search, X } from "lucide-react";
 import { useDeferredValue, useId, useMemo, useState } from "react";
+import { BrandMark } from "@/components/brand";
 import { Since } from "@/components/mdx/since";
 import { cn } from "@/lib/cn";
 import data from "@/lib/options/options.json";
@@ -210,10 +211,17 @@ export function OptionExplorer() {
 
       <div className="max-h-[36rem] overflow-y-auto">
         {groups.length === 0 ? (
-          <p className="px-4 py-8 text-center text-fd-muted-foreground text-sm">
-            No option matches. Some tables, such as [keybindings], [hosts] and
-            [hooks], are set in the file: see the sections of this page.
-          </p>
+          <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+            <BrandMark size={40} />
+            <p className="text-fd-muted-foreground text-sm">
+              Tilly found no option for that. Some tables, such as
+              [keybindings], [hosts] and [hooks], are set in the file: see{" "}
+              <a className="underline" href="/docs/configuration">
+                Configuration
+              </a>
+              .
+            </p>
+          </div>
         ) : (
           groups.map(([name, list]) => (
             <section key={name} aria-labelledby={`opt-${name}`}>

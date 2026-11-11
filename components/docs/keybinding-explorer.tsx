@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { BrandMark } from "@/components/brand";
 import { cn } from "@/lib/cn";
 import data from "@/lib/keybindings/defaults.json";
 import {
@@ -414,10 +415,14 @@ export function KeybindingExplorer() {
 
       <div className="max-h-[32rem] overflow-y-auto">
         {sections.length === 0 ? (
-          <p className="px-4 py-8 text-center text-fd-muted-foreground text-sm">
-            No default binding matches. The action may be unbound: search the
-            palette for it, or bind it in the config.
-          </p>
+          <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+            <BrandMark size={40} />
+            <p className="text-fd-muted-foreground text-sm">
+              {onlyMine
+                ? "Your config sets no binding that matches."
+                : "Tilly found no default binding for that. The action may be unbound: search the palette for it, or bind it in the config."}
+            </p>
+          </div>
         ) : (
           sections.map(([section, list]) => (
             <section key={section} aria-labelledby={`kb-${section}`}>
