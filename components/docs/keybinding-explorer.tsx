@@ -1,9 +1,25 @@
 "use client";
 
 import { Search, X } from "lucide-react";
-import { useDeferredValue, useEffect, useId, useMemo, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "@/lib/cn";
 import data from "@/lib/keybindings/defaults.json";
+import {
+  overlay as layOver,
+  type Overlay,
+  rowKey,
+  shownKeys,
+} from "@/lib/keybindings/overlay";
+
+/** Where the pasted config stays, in this browser only. */
+const STORE = "tuios-kb-config";
 
 /**
  * Every default binding, filtered as you type. The data is tuios's own
@@ -143,13 +159,65 @@ function matches(b: Binding, terms: string[], platform: Platform) {
   return terms.every((t) => hay.includes(t));
 }
 
+/**
+ * The reader's own config, parsed and laid over the defaults. smol-toml loads
+ * only when the reader opens the panel.
+ */
+function useOverlay() {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<Overlay | null>(null);
+  const [error, setError] = useState("");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORE);
+      if (saved) setText(saved);
+    } catch {
+      // Storage is off: the panel still works, it just forgets.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    try {
+      if (text) localStorage.setItem(STORE, text);
+      else localStorage.removeItem(STORE);
+    } catch {
+      // As above.
+    }
+    if (!text.trim()) {
+      setResult(null);
+      setError("");
+      return;
+    }
+    timer.current = setTimeout(async () => {
+      try {
+        const { parse } = await import("smol-toml");
+        setResult(layOver(bindings, parse(text), data.leader));
+        setError("");
+      } catch (e) {
+        setResult(null);
+        setError(e instanceof Error ? e.message.split("\n")[0] : String(e));
+      }
+    }, 250);
+  }, [text]);
+
+  return { text, setText, result, error };
+}
+
 export function KeybindingExplorer() {
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState<string>("all");
   const [platform, setPlatform] = useState<Platform>("linux");
+  const [panel, setPanel] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(false);
+  const mine = useOverlay();
   const deferred = useDeferredValue(query);
   const inputId = useId();
   const countId = useId();
+  const configId = useId();
+  const o = mine.result;
 
   // Show the reader's own platform first. navigator is only read after
   // hydration, so the static HTML and the first client render agree.
@@ -164,13 +232,14 @@ export function KeybindingExplorer() {
     const out = new Map<string, Binding[]>();
     for (const b of bindings) {
       if (scopes && !scopes.includes(b.scope)) continue;
+      if (onlyMine && !o?.keys.has(rowKey(b.section, b.action))) continue;
       if (!matches(b, terms, platform)) continue;
       const list = out.get(b.section) ?? [];
       list.push(b);
       out.set(b.section, list);
     }
     return [...out];
-  }, [deferred, group, platform]);
+  }, [deferred, group, platform, onlyMine, o]);
 
   const shown = sections.reduce((n, [, list]) => n + list.length, 0);
 
@@ -254,7 +323,85 @@ export function KeybindingExplorer() {
               {g.label}
             </button>
           ))}
+          {o ? (
+            <button
+              type="button"
+              aria-pressed={onlyMine}
+              onClick={() => setOnlyMine(!onlyMine)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary",
+                onlyMine
+                  ? "border-fd-primary bg-fd-primary/15 text-fd-foreground"
+                  : "border-fd-border text-fd-muted-foreground hover:text-fd-foreground",
+              )}
+            >
+              Only my changes
+            </button>
+          ) : null}
+          <button
+            type="button"
+            aria-expanded={panel}
+            onClick={() => setPanel(!panel)}
+            className="ms-auto font-mono text-fd-primary text-xs underline decoration-fd-primary/40 underline-offset-4"
+          >
+            {panel ? "Hide my config" : "Compare with my config"}
+          </button>
         </fieldset>
+        {panel ? (
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor={configId}
+              className="text-fd-muted-foreground text-xs"
+            >
+              Paste your <code>config.toml</code>, or only its{" "}
+              <code>[keybindings]</code> tables. It stays in this browser.
+            </label>
+            <textarea
+              id={configId}
+              value={mine.text}
+              onChange={(e) => mine.setText(e.target.value)}
+              rows={6}
+              spellCheck={false}
+              placeholder={
+                '[keybindings]\nleader_key = "ctrl+a"\n\n[keybindings.copy_mode]\ncopy_mode_word_forward = ["alt+right"]'
+              }
+              className="w-full rounded-md border border-fd-border bg-fd-background p-2 font-mono text-fd-foreground text-xs placeholder:text-fd-muted-foreground focus:border-fd-primary focus:outline-none focus:ring-1 focus:ring-fd-primary"
+            />
+            {mine.error ? (
+              <p className="text-amber-700 text-xs dark:text-amber-400">
+                TUIOS would not read this: {mine.error}
+              </p>
+            ) : o ? (
+              <div className="flex flex-col gap-1 text-xs">
+                <p className="text-fd-foreground">
+                  Your config sets {o.changed} action
+                  {o.changed === 1 ? "" : "s"}
+                  {o.leader ? (
+                    <>
+                      , and the leader is{" "}
+                      <kbd className="keycap">{o.leader}</kbd>
+                    </>
+                  ) : null}
+                  .
+                </p>
+                {o.preset ? (
+                  <p className="text-fd-muted-foreground">
+                    The <code>{o.preset}</code> preset moves more defaults than
+                    this list shows.{" "}
+                    <code>tuios keybinds cheatsheet {o.preset}</code> lists
+                    them.
+                  </p>
+                ) : null}
+                {o.unknown.length ? (
+                  <p className="text-amber-700 dark:text-amber-400">
+                    TUIOS does not know {o.unknown.join(", ")}, and ignores it.
+                    For a table, <code>tuios config apply</code> warns too.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <p
@@ -286,45 +433,71 @@ export function KeybindingExplorer() {
                 </code>
               </div>
               <ul className="divide-y divide-fd-border/60">
-                {list.map((b) => (
-                  <li
-                    key={`${b.scope} ${b.action}`}
-                    className="grid gap-x-4 gap-y-1 px-4 py-2 sm:grid-cols-[minmax(9rem,auto)_1fr]"
-                  >
-                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      {keysFor(b, platform).map((key, i) => (
-                        <span
-                          key={key}
-                          className="inline-flex items-center gap-1"
-                        >
-                          {i > 0 ? (
-                            <span className="text-fd-muted-foreground text-xs">
-                              or
+                {list.map((b) => {
+                  const shown = shownKeys(
+                    b,
+                    keysFor(b, platform),
+                    o,
+                    data.leader,
+                  );
+                  return (
+                    <li
+                      key={`${b.scope} ${b.action}`}
+                      className="grid gap-x-4 gap-y-1 px-4 py-2 sm:grid-cols-[minmax(9rem,auto)_1fr]"
+                    >
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {shown.mine && shown.keys.length === 0 ? (
+                          <span className="font-mono text-fd-muted-foreground text-xs">
+                            unbound
+                          </span>
+                        ) : null}
+                        {shown.keys.map((key, i) => (
+                          <span
+                            key={key}
+                            className="inline-flex items-center gap-1"
+                          >
+                            {i > 0 ? (
+                              <span className="text-fd-muted-foreground text-xs">
+                                or
+                              </span>
+                            ) : null}
+                            {presses(key).map((p, j) => (
+                              <kbd
+                                // A chord can repeat a press, so the position is
+                                // part of the key.
+                                key={`${j}:${p}`}
+                                className="keycap"
+                              >
+                                {p}
+                              </kbd>
+                            ))}
+                          </span>
+                        ))}
+                        {shown.mine ? (
+                          <span className="rounded border border-fd-primary/50 px-1.5 font-mono text-[0.6875rem] text-fd-primary">
+                            yours
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="min-w-0 text-sm">
+                        <span className="text-fd-foreground">
+                          {b.description}
+                        </span>{" "}
+                        <code className="block break-words text-fd-muted-foreground text-xs sm:inline">
+                          {b.action}
+                        </code>
+                        {shown.mine ? (
+                          <span className="block font-mono text-fd-muted-foreground text-xs">
+                            default{" "}
+                            <span className="line-through">
+                              {keysFor(b, platform).join(", ") || "none"}
                             </span>
-                          ) : null}
-                          {presses(key).map((p, j) => (
-                            <kbd
-                              // A chord can repeat a press, so the position is
-                              // part of the key.
-                              key={`${j}:${p}`}
-                              className="keycap"
-                            >
-                              {p}
-                            </kbd>
-                          ))}
-                        </span>
-                      ))}
-                    </span>
-                    <span className="min-w-0 text-sm">
-                      <span className="text-fd-foreground">
-                        {b.description}
-                      </span>{" "}
-                      <code className="block break-words text-fd-muted-foreground text-xs sm:inline">
-                        {b.action}
-                      </code>
-                    </span>
-                  </li>
-                ))}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))
