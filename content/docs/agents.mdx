@@ -104,6 +104,18 @@ The installer adds its hook entries to the harness's own settings file, keeps ev
 
 Twelve integrations report the pane's state: Claude Code, Codex, Copilot, Cursor Agent, Gemini CLI, opencode, Kilo, Amp, Kimi Code CLI, Pi, oh-my-pi and Qwen Code. Seven more (Antigravity, Crush, Devin, Droid, Grok, Hermes and Qoder) report only the conversation id, so the pane can be [resumed after a restart](/docs/agent-inbox#resuming-after-a-restart), and leave the state to the screen rules. The Claude Code and Codex hooks also feed the rail what the agent is doing now and the Inbox its [activity log](/docs/agent-inbox#what-the-agent-has-been-doing). The Claude Code hooks also follow the subagents the agent runs, and the rail shows a row for each one. See [Subagents](#subagents). This needs version 3 of the Claude Code integration. `tuios integration status` shows an older install as out of date, and `tuios integration install claude-code` updates it. `tuios integration install claude-code --statusline` also feeds the model, context use and cost from Claude Code's status line. It never replaces a status line of your own: `--then` chains to it.
 
+### How an event reaches TUIOS [#how-an-event-reaches-tuios]
+
+A harness runs its hooks many times a turn, so a hook should cost little. TUIOS does not start a process of its own for each event where it can avoid it:
+
+- **Command hooks** (Claude Code, Codex, Gemini CLI and the others with hook commands). Where the machine has `nc -U` (macOS and OpenBSD netcat) or `socat`, `tuios integration install` writes a short line of sh instead of `tuios agent-hook`. The line sends the event to the daemon over the socket in `TUIOS_SOCKET`, and the daemon runs it as `tuios agent-hook` would. It falls back to `tuios agent-hook` when `TUIOS_SOCKET` is unset, the tool is gone, or the daemon is older and does not know the event verb. GNU netcat has no `-U`, so on a machine with only that, the hooks start `tuios agent-hook`. On Windows they always do.
+- **Plugins** (opencode, Kilo, Amp, Pi and oh-my-pi). They run inside the harness and send each event to the daemon over the socket. A plugin starts `tuios agent-hook` only when the socket cannot be reached or the daemon is older. Hermes reports once a session and still starts TUIOS.
+- **The status line.** With `--statusline`, the Claude Code status line goes the same way, then runs your own status line with the same input and ends with its output and exit status. The opencode and Kilo plugins send their model and cost the same way.
+
+The daemon finds the pane from the process that sent the event, never from what the event says. A hook that may hold an approval for the [Inbox](/docs/agent-inbox#approvals-the-inbox-holds) waits up to 330 seconds for the daemon. Any other waits 2 seconds.
+
+The tool is picked when you install. `tuios integration status` shows an install whose line differs from what this machine would get as out of date. Install again after you add or remove `nc` or `socat`.
+
 The opencode integration works with opencode V1 (1.18.29 or later) and V2. On V2, the plugin runs in the opencode terminal client, so it reports the state of the session that pane shows. Events from other sessions and subagents do not change the pane. A V2 server that several panes share does not report pane state. After you update TUIOS, run `tuios integration install opencode` again and restart opencode. Headless V2 clients, such as `opencode run`, do not load the plugin.
 
 You can also report by hand, or from a script of your own:
