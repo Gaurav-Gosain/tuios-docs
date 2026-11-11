@@ -39,6 +39,7 @@ const keep = [
   "accepted",
   "min",
   "max",
+  "unit",
   "auto",
   "deprecated",
   "description",

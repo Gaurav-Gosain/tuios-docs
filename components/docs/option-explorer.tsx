@@ -24,6 +24,8 @@ interface Option {
   accepted?: string[];
   min?: number;
   max?: number;
+  /** The unit tuios states for the value, such as ms, s, % or rows. */
+  unit?: string;
   auto?: boolean;
   deprecated?: string;
   description: string;
@@ -40,14 +42,20 @@ function values(o: Option): string {
   if (o.accepted?.length) return o.accepted.join(", ");
   if (o.type === "bool") return "true, false";
   if (o.min !== undefined && o.max !== undefined) {
-    return `${o.min} to ${o.max}${o.auto ? ", or auto" : ""}`;
+    return `${o.min} to ${o.max}${withUnit(o)}${o.auto ? ", or auto" : ""}`;
   }
   return "";
 }
 
+/** " ms", "%" or " rows": a percent sits on the number, as tuios shows it. */
+function withUnit(o: Option): string {
+  if (!o.unit) return "";
+  return o.unit === "%" ? "%" : ` ${o.unit}`;
+}
+
 function shownDefault(o: Option): string {
   if (o.default === "") return '""';
-  return o.default;
+  return /^-?\d+$/.test(o.default) ? `${o.default}${withUnit(o)}` : o.default;
 }
 
 function matches(o: Option, terms: string[]) {
