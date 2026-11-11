@@ -813,7 +813,9 @@ export function ExplodedHero() {
                     / {String(CAPTIONS.length).padStart(2, "0")}
                   </span>
                 </span>
-                <h3 className="xh-caption-title">{c.title}</h3>
+                {/* Not a heading: the captions come before the section's
+                    h2, and a heading there breaks the outline. */}
+                <p className="xh-caption-title">{c.title}</p>
                 <p className="xh-caption-body">{c.body}</p>
               </li>
             ))}
