@@ -1,0 +1,78 @@
+---
+title: Agents show their work on the board
+description: A task card can now carry the proof of the work on it, a screenshot, a log, a diff or the pull request, and the board shows it beside the card. Taking the pictures for the docs found two bugs in the preview before it shipped.
+date: '2026-11-11'
+author: Gaurav Gosain
+tags: [agents]
+---
+
+When an agent finishes a card on the [task board](/docs/task-boards), it
+moves the card to review and tells me so. Then I go and look. Which pane was
+it, what did the screen show when the tests passed, where is the pull request?
+The card said "done" and nothing else, so every review started with a hunt.
+
+Now the agent can put the proof on the card itself.
+
+```bash
+tuios task attach t3 --screenshot -w build --note 'the layout after the fix'
+tuios task attach t3 test-output.txt fix.diff
+tuios task attach t3 --link https://github.com/o/r/pull/12
+```
+
+On the board, <kbd>Space</kbd> on a card opens a preview beside the columns:
+the title, who holds it, the prompt, the attachments one row each, and the
+history. <kbd>[</kbd> and <kbd>]</kbd> step through the attachments, and the
+selected one opens under its row: a picture as a picture, a diff highlighted,
+Markdown drawn as Markdown, a Mermaid diagram drawn as text, and a pull
+request with its state and checks.
+
+<Shot
+  name="task-card-preview"
+  width={1836}
+  height={1110}
+  light
+  alt="The task board with the card preview open beside the columns. The card make the backoff jitter configurable shows its title, stage, holder, prompt and three attachments. The selected one, fix.diff, is open under its row with its note and the start of the diff."
+/>
+
+## What a card keeps
+
+The command reads each file, with the rights of whoever runs it, and sends the
+bytes. The daemon never opens a path that a caller names, so attaching a file
+cannot make the daemon read anything the caller could not read already. The daemon stores each file once, by its sha256, beside
+the saved sessions, and the card keeps a reference. The files come back with
+the card after a restart and a live upgrade, and go when no card names them.
+
+A pane may attach only to the card it holds, or to the card it just finished
+while that card waits in verify or review. Attachments are only shown. tuios
+never types one into a pane or hands it to another agent, so a file on a card
+is not a way to slip text into the next agent's prompt.
+
+The limits are in `[tasks]`: 8 MiB a file, 20 files a card, 256 MiB for the
+cards of one session. A refusal names the option to raise.
+
+## The docs found two bugs
+
+I took the pictures for the docs with the same rig as the rest of the site: a
+scripted tuios in a throwaway home, shot by tuios's own renderer. The first
+picture had no title. The preview showed the prompt and the attachments, and
+three blank rows where the title, the stage and the holder should be.
+
+It was not the renderer. Stepping from a picture to the next attachment
+scrolled the preview by the row numbers of the frame before, and that frame
+still held the picture's rows. So the step scrolled about sixteen lines too
+far, past the top. The fix asks the next frame to bring the row into view with
+its own lines, and a preview that starts past its title now says how many
+lines are above it.
+
+The second picture had a title, and a blank space where the latency graph
+should be. A picture was prepared only when its file came in, and at that
+moment no frame had drawn it, so nothing knew the width to draw it at. Nothing
+asked again later. Now a frame that needs a picture asks for it after the
+frame, the same way it asks for a card or a file it lacks.
+
+Both fixed before the feature shipped. That is the part I like about pictures
+in the docs coming from the real binary: a picture that looks wrong is a bug
+report.
+
+See [Attachments](/docs/task-boards#attachments) for every flag, and
+[The card preview](/docs/task-boards#the-card-preview) for the keys.
