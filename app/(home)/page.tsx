@@ -186,7 +186,8 @@ export default function HomePage() {
             href="/docs/worktrees"
           >
             Read an agent&apos;s diff and send it notes. Fan one prompt out to
-            several agents, each in its own worktree, and keep the best.
+            several agents and keep the best, or hand out work as cards on a
+            task board.
           </Feature>
           <Feature
             icon={<LayoutDashboard />}
@@ -209,8 +210,9 @@ export default function HomePage() {
             title="Other machines"
             href="/docs/remote-hosts"
           >
-            Add a host once with <code>tuios hosts add</code>, then attach to
-            its sessions in this client or run one pane on it.
+            <code>tuios hosts setup</code> links a machine in one command. Then
+            attach to its sessions, run one pane on it, or copy files with{" "}
+            <code>tuios cp</code>.
           </Feature>
           <Feature
             icon={<SlidersHorizontal />}
