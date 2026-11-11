@@ -35,6 +35,7 @@ export function Shot({
   caption,
   sizes = SHOT_SIZES.docs,
   href,
+  priority = false,
 }: {
   name: string;
   alt: string;
@@ -44,6 +45,11 @@ export function Shot({
   caption?: string;
   sizes?: string;
   href?: string;
+  /**
+   * The picture is the first thing a reader sees on the page, its largest
+   * paint: load it at once and ahead of the rest, not lazily.
+   */
+  priority?: boolean;
 }) {
   // A picture made outside scripts/docs-media.sh, such as a blog post's chart
   // or a page of the site, is 1600 wide with an 800 wide file beside it.
@@ -61,7 +67,8 @@ export function Shot({
       alt={alt}
       width={width}
       height={height}
-      loading="lazy"
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : undefined}
       decoding="async"
       className={cn("block h-auto w-full", className)}
     />
