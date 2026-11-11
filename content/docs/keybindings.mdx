@@ -915,7 +915,7 @@ To make the ordinary split and new-window keys do the same, set `appearance.new_
 
 ## Copy mode
 
-Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> to enter copy mode. It moves a cursor through the scrollback with vim keys. These keys are fixed and are not in the config, except <kbd>Home</kbd> and <kbd>End</kbd>. You can add keys that pipe a yank through a command. See [Pipe a yank through a command](#pipe-a-yank-through-a-command). Put a count before a motion to repeat it: `10j`, `5w`.
+Press <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>[</kbd> to enter copy mode. It moves a cursor through the scrollback with vim keys. The motions are bindings in the `copy_mode` section, so you can rebind them. See [Motions](#copy-mode-motions). The other keys in the table are fixed. You can add keys that pipe a yank through a command. See [Pipe a yank through a command](#pipe-a-yank-through-a-command). Put a count before a motion to repeat it: `10j`, `5w`.
 
 The copy cursor starts on the terminal cursor, which is usually the prompt line. tmux does the same. To start on the middle row, set `appearance.selection.copy_entry` to `center`.
 
@@ -951,6 +951,33 @@ When the focused pane is in the [multifocus](/docs/layout-modes#typing-into-seve
 The scrollback browser (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>s</kbd>) is a different tool. It lists past commands by their prompt marks, for shells that emit OSC 133.
 
 A yank in copy mode also adds a [paste buffer](/docs/paste-buffers). <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>]</kbd> pastes it again.
+
+### Motions [#copy-mode-motions]
+
+The cursor motions are bindings in the `copy_mode` section. In a <kbd>v</kbd>, <kbd>V</kbd> or <kbd>Ctrl</kbd>+<kbd>V</kbd> selection they move the end of the selection. A count typed before the key repeats a motion that steps, such as `3j`, in a selection too. `10G` goes to line 10.
+
+| Action | Default keys |
+| --- | --- |
+| `copy_mode_left`, `copy_mode_down`, `copy_mode_up`, `copy_mode_right` | <kbd>h</kbd> <kbd>Left</kbd>, <kbd>j</kbd> <kbd>Down</kbd>, <kbd>k</kbd> <kbd>Up</kbd>, <kbd>l</kbd> <kbd>Right</kbd> |
+| `copy_mode_word_end` | <kbd>e</kbd> |
+| `copy_mode_big_word_forward`, `copy_mode_big_word_backward`, `copy_mode_big_word_end` | <kbd>W</kbd>, <kbd>B</kbd>, <kbd>E</kbd> |
+| `copy_mode_half_page_up`, `copy_mode_half_page_down` | <kbd>Ctrl</kbd>+<kbd>U</kbd>, <kbd>Ctrl</kbd>+<kbd>D</kbd> |
+| `copy_mode_page_up`, `copy_mode_page_down` | <kbd>PgUp</kbd>, <kbd>Ctrl</kbd>+<kbd>F</kbd> <kbd>PgDn</kbd> |
+| `copy_mode_bottom` | <kbd>G</kbd> |
+| `copy_mode_screen_top`, `copy_mode_screen_middle`, `copy_mode_screen_bottom` | <kbd>H</kbd>, <kbd>M</kbd>, <kbd>L</kbd> |
+| `copy_mode_paragraph_up`, `copy_mode_paragraph_down` | <kbd>&#123;</kbd>, <kbd>&#125;</kbd> |
+| `copy_mode_matching_bracket` | <kbd>%</kbd> |
+| `copy_mode_repeat_char_search`, `copy_mode_repeat_char_search_back` | <kbd>;</kbd>, <kbd>,</kbd> |
+
+<kbd>0</kbd>, <kbd>^</kbd>, <kbd>$</kbd>, <kbd>w</kbd>, <kbd>b</kbd>, <kbd>Ctrl</kbd>+<kbd>B</kbd> and <kbd>g</kbd><kbd>g</kbd> are fixed keys. They do what `copy_mode_line_start`, `copy_mode_first_nonblank`, `copy_mode_line_end`, `copy_mode_word_forward`, `copy_mode_word_backward`, `copy_mode_page_up` and the top of the scrollback do, and you cannot rebind them. To move a motion to another key, or turn one off with an empty list:
+
+```toml
+[keybindings.copy_mode]
+copy_mode_screen_middle = []            # M does nothing
+copy_mode_half_page_down = ["ctrl+d", "alt+j"]
+```
+
+The keybinding list at the top of this page shows every copy mode action with its keys.
 
 ### Clear the scrollback <Since feature="clear-scrollback" /> [#clear-the-scrollback]
 
@@ -998,7 +1025,7 @@ clear_scrollback = ["K"]
 | `copy_mode_line_start` | <kbd>Home</kbd> |
 | `copy_mode_line_end` | <kbd>End</kbd> |
 
-The keys are in the `copy_mode` section. They work only in copy mode. In the search prompt, they do not move the cursor. <kbd>0</kbd> and <kbd>$</kbd> are fixed keys, and you cannot rebind them.
+The keys are in the `copy_mode` section. They work only in copy mode. In the search prompt, they do not move the cursor. <kbd>0</kbd> and <kbd>$</kbd> are fixed keys, and you cannot rebind them. The other motions are in [Motions](#copy-mode-motions).
 
 Do not bind a key here that copy mode already uses, such as <kbd>y</kbd> or <kbd>v</kbd>, or a key of a `[[keybindings.copy_pipe]]` entry. `tuios keybinds doctor` and the config check warn about such a key. A copy pipe key runs the pipe, and the binding does not run. A key that copy mode uses loses its copy mode action.
 
