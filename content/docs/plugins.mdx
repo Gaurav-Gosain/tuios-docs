@@ -206,11 +206,37 @@ Each tuios release carries its own plugins:
 
 | Name | What it does |
 | --- | --- |
+| `ovnfs` | Opens copy-on-write checkouts of a folder with [ovnfs](https://github.com/stencil-hq/ovnfs), and diffs and applies them back. See [ovnfs checkouts](#ovnfs-checkouts) |
 | `pr-status` | Shows the pull request and CI state of the focused pane's folder in the dock |
 | `sketch` | Draws every Mermaid diagram type in [`tuios mermaid`](/docs/cli-reference#mermaid) and in TML panels. tuios draws eight types itself |
 | `themes` | Adds the themes Dusk and Paper. See [Themes in a plugin](#themes-in-a-plugin) |
 
 `tuios plugins install pr-status` takes the plugin from the release of the tuios that runs. It needs no git and no build. tuios checks each file against the `checksums.txt` of the release, and `plugins.lock` pins the version and a hash of the files. On another machine, `tuios plugins install` gets the same files or nothing.
+
+#### ovnfs checkouts [#ovnfs-checkouts]
+
+An ovnfs checkout is a copy-on-write view of a folder. It opens in about a second at any size and copies nothing. Work in it, then apply the changes back. The plugin needs `ovnfs` 0.4.0 or newer and `jq` on your `PATH`. With an older ovnfs it says so and does nothing else, and `ovnfs update` brings ovnfs up to date.
+
+```bash
+go install github.com/stencil-hq/ovnfs@latest
+tuios plugins install ovnfs
+```
+
+In the command palette:
+
+| Entry | What it does |
+| --- | --- |
+| ovnfs: New checkout here | Opens a checkout of the focused pane's folder, and a pane with your shell in it |
+| ovnfs: Checkouts | Lists the checkouts with their changes and idle time. Choose one to diff, apply, apply to a branch, open a pane in it, attach it to a host or remove it. <kbd>p</kbd> prunes |
+| ovnfs: Diff | Shows what the checkout changed |
+| ovnfs: Apply | Shows a dry run, then merges the changes into the folder when you type `yes` |
+| ovnfs: Apply to a branch | Makes a branch in the folder's repository from the checkout's commits |
+| ovnfs: Attach to a host | Makes the checkout appear on another machine over ssh. It prints the line that opens a pane there, and the `ovnfs push` line that lets the checkout work there without this machine |
+
+- When a pane the plugin opened closes and its checkout has changes, the plugin says so, and the dock shows `ovnfs N to review`. It never applies by itself.
+- When TUIOS removes a worktree, the plugin removes the checkouts of that worktree. It takes a snapshot of a checkout with changes first, and keeps the snapshots, so `ovnfs new --from SNAP` opens the work again. Removing a checkout from the list keeps its snapshots too.
+- [`tuios ship`](/docs/ship) leaves the remotes of an ovnfs checkout out of where it pushes.
+- The plugin holds the `ui` grant. Its panes hold no grant. ovnfs runs with your rights: it is not a sandbox.
 
 `tuios plugins update` moves these plugins to the release of the tuios that runs. `tuios update` does that after it installs a new tuios. When a package manager updates tuios, run `tuios plugins update` after it. A tuios that you built yourself has no release. Install the plugin from its folder: `tuios plugins install Gaurav-Gosain/tuios/plugins/pr-status`.
 
