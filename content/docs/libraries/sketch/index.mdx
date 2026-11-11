@@ -33,7 +33,7 @@ The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/sketch).
 go get tuios.dev/sketch
 ```
 
-The module holds three packages: `tuios.dev/sketch`, `tuios.dev/sketch/raster` and `tuios.dev/sketch/text`.
+The module holds four packages: `tuios.dev/sketch`, `tuios.dev/sketch/raster`, `tuios.dev/sketch/text` and `tuios.dev/sketch/core`. `sketch/core` is the same API with the eight common diagram types (flowchart, sequence, state, class, er, gantt, pie and mindmap), about 2.7 MB smaller in a binary. Its `Detect` still knows every type, so a caller can tell a type it does not draw from text that is no diagram.
 
 ### The sketch command [#sketch-command]
 
@@ -99,7 +99,7 @@ The program prints this, with ANSI colours:
 
 ## Text drawings
 
-`sketch/text` draws every type that sketch draws. It takes the layout that sketch works out for the SVG, and maps it to cells at a scale where every label fits. The labels stay real text. Charts keep their shape in cells: a pie chart is a disc of half blocks, a radar chart and a Venn diagram are braille dots, and the charts are drawn with [plot](/docs/libraries/plot). [Diagram types](/docs/libraries/sketch/diagram-types) shows the text drawing of each type.
+`sketch/text` draws every type that sketch draws. The drawers of the types outside `sketch/core` are left out of a program unless it asks for them: call `text.Rare()` once, before the first drawing, as the `sketch` command does. It takes the layout that sketch works out for the SVG, and maps it to cells at a scale where every label fits. The labels stay real text. Charts keep their shape in cells: a pie chart is a disc of half blocks, a radar chart and a Venn diagram are braille dots, and the charts are drawn with [plot](/docs/libraries/plot). [Diagram types](/docs/libraries/sketch/diagram-types) shows the text drawing of each type.
 
 ### Width [#text-width]
 
@@ -224,6 +224,16 @@ Use a theme in one of two places:
 - `RenderOptions.Theme` writes the theme into the SVG. With `nil`, the SVG is pele's, byte for byte.
 
 For your own colours, fill a `sketch.Theme`. It has `Bg`, `Fg`, `Muted`, `Line`, `Surface`, `SurfaceAlt`, `Border`, `Accent`, `Critical`, eight `Series` colours, `Font`, `FontMono` and `Radius`. A `nil` colour keeps pele's fallback.
+
+A diagram can set its series colours with Mermaid's palette theme variables, as pele 1.13 does: `pie1` to `pie8`, `git0` to `git7`, `cScale0` to `cScale7` (timeline, radar, treemap and mindmap), `venn1` to `venn8`, and `xyChart.plotColorPalette`. They win over the theme in the SVG and in `sketch/raster`. A value must be a colour: a hex or named colour, or a colour function, and `var()` may read only `--pele-*`. A label on a palette colour takes the theme's light or dark text, whichever reads.
+
+```mermaid
+%%{init: {"themeVariables": {"pie1": "#7aa2f7", "pie2": "#bb9af7", "pie3": "#9ece6a"}}}%%
+pie title Time spent
+  "Reading" : 45
+  "Writing" : 35
+  "Testing" : 20
+```
 
 A diagram can set its own fill with `style` or `classDef`. Text in a theme colour on such a fill can be hard to read. Set `raster.Options.Readable` to fix this. When such text has a contrast under 4.5:1 (`raster.TextFloor`), it changes to the theme's text or background colour. If neither reads, it changes to near-black or white. pele does not do this.
 
