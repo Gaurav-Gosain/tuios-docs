@@ -61,6 +61,28 @@ Several sources can report on a pane. From most to least trusted:
 | `detect` | The daemon saw an agent CLI in the pane's foreground |
 | `stall` | The pane was `working` and then went quiet |
 
+```mermaid
+flowchart LR
+  subgraph pane["In the pane"]
+    hook["Harness hooks<br/>tuios agent-hook"]
+    osc7501["OSC 7501<br/>tuios status"]
+    osc["OSC 9;4, title"]
+    screen["The screen"]
+  end
+  transcript[("Transcript file")]
+  hook -->|report| daemon
+  osc7501 -->|program| daemon
+  transcript -->|transcript| daemon
+  osc -->|osc| daemon
+  screen -->|screen rules| daemon
+  daemon{{"Daemon<br/>one state per pane"}}
+  daemon --> title["Title glyph"]
+  daemon --> rail["Rail"]
+  daemon --> inbox["Inbox"]
+  daemon --> alerts["Alerts and hooks"]
+  daemon --> events["tuios subscribe"]
+```
+
 A source can overwrite a claim from its own rank or lower, never from a higher one. So a screen rule cannot overwrite what an agent said about itself. There is one exception: a screen rule that sees a permission prompt can mark a pane `needs_input` over a stale `working` claim, and the old claim comes back as soon as the prompt is gone.
 
 ### The agent reports for itself
