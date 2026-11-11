@@ -143,14 +143,26 @@ A report that breaks a limit is discarded. TUIOS applies nothing from it.
 
 ## TUIOS in a terminal that reads OSC 7501
 
-TUIOS is a program too. In a terminal that reads the protocol, TUIOS reports the agent states of its panes to that terminal. Each pane has one record, with the id `<session>/<pane>`. A client asks its terminal `OSC 7501 ; ?` at start, and reports only when the terminal answers. When a client detaches, it clears its records.
+TUIOS is a program too. In a terminal that reads the protocol, such as Rex, TUIOS reports the agent states of its panes to that terminal. A client asks its terminal `OSC 7501 ; ?` at start, and reports only when the terminal answers. When a client detaches, it clears its records.
 
-To turn this off:
+A terminal shows one record for each of its own panes, the most urgent one. So by default TUIOS reports the attached session as one record, which shows the whole session in the pane TUIOS runs in:
+
+- The record's id and title are the session's name, and its `app` is `tuios`.
+- Its state is the most urgent state of the session's panes: `blocked`, then `error`, `done`, `working` and `idle`.
+- Its message counts the panes in each state, the most urgent first, such as `1 needs input, 2 working, 1 idle`.
+- A blocked session has the `kind` of its blocked panes when they all wait for the same kind of answer.
+- A pane with no agent state, or in the `unknown` state, is not counted. A finished turn that you saw counts as `idle`. When no pane has a state, the record is cleared.
+
+For one record for each pane, with the id `<session>/<pane>`, at most 64 records, or to turn it off:
 
 ```toml
 [agents]
-host_program_status = "off"   # "auto" is the default
+host_program_status = "panes"   # "session" is the default; "off" never asks
 ```
+
+`auto`, the old name of the default, still reads as `session`. A client reads the value when it starts.
+
+`tuios pane-view` reports too: in a terminal that reads OSC 7501, it reports the pane it shows as one record, with the agent's harness as `app`, the pane's title and the agent's message. A state that only a harness hook reported reaches the terminal as well. The pane's own OSC 7501 is not passed through then, because the daemon reads it into the agent state. When the state is gone, or `pane-view` ends, it clears the record.
 
 <Callout type="info">
 TUIOS reads OSC 7501 itself on both terminal backends, the pure Go one and libghostty-vt.

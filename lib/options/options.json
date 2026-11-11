@@ -1,6 +1,15 @@
 {
-  "source": "tuios list-options --json at f3b696fce",
+  "source": "tuios list-options --json at 5755e1571",
   "options": [
+    {
+      "path": "agents.ask_wait_seconds",
+      "section": "agents",
+      "type": "int",
+      "default": "120",
+      "min": 0,
+      "max": 3600,
+      "description": "Seconds ask-human waits for your answer when the agent names no timeout. The question stays after the wait. 0 uses 120"
+    },
     {
       "path": "agents.enabled",
       "section": "agents",
@@ -30,6 +39,15 @@
       "min": 0,
       "max": 200,
       "description": "The most rows a multi-line editor grows to before it scrolls: a reply to an agent or to many, a mail draft and a new agent's task. 0 keeps each editor's own: 8 for a reply, 6 for mail, 3 for a task. An editor never takes more rows than its view has, and alt+m in it takes all of them."
+    },
+    {
+      "path": "agents.undo_window_seconds",
+      "section": "agents",
+      "type": "int",
+      "default": "10",
+      "min": 0,
+      "max": 300,
+      "description": "Seconds after a dismiss, a snooze or a queued reply that u takes it back. 0 uses 10"
     },
     {
       "path": "agents.view_list",
@@ -881,8 +899,22 @@
       "path": "daemon.agent_detect_seconds",
       "section": "daemon",
       "type": "int",
-      "default": "0",
+      "default": "2",
       "description": "Seconds between checks. 0 uses 2. A negative number turns checks off."
+    },
+    {
+      "path": "daemon.agent_stall_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "30",
+      "description": "Seconds of silence after which a working agent shows as unknown. 0 uses 30. A negative number turns it off."
+    },
+    {
+      "path": "daemon.cleanup_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "30",
+      "description": "Seconds between releases of the memory that pane output leaves behind. 0 uses 30."
     },
     {
       "path": "daemon.client_follows_upgrade",
@@ -890,6 +922,49 @@
       "type": "bool",
       "default": "true",
       "description": "After a live upgrade of the daemon to a newer build, a client on this machine runs the new build too, on the same terminal and session."
+    },
+    {
+      "path": "daemon.dispatch_ready_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "0",
+      "description": "Seconds a dispatched task waits for its agent to be ready, at most 600. 0 uses the start-agent wait."
+    },
+    {
+      "path": "daemon.exec_timeout_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "30",
+      "min": 0,
+      "max": 3600,
+      "description": "Seconds a command run with tuios exec may take when the caller names no timeout. 0 uses 30"
+    },
+    {
+      "path": "daemon.host_call_timeout_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "8",
+      "min": 0,
+      "max": 120,
+      "description": "Seconds one listing over a live link may take before the link is dialed again. 0 uses 8"
+    },
+    {
+      "path": "daemon.host_heartbeat_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "15",
+      "min": 0,
+      "max": 300,
+      "description": "Seconds a link to another machine may carry nothing before the daemon pings it. 0 uses 15"
+    },
+    {
+      "path": "daemon.host_heartbeat_timeout_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "5",
+      "min": 0,
+      "max": 60,
+      "description": "Seconds one ping to another machine waits for its reply. Two misses end the link. 0 uses 5"
     },
     {
       "path": "daemon.keep_awake",
@@ -933,12 +1008,51 @@
       "description": "Most history lines one pane saves. 0 uses 1000. A change applies when the daemon next starts."
     },
     {
+      "path": "daemon.pr_poll_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "60",
+      "description": "Seconds between checks of the pull requests the sidebar shows. 0 uses 60."
+    },
+    {
+      "path": "daemon.reconnect_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "15",
+      "min": 0,
+      "max": 300,
+      "description": "Seconds a client waits for a restarted daemon before it gives up. 0 uses 15"
+    },
+    {
       "path": "daemon.resume_agents",
       "section": "daemon",
       "type": "string",
       "default": "ask",
       "accepted": ["ask", "auto", "off"],
       "description": "After a daemon restart, ask to resume each pane's agent conversation, resume it, or do neither"
+    },
+    {
+      "path": "daemon.save_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "30",
+      "min": 10,
+      "max": 600,
+      "description": "Most seconds a session whose panes printed waits to be saved, which keeps each pane's folder current for a restore"
+    },
+    {
+      "path": "daemon.subagent_fade_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "60",
+      "description": "Seconds a finished subagent stays in the list. 0 uses 60."
+    },
+    {
+      "path": "daemon.transfer_keep_seconds",
+      "section": "daemon",
+      "type": "int",
+      "default": "1800",
+      "description": "Seconds a finished file transfer stays in the list. 0 uses 1800."
     },
     {
       "path": "daemon.window_size",
@@ -1101,6 +1215,24 @@
       "type": "string",
       "default": "",
       "description": "Go time layout the clock renders in (empty means 15:04); a layout without seconds refreshes once a minute"
+    },
+    {
+      "path": "files.drop_keep_hours",
+      "section": "files",
+      "type": "int",
+      "default": "24",
+      "min": 0,
+      "max": 8760,
+      "description": "Hours a file dropped into a pane of another machine stays in that machine's drop folder. 0 uses 24"
+    },
+    {
+      "path": "files.drop_keep_mb",
+      "section": "files",
+      "type": "int",
+      "default": "256",
+      "min": 0,
+      "max": 65536,
+      "description": "Most MiB the drop folder holds. A drop that does not fit is refused. 0 uses 256"
     },
     {
       "path": "files.open_copy_ask_mb",
@@ -2296,7 +2428,7 @@
       "path": "startup.daemon",
       "section": "startup",
       "type": "bool",
-      "default": "true",
+      "default": "false",
       "description": "Make a bare \"tuios\" attach to a daemon-backed session instead of running standalone. TUIOS_NO_DAEMON=1 or --standalone overrides it. False when the config file has no [startup] table."
     },
     {
@@ -2332,7 +2464,7 @@
       "path": "startup.tiled",
       "section": "startup",
       "type": "bool",
-      "default": "true",
+      "default": "false",
       "description": "Start a new session tiled instead of floating. False when the config file has no [startup] table."
     },
     {

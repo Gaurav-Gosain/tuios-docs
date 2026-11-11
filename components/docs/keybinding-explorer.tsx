@@ -396,7 +396,7 @@ export function KeybindingExplorer() {
                 {o.unknown.length ? (
                   <p className="text-amber-700 dark:text-amber-400">
                     TUIOS does not know {o.unknown.join(", ")}, and ignores it.
-                    For a table, <code>tuios config apply</code> warns too.
+                    <code>tuios config apply</code> warns too.
                   </p>
                 ) : null}
               </div>

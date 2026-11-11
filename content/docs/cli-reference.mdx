@@ -1234,6 +1234,17 @@ git log -1 --format=%H | tuios set-buffer
 
 These commands read the daemon's state and work with no client attached.
 
+### whoami [#whoami]
+
+Show where this command runs, as the daemon sees it now: the pane (its id, name and workspace), the session, the grants the pane holds, the focused pane and the workspace the session shows, the clients attached to the session, the daemon (version, pid, socket, and the name of a named daemon) and the host. Outside every pane it says so, and lists every attached client.
+
+```bash
+tuios whoami
+tuios whoami --json | jq -r '.session, .focused_window_id'
+```
+
+The daemon finds the caller's pane from the kernel's record of the process, not from its environment, so every id it prints exists now. The `TUIOS_*` variables a pane starts with never change: after `rename-session`, `TUIOS_SESSION` still holds the old name. `stale_env` in the JSON lists each of `TUIOS_PANE_ID`, `TUIOS_WINDOW_ID`, `TUIOS_SESSION` and `TUIOS_SOCKET` that is set and no longer matches, so a script can use the ids whoami printed instead. An empty `clients` list means nobody sees the session now.
+
 ### list-windows <Since command="list-windows" /> [#list-windows]
 
 List the windows in a session.
