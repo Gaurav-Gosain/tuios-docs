@@ -86,7 +86,7 @@ rig() {
   unshare --user --map-root-user --uts --mount bash -c '
     set -e
     mount --make-rprivate /
-    mount --bind "$HOME" "$4"
+    mount --rbind "$HOME" "$4"
     mount -t tmpfs -o mode=755 tmpfs /home
     mkdir -p "$HOME" /home/demo
     mount --move "$4" "$HOME"
