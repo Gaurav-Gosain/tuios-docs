@@ -1627,6 +1627,9 @@ Both keys are on the settings page, in the Behavior section. `tuios set-config r
 |-----|---------|--------------|
 | `stages` <Since config="tasks.stages" /> | every stage | The stages the board shows. The order stays `todo`, `plan`, `doing`, `verify`, `review`, `shipped`, `done` |
 | `auto_stage` <Since config="tasks.auto_stage" /> | `true` | `false` leaves every stage to you. tuios then moves no card on its own |
+| `attachment_max_mib` | `8` | The largest file, in MiB, that `tuios task attach` puts on a card. 1 to 8: the file travels in one request |
+| `attachments_per_card` | `20` | The most attachments one card holds. 1 to 200 |
+| `attachment_session_mib` | `256` | The most MiB the files on one session's cards take together |
 | `machine_cap` <Since config="tasks.machine_cap" /> | `0` | How many agents may work on this machine before Any machine starts a new one on another machine. Agents that work, agents that are starting, and picks from the last 90 seconds that have not started yet count. `0` is no cap. Each machine reads its own |
 
 ```toml
@@ -1634,7 +1637,11 @@ Both keys are on the settings page, in the Behavior section. `tuios set-config r
 stages = ["todo", "doing", "verify"]
 auto_stage = false
 machine_cap = 4
+attachment_max_mib = 4
+attachments_per_card = 10
 ```
+
+A file over a limit is refused with an error that names the option. See [Attachments](/docs/task-boards#attachments).
 
 The dispatch settings (mode, preset, caps, quiet hours, verify) are not in the config file. `tuios task dispatch` sets them, and the daemon saves them. See [Dispatch](/docs/task-boards#dispatch).
 
@@ -2048,6 +2055,18 @@ reply_rows = 0   # default: each editor's own height
 | `1` to `200` | Each grows to that many rows |
 
 An editor never takes more rows than its view has. On a short screen it stops at the view's edge and scrolls. <kbd>Alt</kbd>+<kbd>M</kbd> in an editor makes it as tall as its area, and again puts it back. The settings page has this option on the Behavior tab, as "Reply rows".
+
+### Card preview [#card-preview]
+
+<kbd>Space</kbd> on a card of the [task board](/docs/task-boards#the-card-preview) shows the card whole. `card_preview` says where:
+
+```toml
+[agents]
+card_preview = "auto"     # "side", "sheet", "auto" or "off"
+card_preview_width = ""   # the side panel: cells ("70") or a share ("40%"); empty is 40%
+```
+
+`side` puts it in a panel beside the columns, `sheet` over them, and `auto` beside them on a screen 140 columns or wider that keeps three columns, over them otherwise. `off` never shows it. The panel is 40% of the view by default, at least 44 and at most 96 cells. A drag on its edge sets the width, and the view keeps it. A double click on the edge gives the width back to `card_preview_width`.
 
 ### The other agent tables
 

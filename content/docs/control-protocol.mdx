@@ -270,6 +270,28 @@ Over a link, these verbs need `list`.
 
 The verbs that act as the person need the nonce a client receives when it attaches, or the nonce of [`attach-presence`](#attach-presence). They refuse a caller inside a pane even when it has a copy.
 
+### Task cards [#task-verbs]
+
+The verbs behind `tuios task` and the [task board](/docs/task-boards). A pane needs the `task` grant to change a card, and changes only the card it holds unless it holds `admin`.
+
+| Verb | Purpose |
+|------|---------|
+| `add-task` <Since verb="add-task" /> | Add a card to a session: a title, the prompt for the pane that takes it, and a stage. |
+| `list-tasks` | List a session's cards, oldest first. Each row has `attachment_count`. |
+| `get-task` | Read one card whole: its row, its prompt, its history and its `attachments`. |
+| `claim-task` | Take a card for a pane, by id, or with `next` the oldest card that is free and not blocked. A card in `todo` or `plan` moves to `doing`. |
+| `finish-task` | Mark a card done. Its holder lets it go. |
+| `set-task-stage` | Move a card to a stage by hand. |
+| `block-task` | Mark a card stuck with what it waits on, or lift the mark with `clear`. |
+| `release-task` | Let a card go without finishing it. |
+| `remove-task` | Remove a card and its history. A pane needs `admin`. |
+| `attach-task` | Put a file (`content` in base64, with `name`), several (`files`), a `link`, or a picture or the text of a pane the daemon takes (`screenshot` or `capture`, with `window`, `scrollback` and `lines`) on a card, with `note`. `replace` takes the place of an attachment with the same name. `host` passes it on to the machine that owns a project card. The daemon never reads a path. |
+| `detach-task` | Take an attachment off a card by `name`. Its file goes when no card names it. |
+| `get-task-attachment` | Read one attachment by `name`, with the file in `content` (base64). A `pr` link adds `pr` (number, state, title and checks) or `pr_error`, read through `gh` at most once a minute. |
+| `get-task-dispatch`, `set-task-dispatch` | Read and change how cards go to agents. See [Dispatch](/docs/task-boards#dispatch). |
+
+A pane attaches to the card it holds, and to the card it finished while that card waits in `verify` or `review`. A name already on the card with other content is `invalid_params` unless `replace` is set. With the same content it is left as it is and named in `unchanged`, so a retry succeeds. A state push never carries a card's attachments.
+
 ### Files and worktrees
 
 | Verb | Purpose |
@@ -600,6 +622,9 @@ Codes are stable, so it is safe to branch on them.
 | `plugin_needs_approval` | In a plugin's error (`tuios plugins list`, `tuios plugins info`): the plugin waits for the person's approval on this machine. |
 | `plugin_admin_not_approved` | In a plugin's error: the approval on this machine does not cover the plugin's `admin` grant, or the files its commands name changed. |
 | `plugin_id_shadowed` | In a plugin's error: another plugin with the same id was found first, so this copy does not run. |
+| `attachment_too_large` | The file is over `[tasks] attachment_max_mib`, or the session's card files would go over `attachment_session_mib`. Nothing was attached. |
+| `attachment_limit` | The card holds `[tasks] attachments_per_card` attachments. Nothing was attached. Detach one first. |
+| `no_attachment` | The card has no attachment by that name. Nothing changed. |
 | `internal` | An unexpected failure inside the daemon. |
 
 ## Examples

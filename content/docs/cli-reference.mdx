@@ -1942,6 +1942,12 @@ tuios task stage ID STAGE
 tuios task block ID REASON... | --clear
 tuios task release ID
 tuios task rm ID
+tuios task attach ID FILE... [--name N] [--note TEXT] [--replace]
+tuios task attach ID --link URL [--name N] [--note TEXT]
+tuios task attach ID --screenshot -w PANE | --capture -w PANE [--scrollback] [--lines N]
+tuios task attachments ID
+tuios task attachment get ID NAME -o FILE|-
+tuios task detach ID NAME
 tuios task dispatch [status | pause | resume | mode manual|pull|auto | preset | cap N | quiet SPAN|off | verify COMMAND|off] [--project URL]
 ```
 
@@ -1953,6 +1959,8 @@ tuios task dispatch [status | pause | resume | mode manual|pull|auto | preset | 
 - `--machine` (`add`): where the card's agent starts: `any`, or a linked machine's name. The default is this machine.
 - `--ask-first` (`add`): dispatch never gives the card to an agent. A person starts it.
 - `claim --next` takes the oldest open card. A card that a pane holds, a blocked card, a card added with `--ask-first`, and a card that a fan of another session works on are skipped. Claiming an `--ask-first` card by its id still works. With nothing to take, it fails with `no_task`. A card another pane holds fails with `task_held`.
+- `attach` puts files or a link on a card. Several files are one change and one history entry. `--name` sets the name the card shows (one file only; a pull request link is `PR #N`, another link its host and path). `--note` adds a line about it. `--replace` takes the place of the attachment with the same name; without it, a name in use with other content is refused, and the same file again changes nothing. `--link` takes an http or https address. `--screenshot` and `--capture` have the daemon take a PNG, or the text, of the pane `-w` names, as `screenshot NAME.png` or `capture NAME.txt`; from a pane they need the `read` grant. `--scrollback` takes the history above the screen too, at most `--lines` lines (`--capture` keeps 2000 by default).
+- `attachments` lists a card's files and links. `get` shows them under Attachments. `attachment get` saves one with `-o FILE`, or writes it to standard output with `-o -`. It never writes over a file. With `--json` on a pull request link, it adds the state, title and checks, read through your `gh` at most once a minute. `detach` takes one off. See [Attachments](/docs/task-boards#attachments) for the limits and who may attach.
 - From inside a pane, a change needs the `task` grant. A pane claims only for itself and changes only the card it holds, unless it holds `admin`. `rm` from a pane needs `admin`.
 
 `dispatch` <Since command="task dispatch" /> shows and changes how cards reach agents:

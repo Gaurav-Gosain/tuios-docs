@@ -15,7 +15,7 @@ You see the cards as a board in the agents view. Agents and scripts use `tuios t
 
 <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>+</kbd> <Since action="prefix_new_task" /> opens the capture sheet from any mode. The palette has it as "New task".
 
-1. Write the task. The first line is the card's title. The rest is its prompt. Paste an image with <kbd>Ctrl</kbd>+<kbd>V</kbd>, or paste its path: the image goes to the session's file store, and the prompt names its stored path.
+1. Write the task. The first line is the card's title. The rest is its prompt. Paste an image with <kbd>Ctrl</kbd>+<kbd>V</kbd>, or paste its path: the image is attached to the card, and the prompt names it.
 2. Pick the fields under the text with <kbd>Tab</kbd> and change one with the arrows:
    - **Project**: the repository of the focused pane's folder, by its origin URL. The card then shows on that repository's board in every session and on linked machines. `None, this session` keeps the card in the session.
    - **Stage**: Todo or Plan.
@@ -57,6 +57,7 @@ A card shows its title, then its holder's mark and name (or `Blocked` and why, o
 | <kbd>h</kbd> <kbd>l</kbd>, <kbd>←</kbd> <kbd>→</kbd> | Go to the column before or after |
 | <kbd>j</kbd> <kbd>k</kbd>, <kbd>↓</kbd> <kbd>↑</kbd> | Go to the card below or above |
 | <kbd>H</kbd> <kbd>L</kbd>, <kbd>Shift</kbd>+<kbd>←</kbd> <kbd>Shift</kbd>+<kbd>→</kbd> | Move the card to the stage before or after |
+| <kbd>Space</kbd> | Show the card whole: its prompt, attachments and history. See [The card preview](#the-card-preview) |
 | <kbd>Enter</kbd> | Go to the holder's pane. On a free card, open the New agent sheet on it |
 | <kbd>n</kbd> | Add a card to the column under the cursor |
 | <kbd>t</kbd> | Take the card for the pane behind the agents view |
@@ -231,6 +232,72 @@ When a switch lifts, each agent at rest that holds no card is offered the next o
 Dispatch never answers an approval and never gives a card to a pane that waits for you.
 </Callout>
 
+## The card preview [#the-card-preview]
+
+<kbd>Space</kbd> on a card shows the card whole, without leaving the board. The preview follows the cursor, and a click on another card shows that card. It shows:
+
+- the title, the stage and how long the card has been in it, its session and id;
+- who holds it, or that it is free, its block, and its lifecycle: verify, review, attempts and the last note;
+- the pull request of the session the card's work is in, with its state, checks and branch;
+- the prompt, drawn as Markdown;
+- the attachments, one row each: the name, then the kind, size, who put it there and when;
+- the history, newest first, and the end of a failed verify's output.
+
+On a screen 140 columns or wider that keeps three columns beside it, the preview is a panel on the right of the columns. Otherwise it is a sheet over them.
+
+| Keys | What they do |
+|---|---|
+| <kbd>Space</kbd>, <kbd>Esc</kbd> | Close the preview |
+| <kbd>J</kbd> <kbd>K</kbd>, <kbd>Ctrl</kbd>+<kbd>D</kbd> <kbd>Ctrl</kbd>+<kbd>U</kbd> | Scroll it by half its height |
+| <kbd>[</kbd> <kbd>]</kbd> | Select the attachment before or after, and open it under its row |
+| <kbd>o</kbd> | Show the selected picture whole, in the image view |
+| <kbd>Z</kbd> | Show the preview over the whole view, or beside the columns again |
+
+These are the agents view's own bindings (`inbox_peek`, `inbox_detail_down`, `inbox_tab_next`, `inbox_artifact`, `inbox_zoom`), so `[keybindings.inbox]` changes them. With the mouse, the wheel scrolls the preview, a click on an attachment selects it, a click on a picture opens it, and a drag on the panel's edge sets its width. A double click on the edge gives the width back to the config. A click outside the sheet closes the sheet.
+
+`[agents] card_preview` says where the preview goes: `auto` (the default), `side`, `sheet` or `off`. `card_preview_width` sets the panel's width. See [The agents table](/docs/configuration#card-preview).
+
+The selected attachment opens under its row, with its note:
+
+| Kind | The preview shows |
+|---|---|
+| `image` (PNG, JPEG, GIF, WebP) | The picture, with kitty graphics where the terminal has them and block characters where it does not. At 16 colours, its size in words |
+| `markdown` | The file drawn as Markdown |
+| `diff`, `text` | The file highlighted, the first 400 lines |
+| `mermaid` | The diagram drawn as text by the [`sketch` plugin](/docs/plugins#plugins-of-the-tuios-release), or its source when the plugin is not installed |
+| `pr` | The pull request's number, state, title and checks, read through your `gh` at most once a minute |
+| `link` | The address |
+| `file` | Its name and size. `tuios task attachment get` saves it |
+
+The card is read when the preview first shows it, and each file the first time you select it. Nothing runs on a timer. An attachment is only shown: TUIOS never types it into a pane or gives it to an agent.
+
+## Attachments [#attachments]
+
+Agents and scripts put files and links on a card with `tuios task attach`, so the work's proof sits beside the card: a screenshot, a log, a diff, a Markdown note, a Mermaid diagram, the pull request.
+
+```bash
+tuios task attach t3 after.png --note 'the layout after the fix'
+tuios task attach t3 build.log test-output.txt     # one change, one history entry
+tuios task attach t3 --screenshot -w build         # the daemon takes the picture
+tuios task attach t3 --capture -w build --scrollback --lines 300
+tuios task attach t3 --link https://github.com/o/r/pull/12   # named PR #12
+tuios task attachments t3
+tuios task attachment get t3 build.log -o build.log
+tuios task detach t3 build.log
+```
+
+- **Where the files are.** The command sends the file's bytes, and the daemon never opens a path a caller names. The daemon stores each file once, by its sha256, in its state folder, and the card keeps a reference. The files come back with the card after a restart and a live upgrade. A file goes when no card of a running or a saved session names it.
+- **Kinds.** The kind (`image`, `markdown`, `mermaid`, `diff`, `text`, `link`, `pr`, `file`) is read from the content, then the name. A GitHub pull request address is a `pr`.
+- **Names.** A name is unique on a card. The same file again under its name changes nothing, so a retry is safe. Another file under a name in use is refused unless you pass `--replace`. A pull request link is named `PR #N`, and another link its host and path, unless `--name` says otherwise.
+- **Limits.** `[tasks] attachment_max_mib` (8, also the most), `attachments_per_card` (20) and `attachment_session_mib` (256). A refusal names the option. See [The tasks table](/docs/configuration#the-tasks-table).
+- **Who may attach.** A pane attaches to the card it holds, and to the card it finished while that card waits in `verify` or `review`. `--screenshot` and `--capture` also need the `read` grant. A pane that holds `admin`, you, a shell outside every pane, a plugin and a linked machine attach to any card. `detach` follows the same rule.
+- **Another machine.** On a project card that another machine owns, the pane that holds it attaches with `-s HOST:SESSION`. Its daemon takes a screenshot or a capture there and passes the bytes on over the link, at most 3 MiB.
+- **The capture sheet.** An image pasted into <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>+</kbd> is attached to the new card, and the prompt names it as `NAME (attached)`.
+
+<Callout title="For an agent">
+`tuios task attach` is how an agent hands you proof of its work. A short line in its prompt is enough: "When you are done, attach a screenshot of the result to your card with `tuios task attach`."
+</Callout>
+
 ## Hear changes
 
 A conductor script follows the board with `tuios subscribe`:
@@ -240,6 +307,6 @@ tuios subscribe -s "$TUIOS_SESSION" \
   --types task-claimed,task-finished,task-changed
 ```
 
-Each event carries the card's row. `task-changed` says what happened in `action`: `added`, `staged`, `verified`, `blocked`, `unblocked`, `released` or `removed`. A selector reaches the pane behind a card: `task:t1` is the pane that holds t1, and `stage:verify` every pane that holds a card in verify.
+Each event carries the card's row. `task-changed` says what happened in `action`: `added`, `staged`, `verified`, `blocked`, `unblocked`, `released`, `attached`, `detached` or `removed`. An attach or a detach names the attachment in `reason`. A selector reaches the pane behind a card: `task:t1` is the pane that holds t1, and `stage:verify` every pane that holds a card in verify.
 
 See [CLI Reference](/docs/cli-reference#task) for every flag.
