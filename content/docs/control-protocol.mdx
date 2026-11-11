@@ -174,6 +174,7 @@ The daemon currently implements 115 verbs, some of them only for one daemon to c
 | `set-workspace-name` | Name a workspace. It keeps its number for addressing. |
 | `set-workspace-order` | Set the order workspaces are displayed in. |
 | `set-layout` | Turn tiling on or off, equalize splits, or rotate the focused split. Needs an attached client. |
+| `layout-template` <Since verb="layout-template" /> | Save the workspace a session shows as a layout template, load one back, list them, or delete one (`action`: `list`, `save`, `load`, `delete`). Templates are files of the daemon's machine, so every client reads one list. A load reuses the workspace's panes in order, opens the ones it lacks in their folder with their name and command, minimizes the ones it does not name, and gives a bsp layout its split tree back. Works with no client attached. |
 | `run-command` | Run a tape command, or any keybinding action by its name. Prefer a dedicated verb where one exists: they report what changed. |
 
 ### Input and output
@@ -255,8 +256,8 @@ Over a link, these verbs need `list`.
 | `queue-prompt` | Queue a message for a pane's agent, typed when it comes to rest. See [below](#queue-prompt). |
 | `reply-history` <Since verb="reply-history" /> | Read what the person sent to an agent, for the reply editor. Only the person can. |
 | `add-reply-history` <Since verb="add-reply-history" /> | Add a sent reply to that history. Only the person can. |
-| `list-queued` | List the messages waiting in a pane's queue. |
-| `cancel-queued` | Drop queued messages before they are typed. |
+| `list-queued` | List the messages waiting in a pane's queue. `host` reads a pane's queue on a linked machine. |
+| `cancel-queued` | Drop queued messages before they are typed. `host` drops them on a linked machine, where only the entries this machine queued go. |
 | `review-diff` | Read what the agent in a pane changed against its base. Each line has its colours and its changed words marked. |
 | `review-stage` <Since verb="review-stage" /> | Stage or unstage a change in a pane's worktree, by file, by hunk or by line. Only the index changes. Every answer has an `undo` object, and `action` `undo` takes it back. Acts as the person. |
 | `review-note` | Add, edit, remove, list or clear review notes on a pane's changes. |
@@ -518,9 +519,11 @@ Filter with `session`, `window` and `types`. Leave `types` out to receive everyt
 
 The acknowledgement carries `seq`, the last event number when the stream went live, and `boot_id`, a random id for this daemon start. Every event carries both. To resume after a disconnect, subscribe with `after_seq` and the `boot_id` it came with: the daemon replays the events it still holds after that seq, then carries on live. When it cannot replay everything you missed, a `gap` event comes first and names the reason (`evicted`, `boot_changed`, `not_retained` or `overflow`). Output events are never replayed. After a gap, read the current state again with `list-windows` or `list-agents`.
 
-The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `workspace-renamed`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `client-session-changed`, `host-changed`, `transcript`, `transfer`, `transfer-progress`, `layout-changed` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
+The event types are `window-created`, `window-closed`, `window-exit`, `window-retitled`, `window-focused`, `window-moved`, `window-minimized`, `window-restored`, `workspace-switched`, `workspace-renamed`, `agent-state`, `agent-message`, `agent-activity`, `attention`, `output`, `bell`, `notification`, `mode-changed`, `prompt`, `command-started`, `command-finished`, `session-created`, `session-closed`, `client-session-changed`, `host-changed`, `transcript`, `transfer`, `transfer-progress`, `layout-changed`, `tml-surface` and `gap`. With `hosts`, the stream also carries the agent-state and session events of every linked host.
 
-`transcript`, `transfer-progress` and `layout-changed` are opt-in: they arrive only when `types` names them. <Since feature="layout-changed" /> A `layout-changed` event names the `session` and the `workspace` whose panes opened, closed, moved, were minimized, zoomed or resized, or whose session changed size. It is not kept for replay. Call `list-windows` to read the new rectangles. <Since verb="agent-transcript" /> A `transcript` event says the conversation of a pane grew, with the `cursor` of `agent-transcript`. A `transfer` event has `action` `created`, `state` or `ended`, and the copy's row. `transfer-progress` carries the row while bytes move, at most four times a second.
+`transcript`, `transfer-progress`, `layout-changed` and `tml-surface` are opt-in: they arrive only when `types` names them. <Since feature="layout-changed" /> A `layout-changed` event names the `session` and the `workspace` whose panes opened, closed, moved, were minimized, zoomed or resized, or whose session changed size. It is not kept for replay. Call `list-windows` to read the new rectangles. <Since verb="agent-transcript" /> A `transcript` event says the conversation of a pane grew, with the `cursor` of `agent-transcript`. A `transfer` event has `action` `created`, `state` or `ended`, and the copy's row. `transfer-progress` carries the row while bytes move, at most four times a second.
+
+<Since feature="tml-surface-event" /> A `tml-surface` event is for a client that draws TML surfaces from verbs and has no attach. Each time a surface of the session opens, changes or closes, `tml_surface` carries its `surface`, `title`, `version`, `doc_version`, `closed`, and `ops`: the JSON Patch on the state that made `version` from `version` - 1, when a patch did and it is at most 64 KiB. A client that holds `version` - 1 applies `ops`. Any other client, or one that sees `doc_version` change, reads the surface with `tml-get`. It is not kept for replay.
 
 A `workspace-renamed` event fires when a workspace's name is set, changed or cleared. It carries `session`, `workspace` and `title`, the new name. `title` is absent when the name was cleared.
 

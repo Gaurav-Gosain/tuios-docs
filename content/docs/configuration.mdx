@@ -1198,6 +1198,7 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 | `single_client` <Since config="daemon.single_client" /> | `false` | Keep one client for each session. Each attach detaches the other clients of the session, as `tuios attach -d` does. See [One client for each session](/docs/sessions#one-client-for-each-session) |
 | `ssh_agent` <Since config="daemon.ssh_agent" /> | `"off"` | `"follow"` gives each session a stable link to the ssh agent of the client used last. New panes get `SSH_AUTH_SOCK` set to the link. See [SSH Agent](/docs/ssh-agent) |
 | `display` <Since config="daemon.display" /> | `"follow"` | `"follow"` gives the new panes of a daemon with no display the display of the local client. `"off"` gives them none. See [The display of the client](#the-display-of-the-client) |
+| `client_follows_upgrade` <Since config="daemon.client_follows_upgrade" /> | `true` | After a live upgrade to a newer build, a client on this machine runs the new build too, on the same terminal and session. `false` keeps the old client. See [Upgrade in place](/docs/daemon-restart#upgrade-in-place) |
 | `respond_from_shell` <Since config="daemon.respond_from_shell" /> | `false` | Let `tuios respond`, run from a shell outside every pane, answer an agent's prompt. A caller inside a pane is refused either way. Not settable with `set-config` |
 
 A change to `single_client`, `ssh_agent` or `display` in the file applies to the next attach.
@@ -1517,6 +1518,22 @@ integration = "off"   # default: "auto"
 ```
 
 The change applies to new panes. `tuios new-window --shell-integration off` chooses for one pane, and `tuios doctor shell` shows which panes send marks. A pane that runs `ssh`, or a window on another machine, gets no marks from TUIOS: add the lines `tuios doctor shell` prints to the rc file there.
+
+### Login shells <Since config="shell.login" /> [#login-shells]
+
+TUIOS starts the shell of a new pane as an interactive shell that is not a login shell. It reads `.zshrc` or `.bashrc`, but not `.zprofile`, `.bash_profile` or `.profile`. Most terminals on macOS start a login shell, so a `PATH` that you set in `.zprofile` can be missing in TUIOS. To start each new pane as a login shell:
+
+```toml
+[shell]
+login = true   # default: false
+```
+
+- **zsh** and **fish** start with `-l`. zsh then reads `.zprofile` and `.zlogin` too.
+- **bash** keeps the file TUIOS uses for the prompt marks, because a login bash reads no rc file. That file reads `/etc/profile` and then the first of `~/.bash_profile`, `~/.bash_login` and `~/.profile`, as a login bash does, in place of `~/.bashrc`. Most `~/.bash_profile` files read `~/.bashrc` themselves. With `integration = "off"`, bash starts with `-l`.
+- Other shells (`sh`, `dash`, `ksh`, `tcsh`) start with a `-` in front of their name, which every Unix shell reads as a login shell.
+- On Windows the option does nothing.
+
+The change applies to new panes. A pane that runs a command, such as `tuios new-window -- htop`, runs the command as it is.
 
 ## The scratch table
 
@@ -1860,6 +1877,22 @@ The value is a Go duration, such as `90s` or `20m`. A value that does not parse 
 ### Fold the Working group <Since config="agents.fold_working" /> [#fold-the-working-group]
 
 `fold_working = true` opens the agents view with the Working group folded. A folded group shows its heading, its count and the state mark of each agent. <kbd>F</kbd> folds or opens any group. tuios keeps that choice in `sidebar.json` in its state folder, and the choice wins over `fold_working`. The settings page has this option as "Fold Working".
+
+### Editor height <Since config="agents.reply_rows" /> [#editor-height]
+
+A reply to an agent, a reply to many, a mail draft and a new agent's task are written in an editor that grows as you type, then scrolls. `reply_rows` sets how many rows it grows to:
+
+```toml
+[agents]
+reply_rows = 0   # default: each editor's own height
+```
+
+| Value | What the editors do |
+|---|---|
+| `0` | Each keeps its own height: 8 rows for a reply, 6 for a mail draft, 3 for a new agent's task |
+| `1` to `200` | Each grows to that many rows |
+
+An editor never takes more rows than its view has. On a short screen it stops at the view's edge and scrolls. <kbd>Alt</kbd>+<kbd>M</kbd> in an editor makes it as tall as its area, and again puts it back. The settings page has this option on the Behavior tab, as "Reply rows".
 
 ### The other agent tables
 

@@ -222,6 +222,7 @@ Some of what lands in the Inbox is for later.
 - <kbd>z</kbd> snoozes the item, then <kbd>1</kbd> for 15 minutes, <kbd>2</kbd> for an hour, <kbd>3</kbd> until 9:00 tomorrow, or <kbd>4</kbd> until it changes. A snoozed item leaves the list and the counts, and comes back early when the pane reports something new.
 - <kbd>S</kbd> shows the snoozed items under a Snoozed heading. <kbd>z</kbd> on one wakes it now.
 - <kbd>d</kbd> dismisses. <kbd>u</kbd> undoes the last dismiss or snooze for 10 seconds.
+- A card that asks nothing, such as a finished turn in Ready for review, has a cross at the right of its head. A click on it dismisses the item, as <kbd>d</kbd> does. The agent's row stays, and its next turn brings a new card.
 - On the rail, <kbd>u</kbd> on an agent row marks its finished turn unread again, for every client, and <kbd>z</kbd> opens the Inbox on it to snooze.
 
 An approval the Inbox holds, a plan, and a question from `ask-human` cannot be snoozed, because an agent is waiting on them.
@@ -280,7 +281,7 @@ A tab with items shows the count, such as `Artifacts 3`. At 170 columns and wide
 | <kbd>o</kbd> <Since action="inbox_artifact" /> | Open what the agent showed you, such as a form, on its Artifacts tab, and use it. <kbd>Esc</kbd> goes back to the list |
 | <kbd>x</kbd>, <kbd>\*</kbd> | Mark the agent, or every agent shown, for a bulk answer. See [Many agents at once](#many-agents-at-once) |
 | <kbd>f</kbd> | Show only what needs you, then each kind of item, then every agent |
-| <kbd>s</kbd> | Group and sort: <kbd>1</kbd> groups by state, <kbd>2</kbd> by session, <kbd>3</kbd> by machine, <kbd>4</kbd> by project, and <kbd>s</kbd> again steps the order inside each group. Needs you stays on top in every grouping. A click on Group in the header opens the same choice |
+| <kbd>s</kbd> | Open the Group menu under the header: <kbd>1</kbd> groups by state, <kbd>2</kbd> by session, <kbd>3</kbd> by machine, <kbd>4</kbd> by project, and <kbd>s</kbd> steps the order inside each group. The arrows and <kbd>Enter</kbd> pick too, and <kbd>Esc</kbd> closes it. Needs you stays on top in every grouping. A click on Group opens the same menu. The header's Board and machine controls open menus of their own: Agents or Board, and All machines or one machine |
 | <kbd>\\</kbd> <Since action="inbox_view_list" /> | Show the agents as a column beside the focus, or as a strip of chips above it |
 | <kbd>&lt;</kbd>, <kbd>&gt;</kbd> <Since action="inbox_list_wider" /> | Make the list narrower or wider. A drag on its edge does the same |
 | <kbd>Z</kbd> <Since action="inbox_zoom" /> | Show the region that has the keys alone, or the whole view again |
@@ -474,7 +475,7 @@ On a pane that waits on a prompt, <kbd>r</kbd> opens nothing and says `api is wa
 
 ### The reply editor <Since feature="reply-composer" /> [#the-reply-editor]
 
-The reply editor keeps line breaks. It grows to 8 rows, then scrolls.
+The reply editor keeps line breaks. It grows to 8 rows, then scrolls. [`[agents] reply_rows`](/docs/configuration#editor-height) sets how tall it grows, and <kbd>Alt</kbd>+<kbd>M</kbd> makes it as tall as its area and back.
 
 <Shot
   name="composer"
@@ -487,19 +488,30 @@ The reply editor keeps line breaks. It grows to 8 rows, then scrolls.
 | Key | Does |
 |-----|------|
 | <kbd>Enter</kbd> | Queue the reply |
-| <kbd>Ctrl</kbd>+<kbd>J</kbd>, <kbd>Shift</kbd>+<kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd>, <kbd>\\</kbd> then <kbd>Enter</kbd> | Add a new line |
+| <kbd>Alt</kbd>+<kbd>Enter</kbd>, <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | While the agent works: send the reply now, typed into its pane, instead of queueing it. For one agent on this machine, with text only. See the note under this table |
+| <kbd>Ctrl</kbd>+<kbd>J</kbd>, <kbd>Shift</kbd>+<kbd>Enter</kbd>, <kbd>\\</kbd> then <kbd>Enter</kbd> | Add a new line |
+| <kbd>Alt</kbd>+<kbd>M</kbd> | Make the editor as tall as its area, and back |
 | <kbd>Alt</kbd>+<kbd>←</kbd> <kbd>→</kbd>, <kbd>Ctrl</kbd>+<kbd>←</kbd> <kbd>→</kbd> | Move by word |
 | <kbd>Home</kbd>, <kbd>End</kbd>, <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>E</kbd> | Go to the start or end of the line |
 | <kbd>Ctrl</kbd>+<kbd>W</kbd>, <kbd>Alt</kbd>+<kbd>Backspace</kbd> | Delete a word |
 | <kbd>Ctrl</kbd>+<kbd>U</kbd>, <kbd>Ctrl</kbd>+<kbd>K</kbd> | Delete to the start or end of the line |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Alt</kbd>+<kbd>Z</kbd> | Undo, redo |
-| <kbd>Ctrl</kbd>+<kbd>C</kbd> | Clear the draft |
+| <kbd>Shift</kbd> with the arrows, <kbd>Home</kbd>, <kbd>End</kbd> or a word jump | Select text |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>, <kbd>Cmd</kbd>+<kbd>A</kbd> | Select all. <kbd>Ctrl</kbd>+<kbd>A</kbd> stays the start of the line |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Cmd</kbd>+<kbd>C</kbd> | Copy the selection. With no selection, <kbd>Ctrl</kbd>+<kbd>C</kbd> clears the draft |
+| <kbd>Ctrl</kbd>+<kbd>X</kbd>, <kbd>Cmd</kbd>+<kbd>X</kbd> | Cut the selection |
 | <kbd>Ctrl</kbd>+<kbd>V</kbd> | Paste from the clipboard: its text, or its image when it holds an image and no text |
 | <kbd>↑</kbd>, <kbd>↓</kbd>, <kbd>Ctrl</kbd>+<kbd>R</kbd> | Bring back an earlier reply. See [History and your editor](#history-and-your-editor) |
 | <kbd>Ctrl</kbd>+<kbd>G</kbd> | Edit the draft in `$VISUAL` or `$EDITOR` |
 | <kbd>Esc</kbd> | Close the editor and keep the draft. <kbd>r</kbd> on the same pane opens it again |
 
 The reject reason, the answer to a prompt and the selector line use the same editing keys, on one line.
+
+**Send now on a Mac.** <kbd>Option</kbd>+<kbd>Enter</kbd> reaches TUIOS as <kbd>Alt</kbd>+<kbd>Enter</kbd> only from a terminal that uses Option as Alt (`macos-option-as-alt` in Ghostty, `macos_option_as_alt` in kitty, Esc+ in iTerm2, Use Option as Meta in Terminal.app). Otherwise it is a plain <kbd>Enter</kbd>, and <kbd>Ctrl</kbd>+<kbd>Enter</kbd> is the key to use, in a terminal that speaks the kitty keyboard protocol. The hint under the editor names the key your terminal can send.
+
+**The mouse** <Since feature="composer-mouse" />. A click places the cursor, two clicks select a word, three select a line, <kbd>Shift</kbd>+click extends the selection, and a drag selects. This works in every editor that takes your keys: the reply, the reject reason, the New agent sheet's task, the task capture sheet and a new message in the mailbox. A copy goes to the clipboard and to the [paste buffers](/docs/paste-buffers).
+
+**Your reply in the thread.** The thread shows your reply at its end from the moment you send it, with a line under it that says where it is: `Sending`, `Queued, typed when it rests` with `cancel`, `Sent, waiting for api` once it is typed, or `Not sent: <why>` with `retry`. The line goes when the agent's transcript logs the reply, so the reply never shows twice. A queued reply also shows when the view opens again, and in another client. For an agent on a linked machine, the thread shows that machine's queue, and `cancel` drops the reply there.
 
 **Paste blocks.** A paste of more than 800 characters or 3 lines shows as one block, such as `[Pasted text #1 · 42 lines]`. The cursor steps over a block in one move, and <kbd>Backspace</kbd> deletes all of it. When the cursor is right after a block, the block is selected and the footer shows its keys:
 
