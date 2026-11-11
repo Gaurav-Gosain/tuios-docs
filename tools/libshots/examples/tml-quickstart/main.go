@@ -43,4 +43,5 @@ func main() {
 	}
 	fmt.Println(s.Render(40, 3).Render())
 }
+
 // snippet:end

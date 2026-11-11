@@ -29,4 +29,5 @@ func main() {
 		fmt.Println(line)
 	}
 }
+
 // snippet:end

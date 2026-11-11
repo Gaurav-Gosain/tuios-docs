@@ -42,4 +42,5 @@ func main() {
 	}
 	fmt.Printf("flow.png: %d by %d pixels\n", img.Bounds().Dx(), img.Bounds().Dy())
 }
+
 // snippet:end

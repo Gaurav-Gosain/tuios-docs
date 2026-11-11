@@ -45,4 +45,5 @@ func main() {
 		fmt.Printf("%s: %.0f by %.0f\n", out.file, svg.Width, svg.Height)
 	}
 }
+
 // snippet:end

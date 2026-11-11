@@ -27,4 +27,5 @@ func main() {
 	fmt.Printf("%s (Mermaid calls it %s)\n", svg.Type, svg.MermaidType)
 	fmt.Printf("%.0f by %.0f, %d bytes of SVG\n", svg.Width, svg.Height, len(svg.Data))
 }
+
 // snippet:end

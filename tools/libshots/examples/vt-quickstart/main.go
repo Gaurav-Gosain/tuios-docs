@@ -19,4 +19,5 @@ func main() {
 	fmt.Println(term.CellAt(6, 0).Content) // "w", drawn bold
 	fmt.Println(term.CursorPosition())     // column 2, row 1
 }
+
 // snippet:end

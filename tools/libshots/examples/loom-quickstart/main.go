@@ -34,4 +34,5 @@ func main() {
 	buf := s.Render(56, 7)
 	fmt.Println(buf.Render()) // ANSI text; buf.String() gives plain text
 }
+
 // snippet:end

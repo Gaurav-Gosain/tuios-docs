@@ -99,8 +99,8 @@ func known(name string) bool {
 // size is the size a picture shows at on the page, in CSS pixels: the PNG
 // is drawn at twice this.
 type size struct {
-	W     int  `json:"w"`
-	H     int  `json:"h"`
+	W     int    `json:"w"`
+	H     int    `json:"h"`
 	Light bool   `json:"light"` // a -light twin exists
 	Title string `json:"title,omitempty"`
 	Alt   string `json:"alt,omitempty"`
@@ -179,6 +179,11 @@ func writeSnippets(src, dir string) error {
 			case t == "// snippet:end":
 				if name == "" {
 					return fmt.Errorf("%s: snippet:end with no begin", f)
+				}
+				// gofmt puts a blank line before a comment that follows
+				// the end of a function; it is not part of the snippet.
+				for len(body) > 0 && strings.TrimSpace(body[len(body)-1]) == "" {
+					body = body[:len(body)-1]
 				}
 				if err := os.WriteFile(filepath.Join(dir, name+".txt"), []byte(dedent(body)), 0o644); err != nil {
 					return err
