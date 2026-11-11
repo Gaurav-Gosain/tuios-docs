@@ -120,7 +120,7 @@ The settings page writes only the key that you changed. Your comments, blank lin
 
 ### Command-line flags
 
-Interface flags override the file for one run. They are accepted by `tuios`, `tuios new`, `tuios attach`, `tuios ssh` and `tuios tape play`.
+Interface flags override the file for one run. They are accepted by `tuios`, `tuios new`, `tuios attach`, `tuios ssh` and `tuios tape play`. A flag takes the values its option takes. A value the option does not take stops TUIOS before it starts, with the message `tuios set-config` gives. A switch flag also takes a value, such as `--show-clock=false`. The config file does not change.
 
 | Flag | Option |
 |------|--------|
@@ -173,6 +173,7 @@ All keys below go under `[appearance]`.
 | `modal_dim` <Since config="appearance.modal_dim" /> | `30` | 0 to 90 | Dim the screen behind a dialog, in percent. `0` turns it off. At 16 colours the text goes faint instead |
 | `popup_dim` <Since config="appearance.popup_dim" /> | `0` | 0 to 90 | Dim the screen behind a focused popup from `tuios popup`, in percent. `0` turns it off. `tuios popup --dim N` sets it for one popup. A TML popup uses `modal_dim` |
 | `max_fps` <Since config="appearance.max_fps" /> | `0` | 0, 10 to 240, or `"auto"` | The highest frame rate TUIOS draws at. `0` means 60. See [below](#max_fps) |
+| `idle_fps` | `10` | 1 to 60 | How often TUIOS polls, per second, while nothing moves. Lower saves power on a laptop. Higher notices background work sooner. `max_fps` sets the rate while something moves |
 | `wrap_lists` <Since config="appearance.wrap_lists" /> | `true` | bool | Moving past the end of a list wraps to the other end |
 
 `animations_enabled`, the key `motion` replaces, is still read from older files: `false` reads as `motion = "none"`, and `true` changes nothing. Where both are set, `motion` wins.
@@ -350,6 +351,7 @@ While the pane background paints a colour, a program that asks the terminal for 
 | `new_window_follow_ssh` <Since config="appearance.new_window_follow_ssh" /> | `false` | bool | A split or new window of a pane that runs ssh runs the same ssh. See [below](#splits-that-follow-ssh) |
 | `whichkey_enabled` <Since config="appearance.whichkey_enabled" /> | `true` | bool | Show the which-key popup after the leader key |
 | `whichkey_position` <Since config="appearance.whichkey_position" /> | `"bottom-right"` | `bottom-right`, `bottom-left`, `top-right`, `top-left`, `center` | Where the popup opens |
+| `whichkey_delay_ms` | `500` | 0 to 5000 | Milliseconds after the leader key before the popup opens. `0` opens it at once |
 | `prefix_repeat_time` <Since config="appearance.prefix_repeat_time" /> | `500` | 0 to 5000 | Milliseconds the prefix stays armed after a repeatable command. `0` turns it off |
 
 #### window_title_format
@@ -412,9 +414,48 @@ The option is on the settings page, in the Appearance section. `tuios set-config
 | `image_symbols` <Since config="appearance.image_symbols" /> | `"auto"` | `auto`, `octant`, `sextant`, `quadrant`, `half`, `off` | The block characters for a sixel image on a terminal without graphics. See [Images Without Graphics](/docs/images-without-graphics) |
 | `paste_preview` <Since config="appearance.paste_preview" /> | `true` | bool | Show a pasted image in a card at the cursor for a few seconds |
 
+#### The mouse table
+
+`[mouse]` sets how TUIOS reads the pointer's gestures.
+
+| Key | Default | Values | What it does |
+|-----|---------|--------|--------------|
+| `double_click_ms` | `300` | 100 to 1000 | Milliseconds after a click in which a second click counts as a double click. A pane's text selection, the rail divider, the agents list and the editors all read it |
+| `drag_threshold` | `5` | 1 to 50 | Cells the pointer moves before a press is a drag and not a click. It applies to the right button, to click-to-type and to <kbd>Ctrl</kbd>+drag |
+
+```toml
+[mouse]
+double_click_ms = 450   # a slow hand, or a trackpad that spaces its clicks
+drag_threshold = 8
+```
+
+The agents list used 400 ms before this option. It now follows the same value as a pane.
+
 #### Links
 
 <kbd>Ctrl</kbd>+click on a link opens it. <kbd>Ctrl</kbd>+drag still moves the pane: a link opens only when the pointer does not move. Only `http`, `https`, `mailto`, `ftp` and `ftps` links go to the opener. TUIOS copies other links. Under `ssh`, on a remote client, or on a machine with no desktop, TUIOS copies the URL, and your terminal can still open the link from the OSC 8 that TUIOS writes. If the opener fails, the dock says so and TUIOS copies the URL. See [Links](/docs/links) for the opener, the safety rules and a table of terminals.
+
+### Timings and limits [#timings-and-limits]
+
+These `[appearance]` options set how long the interface waits before it acts, and how much one search keeps. Each applies at once and is on the settings page.
+
+| Key | Default | Values | What it does |
+|-----|---------|--------|--------------|
+| `tooltip_delay_ms` | `350` | 0 to 5000 | Milliseconds the pointer rests on a control before its tooltip shows. `0` shows it at once |
+| `zen_reveal_ms` | `2000` | 200 to 30000 | Milliseconds the pointer may sit still before zen mode (`mouse`) hides the borders again |
+| `paste_preview_ms` | `6000` | 500 to 60000 | Milliseconds the paste card stays up with nothing pressed |
+| `chord_timeout_ms` | `500` | 100 to 3000 | Milliseconds the first key of a two-key chord, such as <kbd>g</kbd> <kbd>g</kbd> in copy mode and in the scrollback browser, waits for the second |
+| `copy_search_max_matches` | `1000` | 100 to 100000 | Matches one copy mode search keeps. A search that stops at the limit shows `1000+`. A very high value slows a one-letter search over a long history, because each frame walks every match |
+| `multi_copy_dim` | `45` | 0 to 90 | Percent a pane is dimmed when the search of [multi copy mode](/docs/layout-modes#multi-copy-mode) found nothing in it. `0` leaves it as it is |
+
+```toml
+[appearance]
+whichkey_delay_ms = 1000
+chord_timeout_ms = 800
+copy_search_max_matches = 5000
+```
+
+For these options and the other millisecond options on this page, a value out of range moves to the nearest end of the range. A `0` reads as the default where `0` is not in the range.
 
 ### Scrolling
 
@@ -626,6 +667,9 @@ Pastes, notifications, OSC 66 text and link addresses lose their control charact
 | `show_counts` <Since config="appearance.sidebar.show_counts" /> | `true` | bool | Window count on each session row |
 | `show_numbers` <Since config="appearance.sidebar.show_numbers" /> | `false` | bool | Switch number (the one `switch_session_N` opens) before each local session name, for sessions 1 to 9 |
 | `marquee` <Since config="appearance.sidebar.marquee" /> | `true` | bool | Scroll a hovered row's long title |
+| `marquee_pause_ms` | `900` | 0 to 10000 | Milliseconds a hovered row holds still before its long title starts to move. `0` starts at once |
+| `marquee_step_ms` | `220` | 20 to 2000 | Milliseconds each one-cell step of the marquee is held. Larger is slower |
+| `git_refresh_ms` | `2000` | 500 to 60000 | Milliseconds between the git section's looks at a folder it shows. A look runs git only when the commits moved. Raise it for a very large repository |
 | `tooltips` <Since config="appearance.sidebar.tooltips" /> | `true` | bool | Label the collapsed strip on hover |
 | `file_icons` <Since config="appearance.sidebar.file_icons" /> | `true` | bool | A Nerd Font icon per file type in the files section |
 | `file_icon_colors` <Since config="appearance.sidebar.file_icon_colors" /> | `true` | bool | Draw each icon in its file type's colour |
@@ -1003,6 +1047,8 @@ Selecting an id that is not registered yet, with `set-config` or the settings pa
 | `level` <Since config="notifications.level" /> | `"info"` | The least severe message the dock shows: `info`, `warning` or `error` |
 | `log_hidden` <Since config="notifications.log_hidden" /> | `true` | `false` keeps the messages that `level` hides out of the log too |
 | `machine_offer` <Since config="notifications.machine_offer" /> | `true` | Offer to add a machine when a pane logs in to it with ssh or mosh and no `[hosts]` entry reaches it. See [From the app](/docs/remote-hosts#from-the-app) |
+| `rate_limit_ms` | `500` | A second desktop notification from a pane within this many milliseconds is dropped, so a pane that spams OSC 9 cannot fill the stack. 0 to 10000. `0` keeps every one |
+| `bell_rate_limit_ms` | `200` | The same for the bell. 0 to 10000. `0` keeps every one |
 
 A message that `level` hides still goes to the log viewer (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>l</kbd>). Warnings and errors always go to the log. A message from a pane, an agent or mail does not use `level`. `[notifications.agent]` and `[notifications.mail]` control those messages.
 
@@ -1187,7 +1233,9 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 |-----|---------|--------------|
 | `log_level` <Since config="daemon.log_level" /> | `"off"` | `off`, `errors`, `basic`, `messages`, `verbose` or `trace` |
 | `agent_autodetect` <Since config="daemon.agent_autodetect" /> | `true` | Detect an agent CLI running in a pane and show its state |
-| `agent_detect_seconds` <Since config="daemon.agent_detect_seconds" /> | `0` | Seconds between checks. `0` means 2. A negative number turns detection off |
+| `agent_detect_seconds` <Since config="daemon.agent_detect_seconds" /> | `2` | Seconds between checks. `0` uses 2. A negative number turns detection off |
+| `agent_stall_seconds` | `30` | Seconds a working agent may print nothing before it shows as unknown. `0` uses 30. A negative number turns this off |
+| `subagent_fade_seconds` | `60` | Seconds a finished subagent stays in the list. `0` uses 60. A failed one stays five times as long |
 | `agent_binaries` <Since config="daemon.agent_binaries" /> | `[]` | Extra program names to treat as agents, added to the built-in list |
 | `resume_agents` <Since config="daemon.resume_agents" /> | `"ask"` | After a daemon restart: `ask` puts a Resume row in the Inbox for each pane whose agent was running, `auto` types each harness's resume command into the new shell, `off` does neither |
 | `persist_scrollback` <Since config="daemon.persist_scrollback" /> | `true` | Save each pane's history with its session, and show it above a divider after a daemon restart or a reboot. The files can hold secrets. `false` stops this, and the daemon deletes the saved history when it next starts. See [Pane history](/docs/sessions#pane-history) |
@@ -1202,6 +1250,22 @@ On macOS, the workspace and preselect defaults use `opt+`, and `terminal_mode` a
 | `respond_from_shell` <Since config="daemon.respond_from_shell" /> | `false` | Let `tuios respond`, run from a shell outside every pane, answer an agent's prompt. A caller inside a pane is refused either way. Not settable with `set-config` |
 
 A change to `single_client`, `ssh_agent` or `display` in the file applies to the next attach.
+
+### Daemon timings [#daemon-timings]
+
+The daemon's timings are whole seconds in `[daemon]`, and `0` reads as the default. The daemon reads them when it starts. Each has an environment variable, read at the same time, that wins over the file:
+
+| Key | Default | Variable | What it sets |
+|-----|---------|----------|--------------|
+| `agent_detect_seconds` | 2 | `TUIOS_AGENT_DETECT_SECONDS` | How often agent detection checks each pane. A negative value turns it off |
+| `agent_stall_seconds` | 30 | `TUIOS_AGENT_STALL_SECONDS` | How long a working agent may print nothing before it shows as unknown. A negative value turns it off |
+| `subagent_fade_seconds` | 60 | `TUIOS_SUBAGENT_FADE_SECONDS` | How long a finished subagent stays in the list |
+| `cleanup_seconds` | 30 | `TUIOS_CLEANUP_SECONDS` | How often the daemon gives back the memory that pane output leaves behind. A client reads the variable too, for its own buffers |
+| `pr_poll_seconds` | 60 | `TUIOS_PR_POLL_SECONDS` | How often the daemon checks the pull requests the rail shows |
+| `transfer_keep_seconds` | 1800 | `TUIOS_TRANSFER_KEEP_SECONDS` | How long a finished file transfer stays in the list |
+| `dispatch_ready_seconds` | the start-agent wait | `TUIOS_DISPATCH_READY_SECONDS` | How long a dispatched task waits for its agent to be ready, at most 600 |
+
+`agent_autodetect` reads `TUIOS_AGENT_AUTODETECT` the same way: `false`, `no`, `off` or `0` turns detection off.
 
 ### The display of the client <Since config="daemon.display" /> [#the-display-of-the-client]
 
@@ -1239,6 +1303,8 @@ To change `window_size` for one session while it runs, use `tuios set-config dae
 | `start_in_terminal_mode` <Since config="startup.start_in_terminal_mode" /> | `false` | Start in terminal mode when a window is present |
 | `session` <Since config="startup.session" /> | `""` | The session a plain `tuios` attaches to. tuios makes the session if it is gone. Empty attaches to the most recent session |
 | `window` <Since config="startup.window" /> | `""` | The pane, by name or id, that a plain `tuios` focuses in `session`. When no pane has that name, the focus does not change |
+
+When the file sets `layout` but not `tiled = true`, new sessions float and do not use the layout. TUIOS says so in the log viewer (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>l</kbd>) and in `tuios config apply`: `[startup] layout is set, but [startup] tiled is off, so new sessions float and do not use the layout. Set tiled = true to use the layout.`
 
 `session` and `window` change a plain `tuios` only. Other commands use the session you give them. `session` uses the daemon even when `daemon` is `false`.
 
@@ -1328,6 +1394,8 @@ keep_open = true
 |-----|---------|--------------|
 | `autorun` <Since config="tape.autorun" /> | `"ask"` | `off` ignores project tapes. `ask` shows a badge and runs nothing until you choose. `auto` runs a trusted, unedited tape on entry |
 | `auto_review` <Since config="tape.auto_review" /> | `false` | Open the review dialog when a tape is found, instead of only showing the badge |
+| `banner_ms` | `8000` | Milliseconds the "project tape found" banner stays on screen. 1000 to 60000 |
+| `done_linger_ms` | `2000` | Milliseconds the DONE mark stays on screen after a tape finishes. 500 to 30000 |
 
 A tape edited after you trusted it is untrusted again.
 
@@ -1336,6 +1404,7 @@ A tape edited after you trusted it is untrusted again.
 | Key | Default | What it does |
 |-----|---------|--------------|
 | `show_key_events` <Since config="debug.show_key_events" /> | `false` | Show the keycast of recent keypresses |
+| `show_key_count` | `5` | How many recent keypresses the keycast keeps, 1 to 20 |
 
 `--show-keys` and <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>k</kbd> toggle the same overlay. See [Showkeys](/docs/showkeys).
 
@@ -1588,7 +1657,7 @@ A smaller limit removes the oldest buffers at once. A yank larger than `max_kb` 
 
 ## The dock table
 
-`[dock]` sets what the bar draws: three ordered lists of component names, plus a table for each component that needs one. Edit it in the file, or with the **Dock > Components** editor on the settings page. `set-config` cannot change the lists.
+`[dock]` sets what the bar draws: three ordered lists of component names, plus a table for each component that needs one. `meter_interval_ms` (default `2000`, 500 to 60000) sets the milliseconds between measurements of the `cpu` and `ram` readouts. Edit it in the file, or with the **Dock > Components** editor on the settings page. `set-config` cannot change the lists.
 
 ```toml
 [dock]
