@@ -15,6 +15,10 @@ import (
 	"tuios.dev/sketch/text"
 )
 
+// The gallery and the site's pages draw every diagram type, so the drawers
+// of the types outside sketch/core are on for every program that uses this.
+func init() { text.Rare() }
+
 // Cols is the width of the text drawings: the width of a common terminal. A
 // drawing that does not fit is drawn at its full width, as tuios mermaid
 // does, and the page lets it scroll.
