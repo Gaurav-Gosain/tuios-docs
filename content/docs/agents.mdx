@@ -549,7 +549,39 @@ tuios start-agent codex --name tests --prompt 'Run the tests and fix what fails.
 tuios start-agent --protocol acp 'opencode acp' --name helper
 ```
 
-`start-agent` opens a pane in the session `-s` names (creating it if needed), starts the agent, and returns once the agent shows it is at its prompt. With `--prompt`, it types the first prompt then. `--protocol acp` or `--protocol codex` runs the agent headless over the Agent Client Protocol or the Codex app-server: the pane shows the conversation as a transcript you type into, and reports the agent's state itself. In that pane, <kbd>Ctrl</kbd>+<kbd>C</kbd> cancels the running turn and every permission request it still waits on. <kbd>Ctrl</kbd>+<kbd>D</kbd> on an empty line quits. To start the same prompt in several agents at once, each in its own git worktree, see [Worktrees](/docs/worktrees#fan-out-one-prompt-several-agents).
+`start-agent` opens a pane in the session `-s` names (creating it if needed), starts the agent, and returns once the agent shows it is at its prompt. With `--prompt`, it types the first prompt then. `--protocol acp` or `--protocol codex` runs the agent headless over the Agent Client Protocol (versions 1 and 2, see [ACP versions](#acp-versions)) or the Codex app-server: the pane shows the conversation as a transcript you type into, and reports the agent's state itself. In that pane, <kbd>Ctrl</kbd>+<kbd>C</kbd> cancels the running turn and every permission request it still waits on. <kbd>Ctrl</kbd>+<kbd>D</kbd> on an empty line quits. To start the same prompt in several agents at once, each in its own git worktree, see [Worktrees](/docs/worktrees#fan-out-one-prompt-several-agents).
+
+### ACP versions <Since config="agents.acp_version" /> [#acp-versions]
+
+TUIOS speaks versions 1 and 2 of the Agent Client Protocol. Version 2 is a [draft of the spec](https://agentclientprotocol.com/protocol/v2/overview), which asks clients not to ask for it by default until it is final. So a pane asks for version 1 unless `[agents] acp_version = 2` says otherwise:
+
+```toml
+[agents]
+acp_version = 2   # 1 (default) or 2, the draft
+```
+
+Asking for 2 is safe with an agent that has only version 1. An agent picks the highest version it speaks at or below the one asked for, and one built before version 2 answers 1, as opencode 2.2.7 does: the pane speaks 1 on the same connection. An agent that refuses 2 is started again and asked for 1. When neither fits, the pane says which versions each side speaks, and an agent of version 2 only, met with the default, gets the line to turn version 2 on. The pane's first line names the version, such as `connected to opencode 2.2.7, ACP version 1`. The daemon reads the value when it starts a protocol pane, so a change applies to the next one.
+
+In version 2 a turn ends when the agent reports its foreground work idle, not when it answers the prompt, so the last words of a reply come before `turn finished`. The rest of what the pane does with version 2:
+
+| Version 2 | The pane |
+|-----------|----------|
+| `state_update` `requires_action` with no question on screen | `needs_input`, "the agent is waiting for input". `running` takes it back to `working` |
+| `state_update` `running` or `idle` with no turn of yours | `working`, then `done`: work the agent started on its own |
+| `agent_message` that replaces a streamed message | The rest, when it only adds to what was shown. Otherwise the whole message again, under "the agent replaced its message:" |
+| `agent_message` with no content | "the agent removed the message above" |
+| `tool_call_update`, `tool_call_content_chunk` | The call, created by its first update. A field sent as null is cleared |
+| A diff with a `git_patch` | The patch. A change with no text names its operation |
+| `plan_update`, `usage_update` | As in version 1. A `cost` of null clears the cost |
+| `notice` | A note line, or an error line for severity error |
+| `compaction_update` | "compacting the context", then "context compacted" or why it failed |
+| `available_commands_update` | "commands: /init /review" once per change. Type a command as a prompt to run it |
+| `config_option_update` | The model category's value goes to `model`. A mode change is a line |
+| A permission's `title`, `description` and `command` subject | The title under the call, the description as its reason, and the command's directory |
+| `$/cancel_request` for a permission | The question leaves the pane and the Inbox, answered cancelled |
+| An update kind TUIOS does not know | One line naming the kind, once |
+
+The terminal output of a version 2 agent's own terminals is not shown yet. The call says it has one, as in version 1. `tuios agent-proto --resume ID` reattaches to a conversation the agent kept, with `session/resume`. The pane advertises no file system, no terminal and no elicitation capability to the agent.
 
 ## Letting an agent drive TUIOS
 
