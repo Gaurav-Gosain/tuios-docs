@@ -34,6 +34,11 @@ export function GET() {
     );
   }
 
+  lines.push(
+    "",
+    `To set up another machine for tuios, run \`tuios hosts setup user@machine --dry-run\`, then the same with \`--install copy --yes --json\`. It tests ssh, installs tuios, starts it and adds the machine. Without a terminal it never prompts: exit 2 names a missing flag, exit 3 means a step needs the person. Run \`tuios --skill hosts\` for the rest. Details: ${absoluteUrl(markdownPath("/docs/remote-hosts"))}`,
+  );
+
   let section = "";
   for (const entry of getDocsInSidebarOrder()) {
     if (entry.section !== section) {
