@@ -1,0 +1,100 @@
+---
+title: harness
+description: Recognise coding-agent CLIs and read their state from the screen. One TOML manifest per agent, and a reason for every answer.
+icon: ScanSearch
+---
+
+`tuios.dev/harness` recognises coding-agent CLIs and reads their state. It is the detection core of tuios, published for any Go program that runs agents in terminals: a multiplexer, an orchestrator or a dashboard. tuios uses it to name the agent in a pane and to read what the agent does. See [Agents](/docs/agents).
+
+```bash
+go get tuios.dev/harness
+```
+
+The package needs Go 1.25 or later. It requires go-toml, and `charmbracelet/x/ansi` for the cell width of wide characters. The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/harness).
+
+## What it answers
+
+- **Which agent is this process?** It reads the process name, the argv and the executable path. This includes an agent that starts through node, bun, python or npx.
+- **What is it doing?** `working`, `idle`, `needs_input` or `limit_reached`. It reads the last lines of the screen, the window title, the OSC 9;4 progress report or a desktop notification.
+- **Why?** Every rule reports what it read and which strings were missing, so you can trace a wrong answer to one line of a manifest.
+
+The rules are data: one TOML manifest per agent. The package bundles 26 of them, among them Claude Code, Codex, Gemini CLI, opencode, Copilot, Cursor, Amp, Crush, Goose, Kimi, Qwen and Pi. A person can drop a file in a folder to add or replace one, with no rebuild.
+
+The package takes plain values and returns plain values. It reads no terminal and starts no process.
+
+## Name an agent and read its screen
+
+```go
+reg, errs := harness.Load() // the bundled manifests; pass folders to add your own
+if len(errs) > 0 {
+	log.Print(errs) // one bad file costs only itself
+}
+
+id, ok := reg.Identify("claude", []string{"claude", "--model", "opus"}, "/usr/local/bin/claude")
+// id = "claude-code", ok = true
+
+screen := []string{ // the last non-empty lines of the pane
+	"Bash(go test ./...)",
+	"Do you want to proceed?",
+	"❯ 1. Yes",
+	"  2. Yes, and don't ask again for similar commands",
+	"  3. No, and tell Claude what to do differently (esc)",
+}
+state, rule, ok := reg.Classify(id, screen)
+// state = "needs_input"
+fmt.Println(reg.RuleKind(id, rule))           // approval
+fmt.Println(reg.RulePrompt(id, rule, screen)) // Do you want to proceed?
+```
+
+`Registry.ScreenLines(id)` says how many lines from the bottom the rules of a harness read. `Registry.Explain` gives the report for each rule behind a `Classify` answer.
+
+## A manifest
+
+```toml
+schema_version = 1
+id = "my-agent"
+display_name = "My Agent"
+
+[detect]
+comm = ["my-agent"]          # the process name
+argv_path = ["@me/my-agent"] # an npm package run by node
+
+[screen]
+enabled = true
+lines = 8
+
+[[screen.rule]]
+state = "needs_input"
+message = "waiting for approval"
+all = ["Allow this command?"]
+any = ["(y/n)", "[Y/n]"]
+
+[[screen.rule]]
+state = "working"
+regex = ['^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] ']
+```
+
+The bundled manifests in the `manifests/` folder are the full reference. A rule that claims idle must read the input box (`region = "prompt_box"`). A bare process name under five letters needs `[detect.require]`. These checks keep a manifest from labelling an unrelated program as an agent.
+
+`herdrconv` converts a herdr detection manifest into a draft:
+
+```bash
+go run tuios.dev/harness/herdrconv path/to/agent.toml > draft.toml
+```
+
+## API overview
+
+| Name | Does |
+| --- | --- |
+| [`Load`](https://pkg.go.dev/tuios.dev/harness#Load), [`Registry`](https://pkg.go.dev/tuios.dev/harness#Registry) | Load the bundled manifests, and any folders you add. |
+| [`Registry.Identify`](https://pkg.go.dev/tuios.dev/harness#Registry.Identify) | Name the agent from a process. |
+| [`Registry.Classify`](https://pkg.go.dev/tuios.dev/harness#Registry.Classify), [`Registry.Explain`](https://pkg.go.dev/tuios.dev/harness#Registry.Explain) | The state from the screen, and the report behind it. |
+| [`Registry.RuleKind`](https://pkg.go.dev/tuios.dev/harness#Registry.RuleKind), [`Registry.RulePrompt`](https://pkg.go.dev/tuios.dev/harness#Registry.RulePrompt) | The kind of the matched rule and its prompt line. |
+
+## What stays in tuios
+
+The library reads. tuios acts. tuios keeps where a person's manifests live, the prompt with its numbered options and the keys that answer it, the resume command, the launch flags, the permission ladder for each harness, and the risk rules, the approval gate, the hooks and the Inbox.
+
+## Versions
+
+The module is at v0 and has no tag yet. The Go API can change before v1. The manifest format has its own version, `schema_version = 1`, and a new rule kind is added without a new version. Its tags will have the folder name as a prefix, such as `harness/v0.1.0`. The source is in the [harness folder](https://github.com/Gaurav-Gosain/tuios/tree/main/harness) of the tuios repository, under the MIT licence. The manifests that come from herdr carry its Apache-2.0 notice.

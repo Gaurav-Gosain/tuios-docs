@@ -192,6 +192,18 @@ try {
     );
   }
   {
+    const res = await get("/harness?go-get=1");
+    const body = await res.text();
+    check(
+      "go-import meta tag, harness",
+      res.status === 200 &&
+        body.includes(
+          'content="tuios.dev/harness git https://github.com/Gaurav-Gosain/tuios harness"',
+        ),
+      `${res.status}, ${body.length} bytes`,
+    );
+  }
+  {
     const res = await get("/progstatus");
     const to = res.headers.get("location") ?? "";
     check(

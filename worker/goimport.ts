@@ -27,6 +27,7 @@ export const importHost = "tuios.dev";
  */
 export const LIBRARIES: Readonly<Record<string, { dir: string }>> = {
   acp: { dir: "acp" },
+  harness: { dir: "harness" },
   loom: { dir: "loom" },
   plot: { dir: "plot" },
   progstatus: { dir: "progstatus" },

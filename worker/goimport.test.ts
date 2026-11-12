@@ -6,6 +6,9 @@ describe("libraryFor", () => {
     ["/acp", "acp"],
     ["/acp/", "acp"],
     ["/acpx", null],
+    ["/harness", "harness"],
+    ["/harness/herdrconv", "harness"],
+    ["/harnessx", null],
     ["/progstatus", "progstatus"],
     ["/progstatus/", "progstatus"],
     ["/progstatus/sub/pkg", "progstatus"],
@@ -84,6 +87,13 @@ describe("goImport", () => {
     const res = goImport(new Request("https://tuios.dev/acp?go-get=1"));
     expect(await res?.text()).toContain(
       '<meta name="go-import" content="tuios.dev/acp git https://github.com/Gaurav-Gosain/tuios acp">',
+    );
+  });
+
+  test("harness names its own folder", async () => {
+    const res = goImport(new Request("https://tuios.dev/harness?go-get=1"));
+    expect(await res?.text()).toContain(
+      '<meta name="go-import" content="tuios.dev/harness git https://github.com/Gaurav-Gosain/tuios harness">',
     );
   });
 
