@@ -5,6 +5,7 @@ import {
   isAltChord,
   type KeyLike,
   optionAsAlt,
+  optionTypedText,
   pressedNames,
   sameChord,
 } from "./keys";
@@ -24,6 +25,64 @@ const option = (key: string, code: string, over: Partial<KeyLike> = {}) =>
     shiftKey: false,
     ...over,
   }) as unknown as KeyboardEvent;
+
+// tuios discussion #850: a layout that types ASCII with Option, as German
+// does for | (Option and 7) and \ (Option, Shift and 7).
+describe("an ASCII character typed with Option", () => {
+  test.each([
+    ["|", "Digit7", false],
+    ["\\", "Digit7", true],
+    ["@", "KeyL", false],
+    ["{", "Digit8", false],
+    ["|", "KeyL", true],
+  ])("key %p on %s (shift %p) is typed", (key, code, shiftKey) => {
+    const e = option(key, code, { shiftKey });
+    expect(optionTypedText(e)).toBe(key);
+    // In a pane, where tuios reads no keys itself, the shell gets it.
+    expect(optionBytes(e, true, 0)).toBe(key);
+    expect(optionBytes(e, true, 1)).toBe(key);
+    // Report-all without the text cannot carry it: the character is sent.
+    expect(optionBytes(e, true, 1 | 8)).toBe(key);
+  });
+
+  test.each([
+    ["|", "Digit7", false, "\x1b[55;3;124u"],
+    ["\\", "Digit7", true, "\x1b[55;4;92u"],
+    ["@", "KeyL", false, "\x1b[108;3;64u"],
+  ])("key %p on %s (shift %p) while tuios reads every key", (key, code, shiftKey, bytes) => {
+    // As Ghostty sends it: the key, the modifiers and the character.
+    expect(optionBytes(option(key, code, { shiftKey }), true, 1 | 8 | 16)).toBe(
+      bytes,
+    );
+  });
+
+  test.each([
+    // A US Mac's Option characters are not ASCII.
+    ["¶", "Digit7", false],
+    ["∆", "KeyJ", false],
+    // The key's own character, as Linux and Windows report Alt and a key.
+    ["7", "Digit7", false],
+    ["j", "KeyJ", false],
+    ["J", "KeyJ", true],
+    ["&", "Digit7", true],
+    ["|", "Backslash", true],
+    [" ", "Space", false],
+  ])("key %p on %s (shift %p) is a chord", (key, code, shiftKey) => {
+    expect(optionTypedText(option(key, code, { shiftKey }))).toBeNull();
+  });
+
+  test("not with ctrl or cmd", () => {
+    expect(
+      optionTypedText(option("|", "Digit7", { ctrlKey: true })),
+    ).toBeNull();
+    expect(
+      optionTypedText(option("|", "Digit7", { metaKey: true })),
+    ).toBeNull();
+    expect(
+      optionTypedText(option("|", "Digit7", { altKey: false })),
+    ).toBeNull();
+  });
+});
 
 describe("Option on a Mac is Alt", () => {
   test.each([
