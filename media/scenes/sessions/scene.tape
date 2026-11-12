@@ -1,4 +1,4 @@
-# Sessions: three sessions on one daemon, and the switcher over them.
+# Sessions: three sessions on one daemon, and go-to on the sessions over them.
 WaitFor panes 1 10s
 Run "tuios new -d web --cwd ~/project/web && tuios new -d store --cwd ~/project/internal/store && clear"
 Sleep 1500ms

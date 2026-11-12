@@ -6,7 +6,43 @@ icon: Search
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Two keys take you to a pane without walking through the panes one by one. Pane labels number the panes on the screen, as tmux's `display-panes` does. The pane navigator lists every pane in every session, as tmux's `choose-tree` does, and searches them.
+Three keys take you somewhere without walking through the panes one by one. Go-to lists every agent, session, workspace and pane in one search. Pane labels number the panes on the screen, as tmux's `display-panes` does. The pane navigator lists every pane in every session, as tmux's `choose-tree` does, and searches them.
+
+## Go to anything [#go-to-anything]
+
+<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>G</kbd> opens go-to. It lists every place you can go in one list: agents, sessions, the workspaces of each session, and panes. The action is `goto_picker`, and the palette has it as "Go to: an agent, session, workspace or pane". Each row starts with its kind, then says where the place is:
+
+```
+agent      claude · payments › 1 › api    needs you: approve Bash ●
+session    payments [space: surge]                          3 panes
+workspace  payments › 2 · api-tests                          1 pane
+pane       payments › 1 › nvim                ~/src/payments
+```
+
+With nothing typed, the first row is the place you were on last, so <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>G</kbd> and <kbd>Enter</kbd> take you back. The agents that need you come next, the one waiting longest first, then the other places you were on recently, then every agent, session and workspace. Panes are listed once you type something.
+
+Typed words are a fuzzy search over the names a row shows: the session, the workspace, the pane and its folder, and for an agent its harness and its last message. A `key:value` term narrows the rows instead, and every term has to match. The terms are the [selector](/docs/agent-inbox#selectors) the agents view takes (`harness:`, `state:`, `needs:you`, `session:`, `group:`, `host:`, `name:`), and three more:
+
+| Term | Keeps |
+|---|---|
+| `kind:agent`, `kind:session`, `kind:workspace` (or `kind:ws`), `kind:pane` | Rows of that kind |
+| `space:NAME` | Rows of the sessions filed under that space |
+| `ws:N` | Agents, workspaces and panes on that workspace, by number or name |
+
+A value is a glob, and commas mean any of them, as in `kind:session,workspace`. `@`, `#` or `!` at the start of the query is `kind:agent`, `kind:session` or `kind:workspace`: `#space:surge` lists the sessions in the surge space, and `@needs:you` the agents that need you.
+
+| Key | Does |
+|---|---|
+| The list keys | Move. See [Lists and the settings page](/docs/keybindings#lists-and-the-settings-page) |
+| <kbd>Enter</kbd> | Go there: the session, then the workspace, then the pane |
+| <kbd>Ctrl</kbd>+<kbd>R</kbd> | Rename the session or workspace on the row. Go-to stays open under the rename |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd> | Delete the session on the row, after a <kbd>y</kbd>. Never the session you are on |
+| <kbd>Ctrl</kbd>+<kbd>U</kbd> | Clear the query |
+| <kbd>Esc</kbd> | Close |
+
+Some keys open go-to with a filter typed: <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>S</kbd> on `# ` (the sessions), <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>W</kbd> on `! session:NAME` (this session's workspaces), and the palette's "All windows" on `kind:pane session:NAME` (this session's panes). With `# NAME` typed and no session called NAME, <kbd>Enter</kbd> makes that session.
+
+A session on another machine is listed with its agents, and <kbd>Enter</kbd> on it attaches that machine as the rail does. Workspaces and panes are listed for the sessions on the machine you are attached to.
 
 ## Pane labels
 
