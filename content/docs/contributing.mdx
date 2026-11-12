@@ -25,6 +25,14 @@ go build -o tuios-web ./cmd/tuios-web
 ./tuios --standalone --debug
 ```
 
+A plain `go build ./cmd/tuios` makes the larger binary that `go install` makes. To build the one a release ships, read the list of packages built with inlining off:
+
+```bash
+GOFLAGS="$(scripts/goflags.sh)" go build -o tuios ./cmd/tuios
+```
+
+`just build` does the same. Set `GOFLAGS` on the `go build` line only: in the environment, the `-gcflags` it adds also reach `go test` and `go vet`.
+
 `--standalone` runs TUIOS without the daemon, which is simpler while you work on the UI. Without it, TUIOS starts or reuses a daemon from the same binary.
 
 The default build uses the pure Go terminal emulator and needs no C toolchain. The libghostty-vt backend uses cgo and needs [Zig](https://ziglang.org/) 0.16 or later:
@@ -57,10 +65,31 @@ go test ./... -count=1 -timeout 20m
 
 CI also checks that `go.mod` is tidy in both the root module and `e2e/tui`, and runs `go test -race ./...` every night.
 
+### The check gate
+
+`just check --changed` runs `scripts/check.sh` on the packages your branch changed against `origin/main`. Run it before you mark a pull request ready. `just check` runs it on every module. The tools run through `go run` at pinned versions, so the gate needs nothing installed beyond Go. Each check writes its full output to `.dev/check/NAME.log`.
+
+| Check | What it runs | Fails the gate |
+|-------|--------------|----------------|
+| `fmt` | `gofmt -l` and `goimports -l` | yes |
+| `vet` | `go vet`, also with `-tags ghostty` when libghostty-vt is built | yes |
+| `lint` | `golangci-lint` with `.golangci.yml`, at the CI version | yes |
+| `tuioslint` | the source checks in `internal/lint` | yes |
+| `vuln` | `govulncheck`, for each module the branch touched | yes |
+| `fix` | the `go fix` modernizers | no, it reports |
+| `gopls` | `gopls check` on the changed Go files | yes |
+| `tidy` | `go mod tidy -diff` per module, and the library pins | yes |
+| `cross` | `go build` for linux, darwin, windows and freebsd | yes |
+| `deadcode` | functions no binary or test reaches, outside `pkg/` | no, it reports |
+
+`--only vet,lint` runs a subset. The gate runs no unit tests beyond `internal/lint`, so run the tests of the packages you changed as well. A pull request runs only the jobs and the end-to-end tests its change can reach. A draft pull request skips the end-to-end shards, so mark it ready for review to run them.
+
 Two more workflows run on every pull request:
 
 - **Lint** (`.github/workflows/lint.yml`): `golangci-lint` v2 with the repository's `.golangci.yml` (the standard linters plus `gosec`), `govulncheck ./...`, and `go vet ./...` with `GOOS` set to `darwin`, `windows`, `freebsd` and `openbsd`. Run `golangci-lint run ./...` locally. A finding that is wrong for one line gets a `//nolint` comment with its reason on that line.
-- **Binary size** (`.github/workflows/binary-size.yml`): `scripts/binary-size.sh` builds tuios the way the release does (`CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w"`) for linux/amd64 and darwin/arm64 and fails when a binary is over its budget. Run the script locally to see the size and the room left. To raise a budget, measure the new size on the Go version `go.mod` names and say in the commit what grew and why.
+- **Binary size** (`.github/workflows/binary-size.yml`): `scripts/binary-size.sh` builds tuios the way the release does (`CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w"`, and inlining off in the packages `scripts/noinline-packages.txt` lists) for linux/amd64 and darwin/arm64 and fails when a binary is over the 50 MB ceiling. It also comments the size change against `main` on the pull request. Run `just size` locally to see the size and the room left. State the size cost of a change in the pull request, and trim what you can: the room under the ceiling is not a budget to spend. Raise the ceiling only on purpose, in its own commit, with the note in `docs/perf.md` ("Binary size budget").
+
+A package joins `scripts/noinline-packages.txt` only when nothing on a hot path calls into it: drawing a frame, key and mouse input, the pty read loop and the daemon's pane streams. Every build of `./cmd/tuios` reads the list, and a lint test fails a build path that does not.
 
 The full suite is slow and uses every core. To leave the machine usable while it runs:
 
@@ -79,6 +108,8 @@ nice -n 10 go test ./... -timeout 20m
 | ghostty backend | `PKG_CONFIG_PATH="$PWD/.ghostty-vt/native/pkgconfig" go test -tags ghostty -count=1 -short ./vt/ ./internal/session/ ./internal/terminal/ ./internal/app/ ./internal/input/ ./cmd/tuios/` | The libghostty-vt emulator and the packages whose tests link it. `go build -tags ghostty ./...` alone runs none of these tests |
 | Differential | `go test -tags differential ./vt/ -run TestDifferential` | The emulator against tmux. Needs `tmux` |
 | Browser | `cd clienttests && npm install && npm test` | `tuios-web` in the system Chromium, with Playwright |
+
+A test that needs fish, zsh or Lua is named in `e2e/tui/tools.txt`. Without `TUIOS_E2E_REQUIRE_TOOLS=1` such a test skips when the tool is missing. CI sets the variable, so a missing tool fails the test there. Each run keeps its temp folder under `/tmp/tuios-e2e-run-PID` and fails, naming the folder, when a test leaves one behind. A failed test copies its frames to `/tmp/tuios-e2e-artifacts/TESTNAME` and logs the path, and CI keeps that folder as an artifact of the failed shard.
 
 <Callout type="warn">
 Without `TUIOS_E2E=1` the end-to-end suite skips every test and reports success. Always pass `-count=1` too: a cached result can survive a change of binary. Run this suite if you change rendering, input handling or the daemon protocol.
@@ -125,6 +156,8 @@ For emulator changes, add a case to the conformance corpus in `vt/`. Unit tests 
    ```bash
    git commit -m "fix: panic when closing the last window"
    ```
+
+   A commit message ends with its body. Add no trailers, such as `Co-authored-by:`.
 
 4. Push and open a pull request. The template asks what changed, why, and how you tested it. Include a screenshot or recording for UI changes, and link the related issue.
 5. Address review comments. Keep commits focused, and rebase on `main` if asked.
