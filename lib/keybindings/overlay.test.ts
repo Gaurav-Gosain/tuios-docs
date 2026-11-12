@@ -99,7 +99,7 @@ choose_buffer = ["="]
       parse(`[keybindings]\nleader_key = "ctrl+a"`),
       data.leader,
     );
-    const b = find("window_prefix", "window_prefix_cancel");
+    const b = find("window_prefix", "prefix_cancel");
     const shown = shownKeys(b, b.keys, o, data.leader);
     expect(shown.mine).toBe(false);
     expect(shown.keys[0].startsWith("ctrl+a t ")).toBe(true);
