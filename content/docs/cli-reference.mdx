@@ -1582,6 +1582,22 @@ tuios list-glyphs mine --json | jq -r '.problems[]?'
 
 See [Glyph sets](/docs/configuration#glyph-sets).
 
+### actions <Since command="actions" /> [#actions]
+
+Your actions: the `[[actions]]` entries of `config.toml` and the `[[keybindings.command]]` entries, each the action `user:NAME`. See [Your actions](/docs/keybindings#your-actions).
+
+| Command | What it does |
+|---------|--------------|
+| `tuios actions [--json]` | List the built-in actions a launcher outside TUIOS can offer |
+| `tuios actions list [NAME] [--json]` | List your actions, or show one |
+| `tuios actions run NAME [-s SESSION] [--dry-run [-w PANE]] [--json]` | Run one as its key would |
+
+With no subcommand, `tuios actions` lists the rows of the command palette that run as a key would, each with its name, palette title and section. A launcher runs one with `tuios run-command -s SESSION Action NAME`. `--json` gives `actions` (`name`, `title`, `category`, `description`) and `harnesses` (`id`, `name`, `command`), the agents `tuios start-agent` knows. It reads only the binary and your harness manifests, with no daemon. [Rex](/docs/rex) reads it each time it loads its config.
+
+`list` prints each action's name, key, source (`actions` or `command key`) and what it runs. With a NAME, it prints that action, and for an entry TUIOS ignores, why.
+
+`run` runs the action as its key would, in the client attached to the session, on the focused pane, through `run-command`. From inside a pane it needs the respond grant. `--dry-run` runs nothing and prints the arguments the action would run, with the placeholders filled from the pane `-w` names (default: the focused pane), each argument quoted on its own line.
+
 ### keybinds <Since command="keybinds" /> [#keybinds]
 
 Inspect and change keybindings. Aliases: `keys`, `kb`.
@@ -2066,6 +2082,8 @@ tuios integration uninstall codex
 - `--mcp`: also register `tuios mcp`, read-only, as an MCP server. `--mcp-write` registers it with the tools that type into panes.
 - `--statusline`: also feed Claude Code's model, context use and cost to the rail. A status line of your own is never replaced: `--then` chains to it.
 - `--command <path>`: the program the hooks run, when `tuios` is not on the harness's `PATH`.
+
+`tuios integration install rex` is not a harness: it adds the TUIOS actions to the [Rex](/docs/rex#install) terminal's command palette. It writes `tuios.lua` next to Rex's `init.lua`, adds one marked `require` line, and has Rex check and reload its config. `status rex` and `uninstall rex` work the same way. `--force` replaces a `tuios.lua` with changes of your own.
 
 See [Agents](/docs/agents#the-agent-reports-for-itself) for what each harness reports.
 
