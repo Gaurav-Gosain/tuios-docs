@@ -297,6 +297,27 @@ The settings page offers Auto, 30, 60, 90, 120, 144, 165 and 240. With Auto sele
 - **Several displays.** A terminal window cannot tell which display it is on, so auto uses the highest rate among them.
 - **Remote clients.** Over SSH, in `tuios-web` and in the SSH server, auto uses 60, because the displays on the machine are not the ones you see.
 
+#### How frames reach the terminal [#cell-frames]
+
+`appearance.cell_frames` <Since config="appearance.cell_frames" /> picks which clients write their frames as cells. Such a client compares each frame with the last one and sends the terminal only the cells that changed. The other clients turn each frame into text, and Bubble Tea turns the text back into cells before it compares. The result on the screen is the same. The cell way takes about half the CPU of a keystroke's frame.
+
+```toml
+[appearance]
+cell_frames = "all"      # the default
+# cell_frames = "served" # only clients over SSH and the web
+# cell_frames = "off"    # no client
+```
+
+| Value | Clients that write cells |
+|-------|--------------------------|
+| `"served"` | Clients over `tuios ssh`, `tuios-web` and the browser tour |
+| `"all"` | Those, and the terminal you run `tuios` in, except on Windows. This is the default |
+| `"off"` | None |
+
+The environment variable `TUIOS_CELL_FRAME` overrides the option: `1` means `all` and `0` means `off`. A change to the option applies to the next client that starts.
+
+If the screen looks wrong, for example text in the wrong place or stale cells after a redraw, set `cell_frames = "off"` or start TUIOS with `TUIOS_CELL_FRAME=0`. That brings back the way frames were sent before the default became `all`. Please report the problem with your terminal's name and version.
+
 ### Backgrounds
 
 A cell with no background of its own is transparent, so your terminal's own background shows through. That is the default everywhere: pane content left on the default background, the space between panes, the borders, the dock and the rail. These options paint those cells instead, one surface at a time or all at once.
@@ -1075,6 +1096,97 @@ The `after-agent-state` [hook](/docs/hooks) follows the same rules, including th
 TUIOS warns when `between_agents` is on and mail alerts are off.
 
 The sound mode, the cooldown, the cue files and the quiet hours always come from `[notifications.agent]`. `tuios set-config notifications.mail.sound ""` clears a key, and `get-config` then prints `(follows notifications.agent.sound)`. See [Agent Messaging](/docs/agent-messaging#mail-alerts).
+
+## Timing options
+
+These `[appearance]` options set how long the interface waits before it acts. Each is in milliseconds, applies at once, and is on the settings page.
+
+| Option | Default | Range | What it does |
+|--------|---------|-------|--------------|
+| `appearance.whichkey_delay_ms` <Since config="appearance.whichkey_delay_ms" /> | `500` | 0 to 5000 | The pause after the leader key before the which-key panel opens. `0` opens it at once. |
+| `appearance.tooltip_delay_ms` <Since config="appearance.tooltip_delay_ms" /> | `350` | 0 to 5000 | How long the pointer rests on a control before its tooltip shows. `0` shows it at once. |
+| `appearance.zen_reveal_ms` <Since config="appearance.zen_reveal_ms" /> | `2000` | 200 to 30000 | How long the pointer may sit still before zen mode (`mouse`) hides the borders again. |
+| `appearance.paste_preview_ms` <Since config="appearance.paste_preview_ms" /> | `6000` | 500 to 60000 | How long the paste card stays up with nothing pressed. |
+| `appearance.chord_timeout_ms` <Since config="appearance.chord_timeout_ms" /> | `500` | 100 to 3000 | How long the first key of a two-key chord (`gg` in copy mode and in the scrollback browser) waits for the second. |
+
+```toml
+[appearance]
+whichkey_delay_ms = 1000
+chord_timeout_ms = 800
+```
+
+A value of 0 on `zen_reveal_ms`, `paste_preview_ms` or `chord_timeout_ms` is read as the default, and a value out of range moves to the nearest end of the range.
+
+## Polling and display options
+
+| Option | Default | Range | What it does |
+|--------|---------|-------|--------------|
+| `appearance.idle_fps` <Since config="appearance.idle_fps" /> | `10` | 1 to 60 | How often TUIOS polls, per second, while nothing is moving. A lower number saves power on a laptop, and a higher one notices background work sooner. It sits beside `max_fps`, which sets the rate while something is moving. |
+| `appearance.sidebar.git_refresh_ms` <Since config="appearance.sidebar.git_refresh_ms" /> | `2000` | 500 to 60000 | Milliseconds between the rail's git section's looks at a directory it is already showing. The look is cheap, because git is run only when the commits have moved. Raise it for a very large repository. |
+| `appearance.sidebar.marquee_pause_ms` <Since config="appearance.sidebar.marquee_pause_ms" /> | `900` | 0 to 10000 | Milliseconds a hovered rail row holds still before its overflowing title starts to move. `0` starts at once. |
+| `appearance.sidebar.marquee_step_ms` <Since config="appearance.sidebar.marquee_step_ms" /> | `220` | 20 to 2000 | Milliseconds each one-cell step of the marquee is held. Larger is slower. |
+| `appearance.multi_copy_dim` <Since config="appearance.multi_copy_dim" /> | `45` | 0 to 90 | Percent a pane is dimmed when multi copy mode's search found nothing in it, so the panes that take part in the selection stand out. `0` leaves it undimmed. |
+| `dock.meter_interval_ms` <Since config="dock.meter_interval_ms" /> | `2000` | 500 to 60000 | Milliseconds between measurements of the dock's CPU and RAM readouts. |
+| `debug.show_key_count` <Since config="debug.show_key_count" /> | `5` | 1 to 20 | How many recent keypresses the showkeys overlay keeps, for a screencast. |
+
+```toml
+[appearance]
+idle_fps = 4
+multi_copy_dim = 60
+
+[appearance.sidebar]
+git_refresh_ms = 5000
+marquee_pause_ms = 400
+marquee_step_ms = 150
+
+[dock]
+meter_interval_ms = 5000
+
+[debug]
+show_key_count = 8
+```
+
+A value of 0 is read as the default on `idle_fps`, `git_refresh_ms`, `marquee_step_ms`, `meter_interval_ms` and `show_key_count`, and a value out of range moves to the nearest end of the range. All seven are on the settings page and apply at once.
+
+## Limits and banners
+
+| Option | Default | Range | What it does |
+|--------|---------|-------|--------------|
+| `notifications.rate_limit_ms` <Since config="notifications.rate_limit_ms" /> | `500` | 0 to 10000 | A second desktop notification from a pane within this many milliseconds is dropped, so a pane that spams OSC 9 cannot flood the stack. `0` keeps every one. |
+| `notifications.bell_rate_limit_ms` <Since config="notifications.bell_rate_limit_ms" /> | `200` | 0 to 10000 | The same for the bell. `0` keeps every one. |
+| `appearance.copy_search_max_matches` <Since config="appearance.copy_search_max_matches" /> | `1000` | 100 to 100000 | Matches one copy mode search keeps. The renderer walks every match on every frame, so a very high value slows a one-letter query over a long scrollback. A search that stops at the limit shows `1000+`. |
+| `tape.banner_ms` <Since config="tape.banner_ms" /> | `8000` | 1000 to 60000 | How long the "project tape found" banner stays on screen. |
+| `tape.done_linger_ms` <Since config="tape.done_linger_ms" /> | `2000` | 500 to 30000 | How long the DONE indicator stays after a tape finishes. |
+
+```toml
+[notifications]
+rate_limit_ms = 1000
+
+[appearance]
+copy_search_max_matches = 5000
+
+[tape]
+banner_ms = 4000
+```
+
+A value of 0 on `copy_search_max_matches`, `banner_ms` or `done_linger_ms` is read as the default, and a value out of range moves to the nearest end of the range. All five are on the settings page and apply at once.
+
+## The mouse table <Since config="mouse" /> [#the-mouse-table]
+
+The `[mouse]` table sets how TUIOS reads the pointer's gestures.
+
+| Option | Default | Range | What it does |
+|--------|---------|-------|--------------|
+| `mouse.double_click_ms` <Since config="mouse.double_click_ms" /> | `300` | 100 to 1000 | Milliseconds after a click in which a second click counts as a double click. A pane's text selection, the rail divider, the Agents list and the draft editor all read it. |
+| `mouse.drag_threshold` <Since config="mouse.drag_threshold" /> | `5` | 1 to 50 | Cells the pointer moves before a press is a drag and not a click. It applies to the right button, to click-to-type and to Ctrl drag. |
+
+```toml
+[mouse]
+double_click_ms = 450
+drag_threshold = 8
+```
+
+Raise `double_click_ms` for a slow hand or a trackpad that spaces its clicks. The Agents list used 400 ms before this option. It now follows the same value as the pane, 300 ms by default. Both options are on the settings page, in the Behavior section, and apply at once. A value of 0 or a value out of range is read as the default or moved to the nearest end of the range.
 
 ## Keybindings
 
