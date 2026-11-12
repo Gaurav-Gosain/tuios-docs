@@ -191,11 +191,15 @@ function actionsOn(files) {
     )) {
       found.add(m[1]);
     }
+    // Later tags declare each action as a row of actionTable in actions.go.
+    for (const m of text.matchAll(/^\s*\{Name:\s*"([a-z][a-z0-9_]+)"/gm)) {
+      found.add(m[1]);
+    }
   }
   return found;
 }
 
-/** The actions on --ref: ActionDescriptions and the default bindings. */
+/** The actions on --ref: ActionDescriptions, actionTable and the default bindings. */
 function refActions(files) {
   const found = new Set();
   for (const { name, text } of files) {
@@ -203,6 +207,11 @@ function refActions(files) {
       const start = text.indexOf("var ActionDescriptions = map[string]string{");
       const body = text.slice(start, text.indexOf("\n}\n", start));
       for (const m of body.matchAll(/^\s*"([a-z][a-z0-9_]+)":\s*"/gm)) {
+        found.add(m[1]);
+      }
+    }
+    if (name === "actions.go") {
+      for (const m of text.matchAll(/^\s*\{Name:\s*"([a-z][a-z0-9_]+)"/gm)) {
         found.add(m[1]);
       }
     }
