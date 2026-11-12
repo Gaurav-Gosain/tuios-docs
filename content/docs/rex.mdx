@@ -1,61 +1,160 @@
 ---
 title: Rex
-description: tuios.lua adds tuios actions to Rex's command palette, and TUIOS reports its sessions' agent states to Rex through OSC 7501.
+description: tuios integration install rex adds the tuios command palette to Rex, with your own actions, and TUIOS tells Rex when an agent waits and what each pane is doing.
 icon: Command
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-[Rex](https://www.superlogical.com/rex) is a terminal with a command palette you can extend in Lua. TUIOS works with it in two ways.
+[Rex](https://www.superlogical.com/rex) is a terminal multiplexer app. TUIOS adds actions to Rex's command palette that work on the TUIOS session shown in the focused Rex pane. It also tells Rex when an agent needs you, and what each pane is doing.
 
-## Agent states in Rex's panes
+## Install
 
-Rex reads OSC 7501, the [Program Status Protocol](/docs/program-status). TUIOS asks the terminal for it when a client starts, so in a Rex pane, the pane that runs TUIOS shows the state of the whole session: the most urgent state of its panes, with a message that counts them, such as `1 needs input, 2 working`. `host_program_status = "panes"` in `[agents]` reports one record for each pane instead. See [TUIOS in a terminal that reads OSC 7501](/docs/program-status#tuios-in-a-terminal-that-reads-osc-7501).
+```bash
+tuios integration install rex
+```
 
-## tuios actions in the palette
+This does four things:
 
-[`tuios.lua`](https://github.com/Gaurav-Gosain/tuios/blob/main/integrations/rex/tuios.lua) adds four actions to Rex's command palette, under "tuios". Each one works on the TUIOS session shown in the focused Rex pane.
+1. It writes `tuios.lua` next to Rex's `init.lua`. Rex finds `init.lua` at `REX_CONFIG`, else `$XDG_CONFIG_HOME/rex/init.lua`, else `~/.config/rex/init.lua`.
+2. It adds one line to `init.lua`: `require("tuios").setup{} -- added by tuios integration`. Nothing else in the file changes. When `init.lua` already requires tuios on a line of your own, that line is kept and no line is added.
+3. It runs `rex config check`. When Rex refuses the config, both files are put back as they were and the command prints Rex's message.
+4. It runs `rex config reload`, then the `tuios_check` action inside Rex, and prints which tuios the actions run and whether Start an Agent finds its agent.
+
+The first time it rewrites `init.lua`, the file as it was is kept as `init.lua.tuios.bak`. A `tuios.lua` with changes of your own is left alone. `--force` replaces it and keeps yours as `tuios.lua.tuios.bak`. An older `tuios.lua` that TUIOS wrote is replaced.
+
+```bash
+tuios integration status rex      # the files, whether Rex loaded them, what tuios_check says
+tuios integration uninstall rex   # removes the marked line and tuios.lua, then reloads
+```
+
+## The actions
+
+The actions are TUIOS's own. Each row of the TUIOS command palette that runs as a key would is one action, read from `tuios actions --json` each time Rex loads its config. A new TUIOS action shows in Rex's palette with no change to `tuios.lua`. Each is named `tuios_` and the TUIOS action name, and titled `tuios:` and the palette row, such as `tuios_prefix_inbox`, "tuios: Agents: What Needs You". `rex actions | grep tuios_` lists them all. Among them:
 
 | Action | Palette title | What it does |
 | --- | --- | --- |
-| `tuios_agents` | tuios: Open the Agents View | Opens the agents view, as <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> does |
-| `tuios_mail` | tuios: Open the Mail for You | Opens the agents view on your mail, as <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>M</kbd> does |
-| `tuios_next_waiting` | tuios: Jump to the Agent That Waits | Moves the focus to the oldest item that needs you, as <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>o</kbd> does |
-| `tuios_start_agent` | tuios: Start an Agent | Starts an agent in a new TUIOS pane and focuses it. Takes `harness`, `name` and `prompt` |
+| `tuios_goto_picker` | tuios: Go To: An Agent, Session, Workspace or Pane | Opens the go-to picker, with each agent's state |
+| `tuios_prefix_inbox` | tuios: Agents: What Needs You | Opens the agents view, as <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>i</kbd> does |
+| `tuios_prefix_mail` | tuios: Agents: Mail for You | Opens the agents view on your mail |
+| `tuios_prefix_next_attention` | tuios: Agents: Go to the Oldest Waiting | Moves the focus to the oldest item that needs you |
+| `tuios_new_window`, `tuios_layout_bsp`, `tuios_prefix_review`, `tuios_prefix_selection`, `tuios_screenshot` and more | | The window, layout, review, copy mode and screenshot rows of the palette |
+| `tuios_user_NAME` | tuios: your label | Your own actions, `user:NAME` |
 
-### Install
+### Your own actions
 
-Copy `tuios.lua` next to your Rex `init.lua` (Rex's [configuration file](https://www.superlogical.com/rex/docs/customize/config.md) page says where it lives), then add to `init.lua`:
+Your `[[actions]]` and `[[keybindings.command]]` entries are in the palette too (see [Your actions](/docs/keybindings#your-actions)). They come from the `config.toml` that Rex's server finds: `$XDG_CONFIG_HOME/tuios`, else `~/.config/tuios`.
 
-```lua
-require("tuios").setup{}
+- A dash in the name is an underscore in Rex, since a Rex action name has only lowercase letters, digits and underscores. `user:open-in-editor` is `tuios_user_open_in_editor`.
+- Two names that come out the same, such as `a-b` and `a_b`, keep the first. `tuios_check` names the other.
+- The palette title is your `label` as you wrote it.
+- An action offered only on a card, a file or another target that is not a pane is left out, since Rex runs it on the focused pane.
+- When TUIOS cannot read `config.toml`, Rex still gets the built-in actions, and `tuios_check` says why.
+
+Run `rex config reload` after you add an action.
+
+### Start an agent, and the check
+
+Two more actions are written in `tuios.lua`:
+
+| Action | Palette title | What it does |
+| --- | --- | --- |
+| `tuios_start_agent` | tuios: Start an Agent | With no field given, opens the New agent sheet. With fields, starts the agent in a new TUIOS pane and focuses it |
+| `tuios_check` | tuios: Check the Rex Integration | Says which tuios the actions run, its version, the focused pane's session, whether the default agent is found, and whether Rex has the actions this tuios lists |
+
+Start an Agent takes `harness`, `name`, `prompt`, `folder` and `machine` (a machine of the `[hosts]` table). The harnesses TUIOS knows are the choices `rex actions --json` shows for `harness`. Rex does not hold a value to that list, so any program `start-agent` can run works too.
+
+```bash
+rex do tuios_start_agent harness=codex name=review prompt='Review the diff.' folder=~/src/app
 ```
 
-Run `rex config reload`. The actions are in the palette under "tuios".
+The go-to picker and the New agent sheet are TUIOS's own, drawn in the focused pane. A Lua action in Rex has no picker or form of its own to open, and a list made when Rex loads its config is out of date by the time it is used, while TUIOS's own are always current.
 
-### Options
+### When TUIOS is updated
+
+`tuios.lua` reads the list at each config load, so `rex config reload` picks up the actions of a new TUIOS. `tuios integration install rex` reloads too. `tuios integration status rex` says when the list Rex loaded is not the one the TUIOS on disk gives, and to reload.
+
+When TUIOS cannot give the list (none is found, or one older than this `tuios.lua`), Rex still loads the config, with the go-to, agents view, mail, oldest waiting, Start an Agent and check actions. `tuios_check` says why.
+
+## Keys
+
+Keys are off until you name them. `keys = "suggested"` binds this set:
+
+| Key | Action |
+| --- | --- |
+| <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>A</kbd> | `tuios_prefix_inbox`: the agents view on what needs you |
+| <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>J</kbd> | `tuios_prefix_next_attention`: jump to the agent that has waited longest |
+| <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>G</kbd> | `tuios_goto_picker`: go to an agent, session, workspace or pane |
+| <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>M</kbd> | `tuios_prefix_mail`: your mail |
+| <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>N</kbd> | `tuios_start_agent`: the New agent sheet |
+
+Each holds `cmd`, which a Mac never sends to a program in a terminal, so no key of TUIOS's (such as <kbd>Ctrl</kbd>+<kbd>B</kbd>) or of your shell's is taken. None is a default key of Rex for Mac or a macOS `ctrl+cmd` shortcut: `ctrl+cmd+q` locks the screen, `ctrl+cmd+f` is full screen, `ctrl+cmd+d` looks a word up, and Rex has `ctrl+cmd+i`. A key you bound in Rex's settings, or with `rex.bind` above the require line, is replaced by the newest binding, so put your own `rex.bind` lines after it.
 
 ```lua
 require("tuios").setup{
-  bin = "tuios",          -- the tuios program; a name is looked up in PATH
-  harness = "claude",     -- the agent tuios_start_agent starts by default
-  keys = {                -- no keys unless you name them
-    tuios_agents = "cmd+shift+a",
-    tuios_next_waiting = "cmd+shift+j",
-  },
+  bin = "tuios",          -- the tuios program; see "Finding tuios and the agents"
+  harness = "claude",     -- the agent tuios_start_agent starts when no harness is given
+  keys = "suggested",
+}
+
+-- The set with changes: your keys on top, false to leave one unbound.
+require("tuios").setup{
+  keys = { suggested = true, tuios_prefix_mail = false, tuios_new_window = "ctrl+cmd+w" },
+}
+
+-- Only keys of your own.
+require("tuios").setup{
+  keys = { tuios_prefix_inbox = "cmd+shift+a", tuios_prefix_next_attention = "cmd+shift+j" },
 }
 ```
 
-A key for an action that does not exist stops `setup` with an error, so a typo shows when Rex loads the file. From the command line:
+The names of the earlier `tuios.lua`, `tuios_agents`, `tuios_mail` and `tuios_next_waiting`, still bind the same actions. A key for an action Rex does not have is left unbound, and `tuios_check` names it, so a key for an action a later TUIOS drops never stops Rex loading the rest of `init.lua`.
 
-```bash
-rex do tuios_start_agent harness=codex name=review prompt='Review the diff on this branch.'
+## Agents that wait
+
+When an agent needs you (a question, an approval, a login), the TUIOS client in the Rex pane tells Rex in two ways, with nothing to set up:
+
+- **A notification.** TUIOS writes OSC 9 with the pane's name and what the agent asked, such as `review needs you · approve Bash: make`. Rex raises it as a desktop notification when Settings, Notifications, System Notifications, Terminal notifications is on. `[notifications.agent]` in `config.toml` says which states alert.
+- **A status record.** TUIOS reports its agents' state with OSC 7501, the [Program Status Protocol](/docs/program-status). Rex shows it on the tab and in the session picker. With Settings, Notifications, Program Activity, Show system notifications on, Rex raises a macOS notification while it is in the background. Rex's docs say a click on that one opens the program's tab. See [Per-pane status](#per-pane-status) for one record per agent.
+
+**None for what you are looking at.** TUIOS asks its terminal for focus events, and Rex sends them when its focus moves between panes. While Rex shows the TUIOS pane, TUIOS writes no notification for the TUIOS pane that has the focus (`suppress_focused`, on by default). Another TUIOS pane still notifies, and so does the focused one while Rex shows another pane or tab.
+
+**Jump to it.** Rex has no notification with a button, and a Lua action cannot raise one. Once Rex shows the TUIOS pane, `tuios_prefix_next_attention` ("tuios: Agents: Go to the Oldest Waiting") moves the focus to the agent that has waited longest, and `tuios_prefix_inbox` opens the agents view on what needs you. In the suggested keys they are <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>J</kbd> and <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>A</kbd>.
+
+**Two notifications for one question.** With Rex in the background and both Rex settings above on, one question can give two macOS notifications, one from each. Keep one: turn off Rex's Terminal notifications, or set `notify = false` under `[notifications.agent]` in TUIOS. The status record still reaches Rex.
+
+<Callout title="What was checked">
+In a real Rex server, another pane's question, and the focused pane's question while Rex showed another pane, each gave one desktop notification. The focused pane's question while Rex showed TUIOS gave none, before and after Rex's focus events. What the Mac app draws for them was not checked, since that server has no app attached.
+</Callout>
+
+## Per-pane status
+
+By default TUIOS gives Rex one status record (OSC 7501) for each TUIOS session: the most urgent state of its agents, and a message that counts them, such as `1 needs input, 2 working`. Rex shows one status for each Rex pane, so a TUIOS session with many agents shows as one.
+
+For one record per agent, set this in `config.toml`:
+
+```toml
+[agents]
+host_program_status = "panes"
 ```
 
-### How it finds the session
+Each TUIOS pane with an agent then has a record of its own, with the pane's name as the title and what the agent asked or is doing as the message, under the id `SESSION/PANE`. `"off"` sends none. A client reads the value when it starts and when `config.toml` changes. `tuios integration status rex` says which one is set.
 
-An action asks Rex for the focused pane's foreground process. When that is a TUIOS client, `tuios list-clients --json` has its pid with the session it shows. The client actions then run `tuios run-command -s SESSION Action NAME`, which that client runs as its key would. `tuios_start_agent` runs `tuios start-agent` on its own, because an agent can take longer to be ready than the 30 seconds Rex gives an action.
+In a real Rex server the Rex pane's `program_status` held the one record `demo` by default. With `"panes"` it held `demo/PANE` for each pane with an agent, in the blocked state with the pane's title and the agent's question as the message. How the Mac app's sidebar and Activity view draw several records from one Rex pane, and what the iOS app shows, was not checked.
+
+## Finding tuios and the agents
+
+The Rex server is started by the app, so its `PATH` has none of the folders a login shell adds, such as `~/.local/bin`.
+
+- `tuios.lua` looks for tuios on `PATH`, then in `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `$GOBIN`, `$GOPATH/bin`, `~/go/bin` and the Nix profiles. When none has it, the action says where it looked. Give the full path then: `setup{ bin = "/full/path/tuios" }`.
+- `tuios start-agent` looks for the agent on the `PATH` its caller sent, then on the daemon's `PATH`, the one a new pane gets, and runs the agent with that `PATH`. So an agent you can start in a TUIOS pane starts from Rex too.
+
+## How an action finds the session
+
+An action asks Rex for the focused pane's foreground process. When that is a TUIOS client, `tuios list-clients --json` has its pid with the session it shows. A pane that runs a shell, or `ssh` to another machine, shows no TUIOS client on this machine, and the action says so.
+
+The TUIOS actions run `tuios run-command -s SESSION Action NAME`, which the client showing the session runs as its key would. Start an Agent runs `tuios start-agent --no-wait`, which answers once the agent has started, well inside the 30 seconds Rex gives an action, so a failure shows as TUIOS's own message. The prompt is typed once the agent is ready.
 
 <Callout title="Limits">
-Only a TUIOS client on the same machine as the Rex server is found. A pane that runs a shell, or `ssh` to another machine, shows no TUIOS client here, and the action says so and does nothing.
+Only a TUIOS client on the same machine as the Rex server is found. The TUIOS actions need the TUIOS client in the focused pane, since that client runs them. Rex's palette lists the agent actions before any agent has run, while TUIOS's own palette waits for one. `install` talks to the local Rex server, or the one `REX_SERVER` names.
 </Callout>
