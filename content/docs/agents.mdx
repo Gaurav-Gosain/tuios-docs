@@ -25,10 +25,25 @@ To keep only the multiplexer, turn every agent feature off with `[agents] enable
 | `done` | `■` | `#` | Finished its task, and you have not looked at it yet. Once you have, it draws `○` |
 | `errored` | `×` | `x` | Stopped on an error |
 | `unknown` | `□` | `?` | An agent is there and nothing says what it is doing |
+| `limit_reached` <Since feature="limit-reached" /> | `▼` | `=` | Stopped on its harness's usage or rate limit |
 
 The glyphs are different shapes, not the same shape in different colours, so they still read in a monochrome screenshot. The ASCII column is what `--ascii-only` draws.
 
 `needs_input` and `errored` are the two states where a person has to act. `get-agent-state` and `list-agents` report that as `needs_you: true`, so a script does not need to know which states mean it.
+
+### A usage limit [#usage-limit]
+
+`limit_reached` is an agent that stopped because its harness hit a usage or rate limit. It is not an error and not a finished turn, and nothing a person types moves it before the limit resets. So `needs_you` is false for it, it opens no Inbox item and it sends no error alert. It is at rest: `ready` is true, and `ask-agent` and mail to it are not held back. After the reset, a message to the agent is how a lead starts it again. A message sent before the reset gets the limit again.
+
+Three sources report it:
+
+- Claude Code's `StopFailure` hook, when its `error` is `rate_limit` or `billing_error`. The message is the error text Claude Code showed. Any other error stays `errored`, with the error in the message, such as `stopped on overloaded`.
+- A screen rule, for Claude Code and Codex, that reads the harness's limit line just above its input box while the agent is at rest. A limit line that a later answer pushed up the screen does not count.
+- `tuios set-agent-state limit_reached -m 'resets 3pm'`. The older `set-agent-state errored --kind usage_limit` lands as `limit_reached` too.
+
+`list-agents --json` gives `limit_resets`: the reset the harness named, in its own words (`11:10am (Australia/Sydney)`, `7:20 PM`, `Sep 14 at 7:20 PM`). TUIOS never turns it into a time, because a harness gives a clock time with no date or a date with no year. It is empty when the harness named none.
+
+The rail row says `limit reached`, and the agents view says `Limit reached` with the harness's line. The agent stays in the At rest group and does not move to Settled by itself. All [task dispatch](/docs/task-boards#the-switches) stops while one is in the limit, and `tuios task dispatch resume` lifts that.
 
 The state is held by the daemon, per pane. Every attached client sees it, and it survives a detach. It does not survive a daemon restart.
 
@@ -271,6 +286,24 @@ The same three commands report `evidence_age_ms`: the milliseconds since the las
 - A title or screen rule that reads the same claim again does not reset it.
 - For a state that the detector or the stall timer inferred (`source` `detect` or `stall`), new output from the pane also resets it. A pane that keeps printing reads fresh.
 - The value is `null` for a pane that never had a state.
+
+## Context size <Since feature="context-size" /> [#context-size]
+
+How full an agent's context is comes from what a source states, never from a guess:
+
+| Source | Tokens in context | Window |
+|--------|-------------------|--------|
+| The transcript of a Claude Code pane TUIOS has joined | The input side of the newest response's `usage` | Not known: the transcript does not say whether the extended window is on |
+| The status line feed (`tuios agent-statusline`) | The same sum from `context_window.current_usage` | `context_window.context_window_size` |
+| A protocol pane (`start-agent --protocol`) | The usage update's `used` | Its `size` |
+
+A subagent's records are not counted. TUIOS reads only the four token counts from a transcript record and never keeps its text.
+
+`list-agents --json` gives each row a `context` object, or `null` when no source said anything: `tokens`, `window` (only when a source stated it), `percent` and `near`. `near` is true at 80 percent or more, the same line as the rail's `ctx 84%`. Without a window there is no percent and no `near`. The values live in the pane's `meta` as `context_tokens` and `context_window`.
+
+The agents view draws it muted in the focus header: `ctx 612k` from the transcript alone, `ctx 612k/1M` once the window is known, or `ctx 42%` from a status line that gave only the percent. Past 80 percent it says `ctx 851k/1M near` in the warn colour. Each row of the list shows the same, without `ctx`. A row with nothing stated draws nothing.
+
+A pane joined to the wrong transcript shows the other agent's size, as it shows that agent's turn state.
 
 ## Subagents <Since feature="subagent-list" /> [#subagents]
 

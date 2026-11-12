@@ -1696,7 +1696,7 @@ tuios list-agents --select 'harness:codex state:idle,done'
 tuios list-agents --json | jq -r '.agents[] | select(.state=="needs_input") | .window_id'
 ```
 
-The states are `needs_input`, `errored`, `done`, `idle`, `working` and `unknown`. The JSON also carries `needs_you`, `queued` (messages waiting in the pane's [queue](#queue)), `completion_seq`, `finished_unread`, the agent's `meta`, `identity` and `confidence` (how TUIOS recognised the harness), `evidence_age_ms`, and `subagents`, the number of subagents the agent has at work. With `--json`, each row also has `subagent_list`: each subagent with its description, state, tool and how it ended. <Since feature="subagent-list" /> See [Subagents](/docs/agents#subagents). The `ID` and `NAME` columns work with `-w`. `--session` cannot be combined with `--all-hosts` or `--host`.
+The states are `needs_input`, `errored`, `done`, `idle`, `working`, `unknown` and `limit_reached`. The JSON also carries `limit_resets` (the reset a `limit_reached` agent's harness named, in its own words, or empty), `context` (`tokens`, `window`, `percent` and `near`, or `null`; see [Context size](/docs/agents#context-size)), `needs_you`, `queued` (messages waiting in the pane's [queue](#queue)), `completion_seq`, `finished_unread`, the agent's `meta`, `identity` and `confidence` (how TUIOS recognised the harness), `evidence_age_ms`, and `subagents`, the number of subagents the agent has at work. With `--json`, each row also has `subagent_list`: each subagent with its description, state, tool and how it ended. <Since feature="subagent-list" /> See [Subagents](/docs/agents#subagents). The `ID` and `NAME` columns work with `-w`. `--session` cannot be combined with `--all-hosts` or `--host`.
 
 ### get-agent-state and set-agent-state
 
@@ -1706,17 +1706,18 @@ Read or report a pane's agent state.
 tuios get-agent-state -w build --json
 tuios set-agent-state working
 tuios set-agent-state needs_input -w build -m "awaiting approval"
+tuios set-agent-state limit_reached -m "resets 3pm"   # stopped on a usage limit
 tuios set-agent-state none                  # clear it
 ```
 
 Without `-w`, a report from a pane is about that pane. From outside every pane, it is about the focused pane. A pane reports only for its own window: a report about another pane needs the `respond` grant. This holds for `set-agent-state`, `set-agent-meta`, `set-agent-session`, `report-agent-activity`, `ask-human` and `request-approval`. A hook that tuios runs outside every pane reports for no pane. See [Agent state from another pane](/docs/agents#agent-state-from-another-pane).
 
-`set-agent-state` takes `none`, `working`, `needs_input`, `idle`, `done`, `errored` or `unknown`, and these flags:
+`set-agent-state` takes `none`, `working`, `needs_input`, `idle`, `done`, `errored`, `unknown` or `limit_reached`, and these flags:
 
 - `-m, --message <text>`: a short note shown with the state.
 - `--source <source>`: `report` (default), `osc`, `screen` or `stall`.
 - `--harness <id>`: the harness the state is about, such as `claude-code`.
-- `--kind <kind>`: what a `needs_input` state waits for, `approval` or `question`. The Inbox groups it by this.
+- `--kind <kind>`: what a `needs_input` state waits for, `approval` or `question`. The Inbox groups it by this. `--kind usage_limit` with `errored` is the older form of `limit_reached`, and lands as it.
 - `--if-state <states>`: apply only when the pane is in one of these states.
 - `--agent-session-id <id>`: the harness's conversation id, stored for a later resume.
 
