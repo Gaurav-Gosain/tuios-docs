@@ -1,0 +1,108 @@
+---
+title: acp
+description: A Go client for the Agent Client Protocol, versions 1 and 2. Start a coding agent, open a session, send prompts and read typed updates.
+icon: Bot
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+`tuios.dev/acp` is a Go client for the [Agent Client Protocol](https://agentclientprotocol.com) (ACP). An editor or a terminal uses the protocol to drive a coding agent: it starts the agent, opens a session, sends prompts and reads what the agent does as typed updates. The messages are JSON-RPC 2.0, one per line, on the agent's stdin and stdout. tuios uses this package for its protocol panes (`tuios start-agent --protocol acp`).
+
+```bash
+go get tuios.dev/acp
+```
+
+The package uses only the standard library and needs Go 1.25 or later. The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/acp).
+
+## What is in it
+
+- **The JSON-RPC peer.** `Conn` sends and receives requests in both directions, and handles `$/cancel_request`.
+- **Version negotiation.** `Connect` asks for a version. An agent asked for version 2 may answer 1. An agent that refuses 2 is started again through the transport and asked for 1. When no version fits, the error names the versions of both sides.
+- **Sessions.** New, resume, list, prompt, cancel and close.
+- **Updates.** Every `session/update` kind is a Go type, in one model for both versions. An unknown kind arrives as `*UnknownUpdate` with its raw JSON.
+- **Permission requests.** Answer with `Choose` or `Cancel`. The agent can withdraw a request with `$/cancel_request`.
+- **Transports.** `Process` starts the agent and talks over stdio. `Pipe` works over a pair of streams.
+
+## Run one prompt
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	"tuios.dev/acp"
+)
+
+func main() {
+	ctx := context.Background()
+	agent := &acp.Process{Path: "opencode", Args: []string{"acp"}, Stderr: os.Stderr}
+	c, err := acp.Connect(ctx, agent, acp.ClientOptions{
+		Info: acp.Implementation{Name: "example", Version: "0.1.0"},
+		OnUpdate: func(u acp.Update) {
+			if m, ok := u.(*acp.MessageUpdate); ok && m.Role == acp.RoleAgent && m.Op == acp.MessageAppend {
+				fmt.Print(m.Text())
+			}
+		},
+		// Dismiss every permission request: the agent does nothing it
+		// has to ask for.
+		OnPermission: func(p *acp.PermissionRequest) { p.Cancel() },
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer c.Close()
+
+	cwd, _ := os.Getwd()
+	s, err := c.NewSession(ctx, cwd)
+	if err != nil {
+		log.Fatal(err)
+	}
+	end, err := s.Prompt(ctx, acp.Text("Summarise the TODO comments in this folder."))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("\nstopped:", end.Reason)
+}
+```
+
+`OnUpdate` and `OnPermission` run on the read goroutine of the connection, in the order the agent sent the messages. They must not block. Answer a permission request from any goroutine.
+
+<Callout type="warn">
+The package passes the text of the agent through as it came. The text can hold terminal escape sequences. A program that draws it in a terminal must remove them first.
+</Callout>
+
+## Versions of the protocol
+
+| Version | Status in the spec | In this package |
+| --- | --- | --- |
+| 1 | stable | spoken, the default |
+| 2 | draft | spoken when `ClientOptions.MaxVersion` is 2 |
+
+The spec asks clients not to ask for version 2 by default while it is a draft, so `DefaultVersion` is 1 and `LatestVersion` is 2. Set `MaxVersion: 2` in the options to ask for version 2 first. The version 2 schema can still change. This package follows the draft of 2026-11-13.
+
+Updates follow the version 2 model, which can say more. A version 1 update arrives as the same type, with the fields that version 1 cannot state left at their zero value. In version 2 the answer to a prompt only says that the agent took the prompt. `Session.Prompt` waits for the `state_update` to idle that ends the turn, so it returns at the end of the turn in both versions.
+
+The client offers the agent no file system and no terminal, so a conforming agent does its own reads, writes and commands. The agent side of the protocol is not in the package.
+
+## API overview
+
+| Name | Does |
+| --- | --- |
+| [`Connect`](https://pkg.go.dev/tuios.dev/acp#Connect), [`ClientOptions`](https://pkg.go.dev/tuios.dev/acp#ClientOptions) | Start a connection and negotiate the version. |
+| [`Process`](https://pkg.go.dev/tuios.dev/acp#Process), [`Pipe`](https://pkg.go.dev/tuios.dev/acp#Pipe) | The transports. |
+| [`Conn`](https://pkg.go.dev/tuios.dev/acp#Conn) | The JSON-RPC peer. |
+| [`Session`](https://pkg.go.dev/tuios.dev/acp#Session) | New, resume, list, prompt, cancel and close. |
+| [`Update`](https://pkg.go.dev/tuios.dev/acp#Update), [`UnknownUpdate`](https://pkg.go.dev/tuios.dev/acp#UnknownUpdate) | What the agent reports during a turn. |
+| [`PermissionRequest`](https://pkg.go.dev/tuios.dev/acp#PermissionRequest) | A question from the agent, answered with `Choose` or `Cancel`. |
+
+## What stays in tuios
+
+tuios keeps the pane program (`agent-proto`) and its transcript, the agent state and the Inbox reports, the keys that answer a permission, and the `[agents] acp_version` option. tuios does not use `acp.Process`. A protocol pane starts its agent through its own transport, so the agent gets no controlling terminal.
+
+## Versions
+
+The module is at v0 and has no tag yet. The API can change between minor versions. Its tags will have the folder name as a prefix, such as `acp/v0.1.0`. The source is in the [acp folder](https://github.com/Gaurav-Gosain/tuios/tree/main/acp) of the tuios repository, under the MIT licence.

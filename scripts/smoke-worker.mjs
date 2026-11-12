@@ -180,6 +180,18 @@ try {
     );
   }
   {
+    const res = await get("/acp?go-get=1");
+    const body = await res.text();
+    check(
+      "go-import meta tag, acp",
+      res.status === 200 &&
+        body.includes(
+          'content="tuios.dev/acp git https://github.com/Gaurav-Gosain/tuios acp"',
+        ),
+      `${res.status}, ${body.length} bytes`,
+    );
+  }
+  {
     const res = await get("/progstatus");
     const to = res.headers.get("location") ?? "";
     check(
