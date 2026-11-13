@@ -1,0 +1,80 @@
+---
+title: Upgrading to v0.13.0
+description: Move from v0.12.1 to v0.13.0 without ending your panes, and the changes to check after the move.
+icon: Milestone
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+There is no v0.12.2. Everything that was on its way to 0.12.2 ships in 0.13.0, so this page is the one to read when you come from v0.12.1. Most of it needs nothing from you. The parts that can surprise you are first.
+
+## Move the daemon without ending your panes
+
+Install the new build the way you installed the old one: `brew upgrade tuios`, `yay -S tuios-bin`, the install script, or `tuios update` for a binary from the script or an archive. The daemon keeps running the old build until you move it. Then run:
+
+```bash
+tuios daemon upgrade
+```
+
+The v0.12.1 daemon hands its panes to the v0.13.0 binary. Every program keeps running with the same process, the same screen and its scrollback. Your client on this machine reattaches by itself and, from v0.13.0 on, runs the new build too. The install script does the same with `scripts/install.sh --upgrade-server`, and `tuios hosts sync --restart` does it on each linked machine.
+
+A live upgrade is refused, and nothing changes, on Windows, while a pane runs for another machine or on another machine, or while a `tuios fan verify` check runs. Then use `tuios restart-server`, which shows what stops and asks first. See [Upgrade in place](/docs/daemon-restart#upgrade-in-place).
+
+<Callout title="Mixed versions">
+A v0.12.1 client can attach to a v0.13.0 daemon, and a v0.13.0 client to a v0.12.1 daemon: the wire protocol is the same version. A client that is older than the daemon does not show what is new, such as the `limit_reached` state.
+</Callout>
+
+## Things you may notice
+
+- **Cell frames are the default.** The client writes each frame as cells and sends the terminal only the cells that changed, on every terminal except on Windows. It looks the same and costs less. If text lands in the wrong place or stale cells stay after a redraw, set `cell_frames = "off"` in `[appearance]`, or start tuios with `TUIOS_CELL_FRAME=0`, and please report your terminal's name and version. See [How frames reach the terminal](/docs/configuration#cell-frames).
+- **Go-to holds the switchers.** The session switcher, the workspace switcher and the window list are now go-to. A pane row ends with the pane's folder, and you can filter by the folder. Every list takes the keys in `[keybindings.lists]`, including the ones that had `j`, `k` and a page of ten built in. See [List keys](/docs/keybindings#list-keys).
+- **Popups sit in the middle of the screen**, clear of the rail. The agents view no longer dims the dock and the rail.
+- **Minimized panes in the dock follow window order**, so dock pill N and restore N always pick the same pane, on every client.
+- **bash and zsh get prompt marks.** tuios turns on OSC 133 marks in the shells it starts, with no edit to your files. Set `integration = "off"` in `[shell]` to start shells as before. See [Shell prompt marks](/docs/configuration#shell-prompt-marks).
+- **A child agent asks its parent first.** A question from an agent started with `start-agent` is mailed to the agent that started it before it reaches you.
+- **`tuios task claim --next`** leaves the cards that were added with `--ask-first`. Claim one of those by its id.
+
+## Names that changed
+
+Each action has one name now. The older names still work in `config.toml`, in a preset, in a tape and over the protocol, so you do not have to edit anything. `tuios keybinds list` shows them after the description as "(also: ...)". The full table is in [Older action names](/docs/keybindings#older-action-names). The common ones:
+
+| Older name | Name now |
+|---|---|
+| `prefix_new_window`, `window_prefix_new` | `new_window` |
+| `prefix_close_window`, `window_prefix_close` | `close_window` |
+| `window_prefix_tiling` | `toggle_tiling` |
+| `terminal_focus_up`, `terminal_focus_down` | `focus_up`, `focus_down` |
+| `prefix_settings` | `open_settings` |
+| `prefix_help` | `toggle_help` |
+| `debug_prefix_cancel` and the other five `*_prefix_cancel` | `prefix_cancel` |
+
+A keybinding that names an action tuios does not know now gets a warning when the config loads. Before, it did nothing in silence. If you see one, check the name for a typo.
+
+## Scripts and agents
+
+- **Usage limits have their own state.** An agent that stops on a usage or rate limit is `limit_reached`, not `errored`. `set-agent-state errored --kind usage_limit` lands as `limit_reached` too. A script that waits for `errored` should also look for `limit_reached`. See [A usage limit](/docs/agents#usage-limit).
+- **Hooks talk to the daemon.** Run `tuios integration install` again. Where the machine has `nc -U` or `socat`, each hook and the Claude Code status line become one line of sh that sends the event to the daemon, so a hook no longer starts a whole tuios. Without those programs, the hooks stay as they were.
+- **Mail from your lead.** Mail from the agent that started you is marked "from your lead". Mail that only says it comes from there is not.
+
+## New options, all off or as before
+
+| Option | Does |
+|---|---|
+| `[[actions]]` and `[menus.NAME]` | Actions and menus of your own. See [Actions and menus of your own](/docs/configuration#actions-and-menus-of-your-own) |
+| `[shell] login = true` | Starts new panes as login shells. See [Login shells](/docs/configuration#login-shells) |
+| `[agents] name_hint = "off"` | Leaves the advice to name the pane out of an agent's start hint |
+| `[agents] acp_version = 2` | Speaks the draft version 2 of the Agent Client Protocol. See [ACP version](/docs/configuration#acp-version) |
+| `[daemon] client_follows_upgrade = false` | Keeps the old client running after a live upgrade |
+| `mouse.double_click_ms`, `mouse.drag_threshold`, `appearance.whichkey_delay_ms`, `appearance.idle_fps` and more | Timings that were fixed. Each default is the old value |
+
+Every option, with its default and the version that added it, is in the [Option Explorer](/docs/config-options).
+
+## Building from source
+
+- The toolchain is Go 1.27.4. `go install` fetches it for you when your Go is older.
+- The release turns inlining off in the packages no hot path calls, through `scripts/goflags.sh`. A plain `go install` skips that, so its binary is about 0.8 MB larger. The installers, the justfile, the Dockerfile and the Nix build all read the list.
+- The ghostty backend is on libghostty-vt 1.0.1. Rebuild it with `scripts/install.sh ghostty`.
+
+## Going back to v0.12.1
+
+Install v0.12.1 again and run `tuios restart-server`. A live upgrade from v0.13.0 down to v0.12.1 is refused, because v0.12.1 cannot read the newer handoff, so the restart stops the programs in your panes. Your sessions, layouts and scrollback come back as after any restart.
