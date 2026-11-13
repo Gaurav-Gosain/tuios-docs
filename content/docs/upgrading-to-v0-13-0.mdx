@@ -1,6 +1,6 @@
 ---
 title: Upgrading to v0.13.0
-description: Move from v0.12.1 to v0.13.0 without ending your panes, and the changes to check after the move.
+description: Move from v0.12.1 to v0.13.0 with one restart of the daemon, live upgrades from then on, and the changes to check after the move.
 icon: Milestone
 ---
 
@@ -8,17 +8,19 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 There is no v0.12.2. Everything that was on its way to 0.12.2 ships in 0.13.0, so this page is the one to read when you come from v0.12.1. Most of it needs nothing from you. The parts that can surprise you are first.
 
-## Move the daemon without ending your panes
+## Move the daemon: one restart, then live upgrades
 
-Install the new build the way you installed the old one: `brew upgrade tuios`, `yay -S tuios-bin`, the install script, or `tuios update` for a binary from the script or an archive. The daemon keeps running the old build until you move it. Then run:
+Install the new build the way you installed the old one: `brew upgrade tuios`, `yay -S tuios-bin`, the install script, or `tuios update` for a binary from the script or an archive. The daemon keeps running the old build until you move it.
+
+A v0.12.1 daemon cannot hand its panes over, so this one move is a restart:
 
 ```bash
-tuios daemon upgrade
+tuios restart-server
 ```
 
-The v0.12.1 daemon hands its panes to the v0.13.0 binary. Every program keeps running with the same process, the same screen and its scrollback. Your client on this machine reattaches by itself and, from v0.13.0 on, runs the new build too. The install script does the same with `scripts/install.sh --upgrade-server`, and `tuios hosts sync --restart` does it on each linked machine.
+It lists the programs that stop and what comes back, and asks first. Each session comes back with its layout, the last 1000 lines of each pane's history, and new shells. `tuios daemon upgrade` on a v0.12.1 daemon says the same thing and changes nothing.
 
-A live upgrade is refused, and nothing changes, on Windows, while a pane runs for another machine or on another machine, or while a `tuios fan verify` check runs. Then use `tuios restart-server`, which shows what stops and asks first. See [Upgrade in place](/docs/daemon-restart#upgrade-in-place).
+From v0.13.0 on, the next move is live. `tuios daemon upgrade` hands the panes to the new binary, and every program keeps running with the same process and the same screen. Your client on this machine reattaches and runs the new build too. `scripts/install.sh --upgrade-server` and `tuios hosts sync --restart` do the same. A live upgrade is refused, and nothing changes, on Windows, while a pane runs for another machine or on another machine, or while a `tuios fan verify` check runs. See [Upgrade in place](/docs/daemon-restart#upgrade-in-place).
 
 <Callout title="Mixed versions">
 A v0.12.1 client can attach to a v0.13.0 daemon, and a v0.13.0 client to a v0.12.1 daemon: the wire protocol is the same version. A client that is older than the daemon does not show what is new, such as the `limit_reached` state.
@@ -72,9 +74,9 @@ Every option, with its default and the version that added it, is in the [Option 
 ## Building from source
 
 - The toolchain is Go 1.27.4. `go install` fetches it for you when your Go is older.
-- The release turns inlining off in the packages no hot path calls, through `scripts/goflags.sh`. A plain `go install` skips that, so its binary is about 0.8 MB larger. The installers, the justfile, the Dockerfile and the Nix build all read the list.
+- The release turns inlining off in the packages no hot path calls, through `scripts/goflags.sh`. A plain `go install` skips that, so its binary is about 0.8 MB larger. The installers, the justfile and the Dockerfile read the list. The Nix package does not yet, so it is the larger binary too.
 - The ghostty backend is on libghostty-vt 1.0.1. Rebuild it with `scripts/install.sh ghostty`.
 
 ## Going back to v0.12.1
 
-Install v0.12.1 again and run `tuios restart-server`. A live upgrade from v0.13.0 down to v0.12.1 is refused, because v0.12.1 cannot read the newer handoff, so the restart stops the programs in your panes. Your sessions, layouts and scrollback come back as after any restart.
+Install v0.12.1 again and run `tuios restart-server`. A live upgrade from v0.13.0 down to v0.12.1 is refused, because v0.12.1 cannot read the newer handoff, so the restart stops the programs in your panes. Your sessions and layouts come back, with the last 1000 lines of each pane's history, as after any restart.

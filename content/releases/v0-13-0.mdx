@@ -19,7 +19,7 @@ go install github.com/Gaurav-Gosain/tuios/cmd/tuios@v0.13.0
 docker run -it --rm ghcr.io/gaurav-gosain/tuios:v0.13.0
 ```
 
-A binary installed by the script or from an archive updates with `tuios update`. Then run `tuios daemon upgrade`: it moves the running v0.12.1 daemon to the new build, and the programs in your panes keep running. `scripts/install.sh --upgrade-server` does the same for you. When a live upgrade cannot run (Windows, or a pane on another machine), run `tuios restart-server`, which stops the programs in your panes. See [Upgrade in place](/docs/daemon-restart#upgrade-in-place).
+A binary installed by the script or from an archive updates with `tuios update`. A v0.12.1 daemon cannot hand its panes over, so move it to the new build once with `tuios restart-server`. The restart stops the programs in your panes, and each session comes back with its layout, its pane history and new shells. From then on, `tuios daemon upgrade` moves the daemon to a new build and every program keeps running. See [Upgrading to v0.13.0](/docs/upgrading-to-v0-13-0). See [Upgrade in place](/docs/daemon-restart#upgrade-in-place).
 
 ## Highlights
 
@@ -32,7 +32,7 @@ A binary installed by the script or from an archive updates with `tuios update`.
 - **Faster frames.** The client writes each frame as cells and sends the terminal only
   what changed. With a typed key in a 200x60 window the frame went from 1023 us to
   205 us, and from 792 to 376 allocations. ([#2001](https://github.com/Gaurav-Gosain/tuios/pull/2001), [#2050](https://github.com/Gaurav-Gosain/tuios/pull/2050))
-- **Live upgrade.** `tuios daemon upgrade` moves a running daemon to a new binary without
+- **Live upgrade.** From this release on, `tuios daemon upgrade` moves a running daemon to a new binary without
   ending your panes, and `scripts/install.sh --upgrade-server` and `tuios hosts sync --restart` use it. A
   client on this machine follows the daemon across the upgrade and runs the new build too. ([#1858](https://github.com/Gaurav-Gosain/tuios/pull/1858), [#1333](https://github.com/Gaurav-Gosain/tuios/pull/1333), [#1398](https://github.com/Gaurav-Gosain/tuios/pull/1398), [#1480](https://github.com/Gaurav-Gosain/tuios/pull/1480), [#1593](https://github.com/Gaurav-Gosain/tuios/pull/1593), by
   @abhijit-s)
@@ -85,6 +85,8 @@ A binary installed by the script or from an archive updates with `tuios update`.
   hook commands that send each event to the daemon socket with `nc -U` or `socat`, so a
   hook no longer starts a whole tuios. Without either program, nothing changes. ([#1908](https://github.com/Gaurav-Gosain/tuios/pull/1908),
   [#1918](https://github.com/Gaurav-Gosain/tuios/pull/1918), [#1919](https://github.com/Gaurav-Gosain/tuios/pull/1919))
+- **One restart to get here.** The v0.12.1 daemon predates live upgrades, so run
+  `tuios restart-server` once after you install. The next upgrade can be live.
 - **Building from source** needs the Go 1.27.4 toolchain, which `go install` fetches
   for you. A plain `go install` binary is about 0.8 MB larger than the release, which
   turns inlining off in the cold packages. ([#1876](https://github.com/Gaurav-Gosain/tuios/pull/1876), [#2053](https://github.com/Gaurav-Gosain/tuios/pull/2053))
