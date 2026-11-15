@@ -64,12 +64,12 @@ function git(...argv) {
  * checksum database recorded, but its release build failed, so 0.13 shipped as
  * v0.13.1.
  */
-const unreleased = new Set(["v0.13.0"]);
+const neverReleased = new Set(["v0.13.0"]);
 
 /** v0.9.2 and the like, oldest first. Pre-release tags are left out. */
 const tags = git("tag", "-l", "v*")
   .split("\n")
-  .filter((t) => /^v\d+\.\d+\.\d+$/.test(t) && !unreleased.has(t))
+  .filter((t) => /^v\d+\.\d+\.\d+$/.test(t) && !neverReleased.has(t))
   .sort((a, b) => {
     const pa = a.slice(1).split(".").map(Number);
     const pb = b.slice(1).split(".").map(Number);
