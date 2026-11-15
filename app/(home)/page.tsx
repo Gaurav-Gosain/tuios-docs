@@ -182,12 +182,11 @@ export default function HomePage() {
           </Feature>
           <Feature
             icon={<GitCompare />}
-            title="Review and fan"
+            title="Review and hand off"
             href="/docs/worktrees"
           >
-            Read an agent&apos;s diff and send it notes. Fan one prompt out to
-            several agents and keep the best, or hand out work as cards on a
-            task board.
+            Read an agent&apos;s diff and send it notes, give each agent its
+            own worktree, or hand out work as cards on a task board.
           </Feature>
           <Feature
             icon={<LayoutDashboard />}
