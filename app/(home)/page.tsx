@@ -185,8 +185,8 @@ export default function HomePage() {
             title="Review and hand off"
             href="/docs/worktrees"
           >
-            Read an agent&apos;s diff and send it notes, give each agent its
-            own worktree, or hand out work as cards on a task board.
+            Read an agent&apos;s diff and send it notes, give each agent its own
+            worktree, or hand out work as cards on a task board.
           </Feature>
           <Feature
             icon={<LayoutDashboard />}
