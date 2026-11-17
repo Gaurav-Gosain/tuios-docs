@@ -103,6 +103,9 @@ const commands = report.commands
       short: c.short ?? "",
     };
     if (c.aliases?.length) out.aliases = c.aliases;
+    // A command of one platform, such as daemon-app on macOS. help --json
+    // lists it on every platform, with the GOOS it runs on.
+    if (c.platform) out.platform = c.platform;
     const flags = (c.flags ?? []).map((f) => {
       const flag = { name: f.name, type: f.type, usage: f.usage ?? "" };
       if (f.shorthand) flag.short = f.shorthand;

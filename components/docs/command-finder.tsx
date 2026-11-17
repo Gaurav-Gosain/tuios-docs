@@ -28,7 +28,16 @@ interface Command {
   aliases?: string[];
   flags?: Flag[];
   doc?: string;
+  /** The one GOOS the command runs on, such as darwin. */
+  platform?: string;
 }
+
+/** The name a reader knows a GOOS by. */
+const platformNames: Record<string, string> = {
+  darwin: "macOS",
+  linux: "Linux",
+  windows: "Windows",
+};
 
 const commands = data.commands as Command[];
 
@@ -211,6 +220,11 @@ export function CommandFinder() {
                         <code className="break-all font-mono text-fd-foreground text-sm">
                           {c.path}
                         </code>
+                        {c.platform ? (
+                          <span className="rounded border border-fd-border px-1.5 font-mono text-[0.6875rem] text-fd-muted-foreground">
+                            {platformNames[c.platform] ?? c.platform} only
+                          </span>
+                        ) : null}
                         {c.aliases?.length ? (
                           <span className="font-mono text-[0.6875rem] text-fd-muted-foreground">
                             also {c.aliases.join(", ")}
