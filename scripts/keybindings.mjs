@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 /**
+ * scripts/reference-data.sh runs this. Run that script, not this one.
+ *
  * Writes lib/keybindings/defaults.json, the data behind the keybinding
  * explorer on /docs/keybindings, from tuios's own keybind report.
  *

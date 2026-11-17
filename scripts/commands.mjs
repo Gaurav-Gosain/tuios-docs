@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 /**
+ * scripts/reference-data.sh runs this. Run that script, not this one.
+ *
  * Writes lib/commands/commands.json, the data behind the command finder on
  * /docs/commands, from tuios's own command tree.
  *

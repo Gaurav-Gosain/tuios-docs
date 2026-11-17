@@ -43,6 +43,31 @@ jobs:
       - name: Test the Worker's content negotiation and the /learn engine
         run: bun test worker/ lib/
 
+      # The command finder, the option explorer and the keybinding explorer
+      # read lib/commands, lib/options and lib/keybindings. The script writes
+      # them from the tuios commit pinned in reference/TUIOS_REF, so a deploy
+      # never ships data older than the pin. Bump that
+      # file to update them.
+      - name: Read the pinned tuios ref for the reference data
+        id: reference
+        run: echo "ref=$(tr -d '[:space:]' < reference/TUIOS_REF)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tuios for the reference data
+        uses: actions/checkout@v7
+        with:
+          repository: Gaurav-Gosain/tuios
+          ref: ${{ steps.reference.outputs.ref }}
+          path: .tuios-reference
+
+      - name: Setup Go for the reference data
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: .tuios-reference/go.mod
+          cache-dependency-path: .tuios-reference/go.sum
+
+      - name: Write the reference data from the pinned tuios
+        run: scripts/reference-data.sh .tuios-reference
+
       # /learn runs tuios compiled to WebAssembly. It is built from the tuios
       # commit pinned in learn/TUIOS_REF, so the page teaches a known version.
       # Bump that file to update it.

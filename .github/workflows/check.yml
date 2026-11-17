@@ -46,6 +46,31 @@ jobs:
       - name: Test the Worker and the /learn engine
         run: bun test worker/ lib/
 
+      # The command finder, the option explorer and the keybinding explorer
+      # read lib/commands, lib/options and lib/keybindings. The script writes
+      # them from the tuios commit pinned in reference/TUIOS_REF, and fails
+      # when the committed files are not what that commit gives. Bump that
+      # file to update them.
+      - name: Read the pinned tuios ref for the reference data
+        id: reference
+        run: echo "ref=$(tr -d '[:space:]' < reference/TUIOS_REF)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tuios for the reference data
+        uses: actions/checkout@v7
+        with:
+          repository: Gaurav-Gosain/tuios
+          ref: ${{ steps.reference.outputs.ref }}
+          path: .tuios-reference
+
+      - name: Setup Go for the reference data
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: .tuios-reference/go.mod
+          cache-dependency-path: .tuios-reference/go.sum
+
+      - name: Check the reference data against the pinned tuios
+        run: scripts/reference-data.sh --check .tuios-reference
+
       - name: Cache the Next.js build
         uses: actions/cache@v6
         with:

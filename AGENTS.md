@@ -71,8 +71,11 @@ public/shots/                 whole-screen captures of tuios for the landing pag
 public/clips/                 short silent clips of tuios for the docs: AV1 WebM, H.264 MP4 and a
                               WebP poster each, made by scripts/docs-media.sh
 media/                        the scenes and tools behind public/clips and the newer public/shots
-lib/keybindings/defaults.json the default bindings behind the keybinding explorer, written by
-                              scripts/keybindings.mjs from `tuios keybinds doctor --json`
+lib/keybindings/defaults.json the default bindings behind the keybinding explorer
+lib/options/options.json      the options behind the option explorer
+lib/commands/commands.json    the commands behind the command finder
+                              scripts/reference-data.sh writes all three from the tuios commit
+                              in reference/TUIOS_REF (see "Screenshots and generated data")
 lib/since/data.json           the first tuios tag of each config key, command, action and verb,
                               written by scripts/since.mjs (see "Version badges")
 public/brand/                 the logo: Tilly mark, wordmark and lockups (SVG and PNG)
@@ -129,7 +132,7 @@ Keep the text readable at the size a reader sees it:
 
 `scripts/gen-library-shots.sh` makes the pictures of the library pages (`content/docs/libraries/`) with `tools/libshots`, a Go program that draws each one with the library it shows and renders it with shot. Each picture is drawn in the dark and the light theme of the site, as `public/libs/LIB/NAME.webp` and `NAME-light.webp`, and its size goes into `lib/libshots.json`. `<LibShot name="LIB/NAME">` puts one on a page. The TML sources are in `tools/libshots/scenes/`, and the code a page shows next to a picture is in `tools/libshots/snippets/`, cut from the program that drew it. A page includes both with `<include cwd>`, so the code and the picture cannot drift apart. The sketch pages also get their text drawings from the script: `lib/sketch-text.json` holds what `sketch/text` draws for each gallery diagram, and `<SketchType>` shows it beside the picture and the source. After a library changes, move the pins in `tools/libshots/go.mod` and run the script again.
 
-The keybinding explorer reads `lib/keybindings/defaults.json`. Regenerate it after tuios changes its defaults; the header of `scripts/keybindings.mjs` has the commands, one report per platform because macOS binds `opt+` where the others bind `alt+`.
+The command finder, the option explorer and the keybinding explorer read `lib/commands/commands.json`, `lib/options/options.json` and `lib/keybindings/defaults.json`. Do not edit them by hand. `scripts/reference-data.sh <tuios checkout>` writes them from that checkout: it builds tuios and runs `help --json`, `list-options --json` and `keybinds doctor --json` in a throwaway home. To move the site to a newer tuios, change `reference/TUIOS_REF`, check out that commit and run the script. The deploy writes the files again from the pin, and `check.yml` fails when the committed files differ from it.
 
 ### Version badges
 

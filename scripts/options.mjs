@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 /**
+ * scripts/reference-data.sh runs this. Run that script, not this one.
+ *
  * Writes lib/options/options.json, the data behind the option explorer on
  * /docs/config-options, from tuios's own option registry.
  *
