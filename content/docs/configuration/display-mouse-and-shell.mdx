@@ -1,0 +1,309 @@
+---
+title: "Display, mouse and shell"
+description: "Display, mouse and shell: part of the Configuration of TUIOS."
+icon: Settings
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CONFIGURATION.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CONFIGURATION.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CONFIGURATION.md). The [Configuration](/docs/configuration) page lists every part.
+
+## Limits and banners [#limits-and-banners]
+
+| Option                                                                                            | Default | Range         | What it does                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------- | ------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`notifications.rate_limit_ms`](/docs/option-reference#notifications.rate_limit_ms)               | `500`   | 0 to 10000    | A second desktop notification from a pane within this many milliseconds is dropped, so a pane that spams OSC 9 cannot flood the stack. `0` keeps every one.                                              |
+| [`notifications.bell_rate_limit_ms`](/docs/option-reference#notifications.bell_rate_limit_ms)     | `200`   | 0 to 10000    | The same for the bell. `0` keeps every one.                                                                                                                                                              |
+| [`appearance.copy_search_max_matches`](/docs/option-reference#appearance.copy_search_max_matches) | `1000`  | 100 to 100000 | Matches one copy mode search keeps. The renderer walks every match on every frame, so a very high value slows a one-letter query over a long scrollback. A search that stops at the limit shows `1000+`. |
+| [`tape.banner_ms`](/docs/option-reference#tape.banner_ms)                                         | `8000`  | 1000 to 60000 | How long the "project tape found" banner stays on screen.                                                                                                                                                |
+| [`tape.done_linger_ms`](/docs/option-reference#tape.done_linger_ms)                               | `2000`  | 500 to 30000  | How long the DONE indicator stays after a tape finishes.                                                                                                                                                 |
+
+```toml
+[notifications]
+rate_limit_ms = 1000
+
+[appearance]
+copy_search_max_matches = 5000
+
+[tape]
+banner_ms = 4000
+```
+
+A value of 0 on `copy_search_max_matches`, `banner_ms` or `done_linger_ms` is read
+as the default, and a value out of range moves to the nearest end of the range.
+All five are on the settings page and apply at once.
+
+## More display options [#more-display-options]
+
+| Option                                                                                              | Default | Range        | What it does                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------- | ------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`appearance.multi_copy_dim`](/docs/option-reference#appearance.multi_copy_dim)                     | `45`    | 0 to 90      | Percent a pane is dimmed when multi copy mode's search found nothing in it, so the panes that take part in the selection stand out. `0` leaves it undimmed. |
+| [`appearance.sidebar.marquee_pause_ms`](/docs/option-reference#appearance.sidebar.marquee_pause_ms) | `900`   | 0 to 10000   | Milliseconds a hovered rail row holds still before its overflowing title starts to move. `0` starts at once.                                                |
+| [`appearance.sidebar.marquee_step_ms`](/docs/option-reference#appearance.sidebar.marquee_step_ms)   | `220`   | 20 to 2000   | Milliseconds each one-cell step of the marquee is held. Larger is slower.                                                                                   |
+| [`dock.meter_interval_ms`](/docs/option-reference#dock.meter_interval_ms)                           | `2000`  | 500 to 60000 | Milliseconds between measurements of the dock's CPU and RAM readouts.                                                                                       |
+
+```toml
+[appearance]
+multi_copy_dim = 60
+
+[appearance.sidebar]
+marquee_pause_ms = 400
+marquee_step_ms = 150
+
+[dock]
+meter_interval_ms = 5000
+```
+
+A value of 0 on `marquee_step_ms` or `meter_interval_ms` is read as the default,
+and a value out of range moves to the nearest end of the range. All four are on
+the settings page and apply at once.
+
+## Display options [#display-options]
+
+| Option                                                                                          | Default | Range        | What it does                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------- | ------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`appearance.idle_fps`](/docs/option-reference#appearance.idle_fps)                             | `10`    | 1 to 60      | How often tuios polls, per second, while nothing is moving. A lower number saves power on a laptop, and a higher one notices background work sooner. It sits beside `max_fps`, which sets the rate while something is moving. |
+| [`appearance.sidebar.git_refresh_ms`](/docs/option-reference#appearance.sidebar.git_refresh_ms) | `2000`  | 500 to 60000 | Milliseconds between the rail's git section's looks at a directory it is already showing. The look is cheap, because git is run only when the commits have moved; raise it for a very large repository.                       |
+| [`debug.show_key_count`](/docs/option-reference#debug.show_key_count)                           | `5`     | 1 to 20      | How many recent keypresses the showkeys overlay keeps, for a screencast.                                                                                                                                                      |
+
+```toml
+[appearance]
+idle_fps = 4
+
+[appearance.sidebar]
+git_refresh_ms = 5000
+
+[debug]
+show_key_count = 8
+```
+
+A value of 0 is read as the default, and a value out of range moves to the
+nearest end of the range. All three are on the settings page and apply at once.
+
+## Timing options [#timing-options]
+
+These `[appearance]` options set how long the interface waits before it acts.
+Each is in milliseconds, applies at once, and is on the settings page.
+
+| Option                                                                                | Default | Range        | What it does                                                                                                      |
+| ------------------------------------------------------------------------------------- | ------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| [`appearance.whichkey_delay_ms`](/docs/option-reference#appearance.whichkey_delay_ms) | `500`   | 0 to 5000    | The pause after the leader key before the which-key panel opens. `0` opens it at once.                            |
+| [`appearance.tooltip_delay_ms`](/docs/option-reference#appearance.tooltip_delay_ms)   | `350`   | 0 to 5000    | How long the pointer rests on a control before its tooltip shows. `0` shows it at once.                           |
+| [`appearance.zen_reveal_ms`](/docs/option-reference#appearance.zen_reveal_ms)         | `2000`  | 200 to 30000 | How long the pointer may sit still before zen mode (`mouse`) hides the borders again.                             |
+| [`appearance.paste_preview_ms`](/docs/option-reference#appearance.paste_preview_ms)   | `6000`  | 500 to 60000 | How long the paste card stays up with nothing pressed.                                                            |
+| [`appearance.chord_timeout_ms`](/docs/option-reference#appearance.chord_timeout_ms)   | `500`   | 100 to 3000  | How long the first key of a two-key chord (`gg` in copy mode and in the scrollback browser) waits for the second. |
+
+```toml
+[appearance]
+whichkey_delay_ms = 1000
+chord_timeout_ms = 800
+```
+
+A value of 0 on `zen_reveal_ms`, `paste_preview_ms` or `chord_timeout_ms` is read
+as the default, and a value out of range moves to the nearest end of the range.
+
+## Mouse [#mouse]
+
+The `[mouse]` table sets how tuios reads the pointer's gestures.
+
+| Option                                                                  | Default | Range       | What it does                                                                                                                                                              |
+| ----------------------------------------------------------------------- | ------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`mouse.double_click_ms`](/docs/option-reference#mouse.double_click_ms) | `300`   | 100 to 1000 | Milliseconds after a click in which a second click counts as a double click. A pane's text selection, the rail divider, the Agents list and the draft editor all read it. |
+| [`mouse.drag_threshold`](/docs/option-reference#mouse.drag_threshold)   | `5`     | 1 to 50     | Cells the pointer moves before a press is a drag and not a click. It applies to the right button, to click-to-type and to Ctrl drag.                                      |
+
+```toml
+[mouse]
+double_click_ms = 450
+drag_threshold = 8
+```
+
+Raise `double_click_ms` for a slow hand or a trackpad that spaces its clicks.
+The Agents list used 400 ms before this option; it now follows the same value
+as the pane, 300 ms by default. Both options are on the settings page, in the
+Behavior section, and apply at once. A value of 0 or a value out of range is
+read as the default or moved to the nearest end of the range.
+
+## Shell integration [#shell-integration]
+
+tuios turns on OSC 133 prompt marks in the bash and zsh shells that it starts
+in panes, as Ghostty and kitty do. The marks tell tuios where a prompt starts,
+where a command starts, and how the command ended. `tuios run`,
+`wait-for command-finished`, `capture-pane --last-command`, the scrollback
+browser and copy mode read them. A pane with marks also keeps one copy of its
+prompt when you make the pane narrower.
+
+tuios does not change your files:
+
+- **zsh**: tuios starts zsh with `ZDOTDIR` set to a folder of its own. The
+  `.zshenv` there sets `ZDOTDIR` back to your value, reads your `.zshenv`, and
+  adds the marks. zsh then reads your `.zshrc` as usual, and your `.zprofile`
+  and `.zlogin` too when it is a login shell (see [Login shells](#login-shells)).
+  Programs in the pane see your own `ZDOTDIR`.
+- **bash**: tuios starts bash with `--rcfile` set to a file of its own. That
+  file reads your `~/.bashrc` and then adds the marks. Your `PS1`, `PS0`,
+  `PROMPT_COMMAND` (a string or an array), traps, `BASH_ENV` and `set -e` or
+  `set -u` stay as they are. This needs bash 4.4 or newer. An older bash
+  starts with no marks.
+- **fish 4** and **nushell** send the marks themselves, so tuios adds nothing.
+- Other shells start as they are.
+
+When your own setup already sends a mark, for example from a prompt theme or
+your own `precmd`, tuios does not send that mark again.
+
+The files are in `$XDG_STATE_HOME/tuios/shell-integration`, by default
+`~/.local/state/tuios/shell-integration`. tuios writes them once and checks
+them the first time it starts a shell. A shell starts less than 1 ms slower.
+
+To turn it off:
+
+```toml
+[shell]
+integration = "off"   # default: "auto"
+```
+
+The change applies to new panes. To choose for one pane, use
+`tuios new-window --shell-integration off`, or `auto` when the config is off.
+`tuios doctor shell` shows which panes send marks.
+
+tuios does not set up the shell of a remote pane: a pane that runs `ssh`, or a
+window on another machine (`--host`). To get marks there, add the lines that
+`tuios doctor shell` prints to the rc file on that machine. Then open a new
+pane.
+
+## Login shells [#login-shells]
+
+By default tuios starts the shell of a new pane as an interactive shell that
+is not a login shell. Such a shell reads `.zshrc` or `.bashrc`, but not
+`.zprofile`, `.bash_profile` or `.profile`. Most terminals on macOS start a
+login shell, so a `PATH` that you set in `.zprofile` can be missing in tuios.
+
+To start each new pane as a login shell:
+
+```toml
+[shell]
+login = true   # default: false
+```
+
+- **zsh** and **fish** start with `-l`. zsh then reads `.zprofile` and
+  `.zlogin`.
+- **bash** keeps the file that tuios uses for the prompt marks, because a
+  login bash reads no rc file. That file reads `/etc/profile` and then the
+  first of `~/.bash_profile`, `~/.bash_login` and `~/.profile`, as a login bash
+  does, in place of `~/.bashrc`. Most `~/.bash_profile` files read `~/.bashrc`
+  themselves. With `[shell] integration = "off"`, bash starts with `-l`.
+- Other shells (`sh`, `dash`, `ksh`, `tcsh`) start with a `-` in front of
+  their name, which every Unix shell reads as a login shell.
+- On Windows the option does nothing.
+
+The change applies to new panes. A pane that runs a command, such as
+`tuios new-window -- htop`, runs the command as it is.
+
+## Splits that follow ssh [#splits-that-follow-ssh]
+
+The actions `split_ssh_horizontal`, `split_ssh_vertical` and `new_window_ssh`
+open a pane on the machine that the focused pane is connected to with ssh. See
+[KEYBINDINGS.md](/docs/keybindings/panes-panels-and-workspaces#split-into-the-same-ssh).
+
+[`appearance.new_window_follow_ssh`](/docs/option-reference#appearance.new_window_follow_ssh) makes the ordinary actions do the same:
+`split_horizontal`, `split_vertical` and `new_window`. When the focused pane
+does not run ssh, these actions open an ordinary pane. The default is `false`.
+
+```toml
+[appearance]
+new_window_follow_ssh = true
+```
+
+tuios finds ssh in the foreground of the pane. ssh can run from a shell, or
+from `sshpass`, `autossh` or `mosh`. ssh can also run from another program,
+such as your own helper script (`tt ssh box`). tuios then follows only an
+interactive login: an ssh line with no remote command, and with none of `-s`,
+`-N`, `-T` or `-W`. tuios reads only the processes that you own in the pane. It runs the `ssh` or `mosh` that it finds on its own `PATH`,
+with no shell on this machine. It never runs the program that the pane runs.
+
+The new ssh gets the same environment as an ordinary new pane. If the ssh
+that tuios follows has an `SSH_AUTH_SOCK` that names your own agent socket,
+the new ssh gets that value too. An agent that your shell started in the pane
+then works in the split. The socket must not be a link, and its folder must
+be yours and closed to other users.
+
+The new ssh line keeps only what it needs to reach the same host as the same
+user. It always gets `-o ControlMaster=no`. Your `~/.ssh/config` applies to it
+as usual, so a setting that you put there still works in the split.
+
+### Lines that are not followed [#lines-that-are-not-followed]
+
+tuios follows an ssh line only when each `-o` option is on one of two lists.
+The new pane keeps these options:
+
+`AddressFamily`, `BatchMode`, `CertificateFile`, `CheckHostIP`, `Ciphers`,
+`Compression`, `ConnectionAttempts`, `ConnectTimeout`, `EscapeChar`,
+`HostKeyAlgorithms`, `HostName`, `IdentitiesOnly`, `IdentityFile`,
+`KbdInteractiveAuthentication`, `KexAlgorithms`, `LogLevel`, `MACs`,
+`PasswordAuthentication`, `Port`, `PreferredAuthentications`, `ProxyJump`,
+`PubkeyAcceptedAlgorithms`, `PubkeyAuthentication`, `ServerAliveCountMax`,
+`ServerAliveInterval`, `StrictHostKeyChecking`, `TCPKeepAlive` and `User`.
+
+The new pane does not get these options, and tuios still follows the line:
+
+- Forwards and sessions: `LocalForward`, `RemoteForward`, `DynamicForward`,
+  `GatewayPorts`, `ExitOnForwardFailure`, `ClearAllForwardings`, `Tunnel`,
+  `TunnelDevice`, `RemoteCommand`, `SessionType`, `StdinNull`,
+  `ForkAfterAuthentication` and `RequestTTY`.
+- Files, sockets, environment and forwarding: `ControlMaster`,
+  `ControlPersist`, `ControlPath`, `UserKnownHostsFile`,
+  `GlobalKnownHostsFile`, `HostKeyAlias`, `IdentityAgent`, `SendEnv`,
+  `SetEnv`, `ForwardAgent`, `ForwardX11` and `ForwardX11Trusted`.
+- The flags `-A`, `-X`, `-Y`, `-S`, `-L`, `-R`, `-D`, `-W`, `-w`, `-N`, `-f`,
+  `-n`, `-T`, `-t`, `-M` and `-s`.
+
+These ssh lines get an ordinary pane:
+
+- An `-o` option that is not on the two lists above. `ProxyCommand`,
+  `LocalCommand`, `XAuthLocation` and `Match` are examples.
+- An option or a value with a control character, such as a line break.
+- `-E`, `-F`, `-I`, `-G`, `-V`, `-Q` and `-O`, and an option that tuios does
+  not know.
+- A `-J` or `ProxyJump` hop that is not `[user@]host[:port]` or the `ssh://`
+  form, made of letters, digits and `._:@[]-`, or a hop that starts with `-`.
+- A mosh destination that starts with `-`.
+- mosh with `--ssh`, `--client` or `--server`.
+- ssh that a file transfer starts: `scp`, `rsync`, `git`, `sftp` or `sshfs`.
+- ssh that another program starts, when the line has a remote command, or
+  `-s`, `-N`, `-T` or `-W`.
+
+When a split asks to follow ssh and gets an ordinary pane, the dock says why.
+
+Put a `ProxyCommand` or a `ProxyJump` in `~/.ssh/config` to use it with a
+split. A split with `-J` on the command line is followed.
+
+### Start in the remote folder [#start-in-the-remote-folder]
+
+The new pane starts in the remote folder when the remote shell reports its
+folder with OSC 7. The host name in the report must be the same as the host
+in the ssh line, or as the `HostName` that `ssh -G` gives for that line.
+`reachy-mini` matches `pollen@reachy-mini`. When `~/.ssh/config` makes `prod`
+an alias for `box.example.com`, a report from `box.example.com` or from `box`
+matches `ssh prod`. A report from `box.other.com` does not. When there is no
+match, the new pane starts in the remote home folder.
+
+fish sends the report by default. For bash, add this line to `~/.bashrc` on
+the remote machine:
+
+```bash
+PROMPT_COMMAND='printf "\033]7;file://%s%s\033\\" "$HOSTNAME" "$PWD"'${PROMPT_COMMAND:+;$PROMPT_COMMAND}
+```
+
+For zsh, add these lines to `~/.zshrc` on the remote machine:
+
+```zsh
+autoload -Uz add-zsh-hook
+_tuios_osc7() { printf '\e]7;file://%s%s\e\\' "$HOST" "$PWD" }
+add-zsh-hook precmd _tuios_osc7
+```
+
+To go to the folder, tuios adds `-t`, `-o RemoteCommand=none` and the
+command `exec sh -c 'cd "FOLDER" ...'` to ssh. This works with every login
+shell that can start `sh`. If the folder is gone, the new pane starts in the
+home folder. A folder name with a quote, `$`, a backslash or `!` is not used.

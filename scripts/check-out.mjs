@@ -12,6 +12,7 @@
 // It prints each problem and exits 1 when it finds any.
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 
 const out = path.resolve(process.argv[2] ?? "out");
 const SITE = "https://tuios.dev";
@@ -104,8 +105,11 @@ async function idsOf(file) {
 
 const pages = [...rel].filter((f) => f.endsWith(".html"));
 let links = 0;
+// The gzipped size of each page, to print the largest.
+const weights = [];
 for (const page of pages) {
   const html = await readFile(path.join(out, page), "utf8");
+  weights.push({ page: urlFor(page), size: gzipSync(html).length });
   const base = new URL(urlFor(page), SITE);
   for (const match of html.matchAll(/<a\s[^>]*?href="([^"]*)"/g)) {
     const href = decodeEntities(match[1]);
@@ -154,6 +158,10 @@ console.log(
 console.log(
   `largest file: /${largest.file}, ${(largest.size / 1048576).toFixed(1)} MiB`,
 );
+console.log("largest pages, gzipped:");
+for (const w of weights.sort((a, b) => b.size - a.size).slice(0, 5)) {
+  console.log(`  ${w.page} ${(w.size / 1024).toFixed(0)} KB`);
+}
 for (const p of problems) console.log(p);
 if (problems.length > 0) {
   console.log(`${problems.length} problems`);

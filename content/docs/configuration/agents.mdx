@@ -1,0 +1,804 @@
+---
+title: "Agents"
+description: "Agents: part of the Configuration of TUIOS."
+icon: Settings
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CONFIGURATION.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CONFIGURATION.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CONFIGURATION.md). The [Configuration](/docs/configuration) page lists every part.
+
+## Turn off agent features [#turn-off-agent-features]
+
+Use this setting if you want only the multiplexer:
+
+```toml
+[agents]
+enabled = false
+```
+
+The default is `true`. You can also change it on the settings page. It is the
+first row, "Agent features". While a tuios client is open, you can also run
+`tuios set-config agents.enabled false` from a shell outside tuios.
+
+When the agent features are off:
+
+- The daemon does not look for agents. It does not read the process table,
+  pane titles, screens or agent transcripts. It ignores the agent state that
+  programs send.
+- The rail shows no agents section. The other sections move up to fill the
+  space.
+- The Inbox, agent mail, approvals and agent alerts are off. The Inbox key
+  shows a message and does nothing else.
+- The prefix menu, the command palette, the help and the settings page do not
+  show agent items.
+- Agent hooks, such as `after-agent-state`, do not run.
+- Agent commands, such as `tuios start-agent`, `tuios fan` and
+  `tuios list-attention`, stop and print this message: "Agent features are
+  off. Set agents.enabled = true in the config to use this command." A
+  program that calls an agent verb gets the error code `agents_disabled`
+  and this message: "Agent features are off on this machine. Set
+  agents.enabled = true in its config.toml to turn them on."
+
+The change applies at once. You do not have to restart tuios. When you turn
+the features off, the daemon clears the agent state of every pane and closes
+every Inbox item. A held approval goes back to the agent, which asks in its
+pane. When you turn the features on, the daemon looks at every pane again.
+
+Typing between panes is stricter when the features are off. A pane can answer
+another pane's prompt if it types into that pane. Usually tuios knows which
+pane waits on a prompt. With the features off it does not know. Thus a pane
+that does not hold the `respond` grant can type only into these panes:
+
+- A pane that it opened, for example with `tuios new-window` or the tmux
+  shim's `split-window`.
+- A pane whose own shell is at its prompt, with no program running.
+
+It cannot type into other panes. This includes `send-keys`, `send-text` and
+`run` from a script in a pane. Your own keys, and commands from a shell outside
+tuios, are not affected. To let every pane type into other panes, give panes
+`respond`:
+
+```toml
+[agents.permissions]
+grants = ["admin", "respond"]
+```
+
+See [What a pane may do](/docs/configuration/permissions#what-a-pane-may-do).
+
+Only you can change the switch: on the settings page, in config.toml, or with
+`tuios set-config` from a shell outside tuios. A process in a pane gets
+`forbidden`. `tuios mcp` started with the features off does not list the
+agent tools. An agent command aimed at another machine, such as
+`tuios list-agents -s build:work`, follows this machine's switch.
+
+## Approvals from the Inbox [#approvals-from-the-inbox]
+
+The `[agents.approvals]` table lets the Inbox answer a harness's permission
+prompt, so you do not have to go to the pane. It is off by default: while a
+prompt is held for the Inbox, the harness shows nothing in its pane.
+
+```toml
+[agents.approvals]
+enabled = ["claude-code", "opencode"]
+hold_seconds = 120
+```
+
+`enabled` names the harnesses, by id or alias: `claude-code` (or `claude`),
+`opencode`, `kilo` and `qwen` have a decision channel tuios can answer through. Other
+names are accepted and hold nothing. Even for these, only a call the Inbox can
+show whole on one line is held, such as a short shell command or a file read;
+an edit, an MCP tool or a long command is answered in the pane.
+`hold_seconds` is how long a prompt waits for your answer before the harness
+asks in its pane after all: 120 when unset, kept between 10 and 300.
+
+The daemon reads the table when it starts and again when the file changes; a
+change applies to the next prompt. Like `[dock]` and `[hosts]`, it is not in
+`list-options` and `tuios set-config` cannot change it. Turning it on gives no
+program the power to answer: only you, at an attached client, can. It also
+needs version 2 of the integration:
+run `tuios integration install claude-code` (or `opencode`, `kilo`, `qwen`)
+again after upgrading. [AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#approvals-from-the-inbox) says how
+a prompt is held, answered and handed back.
+
+## The pane bell [#the-pane-bell]
+
+A program in a pane rings the bell when it prints the BEL character. For
+example, `printf '\a'` rings it. [`notifications.bell`](/docs/option-reference#notifications.bell) sets what tuios does then:
+
+```toml
+[notifications]
+bell = "toast"   # or "forward", "both", "off"
+```
+
+- `toast` shows "bell" in the dock. This is the default.
+- `forward` sends the bell to the terminal that tuios runs in. That terminal
+  then plays its sound, flashes, or marks the window or tab.
+- `both` does the two.
+- `off` does neither.
+
+tuios sends the bell for every pane, also for the pane you are in. It sends
+at most one bell from each pane in 200 milliseconds. A client attached to the
+daemon sends the bell to its own terminal. Over `tuios ssh` and in tuios-web,
+the bell goes to that client, not to the machine that runs tuios.
+
+The terminal decides what a bell does. In Ghostty, for example, set
+`bell-features` to choose a sound, an attention request or a title mark.
+
+The workspace bell marker does not change with this setting. Set
+`bell_marker` under `[dock.tabs]` to change it. You can also change
+the setting on the settings page, in the "Alerts" tab, as "Pane bell".
+
+## Push notifications to your phone [#push-notifications-to-your-phone]
+
+The `[notify]` table sends a push notification when the Inbox gets an item
+that waits for you. The daemon sends it, so it works when no client is
+attached. Set one provider or more. Each provider gets every notification.
+
+```toml
+[notify]
+web_url = "https://term.example.com/"   # tuios-web, for a link to the item
+content = "summary"                     # or "title"
+quiet_active_seconds = 120
+cooldown_seconds = 60
+max_per_hour = 30
+
+[notify.triggers]
+approval = true
+plan = true
+question = true
+ask = true
+mail = false
+errored = false
+finished = false
+
+[notify.ntfy]
+url = "https://ntfy.sh/a-long-random-topic"
+token_file = "~/.config/tuios/ntfy-token"   # optional
+
+[notify.pushover]
+user_env = "PUSHOVER_USER"
+token_file = "~/.config/tuios/pushover-token"
+
+[notify.webhook]
+url = "https://hooks.example.com/tuios"
+token_env = "TUIOS_HOOK_TOKEN"              # optional, sent as a bearer token
+```
+
+| Key                    | Default   | What it does                                                                                                                                                                                                                                                                    |
+| ---------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`              | `true`    | Turns every notification off when `false`. Nothing is sent without a provider.                                                                                                                                                                                                  |
+| `web_url`              | empty     | The address of tuios-web. Each notification links to `web_url/inbox?item=ID`, which opens the agents view on the item. See [WEB.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/WEB.md#open-the-agents-view-from-a-notification). |
+| `content`              | `summary` | `summary` sends the kind, the pane name and the one line the Inbox shows. `title` sends only the kind and the session.                                                                                                                                                          |
+| `quiet_active_seconds` | `120`     | Holds a notification while you typed into a pane at an attached client in this many seconds. When you stay away that long and the item is still open, tuios sends it. `0` sends at once.                                                                                        |
+| `cooldown_seconds`     | `60`      | The shortest time between two notifications for the same pane and kind.                                                                                                                                                                                                         |
+| `max_per_hour`         | `30`      | The most notifications in one hour. `0` sets no limit.                                                                                                                                                                                                                          |
+| `allow_http_redirects` | `false`   | Lets a provider redirect to a plain `http` address.                                                                                                                                                                                                                             |
+
+`[notify.triggers]` selects the Inbox kinds that send a notification. The
+kinds that wait for you are on by default: `approval`, `plan`, `question` and
+`ask` (a question from `tuios ask-human`). The kinds that only report are off:
+`mail`, `errored` and `finished`.
+
+Each item sends one notification at most. A repeated state report, or a new
+line on the same item, sends nothing. An item from a linked host sends
+nothing here. That host sends its own.
+
+### Providers [#providers]
+
+- `[notify.ntfy]`: `url` is the topic address. `priority` is 1 to 5. When it
+  is unset, an item that waits for you gets 4 and other items get 3. The
+  link goes in the `Click` header.
+- `[notify.pushover]`: your user key and an application token. `url`
+  replaces the Pushover API address, for a relay.
+- `[notify.webhook]`: tuios sends a JSON `POST` to `url` with these fields:
+  `event` (`tuios.inbox`), `kind`, `title`, `body`, `link`, `urgent`,
+  `item_id`, `session`, `window`, `harness`, and `test` for a test
+  notification. At `content = "title"` the body is empty.
+
+### Secrets [#secrets]
+
+Give each token in one of three ways. tuios uses the first one that is set.
+
+- `token = "..."` in config.toml.
+- `token_env = "NAME"`: an environment variable of the daemon. The daemon
+  keeps the environment of the shell that started it.
+- `token_file = "PATH"`: a file that only you can read (mode 600 or 400).
+
+Pushover uses `user`, `user_env` and `user_file` for the user key in the
+same way. tuios reads the value each time it sends, so a new token in the
+file applies at once.
+
+tuios sends each notification itself and needs no other program. It uses
+`HTTPS_PROXY`, `NO_PROXY` and the system certificates. Each send waits at
+most 10 seconds. It follows at most 3 redirects. The token goes in a request
+header and is never logged.
+
+tuios does not write a secret to its logs or its output. The address is
+also secret on a public ntfy server, so logs and `tuios notify test` show
+only the host. A redirect to a plain `http` address is refused, unless you
+set `allow_http_redirects`. A redirect to another host is always refused,
+because the message and its token would go there. Set the url to the
+address the server redirects to.
+
+### Apply a change [#apply-a-change]
+
+The daemon reads `[notify]` when it starts, and again when the file changes.
+A change that turns notifications off, or changes the triggers, applies at
+once. A new address, or a new source for a secret, waits for
+`tuios config apply` from a terminal outside tuios, or a daemon restart. A
+program in a pane can write config.toml, and this stops it from sending your
+Inbox to another address. Like `[hosts]`, `[notify]` is not in
+`list-options`, and `tuios set-config` cannot change it.
+
+Run `tuios notify test` to send a test notification through each provider.
+It does not send to the phones of `[notify.webpush]`.
+It says the result for each provider. See
+[CLI\_REFERENCE.md](/docs/cli-reference/tuios-web#tuios-notify-test).
+
+### Web Push to a phone [#web-push-to-a-phone]
+
+A phone can get Inbox items by Web Push. The phone does not keep a
+connection to tuios. Its push service, or its UnifiedPush distributor such as
+the ntfy app, wakes it. The phone app registers with the `register-push`
+verb, or you register it with `tuios notify push register`. Only you can
+register a phone. A program in a pane cannot. See
+[protocol.md](/docs/control-protocol/verbs-other-machines#register-push).
+
+```toml
+[notify.webpush]
+subject = "https://example.com/tuios-contact"   # optional
+allow_insecure = false
+```
+
+| Key              | Default                  | What it does                                                                                                                                                                         |
+| ---------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `subject`        | `https://tuios.dev/push` | The VAPID subject: a URL that a push service can use to contact you. It must be an `https` URL or a `mailto:` URI. The push service reads it, so the default names no machine.       |
+| `allow_insecure` | `false`                  | Lets tuios send to a push service on a loopback or private address, by `https` or `http`, for a push service on your own network. A change to `true` waits for `tuios config apply`. |
+
+When `allow_insecure` is `false`, tuios does not send to a loopback or
+private address. This applies also to a host name that resolves to one. tuios
+never sends to a link-local, multicast or unspecified address. A push does not
+follow a redirect.
+
+When an item opens, tuios encrypts it for each phone that asked for its kind
+and sends it to the phone's push service. When the item closes, tuios sends a
+close, so the phone can remove the notification. A phone gets `approval`,
+`plan`, `ask` and `question` unless it asked for other kinds. The triggers,
+`quiet_active_seconds` and `cooldown_seconds` are for the other providers.
+`enabled = false` stops the pushes of new items. A phone still gets the close
+of an item, so it can remove a notification. `max_per_hour` applies to each
+phone. An item from another machine is not pushed. That machine pushes to its
+own phones.
+
+A push of `approval`, `plan`, `ask` or `question` lives one hour on the push
+service. Other pushes live 120 seconds. tuios tries a failed push again after
+1, 4 and 15 seconds. When the push service says that the phone is gone (404
+or 410), tuios removes the phone and shows an Inbox item about it.
+
+Each registration shows an Inbox item named `phone NAME`. It says who
+registered the phone. Another machine can register a phone over a link with
+`respond`, but it can not replace a registered phone. Check the item. Remove
+a phone you do not know with `tuios notify push rm NAME`. The phones and the VAPID key are in
+the state directory, in `push/`, with mode 600.
+
+Run `tuios notify push ls` to see the phones and the VAPID public key. Run
+`tuios notify push rm NAME` to remove a phone.
+
+## ACP version [#acp-version]
+
+`acp_version` in `[agents]` is the version of the Agent Client Protocol a pane
+that `start-agent --protocol acp` opens asks the agent for:
+
+```toml
+[agents]
+acp_version = 1   # 1 (default) or 2
+```
+
+Version 2 is a draft of the spec, which asks clients not to ask for it by
+default until it is final. An agent that speaks only version 1 still works
+with 2: the pane speaks 1 to it. The daemon reads the value when it starts a
+protocol pane, and a change to the file applies to the next one. See
+[ACP versions](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#acp-versions).
+
+## Harnesses that report to herdr [#harnesses-that-report-to-herdr]
+
+Crush, and other agents that herdr lists as reporting by themselves, report
+their state to herdr, another multiplexer, when they find herdr's environment
+in their pane. tuios accepts the same reports on a socket of its own,
+`<daemon socket>.herdr`. `herdr_protocol` in `[agents]` says which panes get
+herdr's environment:
+
+```toml
+[agents]
+herdr_protocol = "always"   # always (default), agents, off
+```
+
+`always` gives it to every pane, as herdr does, so a Crush that you start from
+a shell prompt reports. `agents` gives it only to a pane that starts a known
+reporter directly, as `tuios new-window NAME crush`, `start-agent crush` or
+`fan --agent crush` do. `off` gives it to no pane.
+
+A pane with herdr's environment gets `HERDR_ENV=1`, `HERDR_SOCKET_PATH` naming
+tuios's socket, `HERDR_PANE_ID`, `HERDR_TAB_ID` and `HERDR_WORKSPACE_ID` naming
+the pane, its workspace and its session, and `HERDR_BIN_PATH` naming a `herdr`
+link to tuios that answers herdr's command line. Programs that check
+`HERDR_ENV` read the pane as a herdr pane. With the default, `herdr` refuses to
+start inside a tuios pane. Set `herdr_protocol = "agents"` to run herdr nested.
+The socket also answers herdr's socket API, so tools built for herdr work with
+tuios (see [herdr compatibility](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#herdr-compatibility)).
+herdr's own hook scripts, if installed, report to tuios from such a pane.
+
+An unknown value reads as `always`, with a warning. The daemon reads the value
+when it starts and again when the file changes. A change applies to the next
+pane. [AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#herdrs-pane-state-protocol) says what is
+accepted.
+
+## Show a hooked agent that stops reporting [#show-a-hooked-agent-that-stops-reporting]
+
+A hooked agent reports at each prompt and each tool call. When it sends no
+report for `silent_after`, tuios shows it as `unknown` with the reason
+`silent`, and its row reads "No report for N min":
+
+```toml
+[agents]
+silent_after = "10m"   # default; "0" or "off" turns it off
+```
+
+The value is a Go duration, such as `90s` or `20m`. A value that does not
+parse reads as `10m`, with a warning. The daemon reads the value when it
+starts and again when the file changes. See
+[Silent agents](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#silent-agents).
+
+## Fold the Working group [#fold-the-working-group]
+
+The agents view (`ctrl+b i`) can open with the Working group folded. A folded
+group shows its heading, its count and the state mark of each agent in it.
+
+```toml
+[agents]
+fold_working = true   # default false
+```
+
+`F` folds or opens any group in the view. tuios keeps that choice in
+`sidebar.json` in its state folder (`$XDG_STATE_HOME/tuios` on Linux). The
+choice wins over `fold_working`. The settings page has this option on the
+Behavior tab, as "Fold Working".
+
+## Next after an answer [#next-after-an-answer]
+
+An answer sent from the agents view (`ctrl+b i`), such as an allow, a reject,
+a plan approved or a question answered, moves the cursor to the next agent
+that needs you, so a queue of approvals takes the answer keys alone. The note
+after the answer says how many more need you. The cursor moves only when it
+is still on the agent you answered: a row you moved to while the answer was
+on its way keeps the cursor.
+
+```toml
+[agents]
+answer_advance = false   # default true
+```
+
+Off keeps the cursor on the agent you answered. The settings page has this
+option on the Behavior tab, as "Next after an answer".
+
+## Naming panes and sessions [#naming-panes-and-sessions]
+
+When an agent starts in a tuios pane, `tuios agent-hook` adds a few lines to
+the agent's context. One of them tells the agent to name its pane after its
+task, and the skill (`tuios --skill`) tells an agent that is alone in its
+session to label the session too. `name_hint` turns that off:
+
+```toml
+[agents]
+name_hint = "on"   # default; "off" leaves the naming advice out
+```
+
+With `off`, the line that names the pane is replaced by one that tells the
+agent not to rename its pane or its session, and to skip the skill's "Name
+your work" section. The title the program sets, the name you gave the pane,
+and the row a worktree session shows in the sidebar then stay as they are.
+The other lines stay, and so does agent state reporting.
+
+An agent reads the hint once, when its session starts, so a change reaches
+the agents that start after it. `tuios set-config agents.name_hint off`
+sets it in a running session and writes `config.toml`. The settings page has this option on the Behavior
+tab, as "Agents name their panes".
+
+## The agent list [#the-agent-list]
+
+On a screen 80 columns or wider, the agents view (`ctrl+b i`) shows the list
+of agents as a column beside the focus. `view_list` sets that layout:
+
+```toml
+[agents]
+view_list = "column"   # default; "strip" or "auto"
+list_width = ""        # cells ("52") or a share ("30%"); empty follows the screen
+card_preview = "auto"  # the board's card preview: "side", "sheet", "auto" or "off"
+card_preview_width = "" # the side panel: cells ("70") or a share ("40%"); empty is 40%
+```
+
+`space` on a card of the task board's columns shows the card whole.
+`card_preview` says where: `side` in a panel beside the columns, `sheet` over
+them, `auto` beside them on a screen 140 columns or wider that keeps three
+columns and over them otherwise, and `off` never. The panel is 40% of the
+view by default, at least 44 and at most 96 cells. A drag on its edge sets
+the width, and the view keeps it; a double click on the edge gives it back to
+`card_preview_width`.
+
+| Value    | What the view shows                                             |
+| -------- | --------------------------------------------------------------- |
+| `column` | The list column, for any number of agents                       |
+| `strip`  | A strip of chips above the focus, when the chips fit on one row |
+| `auto`   | The strip for two agents or fewer, and the column for more      |
+
+The view shows the column for a folded group, the task board, a filter and a
+search. On a screen narrower than 80 columns the list fills the screen, and
+`l` opens the focus. `\` in the view switches between the column and the
+strip. tuios keeps that choice in `sidebar.json` in its state folder. The
+choice wins over `view_list`. The settings page has this option on the
+Behavior tab, as "Agent list".
+
+## Editor height [#editor-height]
+
+A reply to an agent, a reply to many, a mail draft and a new agent's task are
+written in an editor that grows as you type, then scrolls. `reply_rows` sets
+how many rows it grows to:
+
+```toml
+[agents]
+reply_rows = 0   # default: each editor's own height
+```
+
+| Value        | What the editors do                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| `0`          | Each keeps its own height: 8 rows for a reply, 6 for a mail draft, 3 for a new agent's task |
+| `1` to `200` | Each grows to that many rows                                                                |
+
+An editor never takes more rows than its view has: on a short screen it
+stops at the view's edge and scrolls. `alt+m` in an editor switches it to the
+whole height of its area and back. The settings page has this option on the
+Behavior tab, as "Reply rows".
+
+## Report pane states to your terminal [#report-pane-states-to-your-terminal]
+
+When tuios runs in a terminal that reads OSC 7501, the Program Status
+Protocol (Rex does), it reports the agent state of each pane there.
+`host_program_status` in `[agents]` says how, or turns it off:
+
+```toml
+[agents]
+host_program_status = "session"   # session (default), panes, off
+```
+
+`session` asks the terminal when a client starts and, when the terminal
+answers, reports one record for the attached session: the most urgent state
+of its panes, and a message that counts them, such as "1 needs input,
+2 working". A terminal shows one record for each of its own panes, so this is
+the whole session in the pane tuios runs in. `panes` asks the same way and
+reports one record for each pane. `off` never asks. `auto`, the old name of
+the default, still reads as `session`. A client reads the value when it starts.
+An unknown value reads as `auto`, with a warning. See
+[PROGRAM\_STATUS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/PROGRAM_STATUS.md#tuios-inside-a-terminal-that-reads-osc-7501).
+
+## herdr plugins [#herdr-plugins]
+
+tuios runs herdr plugins: folders with a `herdr-plugin.toml`. The `[plugins]`
+table says which plugins run and where tuios finds more of them:
+
+```toml
+[plugins]
+enabled = ["example.notes"]          # the ids of the plugins that run
+dirs = ["~/src/my-herdr-plugin"]     # more plugin folders, or manifests
+```
+
+tuios also finds plugins in `$XDG_CONFIG_HOME/tuios/plugins/<folder>/`, in
+`plugins.lock`, and in herdr's own `plugins.json` and managed checkouts. To
+find a plugin runs nothing. A plugin runs only when its id is in `enabled`.
+
+`tuios plugins install SOURCE` writes `plugins.lock` beside `config.toml`.
+It pins each installed plugin to one commit. Keep the file with your config,
+and run `tuios plugins install` on a new machine to get the same commits.
+`tuios plugins uninstall ID` removes the plugin from the file.
+
+An enabled plugin runs its commands with your rights, outside every pane.
+Enable only plugins that you trust.
+
+Use the commands to change the table. They change only the `enabled` or
+`dirs` line and keep the rest of the file:
+
+```bash
+tuios plugins enable example.notes
+tuios plugins disable example.notes
+tuios plugins link ~/src/my-herdr-plugin
+tuios plugins install owner/repo        # also adds the id to enabled
+tuios plugins uninstall example.notes   # also removes the id from enabled
+```
+
+You must run them from a terminal outside tuios. A change to the file that
+removes a plugin from `enabled` applies at once. A change that adds a plugin
+to `enabled`, or a folder to `dirs`, waits for `tuios config apply` or a
+daemon restart. `tuios plugins enable ID` applies only the plugin that it
+names. A new folder waits because it can hold a
+plugin with the id of a plugin that you enabled.
+[PLUGINS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/PLUGINS.md) says what runs and when.
+
+## Plans, risk rules, the recap and the queue [#plans-risk-rules-the-recap-and-the-queue]
+
+These tables configure the agent review, triage, reply and approval work,
+which is built. Every value has a default, so a file without them behaves as
+the defaults say. Like `[agents.approvals]`, they are
+file-plane config: not in `list-options`, and `tuios set-config` cannot change
+them, so a pane cannot switch a risk rule off through tuios.
+
+```toml
+[agents.approvals]
+hold_plans = true                 # a plan follows enabled
+
+[agents.approvals.risk]
+builtin = true                    # keep the shipped rules
+panes_may_allow = false           # a pane with the respond grant may not allow a risky call
+
+[[agents.approvals.risk.rule]]
+name = "kubectl apply"
+tools = ["Bash"]
+pattern = '\bkubectl\s+(apply|delete)\b'
+
+[agents.recap]
+mode = "toast"                    # toast, inbox or off
+away = "10m"
+test_patterns = ["go test", "pytest"]
+
+[agents.queue]
+max = 8
+
+[agents.mail]
+wake = true
+questions_to_parent = true
+
+[agents.checkpoints]
+enabled = true
+keep = 50
+max_untracked_mb = 50
+
+[agents.presets.worker]
+agent = "claude"
+args = ["--verbose"]
+add_dirs = ["~/notes"]
+grants = ["read", "write", "task"]
+model = "opus"
+env = ["GOMAXPROCS=4"]
+after_ready = ["/remote-control", "Enter", "Escape"]
+ready_timeout = 180000
+```
+
+- `hold_plans` also hands a plan an agent in plan mode asks to have approved
+  to the Inbox, for the harnesses `enabled` names (Claude Code's
+  `ExitPlanMode`). Unset is true. See
+  [Plans](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#plans).
+- `[agents.approvals.risk]` marks an approval risky when its command matches a
+  rule: `builtin` keeps the shipped rules (default true), each `rule` adds one
+  with a name, the tools it applies to (empty for every tool) and an RE2
+  `pattern`, matched against each command of a shell call and the whole text
+  of any other. Naming one shell tool, such as `Bash`, covers every shell
+  tool, including `execute`, the word a protocol pane's line uses for a
+  command, and a line with no tool; naming one file tool, such as `Write`,
+  covers every file tool, including a protocol pane's `edit`. A daemon that
+  could read no config file at all still uses the shipped rules. A rule with no name or a pattern that does not compile is
+  ignored, with a warning. An allow of a risky approval in the Inbox asks
+  first and takes `enter`, and the daemon refuses one that does not name the
+  rules. `panes_may_allow` lets a pane holding the `respond` grant allow a
+  risky call; it is off, so only you can. The shipped rules are listed under
+  [Risk rules](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#risk-rules). They are a speed bump, not a
+  sandbox. The daemon reads the risk rules again when the file changes. A
+  change that adds a rule applies at once. A change that removes a rule, or
+  sets `panes_may_allow`, waits, because a process in a pane can write
+  config.toml. The rules in force stay, and panes may not allow a risky call.
+  Run `tuios config apply` from a terminal outside tuios to apply the change,
+  or restart the daemon. Until then the Inbox shows that a change waits.
+- `[agents.recap]` is the summary of what an agent did while you were away:
+  `mode` says where it is shown (`toast` in the dock when you come back to the
+  pane, and in the Inbox; `inbox` only in the Inbox; `off` only in
+  `agent-log`), `away` how long you must have been away for the dock to show
+  it, and `test_patterns` which commands count as a test run. The daemon
+  reads `test_patterns` for `tuios agent-log --recap` and the
+  `agent-activity` verb, and picks up a change when the file is saved; the
+  client reads `mode` and `away` when it loads the config. The recap is
+  built: see [The away recap](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#the-away-recap).
+- `[agents.queue]` bounds the messages waiting to be typed to one agent when
+  it comes to rest (`tuios queue`, `queue-prompt`): `max`, 8 by default, at
+  most 64. A message queued past it is refused with `queue_full`. The daemon
+  reads it at start and again when the file changes; a queue already longer
+  keeps what it holds. The queue is built: see
+  [AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#queued-messages).
+- `[agents.mail]` `wake` types one line into an agent at rest that has mail
+  nobody told it about, through the delivery queue: the count, the senders
+  and the command that reads the mail, never the mail itself. It is true by
+  default. Set it to false to stop it. The daemon reads it at start. A file
+  change turns it off at once. Turning it on again waits for `tuios config
+  apply` from outside tuios, or a restart. See
+  [AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#mail-that-wakes-an-agent-at-rest).
+- `[agents.mail]` `questions_to_parent` sends a question from a child agent
+  that `tuios delegate` or `tuios start-agent` started to its parent agent by
+  mail first, and lets the parent answer it with `tuios respond`. With it off
+  nothing is mailed, and the parent has no right to answer. The Inbox
+  shows the question as "With the parent agent" for 10 minutes, and does not
+  count it or alert on it. After that, it is a normal Inbox item. It is true by
+  default. Set it to false to send every such question to the Inbox at once.
+  A file change turns it off at once. Turning it on again waits for `tuios
+  config apply` from outside tuios, or a restart. An approval of a child agent
+  always goes to the person, and no pane can answer it.
+- `[agents.presets.NAME]` names a `tuios start-agent --preset NAME`: the
+  agent, and any of `args`, `add_dirs`, `grants`, `model`, `effort`,
+  `permission_mode`, `env` (each `NAME=VALUE`), `after_ready` and
+  `ready_timeout` (milliseconds). `add_dirs` passes the harness's
+  `[launch] add_dir_flag` (Claude Code: `--add-dir`) once per directory,
+  before `args`, with `~` as the home folder of the machine the agent starts
+  on. A harness with no such flag refuses it. `after_ready` is sent once the
+  agent is ready, before `--prompt`, step by step: a step that is one key
+  name (`Enter`, `Escape`, `Tab`, `C-c`) is that key, anything else is typed
+  as text. A step is refused while the agent waits on a prompt of its own,
+  which stops the rest. A file change applies at once.
+- `[agents.checkpoints]` saves the git work tree of an agent's pane each time
+  the agent finishes a turn that changed a file (`tuios checkpoint`).
+  `enabled` is true by default. `keep` is how many checkpoints one pane keeps:
+  50 by default, at most 1000. `max_untracked_mb` leaves an untracked file
+  larger than this many megabytes out of a checkpoint: 50 by default, and a
+  negative value means no limit. `tuios checkpoint list` names the files left
+  out, and a restore does not change them. The same limit holds for
+  `tuios review`, review-stage, fan compare and `tuios fan diff`, which never
+  read such a file: review lists it as not read. Reading one would copy it
+  into the repository's object store, and through a clean filter such as Git
+  LFS's into that store too, on every read. The daemon reads these at start
+  and again when the file changes. See [Turn checkpoints](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#turn-checkpoints).
+
+One rail option goes with them: [`appearance.sidebar.agent_rest_fold`](/docs/option-reference#appearance.sidebar.agent_rest_fold), how long
+an agent row rests (idle, unknown, or done and already seen) before the rail
+folds it into one line, as a duration such as `1h` (the default) or `off`. The
+settings page shows it on its Sidebar tab once an agent has been seen. The
+fold is one muted `+3 at rest` line at the end of the agents section; `enter`
+or a click on it shows the rows until the rail lets go of the keyboard, or,
+when the rail did not have the keyboard, until a click outside the rail or a
+pane is focused. It
+takes two rows or more, and never a row that needs you, a finished turn not
+yet seen, a working agent, the pane you are in, one with messages queued, or
+one whose agent has subagents at work.
+
+A second rail option goes with it: [`appearance.sidebar.subagent_rows`](/docs/option-reference#appearance.sidebar.subagent_rows), how an
+agent row shows its subagents. `rows` (the default) draws a row for each
+subagent under its agent's row, with its mark (`●` running, `■` done, `×`
+failed, `○` stopped), what it was asked to do, and on a tall section the tool
+it runs or how it ended, while the agent's own row says `3 of 4 run`. When the
+section has too little room it leaves the finished ones out first, then
+shows the newest few and `+2 more`, then none; it never hides an agent row to
+show a subagent row. `tree` draws the same rows on tree lines (`├─` and
+`└─`, `|-` and `` `- `` in ASCII). `count` draws the count alone, as the rail
+did before.
+An agent at rest with subagents at work wears `◊` (`%` in ASCII) in the
+working ink, on the rail, its title bar and the switcher. The settings page
+shows the option on its Sidebar tab once an agent has been seen. See
+[Subagents on the rail](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#subagents-on-the-rail).
+
+Four more rail options change how the subagent rows look. Each default draws
+the rows as described above.
+
+| Option                   | Values                                                 | Default               | What it does                                                                                                                           |
+| ------------------------ | ------------------------------------------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `subagent_collapse`      | `off`, `expanded`, `collapsed`                         | `off`                 | `expanded` and `collapsed` draw a heading line, `▾ 4 subagents`, over each agent's subagent rows. The value is the state at the start. |
+| `subagent_fields`        | a comma list of `mark`, `name`, `type`, `time`, `note` | `mark,name,time,note` | The parts each subagent row shows. `type` is the agent type, such as `Explore`. `note` is the second line.                             |
+| `subagent_max_rows`      | `0` to `16`                                            | `0`                   | The most lines one agent's subagents use, the `+N more` line included. `0` means no limit.                                             |
+| `subagent_hide_finished` | a duration such as `30s`, or `off`                     | `off`                 | Removes the row of a finished subagent this long after it ends.                                                                        |
+
+A click on the heading, or `enter` on it, opens or closes the rows. `space`
+does the same with the rail cursor on the agent row or on its heading. The
+rail keeps the state of each pane until the client stops. A closed heading
+shows `▸`, and on a tall section its second line names the subagents.
+
+The daemon keeps a finished subagent for 60 seconds (a failed one for 5
+minutes). `subagent_hide_finished` can make a row go earlier, but it cannot
+keep a row longer than the daemon keeps it.
+
+```toml
+[appearance.sidebar]
+subagent_rows = "tree"
+subagent_collapse = "expanded"
+subagent_fields = "mark,name,time"
+subagent_max_rows = 4
+subagent_hide_finished = "20s"
+```
+
+Each of the five subagent options can be set again in
+`[appearance.sidebar.left]` or `[appearance.sidebar.right]`, for the rail on
+that edge. An option that the edge table does not set uses the value from
+`[appearance.sidebar]`.
+
+The agent row in `[appearance.sidebar.agent_row]` has five tokens for what
+tuios feeds itself: `now` (what a working agent is doing, drawn only while it
+works), `context` (`ctx 84%` in the warning ink, drawn only at 80% or more),
+`subagents` (`2 subagents`, how many subagents the agent has at work, drawn
+on any row while any run, from Claude Code's hooks, and `3 of 4 run` when
+the subagents have rows of their own), `pr` (`PR #12 open
+pass`, the pull request of the session's worktree branch and its checks, in
+the error ink for failing checks, the warning ink for pending ones and the
+success ink for passing ones and a merge, see
+[Shipping a worktree](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#shipping-a-worktree)) and `prompt` (the
+first line of the last prompt, not shipped on the row). The shipped `tokens`
+list is now `["session", "need", "harness", "name", "progress", "elapsed",
+"context", "subagents", "pr", "meta", "now", "message"]`. `progress` (`40%`)
+is the progress a program reported with OSC 7501, drawn while it works or
+waits (see [PROGRAM\_STATUS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/PROGRAM_STATUS.md)). A list you wrote keeps its own
+order and gains nothing. Add `subagents` or `pr` to it to see them. The `meta` token no longer
+draws the fed keys (`now`, `prompt`, `model`, `context`, `cost`, `plan`,
+`subagents`), so place any of them you want with its own token. See
+[What the second line says](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#what-the-second-line-says).
+
+The `$name` tokens can place the metadata keys tuios now feeds: `$model`,
+`$context`, `$cost` and `$plan`.
+They come from Claude Code's status line once `tuios integration install
+claude-code --statusline` is installed, from the opencode and Kilo plugin, and
+from protocol panes, and a key the harness never states draws nothing (see
+[Agent metadata](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#what-feeds-it)). No option is needed to turn
+the feeds on, and there is nothing to configure for them.
+
+## The task board [#the-task-board]
+
+`b` in the agents view shows the task board: the cards of every session,
+one column for each stage ([AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#the-agents-view)).
+`B` shows the stages as a list instead. `[tasks] stages` picks the stages it
+shows. The order stays todo, plan, doing, verify,
+review, shipped, done whatever the list's order, and a stage the list leaves
+out has no column. Empty, or naming no known stage, shows every stage. An
+unknown name is reported as a config warning and ignored.
+
+```toml
+[tasks]
+stages = ["todo", "doing", "verify"]
+```
+
+`ctrl+b +`, or "New task" in the palette, adds a card from anywhere
+([KEYBINDINGS.md](/docs/keybindings/panes-panels-and-workspaces#new-task)). An image in it is attached to
+the card, and the prompt names it.
+
+tuios moves a card on its own when it records a fact about the card's work: a
+plan held for approval and then approved, a fan check, a pull request
+opening, merging or closing ([CLI\_REFERENCE.md](/docs/cli-reference/remote-control-commands-part-2#tuios-task)
+has the table). A move fires only from the stages that fact moves a card
+from, never on a blocked or done card, and the card's history names the
+reason. The plan stage is reached only when `[agents.approvals]` holds plans
+for the harness and the pane is not in front of you. `auto_stage = false`
+leaves every stage to you. A fan's stamp on a card (`tuios fan --task`) is
+still written, though the card then stays where it is.
+
+```toml
+[tasks]
+auto_stage = false
+```
+
+`machine_cap` is how many agents may work on this machine before "Any
+machine" starts a new one on another machine
+([CLI\_REFERENCE.md](/docs/cli-reference/daemon-mode#any-machine)). Agents that work,
+agents that are starting, and picks made in the last 90 seconds that have not
+started yet all count. Each machine reads its own cap and says it when asked.
+`0`, the default, is no cap.
+
+```toml
+[tasks]
+machine_cap = 4
+```
+
+`tuios task attach` puts files and links on a card
+([CLI\_REFERENCE.md](/docs/cli-reference/remote-control-commands-part-2#tuios-task)). The daemon stores each file
+once under its state folder and removes it when no card names it.
+`attachment_max_mib` is the largest file in MiB (default 8, at most 8: the
+file travels in one request), `attachments_per_card` the most one card holds
+(default 20), and `attachment_session_mib` the most the files of one
+session's cards take together (default 256). A file over a limit is refused
+with an error that names the option.
+
+```toml
+[tasks]
+attachment_max_mib = 4
+attachments_per_card = 10
+```

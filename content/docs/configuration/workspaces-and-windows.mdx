@@ -1,0 +1,658 @@
+---
+title: "Workspaces and windows"
+description: "Workspaces and windows: part of the Configuration of TUIOS."
+icon: Settings
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CONFIGURATION.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CONFIGURATION.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CONFIGURATION.md). The [Configuration](/docs/configuration) page lists every part.
+
+## Graphical programs from the launcher [#graphical-programs-from-the-launcher]
+
+The launcher starts a desktop entry in a new pane. A graphical program opens
+its own window, so its pane stays empty. Set [`launcher.gui_command`](/docs/option-reference#launcher.gui_command) to start
+such an entry with another command. The launcher adds the entry's argv to that
+command. Entries with `Terminal=true` and programs from `$PATH` still open in
+a pane.
+
+```toml
+[launcher]
+gui_command = "tuios-wayland launch --"   # or "niri msg action spawn --"
+```
+
+Use only a command that takes an argv and runs it as an argv. Do not use a
+command that joins its arguments into a shell line, such as `swaymsg exec --`
+or `hyprctl dispatch exec`. With such a command, the text of a desktop entry
+becomes shell code. Any installed package can write a desktop entry.
+
+A program from the launcher closes its pane when it exits. Set
+[`launcher.keep_open`](/docs/option-reference#launcher.keep_open) to keep the pane. A line under the output shows the exit
+status, as with `tuios new-window --keep-open`. Close the pane when you are
+done with it. The option needs a daemon session. With `--standalone` the pane
+closes as before.
+
+```toml
+[launcher]
+keep_open = true
+```
+
+## Workspace numbers [#workspace-numbers]
+
+A workspace's number is its position. Moving a workspace with
+`move_workspace_left` or `move_workspace_right`, or dragging its tab in the
+dock, renumbers it. A workspace exists while it holds a pane or is on screen.
+When a workspace that held a pane stops existing, because its last pane
+closed or moved away and it is not on screen, it loses its name.
+
+The numbers close up only when you change something: close a pane, move a
+pane to another workspace, close a workspace or move one. Then every
+workspace above an empty place moves down one: closing workspace 2 of 1, 2
+and 3 leaves 1 and 2. A pane whose program exits on its own (a command
+window with `close_on_exit`, a `tuios xpanes` run, an agent finishing)
+leaves the numbers alone, so a script or agent that holds a workspace number
+still names the same workspace. Its place stays empty until your next close
+or move closes it up. Typing `exit` in a pane's shell is a close. An empty workspace you only looked at goes without
+moving anything.
+
+`Alt+N` with a number past the last workspace that holds a pane opens the
+next one: with three workspaces, `Alt+5` opens workspace 4. When the
+workspace on screen is empty, it is the new one, and `Alt+N` to an unused
+number stays on it. A pane put directly on a higher number, with
+`tuios new-window --workspace 7` or `send_to_workspace_7`, keeps that number
+until the numbers below it close up.
+
+## When a workspace becomes empty [#when-a-workspace-becomes-empty]
+
+When the last pane on the workspace on screen closes, tuios shows the
+workspace you came from. This happens when the pane's program stops, when you
+close the pane, when `tuios xpanes -ss` closes it, and with
+`tuios close-workspace` or the `close_workspace` action.
+
+tuios goes back in this order:
+
+1. For a workspace that `tuios xpanes` opened, the workspace where you ran
+   `tuios xpanes`.
+2. The workspace you showed last that still has panes. After a chain of
+   empty workspaces, tuios goes back past each one.
+3. The workspace with the lowest number that has panes.
+
+When no workspace has panes, tuios shows the splash screen. The workspace on
+screen is the same for every client of the session, so every client goes
+back. Moving a pane to another workspace does not close it, so tuios does not
+go back.
+
+To stay on the empty workspace, turn the setting off:
+
+```toml
+[workspaces]
+return_when_empty = false
+```
+
+The daemon reads the setting when it starts and when the file changes.
+`tuios set-config workspaces.return_when_empty false` changes it while tuios
+runs.
+
+## When you switch to an empty workspace [#when-you-switch-to-an-empty-workspace]
+
+By default, a workspace with no panes shows the splash screen. To open a
+pane there when you switch to it, as the new-window key does, turn on this
+setting:
+
+```toml
+[workspaces]
+new_window_when_empty = true
+```
+
+The new pane starts in the folder of the pane that had focus on the
+workspace you came from. The new pane starts in the session's start folder
+in these cases:
+
+- You came from a workspace with no pane.
+- You came from a scratch terminal.
+- The pane you came from runs on another machine.
+
+The start folder is the folder that `tuios new --cwd` gave.
+
+A pane opens only when you switch: with a workspace key, a click on the
+dock, go-to, the pane navigator or the command palette.
+These switches do not open a pane:
+
+- `move_and_follow` and other moves that take a pane with them.
+- `tuios xpanes`, `tuios select-workspace`, `tuios run-command` and tape
+  scripts. These bring their own panes or run from a script.
+- The switch back from an empty workspace that `return_when_empty` makes.
+- The start of tuios and an attach to a session. The workspace on screen
+  stays as it is.
+
+When two clients show the same session, the client that switches opens the
+pane. The other client shows it. A workspace gets one pane, also when two
+clients switch to it at the same time. When you switch away before the pane
+opens, you stay where you went, and a switch back does not open a second
+pane.
+
+With `appearance.new_window_follow_ssh = true`, a pane that runs ssh gives a
+new pane that runs the same ssh, as the new-window key does.
+
+The daemon must be this version of tuios or newer. With an older daemon, a
+switch opens no pane. Run `tuios kill-server` and start tuios again to load
+the new daemon.
+
+Each client reads the setting from its config file, and a change applies at
+once. The settings page has it under Daemon, and
+`tuios set-config workspaces.new_window_when_empty true` changes it while
+tuios runs.
+
+## Paste preview [#paste-preview]
+
+An image paste (`Ctrl+B V`, the paste key when the clipboard holds only an
+image, or the empty paste some terminals send for an image) writes the image
+to a file and pastes the file's path. tuios then shows
+the image in a small card at the pane's cursor, so you can see what the path
+holds:
+
+- The picture is drawn with kitty graphics when your terminal has them, and
+  with block glyphs when it does not.
+- The line under it names the size, the type and the file.
+- The card takes no input. The next key or click takes it down and still goes
+  where it was going, and so does a key sent with `tuios send-keys`. A panel
+  opened over it, or the pane leaving the screen, takes it down too.
+  Otherwise it goes after six seconds.
+
+```toml
+[appearance]
+paste_preview = false   # paste the path alone; the default is true
+```
+
+## Paste buffers [#paste-buffers]
+
+tuios keeps your recent yanks as paste buffers. `Ctrl+B ]` pastes the newest,
+and `Ctrl+B #` shows them all (see [KEYBINDINGS.md](/docs/keybindings/copy-mode#paste-buffers)).
+
+```toml
+[paste_buffers]
+limit = 20     # how many unnamed buffers to keep. 0 keeps none.
+max_kb = 16384 # most KiB all buffers hold together, at most 262144. 0 uses 16384.
+```
+
+The rules are the tmux rules. A yank makes a buffer that tuios names
+`buffer0`, `buffer1` and so on. `limit` counts only these buffers, and past it
+the oldest of them goes. A buffer that you name with `set-buffer -b` stays
+until you delete it, or until the buffers pass `max_kb`. Past `max_kb` the
+oldest unnamed buffer goes first, then the oldest named one. tuios does not
+keep a yank that is larger than `max_kb` as a buffer, but the yank still goes
+to the clipboard. With `limit = 0`, a yank goes only to the
+clipboard.
+
+The daemon keeps the buffers in memory, so every client and every session
+shares them. They go when the daemon stops. The daemon reads the setting when
+it starts and when the file changes. A smaller limit drops the oldest buffers
+at once.
+
+A buffer is yours or one pane's. Your yanks, and what you set from outside
+every pane or from a pane that holds `admin`, are yours. What a pane without
+`admin` sets is that pane's own. A buffer can hold a secret that you copied,
+so a pane without `admin` sees and pastes only its own buffers: not yours,
+and not another pane's, in its session or not. It cannot change or replace a
+buffer that you set, and it cannot make a named buffer, so a name you keep a
+command under stays yours. From inside a pane, reading its buffers needs the
+`read` grant, changing them needs `write`, and pasting needs both. See
+[What a pane may do](/docs/configuration/permissions#what-a-pane-may-do).
+
+Large requests to the daemon, such as a big `set-buffer`, a `stash put` or an
+image paste, take memory from a budget. You, outside every pane or in a pane
+that holds `admin`, have a budget of your own. A pane without `admin` shares
+another, so it cannot use up yours.
+
+One thing a pane can still learn: the automatic buffer numbers (`buffer0`,
+`buffer1`) come from one counter for everybody. A gap between two of a pane's
+own buffer numbers tells it that other buffers were made in between, such as
+your yanks. It tells the pane how often you copy, not what. tuios accepts this
+as a low risk.
+
+## Master-stack layout [#master-stack-layout]
+
+These options shape the master-stack layout. Each workspace starts with them.
+The layout keys change the workspace on screen, and the workspace keeps the
+change. See [LAYOUT\_MODES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/LAYOUT_MODES.md#master-stack-layout).
+
+| Option                                                                            | What it does                                                                                        | Values                                     | Default |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------- |
+| [`appearance.master_position`](/docs/option-reference#appearance.master_position) | The side the master panes take. With `center`, the stack panes go to the right and the left in turn | `left`, `right`, `top`, `bottom`, `center` | `left`  |
+| [`appearance.master_count`](/docs/option-reference#appearance.master_count)       | How many panes are master panes                                                                     | 1-9                                        | 1       |
+| [`appearance.master_ratio`](/docs/option-reference#appearance.master_ratio)       | The share of the screen the master panes take, as a percent                                         | 10-90                                      | 50      |
+| [`appearance.master_grid`](/docs/option-reference#appearance.master_grid)         | With one master on the left, show four or more panes as a grid                                      | `true`, `false`                            | `true`  |
+
+This example puts an editor in the middle with terminals on both sides. It
+keeps that layout at every pane count:
+
+```toml
+[startup]
+layout = "master-stack"
+
+[appearance]
+master_position = "center"
+master_ratio = 50
+```
+
+`[startup] layout` applies to a new session, and a new workspace takes the layout of the workspace you open it from.
+
+With `center`, the grid is off, so `master_grid` has no effect. The first pane
+of the workspace is the master. To make another pane the master, focus it and
+press `Ctrl+B L Enter`.
+
+## Start session and start pane [#start-session-and-start-pane]
+
+Two `[startup]` options choose where a plain `tuios` opens. Both are empty by
+default.
+
+| Option                                                      | What it does                                                                                                                                                                                                                                                 | Default |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
+| [`startup.session`](/docs/option-reference#startup.session) | The session that `tuios` attaches to. tuios makes the session if it is gone, as `tuios attach NAME -c` does. Empty attaches to the most recent session                                                                                                       | empty   |
+| [`startup.window`](/docs/option-reference#startup.window)   | The pane, by name or id, that `tuios` focuses in [`startup.session`](/docs/option-reference#startup.session) before it attaches. When no pane has that name, the focus does not change. It needs [`startup.session`](/docs/option-reference#startup.session) | empty   |
+
+```toml
+[startup]
+session = "home"
+window = "start"
+```
+
+`tuios attach`, `tuios new` and every other command use the session you give
+them, and ignore these options. [`startup.session`](/docs/option-reference#startup.session) uses the daemon even when
+[`startup.daemon`](/docs/option-reference#startup.daemon) is `false`. `--standalone` and `TUIOS_NO_DAEMON=1` still run a
+local session. Both options are on the settings page, in the Startup section.
+See [SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#start-session-and-start-pane).
+
+## Scrolling layout [#scrolling-layout]
+
+These options shape the scrolling layout. See
+[LAYOUT\_MODES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/LAYOUT_MODES.md#scrolling-layout).
+
+| Option                                                                                    | What it does                                                                  | Values                    | Default                            |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------- | ---------------------------------- |
+| [`appearance.scroll_column_width`](/docs/option-reference#appearance.scroll_column_width) | The width of a new column, as a percent of the screen                         | 20 to `scroll_column_max` | 55                                 |
+| [`appearance.scroll_column_max`](/docs/option-reference#appearance.scroll_column_max)     | The largest width a column can have, as a percent of the screen               | 20-100                    | 90                                 |
+| `appearance.scroll_column_presets`                                                        | The widths that `scroll_cycle_width` steps through, as percents of the screen | a list of 1-100           | empty (33, 50, 55, 67, 90 and 100) |
+
+`scroll_cycle_width` sets the focused column to the next width in the list
+that is larger than the current width. After the largest width, it goes back
+to the smallest. tuios sorts the list. It skips a width that is larger than
+`scroll_column_max`. It ignores a value that is not from 1 to 100 and shows a
+config warning. This example cycles a column through a half, two thirds and the
+full screen:
+
+```toml
+[appearance]
+scroll_column_width = 50
+scroll_column_max = 100
+scroll_column_presets = [50, 67, 100]
+```
+
+A change to the list applies when tuios reloads the config. The settings page
+does not show this option. Edit it in `config.toml`.
+
+## Drop preview [#drop-preview]
+
+While you drag a tiled pane in BSP, tuios shows where the pane would land if you let go. See [LAYOUT\_MODES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/LAYOUT_MODES.md). The preview is a frame in the accent colour, drawn with the same border characters as the panes. With `fill`, the area inside the frame gets one tint, and the text under it fades into that tint. On a 16-colour terminal the frame is reverse video and the area inside stays as it is. Two options shape that preview:
+
+| Option                                                                                  | What it does                                                                                                                                                                                                  | Values                                                | Default   |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------- |
+| [`appearance.drop_preview`](/docs/option-reference#appearance.drop_preview)             | What the preview draws. `fill` draws the frame and tints the area inside it, `outline` draws only the frame, and `off` draws nothing                                                                          | `fill`, `outline`, `off`                              | `outline` |
+| [`appearance.drop_preview_delay`](/docs/option-reference#appearance.drop_preview_delay) | How long the pointer stays on one drop zone before its preview shows. A zone you leave before the delay is never drawn, so carrying a pane across the screen does not flash a zone over every pane on the way | a duration such as `120ms`, or `0` to show it at once | `120ms`   |
+
+```toml
+[appearance]
+drop_preview = "fill"
+drop_preview_delay = "250ms"
+```
+
+Neither option changes the drop: with `off`, releasing on an edge still splits that pane, and releasing in the middle still swaps. Both are on the settings page, in the Appearance section, and `tuios set-config appearance.drop_preview off` applies at once. A value that is not one of the above reads as the default, with a warning when the config loads, and `tuios set-config` refuses it.
+
+## Rounded dock pills [#rounded-dock-pills]
+
+[`appearance.dock_pill_caps`](/docs/option-reference#appearance.dock_pill_caps) puts rounded caps on every pill in the dock: the
+mode chip, the workspace tabs and the minimized windows. It is `true` by
+default. Set it to `false` for flat pills:
+
+```toml
+[appearance]
+dock_pill_caps = false
+```
+
+Under ASCII glyphs the workspace tabs have no caps. The option also controls
+the ends that `[dock.tabs] caps` puts on flat tabs. The rail's pills do not
+change with this option.
+
+## Mode pill icons [#mode-pill-icons]
+
+The mode pill at the start of the dock shows an icon for the mode. Three
+options set the icons:
+
+| Option                                                                                            | Mode                                             |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| [`appearance.dock_mode_icon_window`](/docs/option-reference#appearance.dock_mode_icon_window)     | Window mode                                      |
+| [`appearance.dock_mode_icon_terminal`](/docs/option-reference#appearance.dock_mode_icon_terminal) | Terminal mode                                    |
+| [`appearance.dock_mode_icon_tiling`](/docs/option-reference#appearance.dock_mode_icon_tiling)     | Window mode and terminal mode while tiling is on |
+
+```toml
+[appearance]
+dock_mode_icon_window = "WM"
+dock_mode_icon_terminal = ">_"
+dock_mode_icon_tiling = ""
+```
+
+- When an option is not set, the pill shows the icon of the glyph set. With
+  `use_ascii_only`, that icon is `W`, `T` or `#`.
+- An empty string shows no icon. If the mode has no other text, the dock shows
+  no pill in that mode.
+- An icon can be at most 8 cells wide. A wide character, such as `終`, counts
+  as two cells. The dock does not accept control characters. For an icon that
+  it does not accept, the dock shows the default icon and the config check
+  shows a warning.
+- The pill adds one space on each side of the icon. You do not need to add
+  spaces.
+- While tiling is on, the pill also shows the next split direction, `V` or
+  `H`. Set `appearance.dock_mode_split_letter = false` to show the tiling icon
+  alone. With the default icons, the pill then has the same width as the pill
+  of the leader key, so the workspace tabs do not move when you press the
+  leader key.
+- [`appearance.dock_mode_pill`](/docs/option-reference#appearance.dock_mode_pill) sets what the pill shows while tiling is on.
+  `tiling` (the default) shows the tiling icon in terminal mode and in window
+  mode. `input` shows the terminal icon or the window icon, and the split
+  letter after it shows that tiling is on.
+
+```toml
+[appearance]
+dock_mode_pill = "input"
+```
+
+To remove the whole mode pill, remove `"mode"` from the `left` list in the
+`[dock]` table. See [The dock's components](/docs/configuration/dock-and-rail#the-docks-components).
+
+You can also set the icons on the settings page, in the Dock section, or with
+`tuios set-config dock_mode_icon_window WM`. The word `default` puts an icon
+back to the icon of the glyph set, in the settings, with set-config and in
+`config.toml`. The change applies at once.
+
+## Prefix indicator [#prefix-indicator]
+
+When you press the leader key, the mode pill shows a keyboard icon on the
+warning colour until you press the next key. With `use_ascii_only`, the icon is
+`P`. [`appearance.dock_prefix_indicator`](/docs/option-reference#appearance.dock_prefix_indicator) sets where the armed leader shows:
+
+| Value   | What it does                                                                             |
+| ------- | ---------------------------------------------------------------------------------------- |
+| `pill`  | The mode pill shows the armed leader. This is the default                                |
+| `badge` | A `PREFIX` badge shows in the corner across from the dock. The mode pill does not change |
+
+```toml
+[appearance]
+dock_prefix_indicator = "badge"
+```
+
+The badge shows for each value when the dock is hidden or has no mode pill.
+The option is on the settings page, in the Dock section.
+
+## Workspace label cap [#workspace-label-cap]
+
+[`appearance.dock_workspace_label_max`](/docs/option-reference#appearance.dock_workspace_label_max) caps a workspace tab's label in cells,
+so one long name cannot push the other pills off the bar. The cap is `12` by
+default and counts the tab format's own characters, so `"<{name}>"` loses two
+of them to the brackets. Set it to `0` to draw the whole name and let the
+strip scroll instead:
+
+```toml
+[appearance]
+dock_workspace_label_max = 0
+```
+
+A dock too narrow for even one pill keeps the current workspace's tab, cut to
+whatever room is left, so the workspaces always have something to click. You
+can also set it on the settings page, in the Appearance section. The change
+applies at once.
+
+## Workspace name on hover [#workspace-name-on-hover]
+
+[`appearance.dock_workspace_tooltip`](/docs/option-reference#appearance.dock_workspace_tooltip) shows the workspace name above a pill
+when you hover it. The name shows when the pill cuts the name short. It also
+shows when [`appearance.dock_workspace_tab_format`](/docs/option-reference#appearance.dock_workspace_tab_format) has no `{name}`, for
+example with number-only tabs. A workspace with no name shows its number,
+but only when the tab format has no `{index}`. The option is on by default.
+
+```toml
+[appearance]
+dock_workspace_tab_format = "{index}"
+dock_workspace_tooltip = true
+```
+
+## Compact dock [#compact-dock]
+
+The dock has two rows by default: a rule and the row of pills.
+[`appearance.dock_compact`](/docs/option-reference#appearance.dock_compact) removes the rule, so the dock has one row. The panes
+get that row. The default is `false`.
+
+```toml
+[appearance]
+dock_compact = true
+```
+
+The option works with the dock at the top and at the bottom. It has no effect
+when `dockbar_position` is `hidden`. You can also set it on the settings page,
+in the Dock section, or with `tuios set-config dock_compact true`. The change
+applies at once.
+
+The rule shows how long a dock message stays. A compact dock does not show
+this.
+
+When clients with different docks share a session, the panes keep the
+largest dock height. A client with a compact dock shows a blank row in that
+case.
+
+## Window titles [#window-titles]
+
+A pane's title sits on its border. Two options set its shape and its place:
+
+| Option                                                                                  | Values                                                                                                                                                           | Default |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| [`appearance.window_title_style`](/docs/option-reference#appearance.window_title_style) | `pill`: the name on a fill in the border's colour, with rounded caps. `tab`: the fill with no caps. `plain`: the name in the border's colour, with no fill       | `pill`  |
+| [`appearance.window_title_align`](/docs/option-reference#appearance.window_title_align) | `auto`: on the top row, the end away from the window buttons; on the bottom row, the middle. `left`, `center`, `right`: that place in the room the buttons leave | `auto`  |
+
+```toml
+[appearance]
+window_title_style = "plain"
+window_title_align = "center"
+```
+
+[`appearance.window_title_position`](/docs/option-reference#appearance.window_title_position) sets the row: `top`, `bottom` or
+`hidden`. The caps of `pill` come from the glyph set. Both options are on the
+settings page, in the Appearance section, and `tuios set-config` applies them
+at once.
+
+### The title of a screenshot [#the-title-of-a-screenshot]
+
+A screenshot with a frame draws a title bar. [`screenshot.title_format`](/docs/option-reference#screenshot.title_format) sets its
+text, with three tokens:
+
+| Token     | Becomes                                                                                                                                                         |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{title}` | The window's title as its title bar shows it: the pane's name through [`appearance.window_title_format`](/docs/option-reference#appearance.window_title_format) |
+| `{index}` | The window's place, from 1                                                                                                                                      |
+| `{cwd}`   | The window's folder                                                                                                                                             |
+
+```toml
+[screenshot]
+title_format = "{title} in {cwd}"
+```
+
+The default is `{title}`, the same title the window has on screen. An empty
+format draws no title. In a capture of the whole screen or of a region,
+`{title}` is "screen" or "region", and `{index}` and `{cwd}` are the focused
+window's. An unknown token, such as `{name}`, is shown as written, and tuios warns about
+it when it loads the file.
+
+## Host terminal title [#host-terminal-title]
+
+[`appearance.host_title`](/docs/option-reference#appearance.host_title) sets the title of the terminal tuios runs in, such as
+Ghostty's title bar, from the focused pane. It follows the focus, the
+workspace and the session, and the focused pane's own title changes. It is
+tmux's `set-titles`. Empty, the default, sets no title. Emptied while a client
+is attached, it clears the title it set, as a client does when it detaches.
+
+| Placeholder   | What it holds                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{title}`     | the focused pane's name, as its title on the border shows it                                                                                    |
+| `{index}`     | the pane's place in its workspace, from 1                                                                                                       |
+| `{cwd}`       | the pane's working directory                                                                                                                    |
+| `{session}`   | the session's name as the rail shows it, its display name if it has one, or `tuios` without a daemon                                            |
+| `{workspace}` | the workspace's name, else the name its active pane gave with OSC 1, else its number. With a scratch group open, the workspace it is shown over |
+
+```toml
+[appearance]
+host_title = "{title} · {session}"
+```
+
+With no focused pane on the workspace in view, the title is the session's
+name. So it is when the template uses `{title}` and the pane has no name, as a
+fresh shell has none, and when the template comes out empty. A title a tool
+set with herdr's `terminal title set` wins while it is set. Each client sets
+the title of its own terminal. The option is on the settings page, in the
+Appearance section, and `tuios set-config` applies it at once.
+
+## Focused border colour [#focused-border-colour]
+
+The focused pane's border shows the mode. By default it is the theme's cyan
+in window mode and its green in terminal mode. Three keys set it.
+
+| Option                                                                                                        | Values                                                                                                         | Default |
+| ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------- |
+| [`appearance.border_focused_color`](/docs/option-reference#appearance.border_focused_color)                   | a [colour](/docs/configuration/motion-rendering-and-themes#colour-values). It sets the border in both modes    | empty   |
+| [`appearance.border_focused_color_window`](/docs/option-reference#appearance.border_focused_color_window)     | a [colour](/docs/configuration/motion-rendering-and-themes#colour-values). It sets the border in window mode   | empty   |
+| [`appearance.border_focused_color_terminal`](/docs/option-reference#appearance.border_focused_color_terminal) | a [colour](/docs/configuration/motion-rendering-and-themes#colour-values). It sets the border in terminal mode | empty   |
+
+```toml
+[appearance]
+border_focused_color_window = "accent"
+border_focused_color_terminal = "#ff9e64"
+```
+
+- A key for one mode wins over `border_focused_color` in that mode.
+- An empty key uses the next key. After the three keys, the theme sets the colour.
+- `border_focused_color` also replaces the colours for copy mode and for an
+  agent that waits. The keys for one mode do not.
+- On many themes the cyan and the green have the same lightness. The default
+  terminal mode colour then moves darker, or lighter when darker is too faint.
+  You can then see the mode without the hue.
+- The default unfocused border is darker than both focused borders on a dark
+  background, and lighter on a light one. You can see focus without the hue.
+- Each default focused border has at least twice the contrast of the unfocused
+  border against the background.
+- With no theme, the default unfocused border is a grey near your terminal
+  background. The focused borders use a saturated cyan and green.
+- With [`appearance.session_border`](/docs/option-reference#appearance.session_border) on, the focused border in window mode uses
+  the session colour. In terminal mode it uses the terminal mode colour.
+  Terminal mode stands further from the background and is at least as
+  saturated, so it is the more visible of the two. The session colour moves
+  toward the background to make the step.
+- At 16 colours the default borders use bright cyan and bright green, the
+  slots of your terminal's palette.
+- The settings page has a row for each key, in the Appearance section.
+
+## Focused border gradient [#focused-border-gradient]
+
+[`appearance.border_focused_gradient`](/docs/option-reference#appearance.border_focused_gradient) draws the focused pane's border in two
+or more colours that blend from one to the next.
+[`appearance.border_gradient_angle`](/docs/option-reference#appearance.border_gradient_angle) sets the direction in degrees.
+
+| Option                                                                                            | Values                                                                                                                                      | Default |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| [`appearance.border_focused_gradient`](/docs/option-reference#appearance.border_focused_gradient) | two or more [colours](/docs/configuration/motion-rendering-and-themes#colour-values), separated by spaces or commas. Empty draws one colour | empty   |
+| [`appearance.border_gradient_angle`](/docs/option-reference#appearance.border_gradient_angle)     | `0` to `359`. `0` runs left to right, `90` top to bottom, `45` from the top left corner to the bottom right one                             | `45`    |
+
+```toml
+[appearance]
+border_focused_gradient = "#33ccff #00ff99"
+border_gradient_angle = 45
+```
+
+- The gradient is static. It changes only when the pane moves, resizes or
+  takes focus.
+- The border steps through 8 colours, so the cells of one step share one
+  colour code. This keeps the bytes sent to the terminal small.
+- The window buttons and the title keep their own colours.
+- A focused border in a colour for its state (copy mode or an agent that
+  waits, see [THEMES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/THEMES.md#roles-for-one-piece-of-chrome)) is drawn
+  in that colour, not the gradient.
+- At 16 colours the border uses one colour, as before.
+- A colour value can name a slot or a role, such as `"accent accent_bright"`,
+  so the gradient follows the theme.
+
+## Dialog and panel borders [#dialog-and-panel-borders]
+
+The small dialogs, such as rename, confirm and new space, draw their frame in the pane border style, [`appearance.border_style`](/docs/option-reference#appearance.border_style). The larger panels, such as the command palette, the switchers, the Agents view and the settings page, have no frame unless [`appearance.frame_panels`](/docs/option-reference#appearance.frame_panels) is on. Then they take the same frame.
+
+The scrollback browser and its help modal draw their frame in the border style too.
+
+With [`appearance.pane_overlays`](/docs/option-reference#appearance.pane_overlays) on, a dialog or a panel looks like a pane window:
+
+- Every panel is framed, as if `frame_panels` were on.
+- The frame takes the focused pane's border colour, because an open dialog or panel is the focused thing. That is [`appearance.border_focused_color`](/docs/option-reference#appearance.border_focused_color) when it is set. Otherwise it is the theme's colour for the current mode (copy mode or a waiting agent) or the session's tint.
+- The frame and everything in it sit on the background of an empty pane cell. That is [`appearance.pane_background`](/docs/option-reference#appearance.pane_background) when it is set, else the terminal's own. The title and hints in the frame line share that background, as they do in a pane.
+- The selected row, the row under the pointer and input fields are steps of that background. On a navy pane, a selected row is a darker navy.
+- Pills keep their own colours.
+
+The scrollback browser and the copy-mode search bar follow the option too. The browser's frame takes the focused pane's border colour, and its selected row and key pills are steps of the pane's background. The search bar sits on the pane's background.
+
+The option is off by default. Then a dialog or a panel keeps its own shaded background, and its frame keeps its quiet ink. Some cases keep the shade even with the option on:
+
+- Under `hidden`, no frame is drawn, so the shade is a dialog's only edge.
+- At 16 colours every background is the terminal's own, so the option changes only the frame's colour.
+- With no theme, and a terminal that never reports its background, there is no colour to fill the overlay with or to step its rows from.
+
+[`appearance.overlay_border_color`](/docs/option-reference#appearance.overlay_border_color) sets a colour for every dialog and panel frame, and for the scrollback browser's, with or without `pane_overlays`.
+
+| Option                                                                                      | Values                                                                                                                                                                                                      | Default   |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| [`appearance.border_style`](/docs/option-reference#appearance.border_style)                 | `rounded`, `normal`, `thick`, `double`, `hidden`, `block`, `ascii`, `outer-half-block`, `inner-half-block`, `glyphs`                                                                                        | `rounded` |
+| [`appearance.frame_panels`](/docs/option-reference#appearance.frame_panels)                 | `true` frames every panel in the border style, `false` leaves the panels without a frame                                                                                                                    | `false`   |
+| [`appearance.pane_overlays`](/docs/option-reference#appearance.pane_overlays)               | `true` draws dialogs and panels like pane windows, `false` keeps their own shaded background                                                                                                                | `false`   |
+| [`appearance.overlay_border_color`](/docs/option-reference#appearance.overlay_border_color) | A colour for every dialog and panel frame: `#89b4fa`, a slot name such as `bright_cyan`, or a role such as `accent`. Empty keeps the frame's own colour, or the focused pane's border under `pane_overlays` | empty     |
+
+```toml
+[appearance]
+border_style = "double"
+frame_panels = true
+pane_overlays = true
+overlay_border_color = "accent"
+```
+
+How each border style draws a dialog or a framed panel:
+
+- `rounded`, `normal`, `thick`, `double` and `ascii` draw that style's corners and lines.
+- `hidden` draws no frame. The dialog keeps its size, and its title and key hints stay where the frame would carry them. A frame that is the only edge of what it holds is drawn as in `rounded` instead: the frame of a panel at 16 colours, the frames round the regions inside a panel, such as an explorer's list and preview, and the frames of the scrollback browser and its help modal, which have no background of their own.
+- `block`, `outer-half-block` and `inner-half-block` draw the `rounded` frame. A solid frame is too heavy round a dialog of three rows.
+- `glyphs` draws the border of the active glyph set. A part of the border the set does not name is drawn as in `rounded`.
+- With `--ascii-only`, every frame is drawn with `+`, `-` and `|`.
+- At 16 colours a panel always has a frame, because its background is the terminal's own. The frame takes the border style, except `hidden` as above.
+
+Both options are on the settings page, in the Appearance section. A change applies at once.
+
+## Borderless zoom [#borderless-zoom]
+
+`z` zooms the focused pane. By default the zoomed pane keeps its border, and
+[`appearance.zoom_size`](/docs/option-reference#appearance.zoom_size) sets how much of the screen it takes.
+[`appearance.zoom_borderless`](/docs/option-reference#appearance.zoom_borderless) shows the zoomed pane on the whole pane region
+with no border and no title bar. The program in the pane gets the full size.
+The dock and the rail stay on the screen. The default is `false`.
+
+```toml
+[appearance]
+zoom_borderless = true
+```
+
+With this option on, `zoom_size` and `zoom_max_width` have no effect. The
+option also applies to a floating pane. When you zoom out, the pane gets its
+border back. You can also set it on the settings page, in the Advanced section,
+or with `tuios set-config appearance.zoom_borderless true`. The change applies
+at once.

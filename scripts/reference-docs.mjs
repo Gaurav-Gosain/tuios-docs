@@ -90,6 +90,60 @@ export const pages = [
       "Every table and option in the TUIOS config.toml, with defaults and how changes apply.",
     icon: "Settings",
     lead: "To search every option by name, type or value, use the [option explorer](/docs/config-options).",
+    split: {
+      index: [
+        "tables",
+        "applying-changes",
+        "validation",
+        "when-a-key-is-wrong",
+        "troubleshooting",
+        "examples",
+      ],
+      groups: [
+        {
+          start: "sidebar-file-editor",
+          slug: "files-input-and-focus",
+          title: "Files, input and focus",
+        },
+        {
+          start: "animation-speed",
+          slug: "motion-rendering-and-themes",
+          title: "Motion, rendering and themes",
+        },
+        {
+          start: "graphical-programs-from-the-launcher",
+          slug: "workspaces-and-windows",
+          title: "Workspaces and windows",
+        },
+        {
+          start: "limits-and-banners",
+          slug: "display-mouse-and-shell",
+          title: "Display, mouse and shell",
+        },
+        {
+          start: "the-docks-components",
+          slug: "dock-and-rail",
+          title: "The dock and the session rail",
+        },
+        { start: "turn-off-agent-features", slug: "agents", title: "Agents" },
+        {
+          start: "what-a-pane-may-do",
+          slug: "permissions",
+          title: "Permissions and other machines",
+        },
+        {
+          start: "appearance-the-appearance-table",
+          slug: "appearance-tables",
+          title: "The appearance tables",
+        },
+        {
+          start: "keybindings-the-keybindings-table",
+          slug: "other-tables",
+          title: "The other tables",
+        },
+      ],
+      budget: 90_000,
+    },
   },
   {
     slug: "option-reference",
@@ -108,6 +162,41 @@ export const pages = [
       "Every default key in TUIOS for window mode, terminal mode, prefix commands, copy mode and the mouse, and how to change them.",
     icon: "Keyboard",
     lead: "**Try it live:** [Learn tuios](/learn) has you press these keys in the real app, in your browser. [Default keys](/docs/default-keys) lists every default key, with a search.",
+    split: {
+      index: [
+        "keys-of-another-multiplexer",
+        "lock-mode",
+        "nest-mode",
+        "the-full-list",
+        "keybind-presets",
+        "palette-commands-you-can-bind",
+        "customizing",
+      ],
+      groups: [
+        {
+          start: "editing-sidebar-files",
+          slug: "panes-panels-and-workspaces",
+          title: "Panes, panels and workspaces",
+        },
+        {
+          start: "copy-mode",
+          slug: "copy-mode",
+          title: "Copy mode and screenshots",
+        },
+        {
+          start: "the-agents-view",
+          slug: "agents-view",
+          title: "The agents view",
+        },
+        {
+          start: "other-keyboard-layouts",
+          slug: "layouts-and-macos",
+          title: "Keyboard layouts and macOS",
+        },
+        { start: "modes", slug: "keys-by-mode", title: "Keys by mode" },
+      ],
+      budget: 90_000,
+    },
   },
   {
     slug: "default-keys",
@@ -383,11 +472,21 @@ function split(page, tree, topicInfo) {
   const { head, parts: sections } = cut(tree.children, 2);
   const index = { slug: "", title: page.title, nodes: [...head] };
   const parts = [];
+  // A group takes the section it starts at and every section after it, up
+  // to the next group, so a section the doc adds joins the group before it.
+  let group;
   for (const section of sections) {
     const id = section[0].data.id;
     const byTopic = conf.byTopic?.[id];
+    const start = conf.groups?.find((g) => g.start === id);
+    if (start) {
+      group = { slug: start.slug, title: start.title, nodes: [], depth: 2 };
+      parts.push(group);
+    }
     if (conf.index.includes(id)) {
       index.nodes.push(...section);
+    } else if (group) {
+      group.nodes.push(...section);
     } else if (byTopic) {
       // The heading and the text before the first verb stay on the index.
       const { head: intro, parts: verbs } = cut(section, 3);
@@ -423,8 +522,19 @@ function split(page, tree, topicInfo) {
       });
     }
   }
+  const seen = new Set(sections.map((s) => s[0].data.id));
+  for (const id of [
+    ...conf.index,
+    ...(conf.groups ?? []).map((g) => g.start),
+  ]) {
+    if (!seen.has(id)) {
+      console.warn(
+        `${page.slug}: no section ${id}. Update its split in scripts/reference-docs.mjs.`,
+      );
+    }
+  }
   const out = [index];
-  for (const p of parts) out.push(...chunk(p, conf.budget, 3));
+  for (const p of parts) out.push(...chunk(p, conf.budget, p.depth ?? 3));
   for (const p of out) {
     if (sizeOf(p.nodes) > conf.budget) {
       console.warn(

@@ -1,0 +1,330 @@
+---
+title: "Keyboard layouts and macOS"
+description: "Keyboard layouts and macOS: part of the Keybindings of TUIOS."
+icon: Keyboard
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/KEYBINDINGS.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/KEYBINDINGS.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/KEYBINDINGS.md). The [Keybindings](/docs/keybindings) page lists every part.
+
+## Other keyboard layouts [#other-keyboard-layouts]
+
+Bindings work with layouts for non-Latin scripts, such as Cyrillic, Greek,
+Hebrew or Arabic. When no binding matches the character a key types, tuios uses
+the key at the same position on a US layout. With a Ukrainian layout, the key
+that types `ш` is the US `i` key, so `ctrl+b` then that key opens the agents view. A
+binding on the typed character wins, so you can still bind `ш` yourself. Text
+that you type into a pane, a rename or a search stays the character that you
+typed.
+
+Latin layouts, such as AZERTY, QWERTZ or Dvorak, use the letters on their keys.
+A letter or a `ctrl` chord means the key that it types, not the US key at its
+position. On Dvorak, the key that types `b` is the US `n` key, and `ctrl` with
+it is `ctrl+b`, the leader. The showkeys strip, the binding recorder and a
+tape spell the chord the same way. A Latin letter with no binding does nothing.
+
+This needs a terminal that sends the US-layout key through the Kitty keyboard
+protocol: Ghostty, kitty, WezTerm or foot. Other terminals send only the typed
+character. With those, switch to a Latin layout for tuios commands.
+
+In window mode tuios tells the terminal to send every key as a code. tuios
+resets this when it stops. If tuios cannot stop correctly, the terminal can
+stay in this mode. This occurs when you use `kill -9` on tuios, or when an ssh
+connection drops. The shell then shows codes such as `[97u` when you type. To
+reset the terminal, run this command or close the tab:
+
+```sh
+printf '\033[=0;1u'
+```
+
+### Shifted digits and AZERTY [#shifted-digits-and-azerty]
+
+On a US keyboard `&` is `shift+7`. Some terminals send the chord and others send
+the character. By default, a binding on `opt+shift+7` therefore also matches
+`opt+&`, and a binding on `!` also matches `shift+1`. These US aliases apply
+only when no binding names the key itself. A binding that you write for a key
+always wins over an alias.
+
+On other layouts these keys are in other places. On a French Mac, `&` is the
+unshifted 1 key and the digits need Shift. tuios turns off the US aliases for a
+key when the terminal reports that the key is not where a US layout has it.
+Terminals that send this through the Kitty keyboard protocol include Ghostty,
+kitty, WezTerm and foot. Other terminals do not report the layout. To turn off
+the US aliases for every key, set this:
+
+```toml
+[keybindings]
+keyboard_layout = "other"   # the default is "us"
+```
+
+`tuios keybinds explain opt+&` shows a binding that the key runs through a US
+alias.
+
+#### A recipe for French AZERTY on macOS [#a-recipe-for-french-azerty-on-macos]
+
+Set the left Option key to send Alt. In iTerm2 this is "Esc+". In WezTerm it
+is `send_composed_key_when_left_alt_is_pressed = false`. Then:
+
+- Option and Shift with a number key types the digit. The default `opt+1` to
+  `opt+9` switch workspaces with it.
+- The default `opt+shift+1` to `opt+shift+9` need Shift and a digit together,
+  which AZERTY cannot type. Bind the move to the unshifted keys:
+
+```toml
+[keybindings]
+keyboard_layout = "other"
+
+[keybindings.workspaces]
+move_and_follow_1 = ["opt+&"]
+move_and_follow_2 = ["opt+é"]
+move_and_follow_3 = ['opt+"']
+move_and_follow_4 = ["opt+'"]
+move_and_follow_5 = ["opt+("]
+move_and_follow_6 = ["opt+§"]
+move_and_follow_7 = ["opt+è"]
+move_and_follow_8 = ["opt+!"]
+move_and_follow_9 = ["opt+ç"]
+```
+
+To type `[ ] { } |` with Option, set the right Option key to compose. See
+[One Option key for typing](#one-option-key-for-typing). With
+`keyboard_layout = "other"`, tuios sends those characters to the pane.
+
+#### French AZERTY on macOS [#french-azerty-on-macos]
+
+Set the left Option key to send Alt. In iTerm2 this is "Esc+". In WezTerm it is `send_composed_key_when_left_alt_is_pressed = false`. Then:
+
+- <kbd>Option</kbd> and <kbd>Shift</kbd> with a number key types the digit. The default `opt+1` to `opt+9` switch workspaces with it.
+- The default `opt+shift+1` to `opt+shift+9` need <kbd>Shift</kbd> and a digit together, which AZERTY cannot type. Bind the move to the unshifted keys:
+
+```toml
+[keybindings]
+keyboard_layout = "other"
+
+[keybindings.workspaces]
+move_and_follow_1 = ["opt+&"]
+move_and_follow_2 = ["opt+é"]
+move_and_follow_3 = ['opt+"']
+move_and_follow_4 = ["opt+'"]
+move_and_follow_5 = ["opt+("]
+move_and_follow_6 = ["opt+§"]
+move_and_follow_7 = ["opt+è"]
+move_and_follow_8 = ["opt+!"]
+move_and_follow_9 = ["opt+ç"]
+```
+
+To type `[ ] { } |` with Option, set the right Option key to compose. See [One Option key for typing](#one-option-key-for-typing). With `keyboard_layout = "other"`, TUIOS sends those characters to the pane.
+
+#### A character that Option types, after the leader [#a-character-that-option-types-after-the-leader]
+
+On a German Mac layout, `|` is <kbd>Option</kbd>+<kbd>7</kbd> and `\` is <kbd>Option</kbd>+<kbd>Shift</kbd>+<kbd>7</kbd>. After the leader, Ghostty and other terminals with the Kitty keyboard protocol report that key as <kbd>Alt</kbd>+<kbd>7</kbd> with the text `|`. TUIOS now tries that character too, so <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Option</kbd>+<kbd>7</kbd> runs the binding on `|`, the split.
+
+- TUIOS tries the character last, when the chord is <kbd>Alt</kbd> or <kbd>Alt</kbd>+<kbd>Shift</kbd> and the character is printable ASCII that the key does not give by itself or with <kbd>Shift</kbd> on a US layout.
+- A binding on the chord still wins. <kbd>Option</kbd>+<kbd>7</kbd> still goes to workspace 7 in window mode.
+
+### Characters typed with Option [#characters-typed-with-option]
+
+Some layouts type ASCII characters with Option. On a German Mac, `|` is
+Option and 7, `\` is Option, Shift and 7, and `@` is Option and L. While tuios
+reads keys itself (window mode, after the leader, an overlay), Ghostty sends
+such a key as the chord and the character: Option and 7 is `opt+7` with the
+text `|`. A binding on the chord runs first, so `opt+7` still goes to
+workspace 7 in window mode. When no binding has the chord, the binding on the
+character runs, so `ctrl+b` then Option and 7 splits the pane as `ctrl+b |`
+does. In a pane the character is text, as before.
+
+## Keys sent to a pane [#keys-sent-to-a-pane]
+
+In terminal mode, tuios sends these keys to the program in the pane:
+
+- The keypad keys, with Num Lock on or off. Keypad `Enter` sends Enter.
+- `Begin`, the centre key of the keypad with Num Lock off.
+- F13 and higher. A program on the legacy encoding gets them in the form
+  xterm sends.
+- `Insert`, `Delete`, `PageUp` and `PageDown` with their modifiers.
+  `ctrl+Delete` stays `ctrl+Delete`.
+
+A program on the Kitty keyboard protocol gets each key with the number the
+protocol gives it. A key the protocol has no number for goes in its legacy
+form. Caps Lock, Num Lock and a modifier key pressed alone reach that program
+only when it asks for every key.
+
+### Shift+Up, Shift+Down, Shift+PageUp and Shift+PageDown [#shiftup-shiftdown-shiftpageup-and-shiftpagedown]
+
+`shift+up` and `shift+down` scroll the pane into its history. They do this
+only when all of these are true:
+
+- The program is on the main screen.
+- The program did not turn on a mouse mode.
+
+`shift+pgup` and `shift+pgdown` follow the same rules, but scroll one visible
+pane page at a time. In other panes, tuios sends the keys to the program.
+Programs that use the full screen, such as nvim, less and htop, get them. When
+the pane is in copy mode, the keys scroll. This is the same rule as the mouse
+wheel, and the same rule as kitty.
+
+To change the keys, set `terminal_scroll_up`, `terminal_scroll_down`,
+`terminal_scroll_page_up` and `terminal_scroll_page_down` in
+`[keybindings.terminal_mode]`.
+
+## macOS [#macos]
+
+Option is a compose key on macOS unless the terminal is told otherwise. An
+Option chord then arrives as a character, not as Alt. Terminal.app and iTerm2
+work like this until you change their settings.
+
+The same character can come from two keys. On a US keyboard, Option+3 types
+`£`. On a UK keyboard, Shift+3 types `£`. tuios reads the keyboard layout of
+the Mac when it starts:
+
+- On a US or ABC layout, tuios runs the `opt+` binding for the character.
+  Option+3 types `£` and switches to workspace 3.
+- On any other layout, the character goes to the pane. tuios also does this
+  when it cannot read the layout.
+
+If you change the layout while tuios runs, tuios reads it again when such a
+character arrives and the last read is more than 30 seconds old. The new
+layout applies from the next key. A tuios that serves SSH or web clients from
+a Mac uses the layout of that Mac.
+
+`keyboard_layout` overrides the layout that tuios reads. With
+`keyboard_layout = "us"`, tuios runs the binding. With
+`keyboard_layout = "other"`, the character goes to the pane.
+
+To use the `opt+` bindings on every layout, set your terminal to send Option
+as Alt. See [The fix](#the-fix).
+
+Some terminals, such as Ghostty and kitty, send the character and also report
+Alt. tuios then runs the `opt+` binding on every layout. For example,
+Option+8 types `•` and switches to workspace 8.
+
+To set the behaviour yourself, use `option_glyphs`:
+
+```toml
+[keybindings]
+option_glyphs = "auto"   # auto, alt, bind, type
+```
+
+- `auto` uses the layout of the Mac, as above. This is the default.
+- `alt` runs the binding only when the terminal reports Alt.
+- `bind` always runs the binding. Use it only on a US keyboard.
+- `type` always sends the character to the pane. Use it if you type
+  characters such as `#`, `•` or `{` with Option.
+
+Two kinds of chord cannot be read:
+
+- **Dead keys.** Option+e, i, n, u and backtick emit nothing at all until a
+  second key ends the composition. `alt+n` is bound to "next pane" in terminal
+  mode, and on a stock macOS terminal it takes two presses.
+- **Rewritten chords.** Option+Left and Option+Right are sent as the readline
+  word motions, `ESC b` and `ESC f`. Nothing in what arrives says an arrow key
+  was pressed. Ghostty ships keybinds that do this, and they win even with
+  Option-as-Alt turned on.
+
+Command chords never reach a program inside a terminal at all; macOS routes
+them to the menu bar.
+
+### The fix [#the-fix]
+
+Turn on your terminal's Option-as-Alt setting:
+
+| Terminal     | Setting                                                     |
+| ------------ | ----------------------------------------------------------- |
+| Ghostty      | `macos-option-as-alt = true` in `~/.config/ghostty/config`  |
+| Terminal.app | Settings, Profiles, Keyboard, tick "Use Option as Meta Key" |
+| iTerm2       | Settings, Profiles, Keys, set Left Option key to "Esc+"     |
+| kitty        | `macos_option_as_alt yes` in `~/.config/kitty/kitty.conf`   |
+| WezTerm      | `send_composed_key_when_left_alt_is_pressed = false`        |
+| Alacritty    | `option_as_alt = "Both"` under `[window]`                   |
+| VS Code      | turn on `terminal.integrated.macOptionIsMeta`               |
+| Tern         | set `option_as_alt` in Tern's `settings.json`               |
+
+Ghostty needs two more lines, because its own keybinds rewrite the arrows
+before any encoding happens:
+
+```
+keybind = alt+left=unbind
+keybind = alt+right=unbind
+```
+
+tuios shows this on screen one time, when an Option chord arrives as a
+character and not as Alt. On a layout other than US or ABC it does not show
+it, because the character can be text.
+
+### One Option key for typing [#one-option-key-for-typing]
+
+Some terminals let you set the two Option keys differently. Use the left Option
+key for tuios and the right Option key to type characters such as `#`, `•` or
+`{`. In WezTerm:
+
+```lua
+config.send_composed_key_when_left_alt_is_pressed = false
+config.send_composed_key_when_right_alt_is_pressed = true
+```
+
+In iTerm2, set Left Option key to "Esc+" and Right Option key to "Normal".
+Then set this, so that the right Option key types characters into the pane:
+
+```toml
+[keybindings]
+option_glyphs = "type"
+```
+
+The left Option key sends Alt and runs tuios bindings. The right Option key
+types characters into the pane.
+
+### What works without changing anything [#what-works-without-changing-anything]
+
+The prefix. Every navigation command has a prefix binding, and the prefix is an
+ordinary `ctrl` chord that no terminal interferes with:
+
+| Keys                     | What it does                     |
+| ------------------------ | -------------------------------- |
+| `ctrl+b` then an arrow   | Focus the pane in that direction |
+| `ctrl+b n` / `ctrl+b p`  | Next and previous pane           |
+| `ctrl+b (` / `ctrl+b )`  | Previous and next session        |
+| `ctrl+b K` / `ctrl+b J`  | Previous and next agent pane     |
+| `ctrl+b a`               | Launcher                         |
+| `ctrl+b 0` to `ctrl+b 9` | Jump to a pane                   |
+
+The prefix stays armed for half a second after a command worth repeating, so
+`ctrl+b` then left left left walks three panes on one prefix press. This is
+tmux's `repeat-time`, and `appearance.prefix_repeat_time` changes it. Zero
+turns it off.
+
+These actions repeat when you bind them under the leader: the focus moves,
+`next_window`, `prev_window`, `next_workspace`, `prev_workspace`, the
+`resize_pane_*` steps, the `resize_master_*` and `resize_height_*` steps, and
+the `scroll_*` moves and width cycle. `ctrl+b o` and `ctrl+b O` repeat too.
+Other actions run once.
+
+`keybindings.repeat` sets your own list, as tmux `bind -r` does. The list
+replaces the default list. An empty list turns repeat off:
+
+```toml
+[keybindings]
+# n and p switch workspaces once, so the next n or p you type reaches the shell
+repeat = ["terminal_focus_left", "terminal_focus_right", "focus_up",
+          "focus_down"]
+
+[keybindings.prefix_mode]
+next_workspace = ["n"]
+prev_workspace = ["p"]
+```
+
+An action in the list repeats only when a key runs it after the leader. tuios
+warns about an entry with no such key, and about a misspelt action.
+
+With `keybindings.lock` on, there is no repeat window in terminal mode. A
+repeatable action keeps its menu open until you press `esc`, with no time
+limit. The open menu takes only repeatable keys. Any other key goes to the
+pane, and tuios locks again. See [Lock mode](/docs/keybindings#lock-mode).
+
+Workspace switching on `opt+1` to `opt+9` works with no configuration on a
+US or ABC keyboard layout. It also works in a terminal that reports Alt with
+the character, such as Ghostty and kitty. On other layouts in Terminal.app
+and iTerm2, Option+1 types its character and does not switch. Set the
+terminal to send Option as Alt.

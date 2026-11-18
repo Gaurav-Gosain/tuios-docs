@@ -1,0 +1,334 @@
+---
+title: "Permissions and other machines"
+description: "Permissions and other machines: part of the Configuration of TUIOS."
+icon: Settings
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CONFIGURATION.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CONFIGURATION.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CONFIGURATION.md). The [Configuration](/docs/configuration) page lists every part.
+
+## What a pane may do [#what-a-pane-may-do]
+
+Every pane holds grants that say what a process in it may do through tuios:
+`read` (its own session and fan group), `write` (type into its own session,
+into panes that hold nothing it does not), `fan` (write in its fan group and
+start agents), `respond` (answer prompts without you, and type into a pane
+waiting on one), `files` (copy files with `tuios cp`, see below) and `admin`
+(everything else, as before grants). A pane started
+with `--grants` (`tuios start-agent`, `fan`, `new-window`) or given grants
+with `tuios set-pane-grants` holds those. Every other pane holds the default
+this table sets:
+
+```toml
+[agents.permissions]
+mode = "strict"
+grants = ["read", "write", "fan"]
+```
+
+`mode` is `open`, the default, or `strict`. Under `open` a pane holds `admin`,
+so every script in a pane works as it always has. Under `strict` it holds
+`grants`, which is `read`, `write` and `fan` when unset; an empty list gives
+nothing but the right to report about itself. Any other `mode` is read as
+`strict`, and an unknown grant is dropped: both are reported as config
+warnings, and both fail toward less. `admin` never includes `respond`, and no
+default gives it, so listing `respond` here is how you let every pane answer
+prompts for you.
+
+`files` lets a pane copy files without `admin`. A copy may start when each
+end on this machine is inside the pane's folder (its worktree, else its
+working folder). Each end on a host must be under its home folder, or be its
+receive folder. The pane sees and controls only the copies it started.
+`admin` includes `files`. To let every pane copy near its work under
+`strict`, add it to the list:
+
+```toml
+[agents.permissions]
+mode = "strict"
+grants = ["read", "write", "fan", "files"]
+```
+
+`task` lets a pane add, claim and finish the task cards of its own session
+(`tuios task`) without `admin`. A pane claims only for itself and changes only
+the card it holds. `admin` includes `task`. Under `strict`, give it to the
+panes that take work from a conductor:
+
+```toml
+[agents.permissions]
+mode = "strict"
+grants = ["read", "write", "fan", "task"]
+```
+
+The daemon reads the table when it starts and again when the file changes. A
+change that gives panes less reaches every pane on the default at its next
+call. A change that gives more, such as `strict` to `open`, waits, because a
+process in a pane can write config.toml. Run `tuios config apply` from a
+terminal outside tuios to apply it, or restart the daemon. Until then the
+daemon logs it, and `tuios pane-grants` says so. When a start finds that
+panes hold more than at the last run, it says so in the log, in
+`tuios pane-grants` and in the Inbox. Like
+`[agents.approvals]`, it is not in `list-options` and `tuios set-config` cannot
+change it, so no pane can loosen it. The [paste buffers](/docs/configuration/workspaces-and-windows#paste-buffers) hold
+what you copied, so a pane needs `read` to read them, `write` to change them,
+and both to paste one.
+[AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#what-a-pane-may-do) has the whole model.
+
+## SSH server limits [#ssh-server-limits]
+
+The `[ssh]` section sets the limits of the `tuios ssh` server. The server reads
+it when it starts. The defaults do not stop a normal login.
+
+```toml
+[ssh]
+handshake_timeout = "120s" # time to finish the login; 0 turns the limit off
+idle_timeout = "0"         # close a connection with no traffic for this long; 0 is off
+max_handshakes = 32        # connections that log in at the same time; 0 is no limit
+max_sessions = 64          # sessions open at the same time; 0 is no limit
+```
+
+- `handshake_timeout`: The server closes a connection that does not log in
+  within this time. It is the same as `LoginGraceTime` in OpenSSH. The limit
+  ends when the login is complete, so it does not close a session that you
+  use.
+- `idle_timeout`: The server closes a connection after this time with no
+  traffic in either direction. It is off by default. A session that shows a
+  clock or other output that changes stays open.
+- `max_handshakes`: When this many connections are logging in, the server
+  closes a new connection at once. A connection that is logged in does not
+  count.
+- `max_sessions`: When this many sessions are open, over all connections, the
+  server refuses a new session. The client sees a message. The refused session
+  does not attach to a session and does not open a pane.
+
+A duration is a value such as `90s`, `30m` or `2h`. A value that does not
+parse, or a negative value, gives a warning and the default.
+`tuios ssh --handshake-timeout`, `--idle-timeout`, `--max-handshakes` and
+`--max-sessions` replace these values for one run. The server writes the limits
+it uses to its log when it starts.
+
+Like `[hosts]`, the section is not in `list-options`, and `tuios set-config`
+cannot change it.
+
+## Move between machines [#move-between-machines]
+
+The `next_host` and `prev_host` keybind actions go to a session on the next or
+the previous machine: this machine first, then the `[hosts]` table. They have
+no default key. See
+[KEYBINDINGS.md](/docs/keybindings/panes-panels-and-workspaces#cycle-through-machines).
+
+```toml
+[keybindings.window_management]
+next_host = ["alt+."]
+prev_host = ["alt+,"]
+```
+
+## What another machine may do here [#what-another-machine-may-do-here]
+
+A `[hosts.NAME]` table names a machine this one links to. Read on the machine
+a link arrives at, the same table also says what the machine of that name may
+do there:
+
+```toml
+[hosts.laptop]
+addr = "laptop"                  # optional: without it nothing is dialled
+allow = ["list", "mail", "open", "write", "respond"]
+hold_mail = true
+hosted_grace = "10m"
+
+[hosts."*"]                      # every machine with no table of its own
+allow = ["list", "mail"]
+```
+
+`allow` is the capabilities, and anything not in it is refused with
+`forbidden` and nothing done:
+
+| Capability    | What it lets the other machine do here                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list`        | Read: sessions, windows, captures, screenshots, agent state, the Inbox, prompts, waits and the event stream. It also gives a live stream of the bytes of any pane (`stream-pane`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `mail`        | Send and read agent mail, and use the stash.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `open`        | Start processes: sessions, windows, worktrees, fans, `start-agent`, clones of a repository by its URL, and panes this machine runs for it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `write`       | Change what is here: type into panes, `run` a line at a prompt, close and move windows, set options, layouts and names, report agent state, and attach. Also read a worktree's work out with `bundle-worktree` (`tuios worktree pull`), since a machine that may type into a shell here can read those files already.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `respond`     | Answer for the person: prompts, held approvals, `ask-human` questions, dismissing Inbox items, and passing on held mail. Also type into a pane that waits on a prompt, from a pane on the other machine. The person on the other machine, outside every pane, needs only `write` for that.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `transcripts` | Read the conversation of an agent here, from the person's own client attached over the link. The client must send the nonce of its attach: an agent in a pane, a link the other machine did not vouch for, and a caller with no nonce are refused. `respond` includes it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `files`       | Read and write files here with the file verbs: a file's bytes, copies in and out (`transfer-start` on the other machine), new folders, moves and removes. It is apart from `write`, so you can stop one machine's copies and keep its typing. A write that arrives over the link lands only in the folders of `files_roots` (the receive folder unless you add more, see below), and the drop folder for dropped files, never in `~/.ssh`, `~/.gnupg`, credentials, shell start files, login items or tuios's own config, whatever `allow` and `files_roots` say. A read never returns keys or credentials. It also lets a window here that the other machine draws show kitty images that a program names by path (`kitten icat --transfer-mode=file`): this machine reads the file under the same read rules and `files_read_roots`, and sends the bytes. See [protocol.md](/docs/control-protocol/verbs-other-verbs#files-and-transfers). |
+
+With no table, a machine may `list`, `mail`, `open`, `write`, `files` and
+`transcripts`. `respond` is opt-in. Relaying on to this machine's own hosts needs the five capabilities a
+link had before `files` (`list`, `mail`, `open`, `write`, `respond`), because
+the next machine sees the relay as coming from this one; a table written for an
+older tuios that allows those five still relays. A copy this machine runs for
+another one also needs `files`. A table that sets `allow` without `files` keeps
+that machine from the file verbs. An `allow` that is set replaces the inherited
+list; `allow = []` allows nothing but `hello`.
+
+**Where a link may write: `files_roots`.** A machine with `files` writes only
+under the folders `files_roots` names, plus the drop folder. Unset, it is one
+receive folder: `~/Downloads/tuios` on macOS and Windows, and
+`$XDG_DOWNLOAD_DIR/tuios` (or `~/Downloads/tuios`) on other systems. tuios
+makes it on first use. Widen it on purpose, per machine:
+
+```toml
+[hosts.laptop]
+allow = ["list", "files"]
+files_roots = ["~/Downloads/tuios", "~/dev"]
+```
+
+A path is absolute or starts with `~`. `files_roots = ["~"]` lets the machine
+write anywhere in your home folder; the deny list below still holds inside
+every root, so even then it cannot touch `~/.ssh`, a shell start file, or the
+config folders of the agent harnesses tuios integrates (Claude Code, Codex,
+Gemini CLI, opencode, Cursor and the others), which name commands those tools
+run. A write outside the roots is refused, and the refusal says where writes
+may land and which setting to change. A reload that widens `files_roots`, like
+one that widens `allow`, waits for `tuios config apply`.
+
+**The mode of a file a link writes.** A file that another machine writes here
+gets the sender's permission bits under this machine's umask, as `cp` and
+`scp` without `-p` do. It never gets group or world write. The execute bits
+stay, so a script stays runnable. This holds for a paired device too.
+
+**Where a link may read: `files_read_roots`.** Unset, a machine with `files`
+reads any file you can read, apart from the read deny list: keys, credentials
+(also the logins and API keys of agent tools such as Gemini CLI, opencode, Qwen
+Code, Kilo, Pi, oh-my-pi, Hermes, Amp and the Copilot CLI, Cursor's MCP servers, the sops age keys, atuin's
+key and history, Ollama's key, and the OCI, doctl and ngrok credentials),
+shell start files, `~/.gitconfig`, keyrings, shell histories, browser profiles,
+`/proc` and tuios's own state. A
+deny list can never name every secret on a machine. Set `files_read_roots` to
+hold reads to the folders you name, plus the folders the machine may write.
+That is the stronger choice:
+
+```toml
+[hosts.laptop]
+files_read_roots = ["~/share"]
+```
+
+The rule covers `file-read`, `file-preview`, `file-hash`, `file-walk`, a copy out, and the
+names and sizes `file-stat` and `file-list` show. The read deny list still
+holds inside every root. A file with more than one name (a hard link) is never
+read over a link, inside a root or outside one. Copy it to a new file to share
+it. A reload that removes or widens `files_read_roots`
+waits for `tuios config apply`. A reload that narrows it applies at once.
+
+**How much a link may write.** A write over a link must leave
+`files_min_free` free on its disk: `"1GiB"` unless you set it. The value is a
+whole number with `B`, `KB`, `MB`, `GB`, `TB`, `KiB`, `MiB`, `GiB` or `TiB`.
+`"0"` turns the check off, and a reload that lowers it waits for
+`tuios config apply`. A write that does not fit is refused as
+`disk_full` before a byte moves. One machine may have at most 8 write streams
+and 64 unfinished part files here at once. Past that, a write is `busy`, and
+a copy waits and tries again.
+
+A machine may also make at most `files_max_entries` new files and folders
+here in ten minutes: 20,000 unless you set it. An empty file uses no bytes,
+so `files_min_free` does not stop a machine from making millions of them.
+Past the bound, a new file or folder is `busy`, and a copy waits and goes on.
+The count goes down evenly over the ten minutes. A folder copy of 20,000 files
+lands at full speed, and a larger one goes on at about 33 files a second.
+`0` turns the bound off. A reload that raises it waits for `tuios config apply`. The drop folder holds at most 256 MiB for all
+drops together, and a machine writes there only inside a drop that
+`file-drop-dir` made.
+
+```toml
+[hosts."*"]
+files_min_free = "5GiB"
+files_max_entries = 50000
+```
+
+A copy that another machine starts here with `transfer-start` or `drop-files`
+is held to these rules too, also after tuios restarts. When a reload or a
+restart takes `files` away from that machine, its copies here stop.
+
+> **Trust.** A machine with `files` can write any file inside its roots and
+> read any file outside the deny list (or inside `files_read_roots`). A file copy is a way to run code: a
+> binary dropped on your `PATH`, a config a program reads. Give `files`, and a
+> wide `files_roots`, only to machines you trust as you trust your own.
+
+`hold_mail` holds mail from that machine to any agent here in your Inbox,
+marked `held for NAME`, until you pass it on with `p` there (or
+`release-agent-message`). Mail to you is yours already and is not held.
+
+`hosted_grace` is how long a pane this machine runs for the other one (a
+window opened with `--host` there) outlives a dropped link, still running and
+keeping its last 64 KB of output, waiting to be reattached: a Go duration,
+`"0"` to end it with the link as before, 10 minutes when unset, at most 24
+hours. See [Limits](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#limits).
+
+Each field inherits from `[hosts."*"]`, which inherits from the default. The
+name is matched without regard to case. It is the one the other machine gives
+for itself, its host name up to the first dot, unless the ssh key it logs in
+with pins one:
+
+```
+command="tuios stdio-proxy --as laptop",restrict ssh-ed25519 AAAA...
+```
+
+Only a pinned name is a boundary: a key that may run any command can run a
+shell, and can claim any name. A pinned name needs a table of its own. A key
+pinned to a name with no `[hosts.NAME]` table may do nothing here, so a key
+that outlives its table does not get `[hosts."*"]` or the default. A table with a policy and no `addr` is not
+dialled and not listed by `tuios hosts`, and `[hosts."*"]` never is.
+
+The daemon follows the file. A change that gives a machine less applies to the
+next call on every link, including links already open. A change that gives a
+machine more, a new host, or a host that dials another way waits for
+`tuios config apply` from a terminal outside tuios, or a daemon restart.
+`tuios hosts add` applies its change that way, so from a pane it waits.
+`tuios hosts add` on a known name keeps these fields.
+
+`ssh_options` takes only options that cannot run code or write files on this
+machine, each written as `-o Keyword=value` with one plain value: for example
+`-p`, `-i`, `-l`, `-J`, `Port`, `User`, `HostName`, `HostKeyAlias`,
+`IdentityFile`, `StrictHostKeyChecking`, the `ServerAlive` options and the
+algorithm lists. `ProxyCommand`, `LocalCommand`, the known hosts files,
+`ControlPath`, socket forwards, `-F` and the like are refused. `-J` and
+`ProxyJump` take host names only. `addr` and `command` may not start with a
+dash. A host with a refused entry is ignored, and `tuios hosts` and the Inbox
+name the reason. Put such options in `~/.ssh/config`. [protocol.md](/docs/control-protocol/verbs-other-verbs#what-a-linked-machine-may-do-here) has
+the verb by verb table.
+
+The daemon's links never ask for a password, a passphrase or a code. They
+run ssh with `BatchMode=yes`. A client that can ask you, such as tuios-gpui,
+signs in to a machine itself and keeps that connection open as an ssh master
+in the folder `cm` beside the daemon's socket. That folder is
+`$XDG_RUNTIME_DIR/tuios/cm`, `/run/user/<uid>/tuios/cm` when
+`XDG_RUNTIME_DIR` is not set, or `/tmp/tuios-<uid>/cm` when neither exists. When that folder and its parent exist, are not
+symbolic links, belong to you and only you can open them, each link and
+`tuios hosts test` run ssh with `-o ControlMaster=no` and `-o ControlPath=<folder>/%C`. The link then
+uses the master when one is open for that machine, and connects as usual when
+none is. A machine that needs a password or a second factor then works for
+as long as the master is open. No secret is stored.
+
+A link connects as usual and does not use the folder in these cases:
+
+- Your `~/.ssh/config` gives the host a `ControlPath`. The link uses the
+  master you open there.
+- The host forwards the agent (`ForwardAgent`). A connection through a master
+  gets the forwarding of the master, so the link would lose its agent.
+- A socket path in the folder is too long. The limit is 107 characters on
+  Linux and 103 on macOS. Set `XDG_RUNTIME_DIR` to a shorter folder.
+- tuios runs on Windows. Win32-OpenSSH has no `ControlMaster`.
+
+A master connection can outlive the network under it, for example when a
+laptop sleeps. The link's ssh then waits on it, and the link's keepalives do
+not reach it. The link pings its host when it carried nothing for 15 seconds.
+When the host does not answer, the link ends, and the next dial runs ssh with
+`-o ControlPath=none` and opens a connection of its own. The link does the
+same after this machine wakes from sleep, and after a dial that timed out. A machine that needs
+a password or a second factor fails that one dial, and the dial after it uses
+the master again.
+
+`%C` names a master by the local host, the remote host, the port and the
+user. It does not include a `ProxyCommand`, so a host reached through two
+different proxy commands shares one master. It includes the jump host only
+on OpenSSH 10.6 and later. On an earlier version, a host reached through two
+different jump hosts also shares one master.
+
+`tailscale_login` is the origin of a Headscale server that sends the Tailscale
+SSH check for this host, for example `"https://headscale.example"`. tuios
+shows and opens a sign-in link only on `login.tailscale.com`,
+`controlplane.tailscale.com` and this origin, over https, with the host matched
+exactly. Anything on the host can print the banner that carries the link. See
+[Tailscale SSH check mode](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#tailscale-ssh-check-mode).

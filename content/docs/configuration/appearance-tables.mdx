@@ -1,0 +1,592 @@
+---
+title: "The appearance tables"
+description: "The appearance tables: part of the Configuration of TUIOS."
+icon: Settings
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CONFIGURATION.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CONFIGURATION.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CONFIGURATION.md). The [Configuration](/docs/configuration) page lists every part.
+
+## Appearance: the `[appearance]` table [#appearance-the-appearance-table]
+
+All keys below go under `[appearance]`.
+
+### Theme and chrome [#theme-and-chrome]
+
+These options are in the [option reference](/docs/option-reference): [`appearance.theme`](/docs/option-reference#appearance.theme), [`appearance.glyphs`](/docs/option-reference#appearance.glyphs), [`appearance.border_style`](/docs/option-reference#appearance.border_style), [`appearance.border_focused_color`](/docs/option-reference#appearance.border_focused_color), [`appearance.border_focused_color_window`](/docs/option-reference#appearance.border_focused_color_window), [`appearance.border_focused_color_terminal`](/docs/option-reference#appearance.border_focused_color_terminal), [`appearance.border_unfocused_color`](/docs/option-reference#appearance.border_unfocused_color), [`appearance.frame_panels`](/docs/option-reference#appearance.frame_panels), [`appearance.shared_borders`](/docs/option-reference#appearance.shared_borders), [`appearance.gap`](/docs/option-reference#appearance.gap), [`appearance.dim_unfocused`](/docs/option-reference#appearance.dim_unfocused), [`appearance.dim_foreground`](/docs/option-reference#appearance.dim_foreground), [`appearance.dim_multifocus`](/docs/option-reference#appearance.dim_multifocus), [`appearance.session_colors`](/docs/option-reference#appearance.session_colors), [`appearance.session_border`](/docs/option-reference#appearance.session_border), [`appearance.zen_mode`](/docs/option-reference#appearance.zen_mode), [`appearance.panel_padding`](/docs/option-reference#appearance.panel_padding), [`appearance.motion`](/docs/option-reference#appearance.motion), [`appearance.animation_speed`](/docs/option-reference#appearance.animation_speed), [`appearance.theme_transition`](/docs/option-reference#appearance.theme_transition), [`appearance.theme_transition_duration`](/docs/option-reference#appearance.theme_transition_duration), [`appearance.modal_dim`](/docs/option-reference#appearance.modal_dim), [`appearance.popup_dim`](/docs/option-reference#appearance.popup_dim), [`appearance.max_fps`](/docs/option-reference#appearance.max_fps), [`appearance.wrap_lists`](/docs/option-reference#appearance.wrap_lists).
+
+`animations_enabled`, the key `motion` replaces, is still read from older files: `false` reads as `motion = "none"`, and `true` changes nothing. Where both are set, `motion` wins.
+
+### The `[motion]` table [#the-motion-table]
+
+The `[motion]` table turns each motion on or off by itself and sets how long it takes. [`appearance.motion`](/docs/option-reference#appearance.motion) and `animation_speed` stay on top: `motion = "none"` and calm mode stop every motion below, and the speed divides every length.
+
+These options are in the [option reference](/docs/option-reference): [`motion.workspace`](/docs/option-reference#motion.workspace), [`motion.layout`](/docs/option-reference#motion.layout), [`motion.zoom`](/docs/option-reference#motion.zoom), [`motion.overlays`](/docs/option-reference#motion.overlays), [`motion.sidebar`](/docs/option-reference#motion.sidebar), [`motion.scroll`](/docs/option-reference#motion.scroll), [`motion.copy`](/docs/option-reference#motion.copy), [`motion.confetti`](/docs/option-reference#motion.confetti).
+
+`workspace`, `layout`, `zoom`, `overlays` and `scroll` also take `NAME_ms`, the length in milliseconds at speed 100, from 0 to 1000. `0` is a cut. The defaults are 200 for `workspace` and `zoom`, 300 for `layout` and `scroll`, and 120 for `overlays`. `layout_ms` also sets the snap and swap length, which is two thirds of it.
+
+```toml
+[motion]
+workspace = "fade"
+workspace_ms = 250
+zoom = "off"        # zoom is a cut. The workspace switch still fades.
+```
+
+The old keys [`appearance.workspace_transition`](/docs/option-reference#appearance.workspace_transition), `workspace_transition_ms` and `zoom_animation` still read: TUIOS folds them into [`motion.workspace`](/docs/option-reference#motion.workspace), [`motion.workspace_ms`](/docs/option-reference#motion.workspace_ms) and [`motion.zoom`](/docs/option-reference#motion.zoom) on load. A `[motion]` key that is set wins.
+
+#### border\_style [#border_style]
+
+Values: `rounded` (default), `normal`, `thick`, `double`, `block`, `outer-half-block`, `inner-half-block`, `ascii`, `hidden`, `glyphs`.
+
+`glyphs` uses the border of the active [glyph set](#glyph-sets). `hidden` also hides the window buttons and the scrollbar, because both are drawn on the border.
+
+#### Dialog and panel frames [#dialog-and-panel-frames]
+
+The small dialogs, such as rename, confirm and new space, draw their frame in `border_style`. The large panels, such as the command palette, the switchers, the Agents view and the settings page, have no frame. Set `frame_panels = true` to give them the same frame.
+
+```toml
+[appearance]
+border_style = "double"
+frame_panels = true
+```
+
+- `rounded`, `normal`, `thick`, `double` and `ascii` draw their own corners and lines.
+- `hidden` draws no frame. A dialog keeps its size, and its title and key hints stay in place. A frame that is the only edge of a region is drawn as `rounded`. An example is a panel at 16 colours.
+- `block`, `outer-half-block` and `inner-half-block` draw the `rounded` frame.
+- `glyphs` draws the border of the active glyph set.
+- At 16 colours a panel always has a frame, because its background is the background of your terminal.
+
+[`appearance.pane_overlays`](/docs/option-reference#appearance.pane_overlays) draws dialogs and panels like pane windows. Every panel gets a frame in the focused pane's border colour. The frame and its content sit on the background of an empty pane cell. The selected row and input fields are steps of that background. The option is off by default. Under `hidden`, at 16 colours, or with no theme on a terminal that reports no background, a dialog keeps its shade.
+
+[`appearance.overlay_border_color`](/docs/option-reference#appearance.overlay_border_color) sets a colour for every dialog and panel frame: `#89b4fa`, a slot name such as `bright_cyan`, or a role such as `accent`.
+
+```toml
+[appearance]
+pane_overlays = true
+overlay_border_color = "accent"
+```
+
+#### max\_fps [#max_fps]
+
+`max_fps` is the highest frame rate TUIOS draws at. Your terminal and your monitor can show fewer frames. A value above what they can show does not make TUIOS smoother.
+
+```toml
+[appearance]
+max_fps = 144       # a number from 10 to 240
+# max_fps = "auto"  # the refresh rate of your display
+# max_fps = 0       # 60, the default
+```
+
+| Value         | Frame rate                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `0`           | 60. This is the default                                                                     |
+| `10` to `240` | That number. A value outside the range moves to the nearest end                             |
+| `"auto"`      | The refresh rate of your display, from 10 to 240. If TUIOS cannot find the rate, it uses 60 |
+
+The settings page offers Auto, 30, 60, 90, 120, 144, 165 and 240. With Auto selected, the row shows the rate in use, for example `Auto (144)`. A change applies at once, with no restart.
+
+- **What you see.** TUIOS sends a frame to your terminal, and the terminal draws it on its own schedule. kitty and Ghostty draw at most once for each refresh of the monitor, so a 60 Hz monitor shows at most 60 frames a second. Over SSH, the network and the remote terminal set the limit too.
+- **What it costs.** TUIOS draws only when something on the screen changes. The terminal library under it still wakes at `max_fps` while TUIOS is idle. An idle TUIOS at 240 wakes about three times as often as at 60.
+- **How auto finds the rate.** TUIOS looks once in the background when it starts, and again when the config file reloads. Until the answer arrives, it draws at 60. On Wayland it asks `hyprctl` on Hyprland, `niri` on niri and `wlr-randr` on other wlroots compositors. On X11, or on another compositor, it asks `xrandr --current`. On macOS it asks `system_profiler SPDisplaysDataType`. On Windows it does not look, and uses 60.
+- **Several displays.** A terminal window cannot tell which display it is on, so auto uses the highest rate among them.
+- **Remote clients.** Over SSH, in `tuios-web` and in the SSH server, auto uses 60, because the displays on the machine are not the ones you see.
+
+### Windows and titles [#windows-and-titles]
+
+These options are in the [option reference](/docs/option-reference): [`appearance.window_title_position`](/docs/option-reference#appearance.window_title_position), [`appearance.window_title_format`](/docs/option-reference#appearance.window_title_format), [`appearance.host_title`](/docs/option-reference#appearance.host_title), [`appearance.window_button_style`](/docs/option-reference#appearance.window_button_style), [`appearance.window_button_position`](/docs/option-reference#appearance.window_button_position), [`appearance.hide_window_buttons`](/docs/option-reference#appearance.hide_window_buttons), [`appearance.window_button_zoom`](/docs/option-reference#appearance.window_button_zoom), [`appearance.hide_scrollbar`](/docs/option-reference#appearance.hide_scrollbar), [`appearance.confirm_quit`](/docs/option-reference#appearance.confirm_quit), [`appearance.preferred_shell`](/docs/option-reference#appearance.preferred_shell), [`appearance.new_window_inherit_cwd`](/docs/option-reference#appearance.new_window_inherit_cwd), [`appearance.new_window_follow_ssh`](/docs/option-reference#appearance.new_window_follow_ssh), [`appearance.whichkey_enabled`](/docs/option-reference#appearance.whichkey_enabled), [`appearance.whichkey_position`](/docs/option-reference#appearance.whichkey_position), [`appearance.prefix_repeat_time`](/docs/option-reference#appearance.prefix_repeat_time).
+
+#### window\_title\_format [#window_title_format]
+
+A template for every title. It expands three placeholders:
+
+- `{title}`: the custom name, or the title the program set
+- `{index}`: the window's 1-based position in its workspace
+- `{cwd}`: the window's working directory
+
+```toml
+[appearance]
+window_title_format = "{index}: {title} ({cwd})"
+```
+
+Any other `{...}` produces a validation warning and is drawn as written.
+
+#### host\_title [#host_title]
+
+`host_title` sets the title of the terminal that tuios runs in, such as the title bar of Ghostty. It is the same as `set-titles` in tmux. The title follows the focused pane, the workspace and the session, and it changes when the pane's own title changes.
+
+| Placeholder   | What it holds                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| `{title}`     | The focused pane's name, as the title on its border shows it                                     |
+| `{index}`     | The pane's position in its workspace, from 1                                                     |
+| `{cwd}`       | The pane's working directory                                                                     |
+| `{session}`   | The session's name as the rail shows it. Without a daemon, `tuios`                               |
+| `{workspace}` | The workspace's name, or its number. With a scratch group open, the workspace that it shows over |
+
+```toml
+[appearance]
+host_title = "{title} · {session}"
+```
+
+- With no focused pane on the workspace in view, the title is the session's name.
+- The title is also the session's name when the template uses `{title}` and the pane has no name, as for a new shell, and when the template comes out empty.
+- A title that a tool sets with herdr's `terminal title set` wins while it is set.
+- Each client sets the title of its own terminal.
+- When you empty the option while a client is attached, tuios clears the title that it set.
+
+The option is on the settings page, in the Appearance section. `tuios set-config` applies it at once.
+
+### Mouse and input [#mouse-and-input]
+
+These options are in the [option reference](/docs/option-reference): [`appearance.click_to_type`](/docs/option-reference#appearance.click_to_type), [`appearance.auto_enter_terminal_on_focus`](/docs/option-reference#appearance.auto_enter_terminal_on_focus), [`appearance.focus_follows_mouse`](/docs/option-reference#appearance.focus_follows_mouse), [`appearance.alt_drag`](/docs/option-reference#appearance.alt_drag), [`appearance.right_click_opens_menu`](/docs/option-reference#appearance.right_click_opens_menu), [`appearance.copy_on_select`](/docs/option-reference#appearance.copy_on_select), [`appearance.word_characters`](/docs/option-reference#appearance.word_characters), [`appearance.links`](/docs/option-reference#appearance.links), [`appearance.link_click`](/docs/option-reference#appearance.link_click), [`appearance.link_opener`](/docs/option-reference#appearance.link_opener), [`appearance.nvim_navigation`](/docs/option-reference#appearance.nvim_navigation), [`appearance.link_hover`](/docs/option-reference#appearance.link_hover), [`appearance.kitty_placeholders`](/docs/option-reference#appearance.kitty_placeholders), [`appearance.image_symbols`](/docs/option-reference#appearance.image_symbols), [`appearance.paste_preview`](/docs/option-reference#appearance.paste_preview).
+
+#### Links [#links]
+
+<kbd>Ctrl</kbd>+click on a link opens it. <kbd>Ctrl</kbd>+drag still moves the pane: a link opens only when the pointer does not move. Only `http`, `https`, `mailto`, `ftp` and `ftps` links go to the opener. TUIOS copies other links. Under `ssh`, on a remote client, or on a machine with no desktop, TUIOS copies the URL, and your terminal can still open the link from the OSC 8 that TUIOS writes. If the opener fails, the dock says so and TUIOS copies the URL. See [Links](/docs/links) for the opener, the safety rules and a table of terminals.
+
+### Scrolling [#scrolling]
+
+These options are in the [option reference](/docs/option-reference): [`appearance.scrollback_lines`](/docs/option-reference#appearance.scrollback_lines), [`appearance.scroll_lines`](/docs/option-reference#appearance.scroll_lines).
+
+### Tiling and zoom [#tiling-and-zoom]
+
+These options are in the [option reference](/docs/option-reference): [`appearance.tiling_scheme`](/docs/option-reference#appearance.tiling_scheme), [`appearance.master_ratio`](/docs/option-reference#appearance.master_ratio), [`appearance.master_position`](/docs/option-reference#appearance.master_position), [`appearance.master_count`](/docs/option-reference#appearance.master_count), [`appearance.master_grid`](/docs/option-reference#appearance.master_grid), [`appearance.scroll_column_width`](/docs/option-reference#appearance.scroll_column_width), [`appearance.scroll_column_max`](/docs/option-reference#appearance.scroll_column_max), [`appearance.niri_scroll_cells`](/docs/option-reference#appearance.niri_scroll_cells), [`appearance.niri_reverse_scroll`](/docs/option-reference#appearance.niri_reverse_scroll), [`appearance.niri_click_reveals`](/docs/option-reference#appearance.niri_click_reveals), [`appearance.niri_hover_reveals`](/docs/option-reference#appearance.niri_hover_reveals), [`appearance.zoom_size`](/docs/option-reference#appearance.zoom_size), [`appearance.zoom_max_width`](/docs/option-reference#appearance.zoom_max_width), [`appearance.zoom_borderless`](/docs/option-reference#appearance.zoom_borderless), [`appearance.zoom_animation`](/docs/option-reference#appearance.zoom_animation), [`appearance.zoom_follows_focus`](/docs/option-reference#appearance.zoom_follows_focus), [`appearance.drop_preview`](/docs/option-reference#appearance.drop_preview), [`appearance.drop_preview_delay`](/docs/option-reference#appearance.drop_preview_delay).
+
+The layout a new session starts in is [`startup.layout`](/docs/option-reference#startup.layout). See [The startup table](/docs/configuration/other-tables#the-startup-table). Each workspace starts with the master-stack options, and the layout keys change the workspace on screen. See [Master-stack](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/LAYOUT_MODES.md#master-stack-layout).
+
+### Dock [#dock]
+
+These options are in the [option reference](/docs/option-reference): [`appearance.dockbar_position`](/docs/option-reference#appearance.dockbar_position), [`appearance.dock_workspace_tabs`](/docs/option-reference#appearance.dock_workspace_tabs), [`appearance.dock_workspace_tab_format`](/docs/option-reference#appearance.dock_workspace_tab_format), [`appearance.dock_workspace_label_max`](/docs/option-reference#appearance.dock_workspace_label_max), [`appearance.dock_workspace_tooltip`](/docs/option-reference#appearance.dock_workspace_tooltip), [`appearance.dock_pill_caps`](/docs/option-reference#appearance.dock_pill_caps), [`appearance.dock_compact`](/docs/option-reference#appearance.dock_compact), [`appearance.dock_mode_icon_window`](/docs/option-reference#appearance.dock_mode_icon_window), [`appearance.dock_mode_icon_terminal`](/docs/option-reference#appearance.dock_mode_icon_terminal), [`appearance.dock_mode_icon_tiling`](/docs/option-reference#appearance.dock_mode_icon_tiling), [`appearance.dock_mode_split_letter`](/docs/option-reference#appearance.dock_mode_split_letter), [`appearance.show_clock`](/docs/option-reference#appearance.show_clock), [`appearance.clock_format`](/docs/option-reference#appearance.clock_format), [`appearance.show_cpu`](/docs/option-reference#appearance.show_cpu), [`appearance.show_ram`](/docs/option-reference#appearance.show_ram), [`appearance.hide_clock`](/docs/option-reference#appearance.hide_clock).
+
+`dock_workspace_label_max` stops one long workspace name from pushing the other tabs off the dock. Set it to `0` to show the whole name. The workspace strip then scrolls. A dock with no room for one full tab still shows the current tab, cut to fit.
+
+`dock_compact` works with the dock at the top and at the bottom. It has no effect when `dockbar_position` is `hidden`. The change applies at once. A compact dock does not show the rule that tells how long a dock message stays. When clients with different docks share a session, the panes keep the largest dock height. A client with a compact dock shows a blank row in that case.
+
+The mode pill icons can be any text up to 8 cells wide. A wide character, such as `終`, counts as two cells. The dock does not accept control characters. For an icon that it does not accept, the dock shows the default icon and the config check shows a warning. The pill adds one space on each side of the icon. If an icon is empty and the mode has no other text, the dock shows no pill in that mode. While tiling is on, the pill also shows the next split direction, `V` or `H`. Set `dock_mode_split_letter = false` to show the tiling icon alone. With the default icons, the pill then has the same width as the pill of the leader key, so the workspace tabs do not move when you press the leader.
+
+```toml
+[appearance]
+dock_mode_icon_window = "WM"
+dock_mode_icon_terminal = ">_"
+dock_mode_icon_tiling = ""
+```
+
+To remove the whole mode pill, remove `"mode"` from the `left` list in the `[dock]` table. You can also set the icons on the settings page, in the Dock section, or with `tuios set-config appearance.dock_mode_icon_window WM`. The change applies at once.
+
+### Rail options [#rail-options]
+
+Two rail options sit directly in `[appearance]`:
+
+These options are in the [option reference](/docs/option-reference): [`appearance.global_session`](/docs/option-reference#appearance.global_session), [`appearance.git_dirty`](/docs/option-reference#appearance.git_dirty).
+
+The rest are in [`[appearance.sidebar]`](#the-session-rail).
+
+### The scrollbar [#the-scrollbar]
+
+`[appearance.scrollbar]`:
+
+These options are in the [option reference](/docs/option-reference): [`appearance.scrollbar.style`](/docs/option-reference#appearance.scrollbar.style), [`appearance.scrollbar.thumb`](/docs/option-reference#appearance.scrollbar.thumb), [`appearance.scrollbar.track`](/docs/option-reference#appearance.scrollbar.track), [`appearance.scrollbar.tint`](/docs/option-reference#appearance.scrollbar.tint).
+
+### Selection colours [#selection-colours]
+
+`[appearance.selection]` sets the colours TUIOS draws over pane content to mark text.
+
+These options are in the [option reference](/docs/option-reference): [`appearance.selection.bg`](/docs/option-reference#appearance.selection.bg), [`appearance.selection.fg`](/docs/option-reference#appearance.selection.fg), [`appearance.selection.bold`](/docs/option-reference#appearance.selection.bold), [`appearance.selection.search_bg`](/docs/option-reference#appearance.selection.search_bg), [`appearance.selection.match_bg`](/docs/option-reference#appearance.selection.match_bg), [`appearance.selection.cursor_bg`](/docs/option-reference#appearance.selection.cursor_bg), [`appearance.selection.flash`](/docs/option-reference#appearance.selection.flash), [`appearance.selection.flash_color`](/docs/option-reference#appearance.selection.flash_color), [`appearance.selection.flash_ms`](/docs/option-reference#appearance.selection.flash_ms), [`appearance.selection.flash_style`](/docs/option-reference#appearance.selection.flash_style), [`appearance.selection.copy_entry`](/docs/option-reference#appearance.selection.copy_entry), [`appearance.selection.multi_format`](/docs/option-reference#appearance.selection.multi_format), [`appearance.selection.osc52_write`](/docs/option-reference#appearance.selection.osc52_write), [`appearance.selection.copy_command`](/docs/option-reference#appearance.selection.copy_command).
+
+An empty foreground keeps the colour the program wrote. An empty background falls back to the default.
+
+### Clipboard writes from a pane [#clipboard-writes-from-a-pane]
+
+A program in a pane sets the clipboard with OSC 52. An editor uses OSC 52 to yank over ssh. Any output can also carry OSC 52, for example a file that a program prints. [`appearance.selection.osc52_write`](/docs/option-reference#appearance.selection.osc52_write) controls what happens.
+
+| Value     | What happens                                                                                         |
+| --------- | ---------------------------------------------------------------------------------------------------- |
+| `off`     | The host clipboard does not change.                                                                  |
+| `ask`     | The dock shows a message. Click the message to copy the text.                                        |
+| `focused` | The focused pane copies. A write from another pane shows a message in the dock. This is the default. |
+| `on`      | Every pane copies. This is the behaviour of v0.8.0.                                                  |
+
+```toml
+[appearance.selection]
+osc52_write = "focused"
+```
+
+- When the focused pane copies text with a line break or a control character, the dock shows one line for that pane. A one-line copy shows nothing.
+- Each pane keeps one clipboard ask. A click copies only the text that the dock shows. If the text changes first, click the new message.
+- A pane that runs without the daemon keeps its own copy of the text. The program reads it back with an OSC 52 query. A pane under the daemon keeps no copy, so an OSC 52 query there always gets an empty answer.
+- TUIOS drops a clipboard reply that answers no read request of TUIOS.
+
+Pastes, notifications, OSC 66 text and link addresses lose their control characters. A paste into a pane keeps its tabs and line breaks. Text that holds `ESC[201~` cannot end a bracketed paste early.
+
+### The session rail [#the-session-rail]
+
+`[appearance.sidebar]` configures the rail at the side of the screen.
+
+These options are in the [option reference](/docs/option-reference): [`appearance.sidebar.enabled`](/docs/option-reference#appearance.sidebar.enabled), [`appearance.sidebar.per_session`](/docs/option-reference#appearance.sidebar.per_session), [`appearance.sidebar.position`](/docs/option-reference#appearance.sidebar.position), [`appearance.sidebar.width`](/docs/option-reference#appearance.sidebar.width), [`appearance.sidebar.background`](/docs/option-reference#appearance.sidebar.background), [`appearance.sidebar.cursor_background`](/docs/option-reference#appearance.sidebar.cursor_background), [`appearance.sidebar.agent_rest_fold`](/docs/option-reference#appearance.sidebar.agent_rest_fold), [`appearance.sidebar.subagent_rows`](/docs/option-reference#appearance.sidebar.subagent_rows), [`appearance.sidebar.subagent_collapse`](/docs/option-reference#appearance.sidebar.subagent_collapse), [`appearance.sidebar.subagent_fields`](/docs/option-reference#appearance.sidebar.subagent_fields), [`appearance.sidebar.subagent_max_rows`](/docs/option-reference#appearance.sidebar.subagent_max_rows), [`appearance.sidebar.subagent_hide_finished`](/docs/option-reference#appearance.sidebar.subagent_hide_finished), [`appearance.sidebar.header_case`](/docs/option-reference#appearance.sidebar.header_case), [`appearance.sidebar.sections`](/docs/option-reference#appearance.sidebar.sections), [`appearance.sidebar.show_glyphs`](/docs/option-reference#appearance.sidebar.show_glyphs), [`appearance.sidebar.show_counts`](/docs/option-reference#appearance.sidebar.show_counts), [`appearance.sidebar.show_numbers`](/docs/option-reference#appearance.sidebar.show_numbers), [`appearance.sidebar.marquee`](/docs/option-reference#appearance.sidebar.marquee), [`appearance.sidebar.tooltips`](/docs/option-reference#appearance.sidebar.tooltips), [`appearance.sidebar.file_icons`](/docs/option-reference#appearance.sidebar.file_icons), [`appearance.sidebar.file_icon_colors`](/docs/option-reference#appearance.sidebar.file_icon_colors), [`appearance.sidebar.folder_click`](/docs/option-reference#appearance.sidebar.folder_click), [`appearance.sidebar.file_actions`](/docs/option-reference#appearance.sidebar.file_actions), [`appearance.sidebar.file_delete`](/docs/option-reference#appearance.sidebar.file_delete), [`appearance.sidebar.editor`](/docs/option-reference#appearance.sidebar.editor).
+
+Deprecated keys still load: `show_windows`, `show_agents` and `workspaces` in this table, and the flat `sidebar_*` keys in `[appearance]`. They are folded into the current keys when the file is read.
+
+#### sections [#sections]
+
+One string sets which sections the rail draws, their order from the top, and the share of the rail each may take.
+
+```toml
+[appearance.sidebar]
+sections = "sessions:25,terminals,files:25,agents:34"
+```
+
+- Separate sections with commas. Add `:N` for a share in percent.
+- The section names are `sessions`, `terminals`, `files`, `agents`, `git` and `custom`. Leave a name out to hide that section. See [The custom section](#the-custom-section).
+- A share is a ceiling, not a reservation. A section only takes the lines its rows fill. A section with no share takes what the others leave.
+- `spacer` draws nothing and takes lines. It is the only name you can repeat. A spacer with a share keeps that share. A spacer with no share takes the lines nothing else wants, which pushes what follows to the bottom.
+
+```toml
+[appearance.sidebar]
+# Sessions at the top, files at the bottom
+sections = "sessions:30,terminals,spacer,files:40"
+```
+
+An unknown name, a bad percent or a repeated section is dropped and reported as a config warning.
+
+The settings page has an editor for this: the **Sections** row under Sidebar. Arrows select, <kbd>Shift</kbd>+arrows move, <kbd>Enter</kbd> adds or removes a section, <kbd>←</kbd>/<kbd>→</kbd> change the share, <kbd>r</kbd> restores the default and <kbd>u</kbd> undoes your edits.
+
+#### The files section [#the-files-section]
+
+The files section lists the focused pane's directory. It is read again when the shell changes directory, when the focus moves and when a client attaches. It is also read again when a file in the listed folder is added, removed or renamed, by the pane or by another program. tuios asks the system to report these changes (inotify on Linux, kqueue on macOS and the BSDs, ReadDirectoryChangesW on Windows). Nothing polls, and a change to the contents of a file does not cause a read. For a pane on another machine, the list changes only when the shell changes directory.
+
+`folder_click` decides what a click on a folder does: `navigate` opens it in the listing, `cd` sends the focused pane there, `both` does both. A `cd` is only typed into a pane that is at a shell prompt.
+
+The file keys are in `[keybindings.sidebar_files]` and work while the rail has the keyboard and the cursor is on a file row. See [Keybindings](/docs/keybindings/panes-panels-and-workspaces#editing-sidebar-files). Each action opens a centred dialog. The delete dialog opens on Cancel, so <kbd>Enter</kbd> on an untouched dialog deletes nothing.
+
+Delete uses the freedesktop.org trash in your home directory, so your desktop's trash shows the file and can restore it. <kbd>D</kbd> deletes permanently. Set `file_delete = "permanent"` to make <kbd>d</kbd> permanent too. The per-volume trash is not implemented.
+
+<kbd>Y</kbd> copies the absolute path of the selected file or folder. A folder's context menu has a **Copy path** row that does the same.
+
+On Windows, a shell under MSYS2 or Cygwin reports its folder as `/c/work`. TUIOS reads that as `C:\work`, by the rules of `cygpath`, so the files section lists the right folder.
+
+[`appearance.sidebar.file_drag`](/docs/option-reference#appearance.sidebar.file_drag) lets you drag a row of the files section onto a pane. It is on by default. See [Drag a file into a pane](/docs/session-rail#drag-a-file-into-a-pane).
+
+#### The file editor [#the-file-editor]
+
+<kbd>Shift</kbd>+<kbd>Enter</kbd> on a text file opens it in a terminal editor. `editor` sets the command. The settings page shows it as **File editor** under Sidebar.
+
+```toml
+[appearance.sidebar]
+editor = "micro"
+```
+
+- Other terminal editors and arguments work too, such as `nano` or `vim -f`.
+- Quote a path or an argument that contains spaces. TUIOS splits the command into arguments and runs no shell.
+- TUIOS adds the full path of the file at the end.
+- When `editor` is empty, TUIOS uses `$EDITOR`, then `$VISUAL`, then `vi`.
+- File links and hints open files with the same command.
+- TUIOS reads the first 512 bytes of a file to check that it is text. It refuses binary files and special files.
+
+#### The custom section [#the-custom-section]
+
+The `custom` section shows the output of a command you write. Place `custom` in `sections` and describe it in `[appearance.sidebar.custom]`:
+
+```toml
+[appearance.sidebar]
+sections = "sessions:25,terminals,custom:35,agents:30"
+
+[appearance.sidebar.custom]
+title   = "Brief"
+command = "agent-brief render"
+refresh = "event:window-focused,agent-state"
+```
+
+| Key       | What it does                                                                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`   | The section's heading. Defaults to `Custom`                                                                                                      |
+| `command` | Run with `sh -c`. Every line of stdout is a row                                                                                                  |
+| `refresh` | `once` (the default), a duration such as `"30s"` (one second at least), or `event:TYPE[,TYPE...]` with the dock's event types. `push` is refused |
+
+The command follows the rules of a [dock component](/docs/configuration/other-tables#custom-components). It runs in the client, under a three second timeout, with bounded output. SGR colour stays, and every other control sequence is removed. A command that fails, times out or prints nothing leaves the title over an empty section. Five failures in a row stop it until the config reloads or you run `tuios refresh-dock rail/custom`. `tuios list-dock-components` lists it as `rail/custom`. Rows are cut to the rail's width and to the section's lines, with `… +N` for the rows below.
+
+Each run gets the client's environment and these variables: `TUIOS_SESSION`, `TUIOS_SOCKET`, `TUIOS_RAIL_SECTION` (`custom`), `TUIOS_RAIL_WIDTH`, `TUIOS_RAIL_HEIGHT`, `TUIOS_ACTIVE_PANE_ID` and `TUIOS_ACTIVE_PANE_CWD`. An event that arrives during a run causes one more run after it, so a quick focus change never leaves the old pane's rows on screen. The command does not run while the rail is hidden or folded.
+
+`sections` works with `tuios set-config`. `[appearance.sidebar.custom]` is read from the file only, so a program in a pane cannot change the command.
+
+#### The pane section [#the-pane-section]
+
+The rail can show a live terminal under its own heading. Put `pane` in `sections`, and describe it in `[appearance.sidebar.pane]`. tuios reads this table from the file only.
+
+```toml
+[appearance.sidebar]
+sections = "sessions:25,terminals,files:25,pane,agents:34"
+
+[appearance.sidebar.pane]
+title   = "git"
+command = "watch -t git status -sb"
+height  = 12
+```
+
+| Key       | What it does                                                                                 |
+| --------- | -------------------------------------------------------------------------------------------- |
+| `title`   | The heading of the section. The default is `pane`                                            |
+| `command` | The program the pane runs, through `sh -c` (`cmd /C` on Windows)                             |
+| `height`  | The most rows the pane takes. `0` or unset takes the share of the section, such as `pane:30` |
+
+See [The pane section](/docs/session-rail#the-pane-section).
+
+#### Group the main checkout [#group-the-main-checkout]
+
+`appearance.sidebar.group_main = true` puts a repository's main checkout under the repository row with its worktrees. The session is labelled by its branch. <kbd>Enter</kbd> or a click on the repository row then opens the main checkout's session. **Fold group** on the row's right-click menu folds the group. The default is `false`.
+
+#### Session peek [#session-peek]
+
+When the pointer or the rail cursor is on a session row, the terminals section shows the panes of that session. `appearance.sidebar.peek = false` turns this off. The terminals section then shows the panes of the attached session.
+
+#### Two edges [#two-edges]
+
+The rail can show on both edges of the screen at the same time. `[appearance.sidebar]` still configures the original rail. Add `[appearance.sidebar.left]` or `[appearance.sidebar.right]` to configure one edge:
+
+```toml
+[appearance.sidebar]
+position = "right"
+sections = "sessions,terminals,custom"
+
+[appearance.sidebar.custom]
+command = "right-summary"
+
+[appearance.sidebar.left]
+enabled = true
+width = 28
+sections = "sessions,files,custom"
+
+[appearance.sidebar.left.custom]
+command = "left-summary"
+```
+
+| Key                 | What it does                                                                                                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `custom`            | A table with the `command` of this edge's custom section                                                                                                                                                             |
+| `session`           | The name of a daemon session to show in this rail. Its panes stack top to bottom in place of the sections. Empty shows the sections. See [A daemon session in a rail](/docs/session-rail#a-daemon-session-in-a-rail) |
+| `session_workspace` | Show the session rail only on this workspace, `1` to `9`. `0`, the default, shows it on every workspace                                                                                                              |
+
+These options are in the [option reference](/docs/option-reference): [`appearance.sidebar.enabled`](/docs/option-reference#appearance.sidebar.enabled), [`appearance.sidebar.width`](/docs/option-reference#appearance.sidebar.width), [`appearance.sidebar.sections`](/docs/option-reference#appearance.sidebar.sections).
+
+- On the edge of `position`, the edge table overrides only the keys it sets. The other keys come from `[appearance.sidebar]`.
+- On the other edge, a key you do not set takes its default. An unset `sections` takes the default section order.
+- With `position = "hidden"`, an edge table with `enabled = true` still draws. When both edges are on, the left one is the original rail.
+- Each rail has its own scroll, keyboard focus and custom command. Both read the same sessions, files and git state.
+- On a narrow screen, the second rail closes before the original rail.
+
+Each edge table also takes the five `subagent_*` keys. A key that the edge table does not set uses the value from `[appearance.sidebar]`. See [Subagent rows](/docs/session-rail#subagent-rows).
+
+The edge tables are read from the file only. `tuios set-config` cannot change them, because a custom command runs outside the panes. <kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>H</kbd> shows or hides the second rail. See [Session Rail](/docs/session-rail#both-edges).
+
+#### Agent rows [#agent-rows]
+
+`[appearance.sidebar.agent_row]` chooses which tokens an agent row shows and styles each one, with optional rules that match on the token's value:
+
+```toml
+[appearance.sidebar.agent_row]
+tokens = ["session", "need", "harness", "name", "elapsed", "context", "subagents", "pr", "meta", "now", "message"]
+
+[[appearance.sidebar.agent_row.elapsed.rule]]
+gt = 30          # minutes in the current state
+fg = "warning"
+```
+
+The `tokens` above are the shipped list. The other tokens are `state`, `host` and `prompt`. A `tokens` list you wrote keeps its own order and gets no new tokens, so add `subagents` or `pr` to it to see them. `need` says what a row wants from you, such as `approval` or `question`. `context` shows `ctx 84%` once the agent's context is 80% full. `now` is what a working agent is doing, such as `Bash: go test ./...`. `subagents` shows how many subagents a Claude Code agent has at work, such as `3 subagents`, on any row while any run. When the subagents have rows of their own, it reads `3 of 4 run`. `pr` shows the pull request of the session's worktree branch and its checks, such as `PR #12 open pass`. `meta` draws the other keys the pane reported with `tuios set-agent-meta`, and `$` followed by a key, such as `$model` or `$cost`, places one key. See [Session Rail](/docs/session-rail#agent-rows).
+
+Each rule has one test: `equals`, `contains`, `starts_with`, `gt` or `lt`. The first matching rule wins. A mistake in this table is a warning, not an error.
+
+## Glyph sets [#glyph-sets]
+
+A theme sets the chrome's colours. A glyph set sets its shapes: border corners, window buttons, rules, separators and rail marks.
+
+```toml
+[appearance]
+glyphs = "heavy"
+```
+
+```bash
+tuios list-glyphs            # every set, and every role name
+tuios list-glyphs heavy      # what this set draws, role by role
+tuios set-config appearance.glyphs heavy
+```
+
+| Id        | What it is                                                   |
+| --------- | ------------------------------------------------------------ |
+| `default` | Rounded frame, Nerd Font powerline caps, `✕` and `□` buttons |
+| `unicode` | Box drawing and geometric shapes, with no Nerd Font glyphs   |
+| `heavy`   | One stroke weight heavier throughout                         |
+| `ascii`   | 7-bit ASCII only                                             |
+
+A set's border is used only when `border_style = "glyphs"`. This keeps a set from silently overriding a border style you chose. A set that defines only some border runes gets the rounded border for the rest.
+
+### Writing a set [#writing-a-set]
+
+A set can name the marks of the agent states: `state_working`, `state_needs_input`, `state_idle`, `state_done`, `state_errored`, `state_unknown` and `state_waiting`. A mark may be one cell or two, so `state_needs_input = "✋"` is valid. A state the set leaves alone keeps the shipped mark. Of the built-in sets, only `ascii` names these marks.
+
+Save `<id>.json` in the glyphs directory. `tuios list-glyphs` prints its path.
+
+```json
+{
+  "display_name": "Mine",
+  "inherits": "heavy",
+  "bullet": "◦",
+  "focus": "▐",
+  "border": {
+    "top_left": "╔",
+    "top_right": "╗",
+    "bottom_left": "╚",
+    "bottom_right": "╝"
+  }
+}
+```
+
+Every field is optional. The id defaults to the file name. A role you do not set comes from the inherited set, and finally from `default`. Inheritance goes up to eight levels deep.
+
+The roles:
+
+- **Window buttons:** `close`, `maximize`, `minimize`, `dot`, `pill_left`, `pill_right`
+- **Rules and separators:** `rule`, `separator`, `arrow_left`, `arrow_right`, `dash_rule`
+- **Rail marks:** `focus`, `attention`, `bullet`, `add`, `collapse`, `expand`, `fold_open`, `fold_shut`, `tree_branch`, `tree_last`
+- **Files section:** `folder`, `parent`, `file`
+- **Scrollbar:** `scrollbar_thumb`, `scrollbar_track`
+- **Text:** `ellipsis`, `sigil`
+- **Border:** `border.top`, `border.bottom`, `border.left`, `border.right`, the four corners, and the junctions `middle`, `middle_top`, `middle_bottom`, `middle_left`, `middle_right`
+
+Most roles must be exactly one cell wide, because the window buttons' click areas are fixed offsets. A glyph of the wrong width falls back to the default. `separator`, `ellipsis`, `collapse` and `expand` may be any width. To see what was dropped:
+
+```bash
+tuios list-glyphs mine --json | jq -r '.problems[]?'
+```
+
+The directory is read again on every lookup, so a new file can be selected at once. A file that does not parse is skipped and listed under `problems`.
+
+`--ascii-only` replaces non-ASCII glyphs role by role, so a set keeps every role it already spelled in ASCII. A glyph set never changes colours, and it does not change the dock's icons. A session name, a workspace name or a pane title can hold Nerd Font icons. TUIOS shows each icon in one cell, on the rail, in the dock and in the rest of the chrome. On the Linux console and under `--ascii-only`, TUIOS removes the icons from what it draws, because they show as empty boxes there. The name itself does not change.
+
+The settings page has a **Glyph set** row under **Theme**. Its picker applies each set as you move through the list.
+
+## Themes [#themes]
+
+345 themes ship with TUIOS.
+
+```bash
+tuios --list-themes                   # every theme id
+tuios --preview-theme dracula         # the 16 ANSI colours
+tuios list-themes --filter gruvbox    # from a running daemon, with --json
+tuios list-themes catppuccin_mocha    # colours and their contrast
+```
+
+```toml
+[appearance]
+theme = "dracula"
+```
+
+With no theme, TUIOS uses your terminal's own colours. A theme only changes ANSI colours 0 to 15. 256-colour and truecolor output is drawn as the program wrote it.
+
+To pick one in the app, press <kbd>Enter</kbd> on the **Theme** row of the settings page, or choose **Theme Picker** in the command palette. The picker previews as you move and <kbd>Esc</kbd> restores the theme you had. It has no key binding.
+
+### Custom themes [#custom-themes]
+
+Save one theme per JSON file in `~/.config/tuios/themes/`. Subdirectories are ignored.
+
+```json
+{
+  "id": "my-theme",
+  "display_name": "My Theme",
+  "fg": "#e0def4",
+  "bg": "#191724",
+  "black": "#26233a",
+  "red": "#eb6f92",
+  "green": "#31748f",
+  "yellow": "#f6c177",
+  "blue": "#9ccfd8",
+  "purple": "#c4a7e7",
+  "cyan": "#ebbcba",
+  "white": "#e0def4"
+}
+```
+
+- `id` defaults to the file name, lowercased. `display_name` defaults to `id`.
+- The colour names are `black`, `red`, `green`, `yellow`, `blue`, `purple`, `cyan`, `white`, each with a `bright_` variant, plus `fg`, `bg` and `cursor`. Note `purple`, not `magenta`.
+- A missing colour gets the xterm default. A missing `bright_*` colour copies its normal colour, so set them if you want bright text to look different.
+- An optional `chrome` object sets the UI colours directly (`accent`, `accent_bright`, `success`, `warning`, `error`, `info`, `surface`) without changing the pane palette.
+- A file that does not parse is skipped and logged.
+
+`tuios import-theme <file>` converts a kitty, Ghostty, Alacritty or WezTerm scheme into a file here.
+
+Selecting an id that is not registered yet, with `set-config` or the settings page, reads the directory again first. So does `tuios list-themes`. The picker builds its list when it opens.
+
+## Notifications: the `[notifications]` table [#notifications-the-notifications-table]
+
+`[notifications]` sets how long messages stay on screen, how they look and which ones the dock shows. For a time, `0` uses the built-in default: 2 seconds for info and success messages, 8 for warnings and 15 for errors. A time can be up to 3600 seconds.
+
+These options are in the [option reference](/docs/option-reference): [`notifications.duration`](/docs/option-reference#notifications.duration), [`notifications.warning_duration`](/docs/option-reference#notifications.warning_duration), [`notifications.error_duration`](/docs/option-reference#notifications.error_duration), [`notifications.error_sticky`](/docs/option-reference#notifications.error_sticky), [`notifications.bell`](/docs/option-reference#notifications.bell), [`notifications.style`](/docs/option-reference#notifications.style), [`notifications.level`](/docs/option-reference#notifications.level), [`notifications.log_hidden`](/docs/option-reference#notifications.log_hidden), [`notifications.machine_offer`](/docs/option-reference#notifications.machine_offer).
+
+A message that `level` hides still goes to the log viewer (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>D</kbd> <kbd>l</kbd>). Warnings and errors always go to the log. A message from a pane, an agent or mail does not use `level`. `[notifications.agent]` and `[notifications.mail]` control those messages.
+
+### Agent alerts [#agent-alerts]
+
+`[notifications.agent]` controls what happens when an agent in a pane changes state.
+
+These options are in the [option reference](/docs/option-reference): [`notifications.agent.enabled`](/docs/option-reference#notifications.agent.enabled), [`notifications.agent.notify`](/docs/option-reference#notifications.agent.notify), [`notifications.agent.dock`](/docs/option-reference#notifications.agent.dock), [`notifications.agent.sound`](/docs/option-reference#notifications.agent.sound), [`notifications.agent.sound_mode`](/docs/option-reference#notifications.agent.sound_mode), [`notifications.agent.sound_cooldown_seconds`](/docs/option-reference#notifications.agent.sound_cooldown_seconds), [`notifications.agent.command`](/docs/option-reference#notifications.agent.command), [`notifications.agent.settle_seconds`](/docs/option-reference#notifications.agent.settle_seconds), [`notifications.agent.suppress_focused`](/docs/option-reference#notifications.agent.suppress_focused), [`notifications.agent.quiet_hours`](/docs/option-reference#notifications.agent.quiet_hours).
+
+`[notifications.agent.states]` turns alerts on per state: `needs_input`, `errored` and `done` default to `true`. `idle` and `working` default to `false`.
+
+To hear an alert, set `sound = true`. `sound_mode` then decides how:
+
+- `audio` plays a short cue through the audio player of the machine that runs TUIOS: `paplay`, `pw-play` or `aplay` on Linux, `afplay` on macOS, PowerShell on Windows. If the machine has no player, the alert is silent and TUIOS shows no message.
+- `bell` sends a BEL character to your terminal. Your terminal decides what a bell does, and some terminals make no sound. In kitty, check that `enable_audio_bell` is `yes`. Other terminals have a similar bell setting.
+- `both` does the two.
+
+Over SSH or in the browser, `audio` plays on the server, not where you sit. Use `bell` there. See [Agents](/docs/agents#hear-an-alert).
+
+`[notifications.agent.sounds]` replaces the two built-in cues with your own files: `needs_input` (also used for `errored`) and `done` (also used for `idle`). A path that does not exist falls back to the built-in cue.
+
+The `after-agent-state` [hook](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/HOOKS.md) follows the same rules, including the settle wait.
+
+### Mail alerts [#mail-alerts]
+
+`[notifications.mail]` controls the alerts for mail to you and for session notices. A key that you leave out uses the same key from `[notifications.agent]`.
+
+These options are in the [option reference](/docs/option-reference): [`notifications.agent.enabled`](/docs/option-reference#notifications.agent.enabled), [`notifications.agent.notify`](/docs/option-reference#notifications.agent.notify), [`notifications.agent.dock`](/docs/option-reference#notifications.agent.dock), [`notifications.agent.sound`](/docs/option-reference#notifications.agent.sound), [`notifications.mail.between_agents`](/docs/option-reference#notifications.mail.between_agents).
+
+TUIOS warns when `between_agents` is on and mail alerts are off.
+
+The sound mode, the cooldown, the cue files and the quiet hours always come from `[notifications.agent]`. `tuios set-config notifications.mail.sound ""` clears a key, and `get-config` then prints `(follows notifications.agent.sound)`. See [Agent Messaging](/docs/agent-messaging#mail-alerts).
+
+## Polling and display options [#polling-and-display-options]
+
+These options are in the [option reference](/docs/option-reference): [`appearance.idle_fps`](/docs/option-reference#appearance.idle_fps), [`appearance.sidebar.git_refresh_ms`](/docs/option-reference#appearance.sidebar.git_refresh_ms), [`appearance.sidebar.marquee_pause_ms`](/docs/option-reference#appearance.sidebar.marquee_pause_ms), [`appearance.sidebar.marquee_step_ms`](/docs/option-reference#appearance.sidebar.marquee_step_ms), [`appearance.multi_copy_dim`](/docs/option-reference#appearance.multi_copy_dim), [`dock.meter_interval_ms`](/docs/option-reference#dock.meter_interval_ms), [`debug.show_key_count`](/docs/option-reference#debug.show_key_count).
+
+```toml
+[appearance]
+idle_fps = 4
+multi_copy_dim = 60
+
+[appearance.sidebar]
+git_refresh_ms = 5000
+marquee_pause_ms = 400
+marquee_step_ms = 150
+
+[dock]
+meter_interval_ms = 5000
+
+[debug]
+show_key_count = 8
+```
+
+A value of 0 is read as the default on `idle_fps`, `git_refresh_ms`, `marquee_step_ms`, `meter_interval_ms` and `show_key_count`, and a value out of range moves to the nearest end of the range. All seven are on the settings page and apply at once.
+
+## The `[mouse]` table [#the-mouse-table]
+
+The `[mouse]` table sets how TUIOS reads the pointer's gestures.
+
+These options are in the [option reference](/docs/option-reference): [`mouse.double_click_ms`](/docs/option-reference#mouse.double_click_ms), [`mouse.drag_threshold`](/docs/option-reference#mouse.drag_threshold).
+
+```toml
+[mouse]
+double_click_ms = 450
+drag_threshold = 8
+```
+
+Raise `double_click_ms` for a slow hand or a trackpad that spaces its clicks. The Agents list used 400 ms before this option. It now follows the same value as the pane, 300 ms by default. Both options are on the settings page, in the Behavior section, and apply at once. A value of 0 or a value out of range is read as the default or moved to the nearest end of the range.

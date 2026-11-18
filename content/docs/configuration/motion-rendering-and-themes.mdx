@@ -1,0 +1,516 @@
+---
+title: "Motion, rendering and themes"
+description: "Motion, rendering and themes: part of the Configuration of TUIOS."
+icon: Settings
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CONFIGURATION.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CONFIGURATION.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CONFIGURATION.md). The [Configuration](/docs/configuration) page lists every part.
+
+## Animation speed [#animation-speed]
+
+[`appearance.animation_speed`](/docs/option-reference#appearance.animation_speed) is the percent window animations run at: minimize
+and restore, snap, swap, zoom and the workspace slide. 100 is the speed tuios ships with. 200 runs
+them in half the time, and 50 in twice the time.
+
+```toml
+[appearance]
+animation_speed = 200   # a number from 25 to 400
+# animation_speed = 0   # 100, the default
+```
+
+A value outside 25 to 400 moves to the nearest end. `appearance.motion = "none"`
+still turns the animations off, whatever the speed. Overlay fades and the copy
+sweep keep their own timing. The copy sweep uses [`appearance.selection.flash_ms`](/docs/option-reference#appearance.selection.flash_ms).
+
+## Calm mode [#calm-mode]
+
+[`appearance.calm`](/docs/option-reference#appearance.calm) turns calm mode on. Nothing moves or blinks, and only the
+messages that need you show in the dock. `Ctrl+B Z` (`toggle_calm`) turns it
+on and off and saves the choice here.
+
+```toml
+[appearance]
+calm = true   # default: false
+```
+
+Calm mode and `appearance.motion = "none"` also stop the enter, exit and
+skeleton effects of TML surfaces. A surface then shows each part at once.
+
+Calm mode sits over [`appearance.motion`](/docs/option-reference#appearance.motion). When you turn calm mode off, the
+motion level you set comes back. See
+[KEYBINDINGS.md](/docs/keybindings/panes-panels-and-workspaces#calm-mode) for what calm mode changes.
+
+## Motion [#motion]
+
+The `[motion]` table turns each motion on or off by itself and sets how long it
+takes. [`appearance.motion`](/docs/option-reference#appearance.motion) and [`appearance.animation_speed`](/docs/option-reference#appearance.animation_speed) stay on top.
+`appearance.motion = "none"` and calm mode stop every motion below. The speed
+divides every length.
+
+| Key         | Values                  | Motion                                                                           |
+| ----------- | ----------------------- | -------------------------------------------------------------------------------- |
+| `workspace` | `slide`, `fade`, `none` | The switch between workspaces. `fade` is a cut at 16 colors.                     |
+| `layout`    | `on`, `off`             | A pane that opens, closes, splits, swaps, snaps, minimizes or restores.          |
+| `zoom`      | `on`, `off`             | A pane growing to the zoom box and back.                                         |
+| `overlays`  | `on`, `off`             | A palette or dialog fading in. Needs `appearance.motion = "full"` and truecolor. |
+| `sidebar`   | `on`, `off`             | The shimmer on a working agent row. Needs `appearance.motion = "full"`.          |
+| `scroll`    | `on`, `off`             | The slide of the scrolling layout.                                               |
+| `copy`      | `on`, `off`             | The sweep over the cells a copy took.                                            |
+| `confetti`  | `on`, `off`             | The confetti burst. Needs `appearance.motion = "full"`.                          |
+
+`workspace`, `layout`, `zoom`, `overlays` and `scroll` also take `<name>_ms`,
+the length in milliseconds at speed 100, from 0 to 1000. 0 is a cut. The
+defaults are 200 for `workspace` and `zoom`, 300 for `layout` and `scroll`, and
+120 for `overlays`. `layout` also sets the snap and swap length, which is
+two thirds of `layout_ms`.
+
+```toml
+[motion]
+workspace = "fade"
+workspace_ms = 250
+zoom = "off"        # zoom is a cut. The workspace switch still fades.
+```
+
+The old keys [`appearance.workspace_transition`](/docs/option-reference#appearance.workspace_transition), `workspace_transition_ms` and
+`zoom_animation` still read. Tuios folds them into [`motion.workspace`](/docs/option-reference#motion.workspace),
+[`motion.workspace_ms`](/docs/option-reference#motion.workspace_ms) and [`motion.zoom`](/docs/option-reference#motion.zoom) on load. A `[motion]` key that is set
+wins.
+
+## Confirm a pane close [#confirm-a-pane-close]
+
+[`appearance.confirm_close`](/docs/option-reference#appearance.confirm_close) sets when closing a pane by hand asks first: with
+`close_window`, `close_window`, the pane menu's `Close pane` or the
+close control in the title bar.
+
+- `never` closes the pane at once. This is the default.
+- `busy` asks when the pane runs something besides its shell.
+- `always` asks for every pane.
+
+```toml
+[appearance]
+confirm_close = "busy"
+```
+
+The commands, such as `tuios close-window`, never ask. See
+[KEYBINDINGS.md](/docs/keybindings/panes-panels-and-workspaces#ask-before-a-pane-closes).
+
+## Theme transition [#theme-transition]
+
+[`appearance.theme_transition`](/docs/option-reference#appearance.theme_transition) sets how tuios shows a change of theme. The
+change can come from the theme picker, `tuios set-config`, a config reload or
+the Omarchy theme.
+
+- `none` changes the colors in one frame. This is the default.
+- `circle` grows the new theme from the middle of the screen, over the old one.
+- `fade` changes every cell from the old colors to the new colors.
+
+```toml
+[appearance]
+theme_transition = "circle"
+theme_transition_duration = 450   # milliseconds, from 100 to 2000
+```
+
+[`appearance.animation_speed`](/docs/option-reference#appearance.animation_speed) also applies to the duration. A value outside 100
+to 2000 moves to the nearest end. `appearance.motion = "none"` turns the
+transition off. The `fade` transition needs a truecolor terminal. On a terminal
+with fewer colors, tuios changes the colors in one frame. While the transition
+runs, the screen outside the circle does not change.
+
+## Frame rate [#frame-rate]
+
+[`appearance.max_fps`](/docs/option-reference#appearance.max_fps) is the highest frame rate tuios draws at. Your terminal
+and your monitor can show fewer frames. A value above what they can show does
+not make tuios smoother.
+
+```toml
+[appearance]
+max_fps = 144     # a number from 10 to 240
+# max_fps = "auto"  # the refresh rate of your display
+# max_fps = 0       # 60, the default
+```
+
+| Value         | Frame rate                                                                                   |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| `0`           | 60. This is the default.                                                                     |
+| `10` to `240` | That number. A value outside the range moves to the nearest end.                             |
+| `"auto"`      | The refresh rate of your display, from 10 to 240. If tuios cannot find the rate, it uses 60. |
+
+The settings page offers Auto, 30, 60, 90, 120, 144, 165 and 240. With Auto
+selected, the row shows the rate in use, for example `Auto (144)`. A change
+applies at once, with no restart.
+
+## How frames reach the terminal [#how-frames-reach-the-terminal]
+
+[`appearance.cell_frames`](/docs/option-reference#appearance.cell_frames) picks which clients write their frames as cells. Such
+a client compares each frame with the last one and sends the terminal only the
+cells that changed. The other clients turn each frame into text, and Bubble
+Tea turns the text back into cells before it compares. The result on the
+screen is the same; the cell way takes about half the CPU of a keystroke's
+frame.
+
+```toml
+[appearance]
+cell_frames = "all"      # the default
+# cell_frames = "served" # only clients over SSH and the web
+# cell_frames = "off"    # no client
+```
+
+| Value      | Clients that write cells                                                            |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `"served"` | Clients over `tuios ssh`, `tuios-web` and the browser tour.                         |
+| `"all"`    | Those, and the terminal you run `tuios` in, except on Windows. This is the default. |
+| `"off"`    | None.                                                                               |
+
+The environment variable `TUIOS_CELL_FRAME` overrides the option: `1` means
+`all` and `0` means `off`. A change to the option applies to the next client
+that starts.
+
+If the screen looks wrong, for example text in the wrong place or stale cells
+after a redraw, set `cell_frames = "off"` or start tuios with
+`TUIOS_CELL_FRAME=0`. That brings back the way frames were sent before the
+default became `all`. Please report the problem with your terminal's name and
+version.
+
+**What limits the frames you see.** tuios sends a frame to your terminal. The
+terminal then draws the frame on its own schedule. kitty and ghostty draw at
+most once for each refresh of the monitor, so a 60 Hz monitor shows at most 60
+frames a second, whatever max\_fps is. Over SSH, the network and the remote
+terminal set the limit too.
+
+**What it costs.** tuios draws only when something on the screen changes.
+The terminal library under it still wakes at max\_fps while tuios is idle. An
+idle tuios at 240 wakes about three times as often as at 60. See
+[perf.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/perf.md) for the measured numbers.
+
+**How auto finds the rate.** tuios looks once, in the background, when it
+starts. It looks again when the config file is reloaded. It never delays the
+first frame. Until the answer arrives, tuios draws at 60.
+
+- Linux on Wayland: tuios asks `hyprctl` on Hyprland, `niri` on niri, and
+  `wlr-randr` on other wlroots compositors. It reads the current mode of each
+  output that is on.
+- Linux on X11, or on a Wayland compositor that none of these tools speaks
+  for: tuios asks `xrandr --current`. Under XWayland the answer comes from the
+  compositor and can be less exact.
+- macOS: tuios asks `system_profiler SPDisplaysDataType`. Some built-in
+  displays do not report a rate. tuios then uses 60.
+- Windows: tuios does not look, and uses 60.
+
+A terminal window cannot tell which display it is on. With several displays,
+auto uses the highest rate among them.
+
+Auto looks only when tuios runs on the same machine as your desktop. Over SSH,
+in tuios-web and in the SSH server, auto uses 60, because the displays on the
+machine are not the ones you see.
+
+## Images on a terminal without graphics [#images-on-a-terminal-without-graphics]
+
+A program in a pane can draw a picture with sixel or with kitty graphics.
+Your terminal shows the picture when it supports sixel or kitty graphics.
+Some terminals support neither: kmscon, the Linux console, xterm.js hosts
+such as VS Code, and many SSH clients. On these, tuios draws the picture with
+block characters. Each character cell shows two colours. The picture scrolls
+and clears with the text, and a kitty delete (`a=d`, of every image or of one
+id) takes it down. Kitty Unicode placeholders (`U=1`) are not drawn this way.
+
+[`appearance.image_symbols`](/docs/option-reference#appearance.image_symbols) sets the characters.
+
+```toml
+[appearance]
+image_symbols = "auto"    # the default
+# image_symbols = "octant"
+# image_symbols = "off"   # show a box instead of the picture
+```
+
+| Value        | Characters                                  | Detail in one cell |
+| ------------ | ------------------------------------------- | ------------------ |
+| `"auto"`     | Chosen from `TERM`. See the next table.     |                    |
+| `"octant"`   | Octants, Unicode 16 (U+1CD00 and on)        | 2 by 4             |
+| `"sextant"`  | Sextants, Unicode 13 (U+1FB00 and on)       | 2 by 3             |
+| `"quadrant"` | Quadrants (▖ ▗ ▘ ▝ and others)              | 2 by 2             |
+| `"half"`     | Half blocks (▀ ▄)                           | 1 by 2             |
+| `"off"`      | None. tuios shows a box with "image" in it. |                    |
+
+A finer set shows more detail, but your font must have the characters. A
+terminal cannot tell tuios which characters its font has. So `auto` reads
+`TERM`:
+
+| `TERM`        | `auto` uses | Why                                                                                                                   |
+| ------------- | ----------- | --------------------------------------------------------------------------------------------------------------------- |
+| `kmscon`      | Octants     | kmscon draws with its built-in Unifont, which has the octants.                                                        |
+| `linux`       | Half blocks | The Linux console uses fonts of 256 or 512 characters. These fonts have the CP437 block characters and nothing finer. |
+| Anything else | Quadrants   | Quadrants are in the Basic Multilingual Plane. Every font with block characters has them.                             |
+
+If your font has octants, set `"octant"` for the best picture.
+
+**Colours.** tuios uses the colours your terminal shows.
+
+- 24-bit colour: each cell gets the two colours that fit the picture best.
+- 256 colours: tuios mixes palette colours in a dither pattern.
+- 16 colours, for example the Linux console: tuios always uses half blocks.
+  It mixes the 16 colours in a dither pattern. It uses only the 8 dark
+  colours as a background, because the Linux console uses bright
+  backgrounds for blink. If a picture keeps too little of its shape in 16
+  colours, tuios shows the box instead. On the pictures measured, this
+  did not happen. See [KMSCON-GRAPHICS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/KMSCON-GRAPHICS.md).
+
+**What the program sees.** With block characters on, tuios tells the
+program in the pane that sixel works. Programs such as chafa, timg and yazi
+then send sixel. With `"off"`, tuios tells the program that sixel does not
+work, and the program uses its own text output.
+
+A terminal with sixel or kitty graphics always gets the real picture. It
+never gets block characters.
+
+tuios does not draw kitty graphics images as block characters yet. On a
+terminal without graphics, a program that only uses kitty graphics uses its
+own text output.
+
+## Mermaid diagram colours [#mermaid-diagram-colours]
+
+`tuios mermaid` builds its colours from your tuios theme. `[mermaid] theme`
+picks one of the named diagram themes instead. The `--theme` flag wins over it.
+
+`[mermaid] background` is `theme` (the default) or `none`. With `none`, a kitty
+or png picture has no background, so the diagram is on the background of your
+terminal. The `--background` flag wins over it.
+
+```toml
+[mermaid]
+theme = "flexoki"   # tuios (the default), pele, flexoki, flexoki-dark, nord,
+                    # everforest, gruvbox, rose-pine, catppuccin-mocha,
+                    # catppuccin-latte, tokyo-night, dracula, solarized-light, kanagawa
+background = "none" # theme (the default) or none
+```
+
+## CharmTone themes [#charmtone-themes]
+
+tuios has two built-in themes made from
+[CharmTone](https://github.com/charmbracelet/tone), the colour system of Charm.
+
+| Theme             | Ground           | Text           | Accent            |
+| ----------------- | ---------------- | -------------- | ----------------- |
+| `charmtone`       | Pepper `#201F26` | Sash `#ECEBF0` | Charple `#6B50FF` |
+| `charmtone-light` | Salt `#F7F6FB`   | Char `#3A3943` | Charple `#6B50FF` |
+
+```toml
+[appearance]
+theme = "charmtone"
+background = "theme"   # paint the Pepper ground behind the panes
+```
+
+The dark theme uses the ANSI colours of Crush, the coding agent from Charm.
+Bright black is Squid, so that shell suggestions and comments are easy to read.
+The light theme uses a darker shade of each colour.
+CharmTone has no dark yellow, so yellow is Cumin, a light brown.
+Run `tuios list-themes charmtone-light` to see the contrast of each colour.
+
+## Omarchy themes [#omarchy-themes]
+
+On [Omarchy](https://omarchy.org), tuios uses the Omarchy theme when you set
+no theme. The panes, the chrome, the rail and the dock take the colours of the
+applied theme. The answers to OSC 10, 11 and 4 in a pane are the theme's
+colours too.
+
+When you switch the Omarchy theme, tuios changes its colours at the same
+moment as your terminal. You do not restart tuios and you do not press a key.
+A program in a pane that turned on mode 2031 gets a light or dark report each
+time the theme changes. tuios sends no SIGWINCH. See
+[Programs That Follow the Theme](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/THEMES.md#programs-that-follow-the-theme).
+On a machine without Omarchy, tuios watches nothing.
+
+| [`appearance.theme`](/docs/option-reference#appearance.theme) | On a machine with Omarchy    | On a machine without Omarchy                |
+| ------------------------------------------------------------- | ---------------------------- | ------------------------------------------- |
+| empty (the default)                                           | The Omarchy theme            | The colours of your terminal                |
+| `omarchy`                                                     | The Omarchy theme            | The colours of your terminal, and a warning |
+| `none`                                                        | The colours of your terminal | The colours of your terminal                |
+| a theme id                                                    | That theme                   | That theme                                  |
+
+```toml
+[appearance]
+theme = "omarchy"   # use the Omarchy theme, and warn where Omarchy is missing
+```
+
+[`appearance.theme_light`](/docs/option-reference#appearance.theme_light) names a second theme for a light terminal. `theme` is
+then the dark theme. See
+[THEMES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/THEMES.md#a-light-and-a-dark-theme).
+
+tuios reads `~/.local/state/omarchy/current/theme/colors.toml` (Omarchy 4),
+then `~/.config/omarchy/current/theme/colors.toml` (Omarchy 3). The pane
+colours are the ones Omarchy gives kitty, ghostty and foot. The chrome takes:
+
+| Chrome                                    | Omarchy key                                                                   |
+| ----------------------------------------- | ----------------------------------------------------------------------------- |
+| Accent                                    | `accent`                                                                      |
+| Focused border in window mode             | the first colour of `hyprland_active_border`, else `accent`                   |
+| Terminal mode, copy mode, errors, notices | `green`, `yellow`, `red`, `blue`                                              |
+| Dialogs                                   | `lighter_background`, with `dark_background` and `darker_background` below it |
+
+Each installed Omarchy theme is also in the theme list as `omarchy/NAME`, such
+as `omarchy/gruvbox`. Such an id is fixed. It does not change with the Omarchy
+theme.
+
+`tuios list-themes` shows the Omarchy theme it found, and whether tuios uses
+it:
+
+```
+active: omarchy (default)
+omarchy: Tokyo Night, from /home/you/.local/state/omarchy/current. tuios follows it.
+```
+
+`SWATCH_OMARCHY_DIR` names another `current` directory to read.
+
+## Colour values [#colour-values]
+
+Every colour key in tuios takes the same values: the backgrounds, the border colours, `overlay_border_color`, `scrollbar.tint`, `sidebar.cursor_background`, `[appearance.selection]`, the dock's `fg` and `bg` keys, `[dock.tabs]`, the agent row's `fg`, and a theme file's `chrome` object.
+
+| Value          | Example                                         | What it is                                                                                                   |
+| -------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Hex            | `"#7dcfff"`, `"#7cf"`                           | That colour on every theme.                                                                                  |
+| ANSI number    | `"5"`, `"208"`                                  | `0` to `15` are the sixteen slots below. `16` to `255` are the 256-colour palette.                           |
+| Slot name      | `"magenta"`, `"bright_magenta"`, `"fg"`, `"bg"` | One of the theme's sixteen colours, or its foreground or background. `purple` is the same slot as `magenta`. |
+| Role name      | `"accent"`, `"warning"`, `"surface"`            | The colour the chrome uses for that role. See the list below.                                                |
+| CharmTone name | `"charple"`, `"guac"`                           | A colour from Charm's CharmTone palette.                                                                     |
+
+The role names are `accent`, `accent_bright`, `success`, `warning`,
+`error`, `info`, `surface`, `canvas`, `panel` and `card`, the roles a
+theme's `chrome` object sets (see [THEMES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/THEMES.md)). The roles for one
+piece of chrome have a dotted name: `border.unfocused`, `border.copy`,
+`border.multifocus`, `rule`, `status.attention`, `status.busy`,
+`dots.close`, `dots.minimize`, `dots.zoom`, `dock.ground` and `rail.ground`.
+`text`, `dim` and `muted` are the three text inks. You can use them, but a
+theme cannot set them.
+
+A slot name or a role name follows the theme. Change the theme and the
+colour changes with it. At 16 colours, a slot name is the terminal's own
+slot, so your terminal's palette paints it. A hex colour stays the same on
+every theme.
+
+```toml
+[appearance]
+border_focused_color = "accent"          # the theme's accent, on every theme
+dock_background      = "surface"
+
+[appearance.selection]
+bg = "bright_black"
+
+[dock.tabs]
+active_bg = "accent"
+inactive_fg = "muted"
+```
+
+Case does not matter, and `bright-magenta` is the same as
+`bright_magenta`. A key that has its own words keeps them: `off` and
+`theme` for a background, and `quiet`, `border` and `muted` for the
+scrollbar tint. There `muted` is the tint word, not the text ink. tuios
+reads each value when the config or the theme changes, not on each frame.
+A value that is not a colour is ignored, and the validator says what to
+write instead.
+
+## Backgrounds [#backgrounds]
+
+A cell that has no background of its own is transparent, so your terminal's
+own background shows through it. That is the default everywhere: pane content
+a program left on the default background, the space between panes, the
+borders, the dock and the rail. The background options paint those cells
+instead, one surface at a time or all at once.
+
+| Option                                                                                              | Surface                                                                                                                       | Values                                     | Default                      |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------- |
+| [`appearance.background`](/docs/option-reference#appearance.background)                             | Every surface below that is not set on its own                                                                                | `off`, `theme`, a [colour](#colour-values) | `off`                        |
+| [`appearance.pane_background`](/docs/option-reference#appearance.pane_background)                   | Pane content, the thin scrollbar over it and the scrollback browser                                                           | `off`, `theme`, a colour, or empty         | empty (follows `background`) |
+| [`appearance.desktop_background`](/docs/option-reference#appearance.desktop_background)             | Behind and between panes: gaps between tiled panes, the space around floating ones, an empty workspace and its welcome splash | `off`, `theme`, a colour, or empty         | empty (follows `background`) |
+| [`appearance.window_chrome_background`](/docs/option-reference#appearance.window_chrome_background) | Pane borders and title bars, the lines between shared-border panes, the capture marquee                                       | `off`, `theme`, a colour, or empty         | empty (follows `background`) |
+| [`appearance.dock_background`](/docs/option-reference#appearance.dock_background)                   | The dock                                                                                                                      | `off`, `theme`, a colour, or empty         | empty (follows `background`) |
+| [`appearance.sidebar.background`](/docs/option-reference#appearance.sidebar.background)             | The rail                                                                                                                      | `off`, `theme`, a colour, or empty         | empty (follows `background`) |
+
+A theme can name a ground for the dock and the rail (`chrome.dock.ground` and
+`chrome.rail.ground`, see [THEMES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/THEMES.md#roles-for-one-piece-of-chrome)).
+The theme's ground shows when `dock_background` or `sidebar.background` is
+empty and `background` is `off`. A value in either key wins.
+
+What each value paints:
+
+| Value                      | What is painted                                                                                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `off`                      | Nothing. The cell is transparent and your terminal's own background shows through.                                                                                     |
+| `theme`                    | The active theme's background, with the theme's foreground on text left in the default colour. With no theme set there is no theme background, so it behaves as `off`. |
+| A [colour](#colour-values) | That colour. With a theme set, default-coloured text takes the theme's foreground, lifted until it reads on the colour; with none, it keeps your terminal's own.       |
+
+**Precedence.** A surface's own option wins whenever it holds a value, `off`
+included. Left empty, it follows [`appearance.background`](/docs/option-reference#appearance.background). So one line paints
+everything, and a second line changes or clears one surface:
+
+```toml
+[appearance]
+background = "theme"          # every surface on the theme's background
+dock_background = "#11111b"   # the dock a shade darker
+pane_background = "off"       # panes keep the terminal's own background
+
+[appearance.sidebar]
+background = "#181825"
+```
+
+A value that is not a keyword or a colour resolves to `off` for that
+surface (it does not fall back to `background`), and the validator warns about
+it, as it does about `theme` with no theme set.
+
+**What is kept.** Only cells with no background of their own are painted. A
+background a program chose for a cell always wins, and so do the marks tuios
+paints over a pane (the selection, search matches, the copy mode cursor) and
+every colour the chrome sets itself: a border's ink stays its focus colour, the
+title bar's buttons keep theirs, the dock's pills and the rail's highlighted
+rows keep their fills. The overlay panels (the palette, settings, which-key,
+the Inbox, every picker, the tooltips and badges) are not on the list because
+they have no transparent cells: each fills its whole rectangle with its own
+surface colour.
+
+**Programs that ask.** A program can ask the terminal for its background with
+OSC 11 and its default text colour with OSC 10, and some pick a dark or light
+palette from the answer. While the pane background paints a colour, a pane's
+OSC 11 is answered with that colour and OSC 10 with the text colour tuios gives
+default text there, so the program sees what it is drawn on. A program that set
+its own colours with OSC 10 or 11 gets its own back. With a theme on and the
+pane background off, the answers are the theme's colours. With no theme and the
+pane background off, the answers are the host terminal's own: tuios asks the
+terminal it runs in for its background, its text colour and its sixteen ANSI
+colours when it starts or attaches, and tells panes those, so a program on a
+light terminal picks its light palette. OSC 4 queries for the sixteen are
+answered the same way. Each client asks its own terminal, so an SSH or browser
+client on a light terminal and a local one on a dark terminal each get the
+right answer for the session while they are the one typing. In a daemon
+session the daemon's emulator answers, and the client tells it what to answer
+when it syncs; with several clients attached, the last one to sync decides.
+
+With no theme the chrome is drawn for the host's background too: on a light
+terminal the rail, the dock and the unfocused pane borders use the light
+chrome ramp a light theme gets, measured against the terminal's own colour.
+
+**Following light and dark.** A local client turns on mode 2031, and a terminal
+that supports it (ghostty, kitty, contour and others) then tells tuios when the
+system appearance switches between light and dark. tuios asks for the colours
+again, tells panes, and redraws the chrome for the new background. The light
+and dark verdict has hysteresis: a dark verdict turns light only above an 8-bit
+luminance of 140, and a light one turns dark only below 110, so a mid grey
+background does not flip the chrome back and forth. SSH and browser clients
+ask once when they attach and do not follow the switch, because only the local
+client turns the mode off again on exit.
+
+**Terminals that do not answer.** A terminal that answers no colour query,
+such as mosh, leaves everything as it was: panes are told the emulator's
+defaults (a black background and white text) and the chrome uses its dark ramp.
+Set a theme, or `pane_background`, to give panes a real answer there.
+
+All six hot-reload and are on the **Backgrounds** tab of the settings page
+(`Ctrl+B ,`, then `]`): an All surfaces row and one row per surface, each a
+colour row that opens the same picker as the border colours, with `off` and
+`theme` beside the grid and `x` to clear a surface back to following All
+surfaces. `tuios set-config appearance.dock_background <value>` sets one from a
+script. They reach every client of the session, SSH and browser ones included,
+since they draw the same frame. A screenshot of one pane is drawn on the pane's
+painted colour, and a screen or region capture carries every painted surface
+as it is drawn.

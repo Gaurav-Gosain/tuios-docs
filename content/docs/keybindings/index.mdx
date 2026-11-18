@@ -1,0 +1,347 @@
+---
+title: "Keybindings"
+description: "Every default key in TUIOS for window mode, terminal mode, prefix commands, copy mode and the mouse, and how to change them."
+icon: Keyboard
+---
+
+import { Since } from "@/components/mdx/since";
+import { AnchorRedirect } from "@/components/mdx/anchor-redirect";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/KEYBINDINGS.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+These pages are `docs/KEYBINDINGS.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/KEYBINDINGS.md), at the version this site documents.
+
+<AnchorRedirect page="keybindings" />
+
+**Try it live:** [Learn tuios](/learn) has you press these keys in the real app, in your browser. [Default keys](/docs/default-keys) lists every default key, with a search.
+
+**The pages of this reference:**
+
+- [Panes, panels and workspaces](/docs/keybindings/panes-panels-and-workspaces)
+- [Copy mode and screenshots](/docs/keybindings/copy-mode)
+- [The agents view](/docs/keybindings/agents-view)
+- [Keyboard layouts and macOS](/docs/keybindings/layouts-and-macos)
+- [Keys by mode](/docs/keybindings/keys-by-mode)
+
+The keybinding reference lives on the docs site: [https://tuios.dev/docs/keybindings](/docs/keybindings)
+
+Every binding lives in one of the sections under `[keybindings]` in `config.toml` and is rebindable; the site page lists each section's defaults, the prefix chords, copy mode, and the key syntax.
+
+To send the leader to the program in the pane, press it two times in terminal
+mode. The pane gets the leader that `leader_key` names, such as `ctrl+a`,
+encoded as the pane expects: CSI u for a pane using the Kitty keyboard
+protocol, legacy bytes otherwise. A leader with no legacy encoding is dropped.
+
+The `[keybindings]` sections can also be in a file that config.toml includes,
+or in a file in `config.d`. The tables merge key by key. A
+`[[keybindings.command]]` entry in a later file changes the earlier entry with
+the same `name`, or with the same `key` when one of them has no name. Add
+`disabled = true` to an entry to remove the earlier entry it matches. The
+keybind manager and `tuios keybinds unbind` write a change to the file that
+sets the action. See
+[Split the config into several files](/docs/configuration/files-input-and-focus#split-the-config-into-several-files).
+
+To inspect your own effective bindings, use the binary rather than any document: `tuios keybinds list`, `tuios keybinds doctor` for conflicts, `tuios keybinds explain <key>` for everything one key does, or the in-app keybind manager on `Ctrl+B k`.
+
+## Keys of another multiplexer [#keys-of-another-multiplexer]
+
+`keybindings.preset` gives the keys of tmux, GNU screen or zellij after the
+leader:
+
+```toml
+[keybindings]
+preset = "tmux"
+```
+
+Or press `U` in window mode, or pick "Keybind preset" in the command palette.
+The picker shows each preset with three of its keys, and the keys the program
+in your pane would lose to it. Press Enter to use the preset. Or run
+`tuios keybinds preset tmux`. `tuios keybinds preset` shows the preset in use,
+and `tuios keybinds preset list` shows them all.
+
+The welcome screen offers a preset when it finds a `~/.tmux.conf` (or
+`~/.config/tmux/tmux.conf`), a `~/.screenrc` or a `~/.config/zellij` folder.
+When your tmux.conf sets another prefix, such as `set -g prefix C-a`, the offer
+uses that leader. The offer changes nothing until you press `U` and Enter.
+
+| Preset   | Leader   | What it does                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tuios`  | `ctrl+b` | The tuios keys. This is the default                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `tmux`   | `ctrl+b` | tmux 3.8's keys after the leader                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `screen` | `ctrl+a` | GNU screen's keys after the leader, also on the control variant (`ctrl+a ctrl+n`). `ctrl+a ctrl+a` goes to the last workspace. `ctrl+a a` sends `ctrl+a` to the pane                                                                                                                                                                                                                                                                       |
+| `zellij` | `ctrl+g` | zellij's unlock-first keys. After `ctrl+g`, `p` opens pane mode (the window menu), `t` tab mode (the workspace menu), `s` copy mode and `o` go-to on the sessions. The next key runs one action. In pane mode `r` splits right, `d` splits down, `f` zooms, `h` `j` `k` `l` move focus and `c` renames. In tab mode `n` opens a workspace, `x` closes it, and `h` and `l` go to the previous and next. It turns on [lock mode](#lock-mode) |
+
+- A tmux window is a workspace here. A tmux pane is a window here. So `c`,
+  `n`, `p`, `l`, `0` to `9`, `,` and `&` act on workspaces.
+- A preset changes the leader, the keys after the leader and the
+  terminal-mode keys. Window mode, the sidebar, copy mode and the agents view keep
+  the tuios keys.
+- A tuios feature whose key the preset uses moves to the tuios menu. Press the
+  leader, then `ctrl+t`, then the key it had. For example, `ctrl+b ctrl+t m`
+  opens the minimize menu.
+- Your own bindings win. An action you bind keeps your keys. A key you bind
+  keeps your action, and the preset's action for that key loses it.
+  `tuios keybinds doctor` lists each preset key that your bindings take.
+- A binding that has the tuios default key of an action the preset changes
+  gives way to the preset. A config.toml from an older tuios holds every
+  default, so the preset still applies. In such a file,
+  `leader_key = "ctrl+b"` gives way too: under screen and zellij, the leader
+  is the preset's. In a file without those default keys, `ctrl+b` stays.
+- Only the arrow keys and the resize keys repeat after the leader, as tmux
+  `bind -r` does. A letter you type right after `ctrl+b p` goes to the shell.
+- `tuios keybinds preset tmux` removes `keybindings.leader_key`, so the
+  leader is the preset's.
+- `keybindings.leader_twice` is what the leader pressed two times does:
+  `send` sends it to the pane (the default) and `last_workspace` goes back to
+  the last workspace. The screen preset sets `last_workspace`. `ctrl+c` still
+  cancels the leader under every preset.
+- A `prefix_mode` binding on the leader key wins over `leader_twice`. With
+  `leader_key = "ctrl+j"` and `focus_down = ["ctrl+j"]`, the leader
+  pressed two times focuses the pane below.
+
+`tuios keybinds cheatsheet tmux` shows the keys in three groups: the keys that
+work as in tmux, the tuios keys that moved, and what tmux has that tuios does
+not. `tuios keybinds preset show tmux` prints the preset file.
+
+## Lock mode [#lock-mode]
+
+Lock mode gives every key to the program in the pane. It is the locked mode of
+zellij. Turn it on in `config.toml`:
+
+```toml
+[keybindings]
+lock = true
+```
+
+The zellij preset turns it on. Set `lock = false` to turn it off under that
+preset.
+
+- In terminal mode, tuios takes only the leader. Every other key goes to the
+  pane, also the keys that tuios binds. `alt+1` to `alt+9`, `alt+n`,
+  `alt+esc`, `ctrl+p`, the arrow keys with `alt`, `shift+up` and the hold key
+  all go to the pane.
+- The leader unlocks. Press the leader, then the keys of one action. The
+  action runs and tuios locks again.
+- A repeatable action keeps its menu open. These are the actions in
+  `keybindings.repeat`, such as focus moves and resize steps. Press the key
+  again to move again. You do not press the leader again.
+- The open menu then takes only repeatable keys. Any other key closes the
+  menu and goes to the pane, and tuios locks again. For example, `x` after
+  `ctrl+b left right` goes to the pane. It does not close a pane. The
+  which-key panel of the open menu shows only the repeatable keys and `esc`.
+- Press `esc` to close the menu and lock again. `ctrl+c` also closes it.
+- Press the leader to close the menu and open a new leader menu.
+- A key that the open menu does not bind closes the menu. The key goes to the
+  pane.
+- To go to window mode, press the leader, then `esc`.
+- To send the leader to the pane, press the leader two times.
+- Window mode, overlays, copy mode and the mouse do not change.
+
+The mode pill in the dock shows a lock when tuios is locked. It shows an open
+lock while the leader or a menu waits for a key. Without Nerd Fonts, the pill
+shows `LOCK` and `UNLOCK`. When the dock is hidden, or
+`appearance.dock_prefix_indicator` is `"badge"`, the floating badge shows
+`PREFIX` and the open lock while a menu waits for a key.
+
+## Nest mode [#nest-mode]
+
+Nest mode gives every key to the program in the pane, the leader too, until
+you press one key to end it. It is tmux-matryoshka's prefix `Enter`, for a
+tmux in the pane, or a tuios on another machine, that uses the same leader.
+The `nest` action turns it on. Its default key is the leader, then `enter`,
+in every preset. To put it on a key of its own:
+
+```toml
+[keybindings.terminal_mode]
+nest = ["alt+shift+enter"]
+```
+
+- In terminal mode, every key goes to the focused pane: the leader, the keys
+  tuios binds and the hold key. A nested tmux gets its own `ctrl+b`.
+- `F12` ends nest mode. It does not go to the pane. Set
+  `keybindings.nest_exit_key` to use another key. A key that tuios cannot
+  read goes back to `F12`, so nest mode always has a way out, and a key that
+  programs type, such as a letter or `enter`, is reported in the log viewer.
+- Overlays opened with the mouse, copy mode and the mouse itself do not
+  change. A drag or a resize with the mouse keeps nest mode on.
+- While the sidebar has the keyboard, it takes the keys. Press `esc` to give
+  them back to the pane in nest mode.
+- Nest mode belongs to the client, not to the session. Another client on the
+  same session keeps its keys. It ends when the client leaves terminal mode,
+  and on detach.
+
+The mode pill in the dock shows `NEST F12`, and the focused pane's border
+takes the same colour. When the dock has no mode pill, the floating badge
+shows `NEST F12`.
+
+## The full list [#the-full-list]
+
+[keybindings-defaults.md](/docs/default-keys) lists every action and its
+default keys. A test writes that page from the code.
+
+`tuios keybinds list` shows every action and the keys that run it, as your
+`config.toml` sets them. It has one table for each scope: global, window mode,
+terminal mode, the sidebar and its files and agent rows, the agents view, its prompt,
+the mailbox, the Copies panel, copy mode, the prefix and each prefix menu, and tape playback. A key in a
+prefix menu shows with its chord, such as `ctrl+b L 5`. The command keys have a
+table of their own.
+
+After the scopes, the list shows the fixed keys. tuios reads these keys itself,
+and you cannot rebind them: copy mode, hints mode, the message view, the ways
+out of the spotlight, the list filter keys and the fixed mouse gestures. The middle
+button is an exception: terminal mode binds it like a key. The help overlay
+(`Ctrl+B ?`) shows the same rows. The last table shows the actions that have no
+default key. Bind one in `config.toml`, or run it from the command palette.
+
+`tuios keybinds list --json` prints the same rows as a JSON array. Each row has
+`scope`, `scope_name`, `chord`, `section`, `action`, `keys` and `description`.
+A fixed key has `fixed: true`. An action with no key has `unbound: true`. A key
+that a different action takes first is in `shadowed`.
+An action that also has older names lists them in `also`.
+
+### Older action names [#older-action-names]
+
+Some actions had two or more names, one per menu, such as `prefix_new_window`
+and `window_prefix_new` for `new_window`. Each action has one name now. The
+older names still work in `config.toml`, in a preset, in a tape and over the
+protocol: tuios reads them as the action's own name. `tuios keybinds list`
+shows the older names after the action's description, as "(also: ...)".
+
+| Action                                     | Older names                                                                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `new_window`                               | `prefix_new_window`, `window_prefix_new`                                                                                                         |
+| `close_window`                             | `prefix_close_window`, `window_prefix_close`                                                                                                     |
+| `toggle_tiling`                            | `window_prefix_tiling`                                                                                                                           |
+| `split_vertical`, `split_horizontal`       | `prefix_split_vertical`, `prefix_split_horizontal`                                                                                               |
+| `rotate_split`, `equalize_splits`          | `prefix_rotate_split`, `prefix_equalize_splits`                                                                                                  |
+| `focus_up`, `focus_down`                   | `terminal_focus_up`, `terminal_focus_down`                                                                                                       |
+| `restore_all`                              | `minimize_prefix_restore_all`                                                                                                                    |
+| `prefix_next_window`, `prefix_prev_window` | `window_prefix_next`, `window_prefix_prev`                                                                                                       |
+| `open_settings`                            | `prefix_settings`                                                                                                                                |
+| `command_palette`                          | `prefix_command_palette`                                                                                                                         |
+| `toggle_help`                              | `prefix_help`                                                                                                                                    |
+| `toggle_spotlight`                         | `prefix_toggle_spotlight`                                                                                                                        |
+| `toggle_tape_manager`                      | `tape_prefix_manager`                                                                                                                            |
+| `prefix_cancel`                            | `debug_prefix_cancel`, `layout_prefix_cancel`, `minimize_prefix_cancel`, `tape_prefix_cancel`, `window_prefix_cancel`, `workspace_prefix_cancel` |
+
+A name that is not an action, such as a typo, is reported as a config warning and its keys do nothing. The names of actions that were deleted after an older tuios wrote them into the generated `config.toml` (`nav_up`, `nav_down`, `nav_left`, `nav_right`, `extend_up`, `extend_down`, `extend_left`, `extend_right`, `debug_prefix_keyevents` and `prefix_focus_sidebar`) are skipped without a warning.
+
+A table that names one action by two names keeps the keys of both.
+
+```sh
+tuios keybinds list --json | jq -r '.[] | select(.action == "toggle_tiling") | .keys[]'
+```
+
+`tuios keybinds browse` opens the same rows in an explorer. Press `/` to
+search, and `tab` or a click on a tab to show one scope. The detail pane shows
+the keys, the action, the scope and the description. `q` or `esc` leaves it.
+It opens only when you run `browse`. `tuios keybinds list` stays plain text,
+on a terminal too.
+
+## Keybind presets [#keybind-presets]
+
+`keybindings.preset` gives the keys of tmux, GNU screen or zellij after the leader:
+
+```toml
+[keybindings]
+preset = "tmux"
+```
+
+Or press <kbd>U</kbd> in window mode, or pick "Keybind preset" in the command palette. The picker shows each preset with three of its keys, and the keys that the program in your pane loses to it. Press <kbd>Enter</kbd> to use the preset. Or run `tuios keybinds preset tmux`. `tuios keybinds preset` shows the preset in use, and `tuios keybinds preset list` shows them all.
+
+| Preset   | Leader                       | What it does                                                                                                                                                                                                                                        |
+| -------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tuios`  | <kbd>Ctrl</kbd>+<kbd>B</kbd> | The TUIOS keys. This is the default                                                                                                                                                                                                                 |
+| `tmux`   | <kbd>Ctrl</kbd>+<kbd>B</kbd> | tmux 3.8's keys after the leader                                                                                                                                                                                                                    |
+| `screen` | <kbd>Ctrl</kbd>+<kbd>A</kbd> | GNU screen's keys after the leader                                                                                                                                                                                                                  |
+| `zellij` | <kbd>Ctrl</kbd>+<kbd>G</kbd> | zellij's unlock-first keys. After the leader, <kbd>p</kbd> opens the window menu, <kbd>t</kbd> the workspace menu, <kbd>s</kbd> copy mode and <kbd>o</kbd> go-to on the sessions. The next key runs one action. It turns on [lock mode](#lock-mode) |
+
+- A preset changes the leader, the keys after the leader and the terminal-mode keys. Window mode, the rail, copy mode and the agents view keep the TUIOS keys.
+- A TUIOS feature whose key the preset uses moves to the TUIOS menu. Press the leader, then <kbd>Ctrl</kbd>+<kbd>T</kbd>, then the key it had.
+- Your own bindings win over the preset. `tuios keybinds doctor` lists each preset key that your bindings take.
+- `tuios keybinds cheatsheet tmux` shows the keys that work as in tmux, the TUIOS keys that moved, and what tmux has that TUIOS does not.
+
+## Palette commands you can bind [#palette-commands-you-can-bind]
+
+Every row of the command palette runs an action, so you can bind any of them, and name them in a tape. These have no default key:
+
+| Action                                                                | Does                                                                                               |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `new_window_on_host`                                                  | Open a new window on another machine                                                               |
+| `toggle_shared_borders`                                               | Toggle shared borders between neighbouring panes                                                   |
+| `next_saved_layout`, `prev_saved_layout`                              | Load the next or the previous saved layout                                                         |
+| `layout_bsp`, `layout_master_stack`, `layout_scrolling`, `layout_off` | Tile the workspace as a BSP tree, as master and stack, or as scrolling columns, or turn tiling off |
+| `clear_multifocus`                                                    | Take every pane out of multifocus                                                                  |
+| `multi_copy_mode`                                                     | Copy mode in every pane of the multifocus set                                                      |
+| `all_windows`                                                         | Show every window of every workspace                                                               |
+| `theme_picker`, `look_picker`                                         | Choose a theme, or a look: a theme with its borders and dock                                       |
+| `edit_theme`                                                          | Edit the current theme                                                                             |
+| `share_look`                                                          | Share my look                                                                                      |
+| `toggle_focus_follows_mouse`                                          | Toggle focus follows mouse                                                                         |
+| `add_machine`                                                         | Add a machine                                                                                      |
+| `open_mailbox`                                                        | Open the agents' mailbox                                                                           |
+| `dispatch_pause`, `dispatch_resume`                                   | Pause all task dispatch, or start it again                                                         |
+
+Put the key in a section where it should work, such as `window_management` or `global`:
+
+```toml
+[keybindings.window_management]
+layout_bsp = ["alt+b"]
+
+[keybindings.global]
+theme_picker = ["alt+t"]
+```
+
+The palette shows each row's key once you bind it.
+
+## Customizing [#customizing]
+
+Bindings live in the sections under `[keybindings]` in `config.toml`, listed below. Each action takes a list of keys.
+
+```toml
+[keybindings]
+leader_key = "ctrl+a"
+
+[keybindings.window_management]
+new_window = ["n", "ctrl+t"]
+close_window = []          # unbind: the key goes back to the pane
+```
+
+An empty list and a missing line are different. A missing action gets its default back at the next load. An empty list stays empty. Key syntax and every section are on the [Configuration](/docs/configuration/other-tables#keybindings-the-keybindings-table) page.
+
+The `[keybindings]` sections can also be in a file that `config.toml` includes, or in a file in `config.d`. The tables merge key by key. A `[[keybindings.command]]` entry in a later file changes the earlier entry with the same `name`, or with the same `key` when one of them has no name. Add `disabled = true` to an entry to remove the earlier entry that it matches. The keybind manager and `tuios keybinds unbind` write a change to the file that sets the action. See [Split the Config](/docs/config-files).
+
+### Keys TUIOS cannot read [#keys-tuios-cannot-read]
+
+TUIOS ignores a key that it cannot read, such as `ctrl+nope`, and loads the rest of the file. `tuios keybinds doctor` reads the config the same way as the running app. The leader, the conflicts and the keys taken from the pane in the report are the ones that TUIOS uses.
+
+The doctor lists the ignored keys under `KEYS TUIOS CANNOT READ`, grouped by file. Each line names the key, the problem, the section and the action. It also says what TUIOS does instead. This report is for a file with a bad leader, a bad `new_window` key and an `opt+1` key:
+
+```
+tuios keybinds: 2 keys tuios cannot read, 7 keys a guest wants
+leader: ctrl+b
+
+KEYS TUIOS CANNOT READ (certain)
+  tuios ignores these keys.
+  Correct them in config.toml.
+    hyper+a                invalid modifier: hyper [keybindings.leader_key]. The leader is ctrl+b until you correct it.
+    ctrl+nope              unknown special key: nope [window_management.new_window]. new_window uses its default key, n.
+
+OPT KEYS READ AS ALT (certain)
+  For information. tuios reads opt+ as alt+ on this system. Nothing needs a change.
+  opt+1                  read as alt+1 [workspaces.switch_workspace_1]
+```
+
+An action with no other key gets its default key. If another action already has that default key, the line says so, and the action has no key. Correct each key in the file that the doctor names.
+
+Keys spelled with `opt+` are under `OPT KEYS READ AS ALT`. They are for information. You do not need to change them.
+
+See [When a key is wrong](/docs/configuration#when-a-key-is-wrong).
+
+`tuios keybinds browse` opens the rows of `tuios keybinds list --json` in an explorer. Press <kbd>/</kbd> to search, and <kbd>Tab</kbd> or a click on a tab to show one scope. The detail pane shows the keys, the action, the scope and the description. <kbd>q</kbd> or <kbd>Esc</kbd> leaves it. Add a search to start with it: `tuios keybinds browse spotlight`. `tuios keybinds list` prints plain text, on a terminal too.
+
+The **keybind manager** (<kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>k</kbd>) shows the same analysis in four tabs: Bindings, Conflicts, Guests and Record. Each tab keeps its place. Record captures the next key you press. On a binding, <kbd>Ctrl</kbd>+<kbd>D</kbd> removes it and <kbd>Ctrl</kbd>+<kbd>X</kbd> takes its key off every action.
+
+> **Keybinding edits apply at once.** A keybinding saved in `config.toml` works at the next key press in the running client. You do not need to restart TUIOS or attach again. Changes made with the keybind manager also apply at once.
+
+> **keybinds list-custom does not report leader\_key.** `tuios keybinds list-custom` compares every keybinding section. It does not report `leader_key`. Use `tuios keybinds doctor` or read the file for that.
