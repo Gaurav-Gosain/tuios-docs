@@ -44,6 +44,12 @@ func register(name string, draw func(g *gen) error) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "frame" {
+		if err := runFrame(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	out := flag.String("out", "", "folder for the PNG files")
 	manifest := flag.String("manifest", "lib/libshots.json", "the size of each picture, for the LibShot component")
 	snippets := flag.String("snippets", "tools/libshots/snippets", "folder for the code regions the pages include")

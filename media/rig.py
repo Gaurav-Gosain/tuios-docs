@@ -131,6 +131,21 @@ RESPONDERS = [
 ]
 
 
+def capture_format(scene):
+    """The format tuios writes each screenshot of a scene in.
+
+    "format" in scene.json wins: png, or html and svg for a page that lays
+    out the cells itself. A shot scene with no format is captured as ANSI:
+    scripts/docs-media.sh draws it in the window card of the docs with
+    tools/libshots (libshots frame). "frame": "none" keeps the plain PNG.
+    """
+    if "format" in scene:
+        return scene["format"]
+    if scene.get("kind") == "shot" and scene.get("frame", "window") == "window":
+        return "ansi"
+    return "png"
+
+
 def merge(into, other):
     """Merge the TOML tables of other into into, other winning."""
     for k, v in other.items():
@@ -245,7 +260,7 @@ def main():
         "screenshot": {
             # "format" in scene.json: png unless the page wants the cells, as
             # html or svg, to lay out itself.
-            "directory": shots_dir, "format": scene.get("format", "png"), "frame": "none", "copy": False,
+            "directory": shots_dir, "format": capture_format(scene), "frame": "none", "copy": False,
             "preview": False, "scale": 2,
             # scripts/docs-media.sh sets the font. The renderer has one file
             # for every weight, so a shot draws bold in the regular face.
@@ -427,7 +442,8 @@ def main():
         if short_home:
             shutil.rmtree(env_root, ignore_errors=True)
 
-    ext = scene.get("format", "png")
+    # tuios names an ANSI capture .ans.
+    ext = {"ansi": "ans"}.get(capture_format(scene), capture_format(scene))
     taken = sorted(glob.glob(os.path.join(shots_dir, f"*.{ext}")), key=os.path.getmtime)
     names = scene.get("shots", [])
     if len(taken) != len(names):

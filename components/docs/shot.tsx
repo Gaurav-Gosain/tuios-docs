@@ -23,6 +23,10 @@ export const SHOT_SIZES = {
  * The page then shows the picture that matches the site theme. The other one
  * stays hidden, and a hidden lazy image is not fetched.
  *
+ * With `framed`, the picture already holds its own window card: the frame,
+ * the rounded corners, the shadow and the wash behind it, drawn by tuios.dev/shot
+ * (see media/rig.py). The page then draws no border of its own.
+ *
  * With `href`, the picture links to that address, such as the full size file
  * of a screen too wide to read at the column's width.
  */
@@ -36,6 +40,7 @@ export function Shot({
   sizes = SHOT_SIZES.docs,
   href,
   priority = false,
+  framed = false,
 }: {
   name: string;
   alt: string;
@@ -50,6 +55,8 @@ export function Shot({
    * paint: load it at once and ahead of the rest, not lazily.
    */
   priority?: boolean;
+  /** The picture has its own window card, so the page adds no border. */
+  framed?: boolean;
 }) {
   // A picture made outside scripts/docs-media.sh, such as a blog post's chart
   // or a page of the site, is 1600 wide with an 800 wide file beside it.
@@ -74,7 +81,13 @@ export function Shot({
     />
   );
   const frame = (
-    <div className="overflow-hidden rounded-xl border border-fd-border">
+    <div
+      className={
+        framed
+          ? undefined
+          : "overflow-hidden rounded-xl border border-fd-border"
+      }
+    >
       {light ? (
         <>
           {img(`${name}-light`, "dark:hidden")}

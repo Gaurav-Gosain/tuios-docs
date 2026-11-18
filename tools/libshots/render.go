@@ -165,15 +165,7 @@ func (g *gen) write(name string, t theme, grid *shot.Grid, p pic) error {
 	case card:
 		f.Mode = shot.FramePlain
 	case window:
-		f.Mode = shot.FrameWindow
-		f.Title = p.title
-		f.Padding = 28
-		f.Radius = 10
-		f.Shadow = true
-		f.Transparent = false
-		f.WashStart, f.WashEnd = t.wash[0], t.wash[1]
-		f.Accent = t.term.ANSI[5]
-		f.Controls = shot.ControlsMacOS
+		dressWindow(f, t, p.title)
 	}
 	png, err := shot.Render(shot.FormatPNG, grid, f)
 	if err != nil {
@@ -194,6 +186,22 @@ func (g *gen) write(name string, t theme, grid *shot.Grid, p pic) error {
 	}
 	g.sizes[name] = sz
 	return nil
+}
+
+// dressWindow gives f the window card every docs picture of a terminal
+// wears: the macOS controls and a title, rounded corners, a soft shadow,
+// and the theme's wash behind the card. The e2e frames of tuios wear the
+// same card.
+func dressWindow(f *shot.Frame, t theme, title string) {
+	f.Mode = shot.FrameWindow
+	f.Title = title
+	f.Padding = 28
+	f.Radius = 10
+	f.Shadow = true
+	f.Transparent = false
+	f.WashStart, f.WashEnd = t.wash[0], t.wash[1]
+	f.Accent = t.term.ANSI[5]
+	f.Controls = shot.ControlsMacOS
 }
 
 func pngSize(b []byte) (int, int) {
