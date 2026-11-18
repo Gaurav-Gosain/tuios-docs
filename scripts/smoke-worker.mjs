@@ -204,6 +204,18 @@ try {
     );
   }
   {
+    const res = await get("/nitpick/cmd/nitpick?go-get=1");
+    const body = await res.text();
+    check(
+      "go-import meta tag, nitpick",
+      res.status === 200 &&
+        body.includes(
+          'content="tuios.dev/nitpick git https://github.com/Gaurav-Gosain/tuios nitpick"',
+        ),
+      `${res.status}, ${body.length} bytes`,
+    );
+  }
+  {
     const res = await get("/progstatus");
     const to = res.headers.get("location") ?? "";
     check(

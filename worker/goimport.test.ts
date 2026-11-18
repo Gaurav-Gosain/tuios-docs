@@ -29,6 +29,9 @@ describe("libraryFor", () => {
     ["/plotx", null],
     ["/sketch", "sketch"],
     ["/sketch/raster", "sketch"],
+    ["/nitpick", "nitpick"],
+    ["/nitpick/cmd/nitpick", "nitpick"],
+    ["/nitpickx", null],
     ["/docs/progstatus", null],
     ["/", null],
     ["/constructor", null],
@@ -94,6 +97,15 @@ describe("goImport", () => {
     const res = goImport(new Request("https://tuios.dev/harness?go-get=1"));
     expect(await res?.text()).toContain(
       '<meta name="go-import" content="tuios.dev/harness git https://github.com/Gaurav-Gosain/tuios harness">',
+    );
+  });
+
+  test("nitpick names its own folder", async () => {
+    const res = goImport(
+      new Request("https://tuios.dev/nitpick/cmd/nitpick?go-get=1"),
+    );
+    expect(await res?.text()).toContain(
+      '<meta name="go-import" content="tuios.dev/nitpick git https://github.com/Gaurav-Gosain/tuios nitpick">',
     );
   });
 

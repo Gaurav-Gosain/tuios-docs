@@ -29,6 +29,7 @@ export const LIBRARIES: Readonly<Record<string, { dir: string }>> = {
   acp: { dir: "acp" },
   harness: { dir: "harness" },
   loom: { dir: "loom" },
+  nitpick: { dir: "nitpick" },
   plot: { dir: "plot" },
   progstatus: { dir: "progstatus" },
   shot: { dir: "shot" },
