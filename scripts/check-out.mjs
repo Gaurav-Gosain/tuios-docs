@@ -6,9 +6,11 @@
 //    The search index was one (out/api/search, 9 MB sent raw).
 // 2. Every internal link on every page points to a file in out/, and every
 //    #anchor names an id on the target page.
+// 3. No file is over 25 MiB, the largest asset Workers serves. The search
+//    index (out/api/search.json) is the one that grows.
 //
 // It prints each problem and exits 1 when it finds any.
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 const out = path.resolve(process.argv[2] ?? "out");
@@ -133,8 +135,24 @@ for (const page of pages) {
   }
 }
 
+// Workers static assets refuse a file over 25 MiB.
+const MAX_ASSET = 25 * 1024 * 1024;
+let largest = { file: "", size: 0 };
+for (const file of rel) {
+  const { size } = await stat(path.join(out, file));
+  if (size > largest.size) largest = { file, size };
+  if (size > MAX_ASSET) {
+    problems.push(
+      `over 25 MiB, which Workers does not serve: /${file} (${size} bytes)`,
+    );
+  }
+}
+
 console.log(
   `${rel.size} files, ${pages.length} pages, ${links} internal links`,
+);
+console.log(
+  `largest file: /${largest.file}, ${(largest.size / 1048576).toFixed(1)} MiB`,
 );
 for (const p of problems) console.log(p);
 if (problems.length > 0) {

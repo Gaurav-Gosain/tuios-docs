@@ -638,6 +638,16 @@ if (import.meta.main) {
   const anchorsFile = path.join(site, "lib/reference/anchors.json");
   await mkdir(path.dirname(anchorsFile), { recursive: true });
   await writeFile(anchorsFile, `${JSON.stringify(moved, null, 2)}\n`);
+  // The search index takes only the headings of these pages
+  // (app/api/search.json/route.ts).
+  await writeFile(
+    path.join(site, "lib/reference/pages.json"),
+    `${JSON.stringify(
+      pages.map((p) => p.slug),
+      null,
+      2,
+    )}\n`,
+  );
   for (const { page, parts } of built) {
     console.log(
       `wrote ${parts.length === 1 ? `content/docs/${page.slug}.mdx` : `${parts.length} pages in content/docs/${page.slug}/`} from ${page.source}`,
