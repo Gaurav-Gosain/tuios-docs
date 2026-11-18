@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Writes the three data files behind the reference widgets from a tuios
-# checkout, so they match the tuios commit the site pins:
+# Writes the reference pages and the three data files behind the reference
+# widgets from a tuios checkout, so they match the tuios commit the site pins.
+# scripts/reference-docs.mjs writes the pages from the docs of the checkout.
+# The data files:
 #
 #   lib/commands/commands.json     the command finder (/docs/commands)
 #   lib/options/options.json       the option explorer (/docs/config-options)
@@ -64,10 +66,15 @@ wait "$daemon" 2>/dev/null || true
 daemon=
 
 targets=(lib/commands/commands.json lib/options/options.json lib/keybindings/defaults.json)
+pages=(cli-reference configuration option-reference keybindings default-keys control-protocol protocol-verbs)
+for p in "${pages[@]}"; do targets+=("content/docs/$p.mdx"); done
 if ((check)); then
   for t in "${targets[@]}"; do cp "$site/$t" "$work/$(basename "$t").before"; done
 fi
 
+# The reference pages first: commands.mjs links each command to its heading
+# on the CLI reference page.
+bun "$site/scripts/reference-docs.mjs" "$src" "$ref"
 bun "$site/scripts/commands.mjs" "$work/help.json" "$ref"
 bun "$site/scripts/options.mjs" "$work/options.json" "$ref"
 bun "$site/scripts/keybindings.mjs" "$work/darwin.json" "$work/linux.json" "$ref"
