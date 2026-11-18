@@ -125,8 +125,20 @@ shot_files() {
 # widths SCENE_DIR: the widths of the 1x files, from "display" in scene.json.
 widths() { jq -r '.display // [702, 834] | .[]' "$1/scene.json"; }
 
+# libshots: tools/libshots, built once per run. Its frame command draws an
+# ANSI capture in the window card every docs shot wears (see capture_format
+# in media/rig.py).
+libshots=
+libshots() {
+  if [[ -z $libshots ]]; then
+    libshots=$build/libshots
+    (cd "$root/tools/libshots" && GOWORK=off run go build -o "$libshots" .)
+  fi
+  "$libshots" "$@"
+}
+
 shot_scene() { # NAME
-  local name=$1 dir=$media/scenes/$1 theme suffix shot
+  local name=$1 dir=$media/scenes/$1 theme suffix shot light cols rows
   local themes display
   mapfile -t display < <(widths "$dir")
   mapfile -t themes < <(jq -r '.themes // ["catppuccin_mocha"] | .[]' "$dir/scene.json")
@@ -134,7 +146,21 @@ shot_scene() { # NAME
     suffix=
     [[ $theme == *latte* || $theme == *light* || $theme == *day* ]] && suffix=-light
     rig "$dir" "$build/$name$suffix" --theme "$theme"
+    light=()
+    [[ -n $suffix ]] && light=(-light)
+    cols=$(jq -r '.cols' "$dir/scene.json")
+    rows=$(jq -r '.rows' "$dir/scene.json")
     for shot in $(jq -r '.shots[]' "$dir/scene.json"); do
+      if [[ -f $build/$name$suffix/$shot.ans ]]; then
+        # A shot must show no folder of the machine that made it. The
+        # "Saved to" notice of an earlier capture names one.
+        if grep -qE "Saved to|$HOME" "$build/$name$suffix/$shot.ans"; then
+          echo "docs-media: $name$suffix/$shot shows a local path. Wait longer before the screenshot." >&2
+          exit 1
+        fi
+        libshots frame -in "$build/$name$suffix/$shot.ans" -out "$build/$name$suffix/$shot.png" \
+          -cols "$cols" -rows "$rows" -font "$DOCS_MEDIA_FONT" -bold "$DOCS_MEDIA_FONT_BOLD" "${light[@]}"
+      fi
       shot_files "$build/$name$suffix/$shot.png" "$root/public/shots/$shot$suffix" "${display[@]}"
       echo "shot: public/shots/$shot$suffix.webp"
     done
