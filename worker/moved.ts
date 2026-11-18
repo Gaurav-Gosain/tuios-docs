@@ -6,6 +6,10 @@
 export const MOVED: Record<string, string> = {
   // The notes on unreleased work since v0.7.0 became the v0.8.0 notes.
   "/releases/since-v0-7-0": "/releases/v0-8-0",
+  // The v0.13 summary and upgrade pages were removed. The release notes at
+  // /releases/v0-13-1 hold the same changes.
+  "/docs/whats-new": "/docs",
+  "/docs/upgrading-to-v0-13-0": "/docs",
 };
 
 /**
