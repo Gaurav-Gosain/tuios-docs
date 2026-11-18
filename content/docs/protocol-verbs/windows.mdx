@@ -1,0 +1,360 @@
+---
+title: "Windows"
+description: "Windows: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `close-window` <Since verb="close-window" /> [#close-window]
+
+Close a window.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+
+```json
+{"id":1,"verb":"close-window","params":{"session":"work","window":"build"}}
+```
+
+## `close-workspace` <Since verb="close-workspace" /> [#close-workspace]
+
+Close every pane on a workspace, like tmux kill-window. Scratch panes stay unless the workspace named is their scratch workspace. A pane that calls it needs the admin grant.
+
+| Param       | Type   | Required | Default | Description                                                                                                              |
+| ----------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`   | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `workspace` | int    |          |         | Workspace whose panes to close. Omit for the current one.                                                                |
+
+| Result field | Type      | Description                                           |
+| ------------ | --------- | ----------------------------------------------------- |
+| `workspace`  | int       | The workspace whose panes were closed.                |
+| `closed`     | \[]string | Ids of the windows that were closed, in window order. |
+
+```json
+{"id":1,"verb":"close-workspace","params":{"session":"work","workspace":2}}
+```
+
+## `focus-window` <Since verb="focus-window" /> [#focus-window]
+
+Move the focus to a pane. Pass exactly one of window, relative or direction.
+
+| Param       | Type   | Required | Default | Description                                                                                                              |
+| ----------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`   | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`    | string |          |         | Window id or name to focus. Switches to that window's workspace.                                                         |
+| `relative`  | string |          |         | Focus the next or previous window on the current workspace. One of `next` or `prev`.                                     |
+| `direction` | string |          |         | Focus the neighbouring pane in this direction. Needs an attached client. One of `left`, `right`, `up` or `down`.         |
+
+| Result field        | Type   | Description                                                            |
+| ------------------- | ------ | ---------------------------------------------------------------------- |
+| `focused_window_id` | string | Id of the window that now has the focus.                               |
+| `current_workspace` | int    | Workspace now showing.                                                 |
+| `window`            | object | The focused window's full row, in the same shape list-windows reports. |
+
+```json
+{"id":1,"verb":"focus-window","params":{"session":"work","window":"build"}}
+```
+
+```json
+{"id":1,"verb":"focus-window","params":{"session":"work","relative":"next"}}
+```
+
+## `get-window` <Since verb="get-window" /> [#get-window]
+
+Describe one window, as the client protocol's GetWindow does: an attached client answers with its cursor and process fields, and with none attached the daemon answers with the window's list-windows entry. It is a read, which a pane holding read may call on its own session.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+
+| Result field   | Type   | Description                                               |
+| -------------- | ------ | --------------------------------------------------------- |
+| `window_id`    | string | Id of the window.                                         |
+| `display_name` | string | Its name as shown: the custom name, or the shell's title. |
+| `agent_state`  | string | Its agent state.                                          |
+
+```json
+{"id":1,"verb":"get-window","params":{"session":"work"}}
+```
+
+## `list-windows` <Since verb="list-windows" /> [#list-windows]
+
+List the windows in a session. The list carries shell, the base name of the shell a new pane in the session runs. Each window carries a host when its process runs on another machine, and omits it when the process is on this one. A window whose shell marks its commands with OSC 133 also carries at\_prompt, command\_seq, marks\_commands (the shell has sent a command-start mark), prompt\_marks\_only when it ran a command without one, running\_cmdline while a command runs, and last\_cmdline, last\_exit\_code and last\_duration\_ms once one has finished. A pane given grants of its own carries them as grants; a pane on the default of \[agents.permissions] omits it. A pane whose process runs on this machine carries pid, the process it started, and tty, its terminal device. A zoomed window carries zoomed, and a floating window carries floating. A window whose program named itself with OSC 1 carries icon\_name, the name an unnamed workspace shows while the window is its active one.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `rail`    | bool   |          | `false` | Also list the rail pane, the pane a client draws in its rail's pane section. It carries rail, the command line it runs.  |
+
+```json
+{"id":1,"verb":"list-windows","params":{"session":"work"}}
+```
+
+## `move-window` <Since verb="move-window" /> [#move-window]
+
+Move a window to another workspace, or with to\_session to another session, or with beside next to another pane. The program in the window keeps running, and the window keeps its id and its scrollback.
+
+| Param        | Type   | Required | Default | Description                                                                                                                                                                                            |
+| ------------ | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`    | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                               |
+| `window`     | string |          |         | Window to move. Omit to move the focused one.                                                                                                                                                          |
+| `workspace`  | int    |          |         | Workspace number to move the window to. Required without to\_session. With to\_session, omit it to use the workspace the destination shows.                                                            |
+| `follow`     | bool   |          | `false` | Switch to that workspace after moving. With to\_session, focus the window in the destination.                                                                                                          |
+| `to_session` | string |          |         | Session to move the window to, by name or id. A popup, a scratch pane, a TML pane and a pane on another machine cannot move (pane\_not\_movable). The window's own session is refused (same\_session). |
+| `beside`     | string |          |         | Pane to put the window next to, in the layout of that pane's workspace. Without window, the caller's own pane moves. Not with workspace, to\_session or follow. Works with no client attached.         |
+| `side`       | string |          | `right` | With beside: the side of that pane the window takes. One of `left`, `right`, `up` or `down`.                                                                                                           |
+| `ratio`      | int    |          |         | With beside: the window's share of the space, in percent, from 1 to 99. Omit for an even split.                                                                                                        |
+
+| Result field        | Type   | Description                                                                               |
+| ------------------- | ------ | ----------------------------------------------------------------------------------------- |
+| `window_id`         | string | Id of the window that moved. A move to another session keeps it.                          |
+| `session`           | string | Session the window is in now.                                                             |
+| `from_session`      | string | Session the window left. Only with to\_session.                                           |
+| `from_workspace`    | int    | Workspace it was on.                                                                      |
+| `workspace`         | int    | Workspace it is on now.                                                                   |
+| `current_workspace` | int    | Workspace the window's session shows after the call. It changes only when follow is true. |
+
+```json
+{"id":1,"verb":"move-window","params":{"session":"work","window":"build","workspace":2,"follow":true}}
+```
+
+```json
+{"id":1,"verb":"move-window","params":{"session":"work","window":"build","to_session":"review"}}
+```
+
+```json
+{"id":1,"verb":"move-window","params":{"session":"work","window":"review","beside":"build","side":"down","ratio":30}}
+```
+
+## `new-window` <Since verb="new-window" /> [#new-window]
+
+Create a new window, optionally on a named workspace and in a named directory.
+
+| Param               | Type      | Required | Default    | Description                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------- | --------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`           | string    |          |            | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                                                                                                                            |
+| `name`              | string    |          |            | Name for the new window. Omit to use the shell's title.                                                                                                                                                                                                                                                                                                                                                             |
+| `workspace`         | int       |          |            | Workspace number to create the window on. Omit for the calling pane's workspace, else the one the session shows.                                                                                                                                                                                                                                                                                                    |
+| `cwd`               | string    |          |            | Directory to start the shell in. Omit to use the calling pane's directory, or outside a pane the focused pane's.                                                                                                                                                                                                                                                                                                    |
+| `focus`             | bool      |          | `true`     | Focus the new window. Pass false to leave the focus where it is.                                                                                                                                                                                                                                                                                                                                                    |
+| `command`           | \[]string |          |            | Argv to exec as the window's process instead of a shell. No shell parses it, so nothing needs quoting. The window closes when the program exits, unless keep\_open is set.                                                                                                                                                                                                                                          |
+| `host`              | string    |          |            | Run the window's process on another machine, named as it is in the \[hosts] config table. The window belongs to this session and is drawn and sized here; only the process is there. Omit, or pass "local", for this machine.                                                                                                                                                                                       |
+| `grants`            | \[]string |          |            | What the new pane may do through tuios: read, write, fan, respond, admin, or none. Omit for the default of \[agents.permissions], or, from a pane without admin, the calling pane's own grants. A pane may give only what it holds, and admin does not include respond. A window on another machine holds what that machine gives it. One of `read`, `write`, `fan`, `respond`, `files`, `task`, `admin` or `none`. |
+| `close_on_exit`     | bool      |          | `false`    | Close the window when its process exits, also with no client attached. Without it, a detached session keeps a window whose process exited until something closes it.                                                                                                                                                                                                                                                |
+| `keep_open`         | bool      |          | `false`    | Keep the window after its process exits. The window shows a line with the exit status under the last output, and stays until something closes it. Cannot be used with close\_on\_exit.                                                                                                                                                                                                                              |
+| `wait`              | bool      |          | `false`    | Answer when the process exits, with exit\_code. Use keep\_open too to read the output after the exit. Not for a window on another machine.                                                                                                                                                                                                                                                                          |
+| `timeout`           | int       |          | `0`        | With wait: milliseconds to wait before failing with the timeout code. 0 waits with no limit.                                                                                                                                                                                                                                                                                                                        |
+| `kind`              | string    |          | `terminal` | What draws the window: terminal, or view, web or app for a window a native renderer (tuios-gpui) draws itself. Such a window runs a placeholder that shows its uri in a terminal client. One of `terminal`, `view`, `web` or `app`.                                                                                                                                                                                 |
+| `uri`               | string    |          |            | What a view, web or app window shows, such as tuios\://review/\<pane> or a page. Needed for those kinds.                                                                                                                                                                                                                                                                                                            |
+| `env`               | object    |          |            | Environment variables for the window's process, name to value, on top of the daemon's. TUIOS\_ names, TMUX and TMUX\_PANE are refused, and a call from another machine may not pass env. Not for a window on another machine. Not saved: a restored pane starts without it.                                                                                                                                         |
+| `shell_integration` | string    |          |            | Whether the pane's bash or zsh starts with OSC 133 prompt marks on: auto or off. Omit it to use \[shell] integration. Has no effect on a window that runs a command. Not saved: a restored pane uses the config. One of `auto` or `off`.                                                                                                                                                                            |
+
+| Result field | Type   | Description                                                                                                                                              |
+| ------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `window_id`  | string | Id of the new window. Use it to address the window in later calls.                                                                                       |
+| `host`       | string | The machine the window's process runs on. Omitted for a window on this machine.                                                                          |
+| `name`       | string | The window's name, generated when none was given.                                                                                                        |
+| `workspace`  | int    | Workspace the window was created on.                                                                                                                     |
+| `pty_id`     | string | Id of the window's PTY.                                                                                                                                  |
+| `focused`    | bool   | Whether the window took the focus.                                                                                                                       |
+| `unplaced`   | bool   | True while the window's geometry is a placeholder. An attached client replaces it. On a detached session it stays true and the reported size is nominal. |
+| `keep_open`  | bool   | True when the window stays after its process exits. Omitted otherwise. A daemon that does not know keep\_open omits it too.                              |
+| `exit_code`  | int    | With wait: the process's exit status, -1 when a signal ended it.                                                                                         |
+| `signal`     | int    | With wait: the signal that ended the process. Omitted when it exited on its own.                                                                         |
+
+```json
+{"id":1,"verb":"new-window","params":{"session":"work","name":"build"}}
+```
+
+```json
+{"id":1,"verb":"new-window","params":{"session":"work","name":"tests","workspace":2,"cwd":"/src/api","focus":false}}
+```
+
+```json
+{"id":1,"verb":"new-window","params":{"session":"work","name":"htop","command":["/usr/bin/htop"]}}
+```
+
+```json
+{"id":1,"verb":"new-window","params":{"session":"work","name":"tests","focus":false,"command":["sh","-c","make test"],"keep_open":true,"wait":true}}
+```
+
+## `pip` <Since verb="pip" /> [#pip]
+
+Pin a pane as the attached client's picture-in-picture view: a small live copy of the pane in a corner of the screen while another pane has the focus. Naming the pinned pane again unpins it. The view belongs to the client, not the session, and needs an attached client.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name to pin. Omit to pin the client's focused pane, or to unpin it when it is the pinned one.               |
+| `off`     | bool   |          | `false` | Unpin whatever is pinned. Takes no window.                                                                               |
+
+| Result field | Type   | Description                                          |
+| ------------ | ------ | ---------------------------------------------------- |
+| `pinned`     | bool   | Whether a pane is pinned now.                        |
+| `window_id`  | string | Id of the pinned pane, empty when nothing is pinned. |
+
+```json
+{"id":1,"verb":"pip","params":{"session":"work","window":"build"}}
+```
+
+```json
+{"id":1,"verb":"pip","params":{"off":true}}
+```
+
+## `popup` <Since verb="popup" /> [#popup]
+
+Open a popup: a floating pane that runs one command and closes when the command exits. Needs an attached client.
+
+| Param            | Type      | Required | Default | Description                                                                                                                                                                                                                              |
+| ---------------- | --------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`        | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                 |
+| `command`        | \[]string | yes      |         | Argv to run in the popup. No shell parses it, so nothing needs quoting. The popup closes when the program exits.                                                                                                                         |
+| `width`          | string    |          | `80%`   | Popup width, in cells ("60") or as a share of the pane region ("60%").                                                                                                                                                                   |
+| `height`         | string    |          | `60%`   | Popup height, in cells ("20") or as a share of the pane region ("50%").                                                                                                                                                                  |
+| `dim`            | int       |          |         | Percent to dim the screen behind this popup, 0 to 90. Omit to inherit appearance.popup\_dim (default 0); explicit 0 disables it. Scratch panes are unchanged.                                                                            |
+| `name`           | string    |          |         | Name for the popup. Omit to use the program's title.                                                                                                                                                                                     |
+| `cwd`            | string    |          |         | Directory to run the command in. Omit to inherit the daemon's.                                                                                                                                                                           |
+| `cwd_from`       | string    |          |         | A window whose folder the command runs in, read from its process when the call comes. It wins over cwd, which is the folder when the read gives none.                                                                                    |
+| `workspace`      | int       |          |         | Workspace to open the popup on. Omit for the current one.                                                                                                                                                                                |
+| `wait`           | bool      |          | `false` | Keep the call open until the command exits, and return its exit\_code in a popup\_result.                                                                                                                                                |
+| `capture_stdout` | bool      |          | `false` | With wait: send the command's standard output to a pipe the daemon reads instead of the popup, and return it as stdout. A picker such as fzf draws on the terminal and prints only the choice, so the choice comes back. Not on Windows. |
+| `timeout`        | int       |          | `0`     | With wait: milliseconds to wait before failing with the timeout code. The popup stays open. 0 waits as long as it is open.                                                                                                               |
+| `scratch_name`   | string    |          |         | With scratch: the scratch pane's name. A session has one scratch pane per name. Empty is the built-in scratch terminal.                                                                                                                  |
+| `scratch`        | bool      |          | `false` | Open the session's scratch terminal, the popup the toggle\_scratch key shows and hides. command is optional and defaults to the shell. A session has one scratch terminal.                                                               |
+
+| Result field       | Type   | Description                                                                                 |
+| ------------------ | ------ | ------------------------------------------------------------------------------------------- |
+| `exit_code`        | int    | With wait: the command's exit status, -1 when a signal ended it, as closing the popup does. |
+| `stdout`           | string | With capture\_stdout: what the command printed to standard output, at most 1 MiB.           |
+| `stdout_truncated` | bool   | With capture\_stdout: true when the output was cut to 1 MiB.                                |
+| `window_id`        | string | Id of the popup. Use it to address the popup in later calls.                                |
+| `name`             | string | The popup's name, generated when none was given.                                            |
+| `workspace`        | int    | Workspace the popup was opened on.                                                          |
+| `pty_id`           | string | Id of the popup's PTY.                                                                      |
+| `width`            | string | The width the popup uses, with the default filled in.                                       |
+| `height`           | string | The height the popup uses, with the default filled in.                                      |
+
+```json
+{"id":1,"verb":"popup","params":{"session":"work","command":["fzf"]}}
+```
+
+```json
+{"id":1,"verb":"popup","params":{"session":"work","command":["htop"],"width":"90%","height":"80%"}}
+```
+
+```json
+{"id":1,"verb":"popup","params":{"session":"work","command":["fzf"],"wait":true,"capture_stdout":true}}
+```
+
+## `resize` <Since verb="resize" /> [#resize]
+
+Resize a window's PTY.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+| `width`   | int    | yes      |         | New width in columns. Must be positive.                                                                                  |
+| `height`  | int    | yes      |         | New height in rows. Must be positive.                                                                                    |
+
+```json
+{"id":1,"verb":"resize","params":{"session":"work","width":120,"height":40}}
+```
+
+## `screenshot` <Since verb="screenshot" /> [#screenshot]
+
+Render a window to an image file.
+
+| Param        | Type   | Required | Default  | Description                                                                                                              |
+| ------------ | ------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`    | string |          |          | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`     | string |          |          | Window id or name. Omit to target the focused window.                                                                    |
+| `format`     | string |          | `png`    | Output format. One of `png`, `svg`, `ansi`, `html` or `txt`.                                                             |
+| `frame`      | string |          | `window` | Dressing around the capture. One of `window`, `plain` or `none`.                                                         |
+| `theme`      | string |          |          | Render in this theme instead of the session's. Truecolor cells are unchanged by it.                                      |
+| `scrollback` | bool   |          | `false`  | Put the pane's history above the screen in the picture.                                                                  |
+| `lines`      | int    |          |          | Bound the history rows to the last N. Needs scrollback.                                                                  |
+| `cursor`     | bool   |          | `false`  | Draw the cursor cell.                                                                                                    |
+| `out`        | string |          |          | Write here instead of generating a name under screenshot.directory. A linked machine cannot set it.                      |
+
+| Result field | Type      | Description                                                                           |
+| ------------ | --------- | ------------------------------------------------------------------------------------- |
+| `path`       | string    | The file that was written.                                                            |
+| `host`       | string    | The machine the path is on: daemon or client.                                         |
+| `format`     | string    | The format that was rendered.                                                         |
+| `cols`       | int       | Grid width in cells.                                                                  |
+| `rows`       | int       | Grid height in cells, history included.                                               |
+| `bytes`      | int       | Size of the written file.                                                             |
+| `warnings`   | \[]string | Anything the render had to guess or fall back on. Empty when there is nothing to say. |
+
+```json
+{"id":1,"verb":"screenshot","params":{"session":"work","window":"build","format":"svg"}}
+```
+
+## `set-window` <Since verb="set-window" /> [#set-window]
+
+Change a window's name or minimized state. Pass only the fields to change.
+
+| Param       | Type   | Required | Default | Description                                                                                                              |
+| ----------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`   | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`    | string |          |         | Window to change. Omit for the focused one.                                                                              |
+| `name`      | string |          |         | New name. Pass an empty string to clear it and fall back to the shell's title.                                           |
+| `minimized` | bool   |          |         | Minimize the window, or restore it.                                                                                      |
+
+| Result field   | Type   | Description                                                  |
+| -------------- | ------ | ------------------------------------------------------------ |
+| `window_id`    | string | Id of the window that changed.                               |
+| `display_name` | string | The name shown now. After a clear this is the shell's title. |
+| `minimized`    | bool   | Whether it is minimized now.                                 |
+
+```json
+{"id":1,"verb":"set-window","params":{"session":"work","window":"build","name":"api tests","minimized":false}}
+```
+
+## `split-window` <Since verb="split-window" /> [#split-window]
+
+Split a pane and put a new one beside it. Works with no client attached, and turns tiling on when it is off. The new pane opens on the workspace of the pane it cuts, and starts in the caller's directory when cwd is left out.
+
+| Param               | Type      | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`           | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                                                                                                                            |
+| `window`            | string    |          |         | Window to split. Omit to split the caller's own pane, or outside a pane the focused one.                                                                                                                                                                                                                                                                                                                            |
+| `direction`         | string    |          |         | Axis to cut on. The new pane goes right or below. Pass this or side. One of `horizontal` or `vertical`.                                                                                                                                                                                                                                                                                                             |
+| `side`              | string    |          |         | Side of the pane the new pane takes. Pass this or direction. One of `left`, `right`, `up` or `down`.                                                                                                                                                                                                                                                                                                                |
+| `ratio`             | int       |          |         | The new pane's share of the space, in percent, from 1 to 99. Omit for an even split.                                                                                                                                                                                                                                                                                                                                |
+| `name`              | string    |          |         | Name for the new window.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `command`           | \[]string |          |         | Argv to run in the new pane instead of a shell, as for new-window.                                                                                                                                                                                                                                                                                                                                                  |
+| `cwd`               | string    |          |         | Directory to start in, as for new-window.                                                                                                                                                                                                                                                                                                                                                                           |
+| `focus`             | bool      |          | `true`  | Focus the new pane. Pass false to leave the focus where it is.                                                                                                                                                                                                                                                                                                                                                      |
+| `keep_open`         | bool      |          | `false` | Keep the pane after its process exits, as for new-window.                                                                                                                                                                                                                                                                                                                                                           |
+| `close_on_exit`     | bool      |          | `false` | Close the pane when its process exits, as for new-window.                                                                                                                                                                                                                                                                                                                                                           |
+| `env`               | object    |          |         | Environment variables for the pane's process, as for new-window.                                                                                                                                                                                                                                                                                                                                                    |
+| `host`              | string    |          |         | Run the pane's process on another machine, as for new-window.                                                                                                                                                                                                                                                                                                                                                       |
+| `shell_integration` | string    |          |         | Whether the pane's shell starts with OSC 133 prompt marks on, as for new-window. One of `auto` or `off`.                                                                                                                                                                                                                                                                                                            |
+| `grants`            | \[]string |          |         | What the new pane may do through tuios: read, write, fan, respond, admin, or none. Omit for the default of \[agents.permissions], or, from a pane without admin, the calling pane's own grants. A pane may give only what it holds, and admin does not include respond. A window on another machine holds what that machine gives it. One of `read`, `write`, `fan`, `respond`, `files`, `task`, `admin` or `none`. |
+
+| Result field | Type   | Description                                      |
+| ------------ | ------ | ------------------------------------------------ |
+| `window_id`  | string | Id of the pane the split created.                |
+| `direction`  | string | The axis that was cut.                           |
+| `side`       | string | The side the new pane took.                      |
+| `name`       | string | The new pane's name.                             |
+| `workspace`  | int    | Workspace the new pane is on.                    |
+| `unplaced`   | bool   | True while a client has still to place the pane. |
+
+```json
+{"id":1,"verb":"split-window","params":{"session":"work","window":"build","direction":"vertical","name":"logs"}}
+```
+
+```json
+{"id":2,"verb":"split-window","params":{"session":"work","window":"build","side":"down","ratio":30,"focus":false,"command":["tail","-f","app.log"]}}
+```

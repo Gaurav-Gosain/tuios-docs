@@ -11,12 +11,13 @@
  *   bun scripts/commands.mjs help.json <tuios commit>
  *
  * Each command keeps its path, usage line, short line, aliases and own flags.
- * `doc` links it to its section of content/docs/cli-reference.mdx: the
- * heading named by the longest part of its path, so `tuios task attach`
- * goes to the task section until it has a heading of its own.
+ * `doc` links it to its section of the CLI reference (content/docs/cli-reference/,
+ * one page per command group): the heading named by the longest part of its
+ * path, so `tuios task attach` goes to the task section until it has a heading
+ * of its own. lib/reference/anchors.json says which page holds each heading.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const [reportPath, ref] = process.argv.slice(2);
 if (!reportPath || !ref) {
@@ -40,14 +41,27 @@ function slug(text) {
 }
 
 // Headings of the CLI reference: their text, without badges or code marks,
-// and their anchor.
-const page = new URL("../content/docs/cli-reference.mdx", import.meta.url);
+// and their anchor. The pages are read in the order of the sidebar.
+const dir = new URL("../content/docs/cli-reference/", import.meta.url);
+const pageFiles = existsSync(dir)
+  ? JSON.parse(readFileSync(new URL("meta.json", dir), "utf8")).pages.map(
+      (p) => new URL(`${p}.mdx`, dir),
+    )
+  : [new URL("../content/docs/cli-reference.mdx", import.meta.url)];
+const moved =
+  JSON.parse(
+    readFileSync(
+      new URL("../lib/reference/anchors.json", import.meta.url),
+      "utf8",
+    ),
+  )["cli-reference"] ?? {};
 // A command a table names, such as `tuios plugins install` under Plugins,
 // goes to the section of its first mention.
 const anchors = new Map();
 const mentions = new Map();
 let current = "";
-for (const line of readFileSync(page, "utf8").split("\n")) {
+const lines = pageFiles.flatMap((f) => readFileSync(f, "utf8").split("\n"));
+for (const line of lines) {
   const m = line.match(/^#{2,4} (.+?)(?: \[#([^\]]+)\])?\s*$/);
   if (m) {
     const text = m[1]
@@ -88,7 +102,7 @@ function docFor(path) {
   for (const map of [anchors, mentions]) {
     for (let n = words.length; n > 0; n--) {
       const id = map.get(words.slice(0, n).join(" "));
-      if (id) return `/docs/cli-reference#${id}`;
+      if (id) return `${moved[id] ?? "/docs/cli-reference"}#${id}`;
     }
   }
   return undefined;

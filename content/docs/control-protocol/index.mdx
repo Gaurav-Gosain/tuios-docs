@@ -1,0 +1,518 @@
+---
+title: "Control Protocol"
+description: "Drive a TUIOS daemon from scripts and programs with line-delimited JSON on its socket."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+import { AnchorRedirect } from "@/components/mdx/anchor-redirect";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+These pages are `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md), at the version this site documents.
+
+<AnchorRedirect page="control-protocol" />
+
+**The pages of this reference:**
+
+- [Versioning and introspection](/docs/control-protocol/versioning)
+- [Verbs: Discovery](/docs/control-protocol/verbs-discovery)
+- [Verbs: Sessions](/docs/control-protocol/verbs-sessions)
+- [Verbs: Windows](/docs/control-protocol/verbs-windows)
+- [Verbs: Input and output](/docs/control-protocol/verbs-input-and-output)
+- [Verbs: Search](/docs/control-protocol/verbs-search)
+- [Verbs: Options, themes and the dock](/docs/control-protocol/verbs-options-themes-and-the-dock)
+- [Verbs: Agents and messages](/docs/control-protocol/verbs-agents-and-messages)
+- [Verbs: The Inbox, the queue and review](/docs/control-protocol/verbs-the-inbox-the-queue-and-review)
+- [Verbs: Files and worktrees](/docs/control-protocol/verbs-files-and-worktrees)
+- [Verbs: Other machines](/docs/control-protocol/verbs-other-machines)
+- [Verbs: Other verbs](/docs/control-protocol/verbs-other-verbs)
+- [Event stream](/docs/control-protocol/event-stream)
+
+The TUIOS daemon speaks a typed, line-delimited JSON control protocol over the
+same unix socket the interactive client uses. It is layered additively on top of
+the existing binary framing: a connection is classified as JSON or binary from
+its very first byte, so older clients (older tuios binaries, the SSH server, the
+web build) keep working unchanged while new tooling can drive the daemon with
+one JSON object per line.
+
+This is the stable, language agnostic surface for scripting, CI, and test
+harnesses. You can talk to it from a shell with a here-string and read replies
+with jq, no client library required.
+
+## Transport and framing [#transport-and-framing]
+
+- One request is one line of JSON terminated by a newline.
+- One response is one line of JSON terminated by a newline.
+- The daemon detects the protocol from the first byte of the connection. A JSON
+  client's first byte is `{` (or leading whitespace); a binary client's first
+  byte is the high byte of a length prefix, which is always `0x00` or `0x01` for
+  frames under the 16MB cap, so the two never collide.
+- A single request line is capped at 12 MiB. Requests are processed in order on a
+  connection; issue one request, read one response, then send the next. Run
+  independent requests concurrently by opening more than one connection.
+- The socket is protected by filesystem permissions (mode 0700). There is no
+  application level auth token; use SSH for remote access.
+
+## Connecting [#connecting]
+
+The protocol shares the socket the TUIOS client uses. There is no separate port and no handshake to negotiate: connect and write JSON. The daemon tells the two apart by the first byte, since a JSON request starts with `{` and a binary client frame never does.
+
+```bash
+if [ -n "$XDG_RUNTIME_DIR" ]; then
+  SOCK="$XDG_RUNTIME_DIR/tuios/tuios.sock"
+elif [ -S "/run/user/$(id -u)/tuios/tuios.sock" ]; then
+  SOCK="/run/user/$(id -u)/tuios/tuios.sock"
+else
+  SOCK="/tmp/tuios-$(id -u)/tuios.sock"
+fi
+
+printf '{"id":1,"verb":"list-sessions"}\n' | nc -U "$SOCK" | jq .
+```
+
+`socat - UNIX-CONNECT:"$SOCK"` works in place of `nc -U "$SOCK"`. The socket path for Windows is in [Sessions](/docs/sessions#daemon-location).
+
+You can send several requests on one connection. They are answered in order, one response line per request line. To run requests in parallel, open more connections.
+
+The socket is only accessible to your user: its directory is created with mode `0700`, and TUIOS refuses a directory that another user owns or that is a symlink. There is no token or password on top of that. What a program inside a pane may do over the socket is limited by the pane's [grants](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#what-a-pane-may-do).
+
+### Limits [#limits]
+
+The daemon limits the connections and the memory that clients can use.
+
+| Limit                                               | Value                                                                                            | What happens past it                                                                                                                                                                    |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connections on the main socket                      | 1024                                                                                             | The daemon sends a `too_many_connections` error and closes the connection.                                                                                                              |
+| Connections from panes, hooks and plugins, together | 896: 128 of the 1024 are kept for you                                                            | The daemon refuses the connection and says why. A program in a pane cannot take the connections that your own client and commands need.                                                 |
+| Connections from the programs of one pane           | 64                                                                                               | The daemon refuses the connection and says why. One pane cannot take the connections of the others.                                                                                     |
+| Connections on the link sockets, together           | 256                                                                                              | The same. Other machines cannot take the connections that your own clients need.                                                                                                        |
+| Memory for requests over 64 KiB                     | One budget for your own clients, and a smaller one for links and panes without the `admin` grant | The request waits up to 2 seconds. Then the daemon refuses it with `busy` and closes the connection.                                                                                    |
+| Length of one request line                          | 12 MiB                                                                                           | The daemon refuses the request with `invalid_request` and closes the connection.                                                                                                        |
+| Large writes to one pane                            | One at a time                                                                                    | A queued write waits for the write ahead of it. When the write ahead has held the pane for 5 seconds and the pane still does not read, the daemon refuses the queued write with `busy`. |
+
+A TUIOS client takes a few connections. A command takes one connection while it runs. A request of 64 KiB or less, such as a key press, never waits for the memory budget.
+
+`busy` and `too_many_connections` are the only errors that can clear without a change to the request. When you get `busy`, the daemon did nothing. Wait a short time and send the request again. If the connection closed, open a new one first. When you get `too_many_connections`, close some clients or commands, then connect again.
+
+## Request envelope [#request-envelope]
+
+```json
+{"id": 1, "verb": "list-windows", "params": {"session": "work"}}
+```
+
+- `id` is opaque and optional. It may be a number or a string. The daemon echoes
+  it back verbatim on the matching response. Omit it and the response omits it.
+- `verb` is the verb name (required).
+- `params` is a verb specific object. It may be omitted when a verb takes no
+  parameters.
+
+## Response envelope [#response-envelope]
+
+A success response carries a `result` object:
+
+```json
+{"id": 1, "result": {"type": "window_list", "total": 2, "windows": [ ... ]}}
+```
+
+An error response carries an `error` object with a stable string `code`, a human
+readable `message`, and usually a structured `hint` naming what resolves the
+failure:
+
+```json
+{"id": 1, "error": {
+  "code": "session_not_found",
+  "message": "session wrok not found",
+  "hint": {
+    "param": "session",
+    "command": "tuios ls",
+    "did_you_mean": "work",
+    "available": ["notes", "work"],
+    "detail": "the name matches no live session. ..."
+  }
+}}
+```
+
+### The hint object [#the-hint-object]
+
+`hint` exists so a caller never has to guess what to do next, and never has to
+make a second call just to learn what values are legal. Every field is optional
+and omitted when empty, so a consumer that reads only `code` and `message` is
+unaffected.
+
+| Field          | Meaning                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `verb`         | The verb that resolves or explains the failure, e.g. `list-verbs` for an unknown verb.                       |
+| `command`      | The exact CLI command that resolves it, written to be run as-is. Placeholders are in `<angle brackets>`.     |
+| `param`        | The offending parameter, for `invalid_params` and anything that failed on one input.                         |
+| `accepted`     | The values `param` will take, when that set is closed.                                                       |
+| `did_you_mean` | The closest match to what the caller asked for, when one is close enough to suggest.                         |
+| `available`    | What does exist: session names, addressable windows, verb names, option keys.                                |
+| `detail`       | One sentence of context that does not fit the fields above.                                                  |
+| `missing`      | On a `forbidden` refusal over a link: the link capabilities the caller lacks, such as `files`.               |
+| `table`        | With `missing`: the config table on the refusing machine that grants them, such as `[hosts.laptop]`.         |
+| `host`         | With `missing`, when a daemon passes on a refusal it got from a host: that host's name on the caller's side. |
+
+A hint is advisory. Acting on `command` or `did_you_mean` is always optional, and
+the absence of a hint never changes what `code` means.
+
+Every `result` carries a `type` discriminator string so a generic client can
+dispatch on the result shape without tracking which verb it sent.
+
+Most verbs that name a session accept an empty or omitted `session`. From a
+caller inside a pane, it resolves to the pane's own session. From a caller
+outside every pane, it resolves to the most recently active session. The
+exceptions say so in their own `session` parameter description in `list-verbs`:
+
+- `subscribe` reads an omitted `session` as every session. Its `session` is a
+  filter, not a target.
+- `wait-for` with `session-exists` requires `session`, because it names the
+  session to wait for. `wait-for` with `agent-state` and `any_session` takes no
+  `session` and watches every session.
+- `kill-session` and `remove-worktree` require `session` and never guess.
+- `list-hooks`, `list-options`, `list-themes` and `list-glyphs` fall back to the
+  caller's session or the most recently active one, and to the daemon's defaults when there is no
+  session at all, rather than failing.
+
+## Calling a verb from a command [#calling-a-verb-from-a-command]
+
+A program that can start a process but cannot write to the socket uses `tuios call`. It sends one verb and prints the reply as JSON.
+
+```bash
+tuios call list-sessions
+tuios call list-windows '{"session":"work"}'
+```
+
+The daemon checks the call as it checks any request on the socket. `call` refuses the verbs that hold the connection open. See [`call`](/docs/cli-reference/inspection-commands#tuios-call) in the CLI reference.
+
+## Verbs by topic [#verbs-by-topic]
+
+The verbs, grouped by what they do. [protocol-verbs.md](/docs/protocol-verbs) lists each verb with its parameters, its reply and an example. `tuios list-verbs` lists the verbs of the binary you talk to.
+
+### Discovery [#discovery]
+
+[`hello`](/docs/protocol-verbs/discovery#hello), [`list-verbs`](/docs/protocol-verbs/discovery#list-verbs).
+
+### Sessions [#sessions]
+
+[`list-sessions`](/docs/protocol-verbs/sessions#list-sessions), [`list-clients`](/docs/protocol-verbs/sessions#list-clients), [`new-session`](/docs/protocol-verbs/sessions#new-session), [`switch-session`](/docs/protocol-verbs/sessions#switch-session), [`detach-client`](/docs/protocol-verbs/sessions#detach-client), [`ssh-agent-path`](/docs/protocol-verbs/sessions#ssh-agent-path), [`display-env`](/docs/protocol-verbs/sessions#display-env), [`session-info`](/docs/protocol-verbs/sessions#session-info), [`kill-session`](/docs/protocol-verbs/sessions#kill-session), [`rename-session`](/docs/protocol-verbs/sessions#rename-session), [`set-session-name`](/docs/protocol-verbs/sessions#set-session-name), [`set-session-accent`](/docs/protocol-verbs/sessions#set-session-accent), [`set-session-space`](/docs/protocol-verbs/sessions#set-session-space).
+
+### Windows [#windows]
+
+[`list-windows`](/docs/protocol-verbs/windows#list-windows), [`get-window`](/docs/protocol-verbs/windows#get-window), [`new-window`](/docs/protocol-verbs/windows#new-window), [`close-window`](/docs/protocol-verbs/windows#close-window), [`close-workspace`](/docs/protocol-verbs/windows#close-workspace), [`focus-window`](/docs/protocol-verbs/windows#focus-window), [`move-window`](/docs/protocol-verbs/windows#move-window), [`set-window`](/docs/protocol-verbs/windows#set-window), [`split-window`](/docs/protocol-verbs/windows#split-window), [`resize`](/docs/protocol-verbs/windows#resize), [`popup`](/docs/protocol-verbs/windows#popup), [`screenshot`](/docs/protocol-verbs/windows#screenshot), [`pip`](/docs/protocol-verbs/windows#pip).
+
+### Workspaces and layout [#workspaces-and-layout]
+
+[`list-workspaces`](/docs/protocol-verbs/workspaces-and-layout#list-workspaces), [`select-workspace`](/docs/protocol-verbs/workspaces-and-layout#select-workspace), [`set-workspace-name`](/docs/protocol-verbs/workspaces-and-layout#set-workspace-name), [`set-workspace-order`](/docs/protocol-verbs/workspaces-and-layout#set-workspace-order), [`set-layout`](/docs/protocol-verbs/workspaces-and-layout#set-layout), [`layout-template`](/docs/protocol-verbs/workspaces-and-layout#layout-template), [`run-command`](/docs/protocol-verbs/workspaces-and-layout#run-command).
+
+### Input and output [#input-and-output]
+
+[`send-text`](/docs/protocol-verbs/input-and-output#send-text), [`paste-image`](/docs/protocol-verbs/input-and-output#paste-image), [`send-keys`](/docs/protocol-verbs/input-and-output#send-keys), [`list-keys`](/docs/protocol-verbs/input-and-output#list-keys), [`capture-pane`](/docs/protocol-verbs/input-and-output#capture-pane), [`run`](/docs/protocol-verbs/input-and-output#run).
+
+### Search [#search]
+
+[`search-panes`](/docs/protocol-verbs/search#search-panes), [`command-history`](/docs/protocol-verbs/search#command-history), [`list-ports`](/docs/protocol-verbs/search#list-ports).
+
+Over a link, these verbs need `list`.
+
+### Options, themes and the dock [#options-themes-and-the-dock]
+
+[`list-options`](/docs/protocol-verbs/options-themes-and-the-dock#list-options), [`get-option`](/docs/protocol-verbs/options-themes-and-the-dock#get-option), [`apply-config`](/docs/protocol-verbs/options-themes-and-the-dock#apply-config), [`set-option`](/docs/protocol-verbs/options-themes-and-the-dock#set-option), [`list-themes`](/docs/protocol-verbs/options-themes-and-the-dock#list-themes), [`list-glyphs`](/docs/protocol-verbs/options-themes-and-the-dock#list-glyphs), [`list-hooks`](/docs/protocol-verbs/options-themes-and-the-dock#list-hooks), [`list-dock-components`](/docs/protocol-verbs/options-themes-and-the-dock#list-dock-components), [`refresh-dock`](/docs/protocol-verbs/options-themes-and-the-dock#refresh-dock).
+
+### Agents and messages [#agents-and-messages]
+
+[`list-agents`](/docs/protocol-verbs/agents-and-messages#list-agents), [`get-agent-state`](/docs/protocol-verbs/agents-and-messages#get-agent-state), [`set-agent-state`](/docs/protocol-verbs/agents-and-messages#set-agent-state), [`explain-agent-detect`](/docs/protocol-verbs/agents-and-messages#explain-agent-detect), [`agent-hook-event`](/docs/protocol-verbs/agents-and-messages#agent-hook-event), [`agent-statusline-event`](/docs/protocol-verbs/agents-and-messages#agent-statusline-event), [`explain-agent-screen`](/docs/protocol-verbs/agents-and-messages#explain-agent-screen), [`send-agent-message`](/docs/protocol-verbs/agents-and-messages#send-agent-message), [`read-agent-messages`](/docs/protocol-verbs/agents-and-messages#read-agent-messages), [`ask-agent`](/docs/protocol-verbs/agents-and-messages#ask-agent), [`ask-human`](/docs/protocol-verbs/agents-and-messages#ask-human), [`set-agent-meta`](/docs/protocol-verbs/agents-and-messages#set-agent-meta), [`set-agent-session`](/docs/protocol-verbs/agents-and-messages#set-agent-session), [`report-agent-activity`](/docs/protocol-verbs/agents-and-messages#report-agent-activity), [`agent-mail-notice`](/docs/protocol-verbs/agents-and-messages#agent-mail-notice), [`artifact-list`](/docs/protocol-verbs/agents-and-messages#artifact-list), [`agent-transcript`](/docs/protocol-verbs/agents-and-messages#agent-transcript), [`start-agent`](/docs/protocol-verbs/agents-and-messages#start-agent), [`resume-agent`](/docs/protocol-verbs/agents-and-messages#resume-agent), [`agent-activity`](/docs/protocol-verbs/agents-and-messages#agent-activity), [`resolve-pane`](/docs/protocol-verbs/agents-and-messages#resolve-pane), [`pane-grants`](/docs/protocol-verbs/agents-and-messages#pane-grants), [`set-pane-grants`](/docs/protocol-verbs/agents-and-messages#set-pane-grants), [`restrict-connection`](/docs/protocol-verbs/agents-and-messages#restrict-connection).
+
+### The Inbox, the queue and review [#the-inbox-the-queue-and-review]
+
+[`list-attention`](/docs/protocol-verbs/the-inbox-the-queue-and-review#list-attention), [`peek-prompt`](/docs/protocol-verbs/the-inbox-the-queue-and-review#peek-prompt), [`respond`](/docs/protocol-verbs/the-inbox-the-queue-and-review#respond), [`get-approval`](/docs/protocol-verbs/the-inbox-the-queue-and-review#get-approval), [`request-approval`](/docs/protocol-verbs/the-inbox-the-queue-and-review#request-approval), [`reply-approval`](/docs/protocol-verbs/the-inbox-the-queue-and-review#reply-approval), [`answer-ask`](/docs/protocol-verbs/the-inbox-the-queue-and-review#answer-ask), [`dismiss-attention`](/docs/protocol-verbs/the-inbox-the-queue-and-review#dismiss-attention), [`mark-attention`](/docs/protocol-verbs/the-inbox-the-queue-and-review#mark-attention), [`release-agent-message`](/docs/protocol-verbs/the-inbox-the-queue-and-review#release-agent-message), [`queue-prompt`](/docs/protocol-verbs/the-inbox-the-queue-and-review#queue-prompt), [`reply-history`](/docs/protocol-verbs/the-inbox-the-queue-and-review#reply-history), [`add-reply-history`](/docs/protocol-verbs/the-inbox-the-queue-and-review#add-reply-history), [`list-queued`](/docs/protocol-verbs/the-inbox-the-queue-and-review#list-queued), [`cancel-queued`](/docs/protocol-verbs/the-inbox-the-queue-and-review#cancel-queued), [`review-diff`](/docs/protocol-verbs/the-inbox-the-queue-and-review#review-diff), [`review-stage`](/docs/protocol-verbs/the-inbox-the-queue-and-review#review-stage), [`review-note`](/docs/protocol-verbs/the-inbox-the-queue-and-review#review-note), [`send-review`](/docs/protocol-verbs/the-inbox-the-queue-and-review#send-review), [`list-checkpoints`](/docs/protocol-verbs/the-inbox-the-queue-and-review#list-checkpoints), [`checkpoint-diff`](/docs/protocol-verbs/the-inbox-the-queue-and-review#checkpoint-diff), [`restore-checkpoint`](/docs/protocol-verbs/the-inbox-the-queue-and-review#restore-checkpoint).
+
+The verbs that act as the person need the nonce a client receives when it attaches, or the nonce of [`attach-presence`](/docs/control-protocol/verbs-other-machines#attach-presence). They refuse a caller inside a pane even when it has a copy.
+
+### Task cards [#task-cards]
+
+The verbs behind `tuios task` and the [task board](/docs/task-boards). A pane needs the `task` grant to change a card, and changes only the card it holds unless it holds `admin`.
+
+[`add-task`](/docs/protocol-verbs/task-cards#add-task), [`list-tasks`](/docs/protocol-verbs/task-cards#list-tasks), [`get-task`](/docs/protocol-verbs/task-cards#get-task), [`claim-task`](/docs/protocol-verbs/task-cards#claim-task), [`finish-task`](/docs/protocol-verbs/task-cards#finish-task), [`set-task-stage`](/docs/protocol-verbs/task-cards#set-task-stage), [`block-task`](/docs/protocol-verbs/task-cards#block-task), [`release-task`](/docs/protocol-verbs/task-cards#release-task), [`remove-task`](/docs/protocol-verbs/task-cards#remove-task), [`attach-task`](/docs/protocol-verbs/task-cards#attach-task), [`detach-task`](/docs/protocol-verbs/task-cards#detach-task), [`get-task-attachment`](/docs/protocol-verbs/task-cards#get-task-attachment), [`get-task-dispatch`](/docs/protocol-verbs/task-cards#get-task-dispatch).
+
+A pane attaches to the card it holds, and to the card it finished while that card waits in `verify` or `review`. A name already on the card with other content is `invalid_params` unless `replace` is set. With the same content it is left as it is and named in `unchanged`, so a retry succeeds. A state push never carries a card's attachments.
+
+### Files and worktrees [#files-and-worktrees]
+
+[`stash-put`](/docs/protocol-verbs/files-and-worktrees#stash-put), [`stash-get`](/docs/protocol-verbs/files-and-worktrees#stash-get), [`stash-list`](/docs/protocol-verbs/files-and-worktrees#stash-list), [`file-preview`](/docs/protocol-verbs/files-and-worktrees#file-preview), [`new-worktree`](/docs/protocol-verbs/files-and-worktrees#new-worktree), [`list-worktrees`](/docs/protocol-verbs/files-and-worktrees#list-worktrees), [`remove-worktree`](/docs/protocol-verbs/files-and-worktrees#remove-worktree), [`fan`](/docs/protocol-verbs/files-and-worktrees#fan), [`compare-fan`](/docs/protocol-verbs/files-and-worktrees#compare-fan), [`verify-fan`](/docs/protocol-verbs/files-and-worktrees#verify-fan), [`keep-fan`](/docs/protocol-verbs/files-and-worktrees#keep-fan), [`bundle-worktree`](/docs/protocol-verbs/files-and-worktrees#bundle-worktree), [`ship-commit`](/docs/protocol-verbs/files-and-worktrees#ship-commit), [`ship-merge`](/docs/protocol-verbs/files-and-worktrees#ship-merge), [`ship-push`](/docs/protocol-verbs/files-and-worktrees#ship-push), [`ship-pr`](/docs/protocol-verbs/files-and-worktrees#ship-pr), [`ship-status`](/docs/protocol-verbs/files-and-worktrees#ship-status).
+
+`ship-push` and `ship-pr` send nothing on the first call. They answer `confirm_required`: the hint's `available` lists what would be sent, and `confirm` carries a token. Call again with that token. A caller inside a pane or on a restricted connection also needs the person's `allow` in the Inbox, and the call waits for it (`wait`, default 120000 ms). See [Ship](/docs/ship) and [Checkpoints](/docs/checkpoints).
+
+### Other machines [#other-machines]
+
+[`list-hosts`](/docs/protocol-verbs/other-machines#list-hosts), [`list-host-sessions`](/docs/protocol-verbs/other-machines#list-host-sessions), [`list-host-agents`](/docs/protocol-verbs/other-machines#list-host-agents), [`open-host-connection`](/docs/protocol-verbs/other-machines#open-host-connection), [`stream-pane`](/docs/protocol-verbs/other-machines#stream-pane), [`attach-presence`](/docs/protocol-verbs/other-machines#attach-presence), [`register-push`](/docs/protocol-verbs/other-machines#register-push).
+
+### File transfers [#file-transfers]
+
+These verbs act on the files of the machine whose daemon answers them. To reach the files of another machine, send them on a connection from `open-host-connection`. That machine's [`files` policy](/docs/configuration#files-over-a-link) then decides. Every path is absolute or starts with `~`. A pane needs the `admin` grant to use them.
+
+[`file-stat`](/docs/protocol-verbs/file-transfers#file-stat), [`file-list`](/docs/protocol-verbs/file-transfers#file-list), [`file-read`](/docs/protocol-verbs/file-transfers#file-read), [`file-hash`](/docs/protocol-verbs/file-transfers#file-hash), [`file-walk`](/docs/protocol-verbs/file-transfers#file-walk), [`file-mkdir`](/docs/protocol-verbs/file-transfers#file-mkdir), [`file-rename`](/docs/protocol-verbs/file-transfers#file-rename), [`file-remove`](/docs/protocol-verbs/file-transfers#file-remove), [`open-file-stream`](/docs/protocol-verbs/file-transfers#open-file-stream), [`file-commit`](/docs/protocol-verbs/file-transfers#file-commit), [`file-drop-dir`](/docs/protocol-verbs/file-transfers#file-drop-dir), [`transfer-start`](/docs/protocol-verbs/file-transfers#transfer-start), [`transfer-list`](/docs/protocol-verbs/file-transfers#transfer-list), [`transfer-pause`](/docs/protocol-verbs/file-transfers#transfer-pause).
+
+A copy goes on after the client exits, after a dropped link and after a daemon restart. Each file is checked with sha256 before it is put in place, and keeps the permission bits and modification time of the original. A destination that exists answers `file_exists` unless the call passes `conflict`: `replace`, `keep-both`, `merge` (a folder into a folder) or `fail`. With `move`, the original is removed after every file is checked. Links, named pipes, sockets and devices in a folder are not copied. The row counts them in `skipped`. See [Remote Hosts](/docs/remote-hosts#copy-files-between-machines).
+
+More verbs, `open-pane`, `pane-agent`, `pane-cwd`, `resize-pane`, `read-dir`, `wait-dir`, `close-pane`, `pane-calls`, `paste-pane-image` and `link-peer`, are what one daemon calls on another to run a window's process on a different machine. You do not normally call them yourself.
+
+With `[agents] enabled = false`, every agent verb fails with `agents_disabled`, and so do the agent conditions of `wait-for`. See [Turn off agent features](/docs/agents-off).
+
+### Events and waiting [#events-and-waiting]
+
+[`subscribe`](/docs/protocol-verbs/events-and-waiting#subscribe), [`unsubscribe`](/docs/protocol-verbs/events-and-waiting#unsubscribe), [`wait-for`](/docs/protocol-verbs/events-and-waiting#wait-for).
+
+### Other verbs [#other-verbs]
+
+[`agent-message-receipts`](/docs/protocol-verbs/other-verbs#agent-message-receipts), [`agent-preset`](/docs/protocol-verbs/other-verbs#agent-preset), [`agent-readiness`](/docs/protocol-verbs/other-verbs#agent-readiness), [`clear-history`](/docs/protocol-verbs/other-verbs#clear-history), [`close-pane`](/docs/protocol-verbs/other-verbs#close-pane), [`daemon-upgrade`](/docs/protocol-verbs/other-verbs#daemon-upgrade), [`delegate`](/docs/protocol-verbs/other-verbs#delegate), [`delete-buffer`](/docs/protocol-verbs/other-verbs#delete-buffer), [`drop-files`](/docs/protocol-verbs/other-verbs#drop-files), [`exec`](/docs/protocol-verbs/other-verbs#exec), [`file-abort`](/docs/protocol-verbs/other-verbs#file-abort), [`file-check`](/docs/protocol-verbs/other-verbs#file-check), [`get-keep-awake`](/docs/protocol-verbs/other-verbs#get-keep-awake), [`get-note`](/docs/protocol-verbs/other-verbs#get-note), [`host-speed-test`](/docs/protocol-verbs/other-verbs#host-speed-test), [`judge-fan`](/docs/protocol-verbs/other-verbs#judge-fan), [`link-peer`](/docs/protocol-verbs/other-verbs#link-peer), [`list-buffers`](/docs/protocol-verbs/other-verbs#list-buffers), [`list-push`](/docs/protocol-verbs/other-verbs#list-push), [`list-recordings`](/docs/protocol-verbs/other-verbs#list-recordings), [`list-routes`](/docs/protocol-verbs/other-verbs#list-routes), [`mark-recording`](/docs/protocol-verbs/other-verbs#mark-recording), [`open-pane`](/docs/protocol-verbs/other-verbs#open-pane), [`open-tree-stream`](/docs/protocol-verbs/other-verbs#open-tree-stream), [`pane-agent`](/docs/protocol-verbs/other-verbs#pane-agent), [`pane-calls`](/docs/protocol-verbs/other-verbs#pane-calls), [`pane-cwd`](/docs/protocol-verbs/other-verbs#pane-cwd), [`pane-kitty-medium`](/docs/protocol-verbs/other-verbs#pane-kitty-medium), [`paste-buffer`](/docs/protocol-verbs/other-verbs#paste-buffer), [`paste-pane-image`](/docs/protocol-verbs/other-verbs#paste-pane-image), [`place-agent`](/docs/protocol-verbs/other-verbs#place-agent), [`plugin-cell`](/docs/protocol-verbs/other-verbs#plugin-cell), [`plugin-notify`](/docs/protocol-verbs/other-verbs#plugin-notify), [`rail-pane`](/docs/protocol-verbs/other-verbs#rail-pane), [`read-dir`](/docs/protocol-verbs/other-verbs#read-dir), [`record-pane`](/docs/protocol-verbs/other-verbs#record-pane), [`remove-push`](/docs/protocol-verbs/other-verbs#remove-push), [`report-program-status`](/docs/protocol-verbs/other-verbs#report-program-status), [`resize-pane`](/docs/protocol-verbs/other-verbs#resize-pane), [`resize-window`](/docs/protocol-verbs/other-verbs#resize-window), [`retry-host`](/docs/protocol-verbs/other-verbs#retry-host), [`run-task-verify`](/docs/protocol-verbs/other-verbs#run-task-verify), [`set-agent-quiet`](/docs/protocol-verbs/other-verbs#set-agent-quiet), [`set-buffer`](/docs/protocol-verbs/other-verbs#set-buffer), [`set-fan-verdict`](/docs/protocol-verbs/other-verbs#set-fan-verdict), [`set-keep-awake`](/docs/protocol-verbs/other-verbs#set-keep-awake), [`set-note`](/docs/protocol-verbs/other-verbs#set-note), [`set-session-order`](/docs/protocol-verbs/other-verbs#set-session-order), [`set-task-dispatch`](/docs/protocol-verbs/other-verbs#set-task-dispatch), [`show-buffer`](/docs/protocol-verbs/other-verbs#show-buffer), [`speed-test`](/docs/protocol-verbs/other-verbs#speed-test), [`stop-recording`](/docs/protocol-verbs/other-verbs#stop-recording), [`swap-window`](/docs/protocol-verbs/other-verbs#swap-window), [`tml-close`](/docs/protocol-verbs/other-verbs#tml-close), [`tml-get`](/docs/protocol-verbs/other-verbs#tml-get), [`tml-input`](/docs/protocol-verbs/other-verbs#tml-input), [`tml-list`](/docs/protocol-verbs/other-verbs#tml-list), [`tml-open`](/docs/protocol-verbs/other-verbs#tml-open), [`tml-patch`](/docs/protocol-verbs/other-verbs#tml-patch), [`tml-place`](/docs/protocol-verbs/other-verbs#tml-place), [`tml-replace`](/docs/protocol-verbs/other-verbs#tml-replace), [`tml-validate`](/docs/protocol-verbs/other-verbs#tml-validate), [`transfer-answer`](/docs/protocol-verbs/other-verbs#transfer-answer), [`transfer-cancel`](/docs/protocol-verbs/other-verbs#transfer-cancel), [`transfer-clear`](/docs/protocol-verbs/other-verbs#transfer-clear), [`transfer-resume`](/docs/protocol-verbs/other-verbs#transfer-resume), [`wait-dir`](/docs/protocol-verbs/other-verbs#wait-dir), [`zoom-window`](/docs/protocol-verbs/other-verbs#zoom-window).
+
+## Examples [#examples]
+
+```bash
+# Create a headless session and run a build in it
+printf '{"verb":"new-session","params":{"name":"ci"}}\n' | nc -U "$SOCK"
+printf '{"verb":"send-text","params":{"session":"ci","text":"make test\\n"}}\n' | nc -U "$SOCK"
+
+# Block until it finishes, then read the last 20 lines
+printf '{"verb":"wait-for","params":{"condition":"window-output","session":"ci","pattern":"(PASS|FAIL)","timeout":600000}}\n' | nc -U "$SOCK"
+printf '{"verb":"capture-pane","params":{"session":"ci","source":"recent","lines":20}}\n' \
+  | nc -U "$SOCK" | jq -r .result.content
+
+# Watch for bells and exits in every session
+printf '{"verb":"subscribe","params":{"types":["bell","window-exit"]}}\n' | nc -U "$SOCK" | jq -c .
+```
+
+## Error codes [#error-codes]
+
+| Code                        | Meaning                                                                                                                                                                                                                                                                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid_request`           | The line was not a valid request envelope (bad JSON, or missing verb).                                                                                                                                                                                                                                                                         |
+| `unknown_verb`              | No verb by that name.                                                                                                                                                                                                                                                                                                                          |
+| `invalid_params`            | The params failed to decode, or a required field was missing.                                                                                                                                                                                                                                                                                  |
+| `session_not_found`         | The named session does not exist (or no sessions exist).                                                                                                                                                                                                                                                                                       |
+| `session_exists`            | new-session was given a name the daemon already holds.                                                                                                                                                                                                                                                                                         |
+| `fan_exists`                | fan was given the name of a fan that exists in the repository, with no `join`. The hint lists the fan's sessions that the caller reaches.                                                                                                                                                                                                      |
+| `window_not_found`          | The window target did not resolve to a window.                                                                                                                                                                                                                                                                                                 |
+| `no_windows`                | The session has no windows to act on.                                                                                                                                                                                                                                                                                                          |
+| `pty_not_found`             | The target window has no live PTY.                                                                                                                                                                                                                                                                                                             |
+| `lease_expired`             | On a `stream-pane` connection, as an E frame: no L frame came within the lease time, so the lease on the pane's size was released.                                                                                                                                                                                                             |
+| `plugin_needs_approval`     | In a plugin's error (`tuios plugins list` and `tuios plugins info`): the plugin waits for the person's approval on this machine.                                                                                                                                                                                                               |
+| `plugin_admin_not_approved` | In a plugin's error: the approval on this machine does not cover the plugin's admin grant.                                                                                                                                                                                                                                                     |
+| `plugin_id_shadowed`        | In a plugin's error: another plugin with the same id was found first, so this copy does not run.                                                                                                                                                                                                                                               |
+| `needs_client`              | The verb needs a live renderer that is not attached.                                                                                                                                                                                                                                                                                           |
+| `option_not_found`          | No option by that path exists. The hint carries the closest match.                                                                                                                                                                                                                                                                             |
+| `command_failed`            | A verb routed to the attached client came back failed or timed out.                                                                                                                                                                                                                                                                            |
+| `timeout`                   | A wait-for condition did not match before its timeout elapsed.                                                                                                                                                                                                                                                                                 |
+| `not_ready`                 | The target agent was mid-turn, so the call declined to type at it. `resume-agent` raises it for a pane whose shell is not at its prompt.                                                                                                                                                                                                       |
+| `not_resumable`             | `resume-agent` found no conversation it can resume in the pane: none recorded, a harness with no `[resume]` command, an id that is not one plain shell token, or a pane on another machine. Nothing was typed.                                                                                                                                 |
+| `no_shell_integration`      | The pane's shell has sent no OSC 133 marks, or marks its prompts and not its commands, so `run` cannot tell where a command starts and ends, and `capture-pane` with `last-command-output` has no finished command to read. Nothing was typed, except by a `run` that found out after typing, which says so.                                   |
+| `not_at_prompt`             | `run` typed nothing because a command is running in the pane. The message names it; the hint names the `wait-for command-finished` call that waits for it.                                                                                                                                                                                     |
+| `agent_blocked`             | ask-agent declined to type at an agent on `needs_input`, because the text would answer its prompt. Nothing was typed. The hint names `capture-pane`.                                                                                                                                                                                           |
+| `prompt_stalled`            | ask-agent typed the question and sent Enter, and within `stall_timeout` the pane did not show that it took it. The question was typed; look at the pane before sending it again. The hint names `capture-pane`.                                                                                                                                |
+| `loop_refused`              | The call would loop: a pane addressing itself, or an ask that closes a cycle with one in flight.                                                                                                                                                                                                                                               |
+| `rate_limited`              | The sender is over the cross-agent message rate cap.                                                                                                                                                                                                                                                                                           |
+| `not_human`                 | Only the person at an attached client may make this call, and it carried no nonce from a live attach. `dismiss-attention`, `mark-attention`, `respond`, `reply-approval` and `agent-transcript` raise it.                                                                                                                                      |
+| `prompt_changed`            | `respond` pressed nothing: the pane is not on `needs_input`, no rule reads its prompt now, the prompt is not the one `prompt_id` names, or another client already answered it. Read it again with `peek-prompt`.                                                                                                                               |
+| `no_keyboard`               | The target is the person's inbox, `human`, which has no pane to type into.                                                                                                                                                                                                                                                                     |
+| `confirm_required`          | A write by `select`, or a `ship-push` or `ship-pr`, sent nothing: it carried no `confirm` token, or a token for something other than what would be sent now. The hint lists the panes, or what the push would send, in `available`, and carries the token in `confirm`.                                                                        |
+| `no_transcript`             | `agent-transcript` found no transcript for the pane: it is not joined to one, or the file is gone. Nothing was read.                                                                                                                                                                                                                           |
+| `unsupported_harness`       | `agent-transcript` cannot read the transcript of the pane's harness. Supported readers are listed under [agent-transcript](/docs/control-protocol/verbs-agents-and-messages#agent-transcript).                                                                                                                                                 |
+| `forbidden`                 | The caller may not do what it asked. A process inside a pane of this daemon cannot send or ask as `human`, and a machine linked to this one cannot call what its link policy does not grant; the hint names the capability and the `[hosts]` table that grants it. Nothing was done.                                                           |
+| `protocol_mismatch`         | The caller's protocol version is outside the range this daemon serves. Only `hello` produces it.                                                                                                                                                                                                                                               |
+| `unknown_host`              | No host by that name is configured. Host names are matched exactly.                                                                                                                                                                                                                                                                            |
+| `host_unreachable`          | The host is configured and is not answering: its link is down, or the far side does not reply. Nothing was queued; only `send-agent-message` with `host` keeps a message for a host that is down, and it answers `queued` instead of this. A write to a window on another machine whose link is being restored also answers it.                |
+| `host_refused`              | The host's link is up and cannot take another connection.                                                                                                                                                                                                                                                                                      |
+| `unknown_pane`              | This daemon is not running a pane with that id.                                                                                                                                                                                                                                                                                                |
+| `upgrade_refused`           | `daemon-upgrade` did not start: the new binary failed the preflight, the daemon holds something a live upgrade cannot hand over (a pane on another machine, a running fan check, a capturing popup, a hook or a plugin command), or this platform cannot hand off. Nothing was changed. The message says which.                                |
+| `daemon_upgrading`          | A live upgrade replaced the daemon's image while it worked on, or waited in, this call. The connection closes after it. A call that reads or waits can be made again: the new image answers, with the same panes. A call that changes something, such as `fan` or `send-text`, may have partly run, so check what it did before calling again. |
+| `internal`                  | An unexpected server side failure.                                                                                                                                                                                                                                                                                                             |
+| `not_worktree`              | The session is not in a git worktree, so there is nothing to remove or diff.                                                                                                                                                                                                                                                                   |
+| `worktree_dirty`            | remove-worktree refused: the worktree holds uncommitted changes and neither `stash` nor `force` was passed. Nothing was removed.                                                                                                                                                                                                               |
+| `git_failed`                | A git command failed. The message is git's own. The repository is as it was.                                                                                                                                                                                                                                                                   |
+| `repo_not_found`            | No checkout on this machine has the origin `repo_url` names, and `clone` was not passed. Pass `clone`, a `repos_root`, or `repo` with the directory.                                                                                                                                                                                           |
+| `not_repo`                  | No git repository is under the pane or session named, so there is nothing to review. Nothing was read.                                                                                                                                                                                                                                         |
+| `no_notes`                  | `send-review` found no unsent review notes for the pane. Nothing was typed.                                                                                                                                                                                                                                                                    |
+| `hunk_changed`              | `review-stage` did not find the file or the hunk in the diff now. Nothing was changed. Read the diff again with the same `index` and `context`.                                                                                                                                                                                                |
+| `index_changed`             | `review-stage` did not undo the call: the index changed after it. Nothing was changed.                                                                                                                                                                                                                                                         |
+| `whole_file_only`           | `review-stage` stages a rename, a binary file or a file past the diff caps only whole. Nothing was changed. Leave `hunk` and `lines` out.                                                                                                                                                                                                      |
+| `no_checkpoint`             | The pane has no checkpoint by that number, or none at all. Nothing was read or changed. The hint lists the numbers it has.                                                                                                                                                                                                                     |
+| `nothing_to_commit`         | `ship-commit` found no change in the work tree. `ship-push` and `ship-pr` raise it for a branch with no commit. Nothing was changed.                                                                                                                                                                                                           |
+| `merge_conflict`            | `ship-merge` stopped on conflicts and undid the merge. The main checkout is as it was. The hint lists the files in `available`.                                                                                                                                                                                                                |
+| `checkout_dirty`            | `ship-merge` refused: the main checkout has uncommitted changes to tracked files, a merge or rebase in progress, is not on the branch to merge into, or the branch cannot be fast-forwarded under `ff-only`. Nothing was merged.                                                                                                               |
+| `no_remote`                 | `ship-push` or `ship-pr` found no remote to push to, or not the one named. Nothing was pushed.                                                                                                                                                                                                                                                 |
+| `gh_unavailable`            | `ship-pr` or `ship-status` with `refresh` needs the gh CLI, and it is not installed or not logged in. Nothing was pushed or opened.                                                                                                                                                                                                            |
+| `queue_full`                | The pane's delivery queue holds `[agents.queue] max` messages. Nothing was queued.                                                                                                                                                                                                                                                             |
+| `no_buffer`                 | No paste buffer has the name given, or there are no buffers when none was named. Nothing was read, pasted or deleted.                                                                                                                                                                                                                          |
+| `risk_unacknowledged`       | An allow for an approval that matched risk rules came without `risk_ack` naming exactly those rules. Nothing was answered.                                                                                                                                                                                                                     |
+| `agents_disabled`           | The verb is an agent feature, and `[agents] enabled = false` turned the agent features off. Nothing was done.                                                                                                                                                                                                                                  |
+| `no_file`                   | A file verb was given a path that does not exist on that machine. Nothing was read or changed.                                                                                                                                                                                                                                                 |
+| `file_exists`               | The destination exists, and the call was not told what to do with it (`conflict`, or `replace` for `file-rename`). Nothing was changed.                                                                                                                                                                                                        |
+| `no_permission`             | The user the daemon runs as may not read or change that path. Nothing was changed.                                                                                                                                                                                                                                                             |
+| `hash_mismatch`             | A part's bytes did not match the sender's sha256, so the part was removed and nothing was put in place. A transfer copies that file once more by itself.                                                                                                                                                                                       |
+| `source_changed`            | A file changed on its machine while it was copied: its size or modification time is not what the copy started from. Nothing was put in place for that file.                                                                                                                                                                                    |
+| `cross_device`              | `file-rename` cannot move a path to another disk. Nothing was moved.                                                                                                                                                                                                                                                                           |
+| `disk_full`                 | The disk had no room for the write. What was written stays in the part.                                                                                                                                                                                                                                                                        |
+| `no_transfer`               | No transfer has that id. A finished one leaves the list 30 minutes after it ends.                                                                                                                                                                                                                                                              |
+| `busy`                      | The daemon had no room for the request now, (`transfer-start`) another copy writes that destination now, or (`daemon-upgrade`) a live upgrade is already running. Nothing was done.                                                                                                                                                            |
+| `invalid_tml`               | The TML document does not parse or does not validate. Nothing was opened or changed. The error carries `problems`: each one has `at` (a JSON Pointer to the node), `code`, `message`, and where it helps `did_you_mean`, `accepted` or `available`.                                                                                            |
+| `no_surface`                | No open TML surface has that id. It closed, or the id is wrong. `list-windows` names the surface of each TML window.                                                                                                                                                                                                                           |
+| `too_many_surfaces`         | The caller holds as many open TML surfaces as it may: one caller holds 8, and the person 32 per session. Nothing was opened.                                                                                                                                                                                                                   |
+
+Codes are stable and additive: existing codes never change meaning, and a new
+code is only ever introduced for a condition that previously had none. A client
+should treat an unrecognized code as a generic failure and fall back to
+`message`. The live catalog with descriptions is in the `list-verbs` result.
+
+## How verbs interact with an attached client [#how-verbs-interact-with-an-attached-client]
+
+Read verbs (`list-sessions`, `session-info`, `list-windows`, `get-option`) and
+input verbs (`send-text`, `capture-pane`, `resize`) always answer from daemon
+owned state and the daemon owned PTYs, so they work with or without an attached
+TUI.
+
+`new-window`, `close-window` and the `RenameWindow` command always act on daemon
+owned state, attached or not. Adding a window to the window set with a PTY under
+it, removing one and killing its PTY, and naming a window are the daemon's to do;
+an attached client is told what happened and re-renders. There is no second
+implementation for these and no round trip to a client that can time out. This is
+also the path a keystroke takes: pressing the create or close chord in an
+attached TUI sends the same command the CLI would.
+
+The one thing the daemon cannot decide about a window it creates is where the
+window goes, because it has no viewport and attached clients may have different
+ones. Rather than guess, it sets `unplaced` on the window it hands out. A client
+that receives an unplaced window puts it where it would have put a window of its
+own and clears the flag by pushing the geometry it chose. A window state without
+the field is placed, so state written before this existed is read exactly as
+before.
+
+The verbs a live renderer still has to own to stay in sync (`send-keys` with
+no window, and the live apply half of `set-option`) route to the attached TUI
+when one is present and act on daemon owned state otherwise. `send-keys` with
+a window writes to that window's terminal either way. The routing is transparent to the
+caller: it is still one request and one response.
+
+A verb that genuinely cannot run without a renderer (tiling geometry, animation,
+theming) fails with `needs_client`, whose hint names the `tuios attach` command
+for that session. Everything else works headless.
+
+### Who owns session state [#who-owns-session-state]
+
+The daemon owns session state. An attached client keeps its own copy and pushes
+it back as it renders, but that push does not replace what the daemon holds.
+
+Every state the daemon hands out carries a `version`, which counts the mutations
+the daemon has made itself. A client echoes the version it last saw back as
+`base_version` on the state it pushes. When the two match, the client has seen
+everything the daemon did and its snapshot is applied as sent. When
+`base_version` is behind, the client built its snapshot before a daemon side
+mutation it has never seen, and the fields the daemon owns are restored on top of
+it: which windows exist, their names, workspaces and minimized flags, the focused
+window, and the current workspace. The client keeps the fields it owns, which are
+the ones derived from its own viewport: pixel geometry, z order, the shell
+reported title, pre restore geometry, and alt screen state. The daemon then sends
+the merged state back to that client so it converges rather than pushing the same
+stale view again.
+
+The daemon does not wait to be asked. Every mutation it makes itself is pushed to
+the attached clients as a state sync the moment it lands, so a change made by a
+headless verb, a script, or another client shows up in a live TUI rather than
+waiting for that client's next push to reveal the disagreement. Pushes are
+ordered by `version`, and one overtaken by a newer state is dropped, so a client
+is never handed a state older than one it has already applied.
+
+Layout is split the same way, along the line between intent and pixels. The
+daemon carries the layout intent: `layout_mode` (`bsp`, `master-stack` or
+`scrolling`), the BSP tree per workspace, the split ratios, the master and stack ratios and splits, the
+tiling scheme, and `num_workspaces`. It does not carry the pixel rectangles for
+tiled windows, because those depend on the viewport of whichever client is
+rendering, and two clients attached at different sizes must derive different
+rectangles from the same topology. So intent persists across a detach and each
+client re-tiles from it.
+
+`layout_mode` and `num_workspaces` are both additive and both mean "unstated"
+when absent: a client that receives a state without `layout_mode` leaves its own
+layout alone rather than resetting to a default, and the daemon falls back to
+nine workspaces when no client has told it otherwise. Before `layout_mode`
+existed the BSP tree survived a reattach but the mode selecting between layouts
+did not, so a scrolling session came back as a BSP one.
+
+A `base_version` of `0` means a client that predates state versioning. It cannot
+say what it saw, so its pushes are applied as sent, exactly as before. Input mode
+is not part of session state at all: it is per viewer, so one client switching to
+terminal mode no longer switches every other client with it.
+
+`kill-session` destroys the session for every client, not just the caller. Each
+attached client is told the session ended and exits with a non-zero status, so a
+script that kills a session does not leave a user staring at a dead UI. The
+`session-closed` event fires on the event stream at the same time.
+
+## herdr compatibility [#herdr-compatibility]
+
+A second socket beside the daemon socket, `<daemon socket>.herdr`, answers
+herdr's socket API, so tools built for herdr work with tuios. Each herdr
+method runs the tuios verb that does the same work, with the same pane grants
+and checks. [AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#herdr-compatibility) has the
+mapping, the method table and the event table.
+
+## Verbs [#verbs]
+
+This catalog documents the verbs that need prose.
+[protocol-verbs.md](/docs/protocol-verbs) lists every verb, with its params,
+its result fields and an example. A test writes that page from the verb
+registry, so it always matches the code. `tuios list-verbs` prints the same
+data from the running daemon.
+
+## A client built on these verbs: the tmux shim [#a-client-built-on-these-verbs-the-tmux-shim]
+
+`tuios tmux` and the `tmux` link `tuios tmux-shim` installs answer tmux
+commands by calling the verbs above on the caller's own session. They add no
+verb and change none, and the wire is unchanged: an older daemon serves the
+shim as well as a new one. The mapping, for a reader of a daemon log:
+
+| tmux                             | verbs                                                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| any target                       | `list-windows`, `list-workspaces` (a pane `%N` is a window, N derived from its id; a window `@N` is workspace N)                     |
+| `split-window`, `new-window`     | `new-window` with `workspace`, `focus`, `cwd`, and `command` running `tuios tmux-pane`; `new-window -n` adds `set-workspace-name`    |
+| `send-keys`                      | `send-text`, with tmux key names turned into bytes by the shim                                                                       |
+| `capture-pane -p`                | `capture-pane`, `source` visible, and recent when `-S` reaches into history                                                          |
+| `kill-pane`, `kill-window`       | `close-window`                                                                                                                       |
+| `select-pane`, `select-pane -T`  | `focus-window`, `set-window` with `name`                                                                                             |
+| `select-window`, `rename-window` | `select-workspace`, `set-workspace-name`                                                                                             |
+| `respawn-pane -k`                | `pane-grants`, then a request on the pane holder's unix socket. From a pane without `admin`, only the caller's own pane is respawned |
+
+Every call names the caller's session, so nothing the shim does reaches
+another. It holds no authority the caller's own tuios CLI does not. See
+[TMUX\_SHIM.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/TMUX_SHIM.md).
+
+## Examples from a shell [#examples-from-a-shell]
+
+Create a detached session, drive it, and read it back:
+
+```sh
+SOCK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tuios/tuios.sock"
+
+# List windows in the most recently active session.
+printf '{"id":1,"verb":"list-windows"}\n' | socat - "UNIX-CONNECT:$SOCK" | jq .
+
+# Run a command in a pane and read the output.
+printf '{"verb":"send-text","params":{"text":"date\n"}}\n' | socat - "UNIX-CONNECT:$SOCK"
+printf '{"verb":"capture-pane","params":{"source":"recent","lines":5}}\n' \
+  | socat - "UNIX-CONNECT:$SOCK" | jq -r .result.content
+
+# Block until a build finishes instead of polling capture-pane.
+printf '{"verb":"wait-for","params":{"condition":"window-output","pattern":"build succeeded","timeout":120000}}\n' \
+  | socat - "UNIX-CONNECT:$SOCK" | jq .
+
+# Watch every window's activity as newline-delimited events.
+printf '{"verb":"subscribe","params":{"types":["output","bell","window-exit"]}}\n' \
+  | socat - "UNIX-CONNECT:$SOCK" | jq -c .
+```
+
+`tuios subscribe` does the last one without socat, and resumes with
+`--after-seq` and `--boot-id`.
+
+The tuios CLI speaks this protocol directly. `tuios ls`, `tuios list-clients`,
+`tuios kill-session`, `tuios send-keys`, `tuios capture-pane`,
+`tuios list-windows`, `tuios session-info`, `tuios set-config`, and
+`tuios get-config` are all verb protocol clients.

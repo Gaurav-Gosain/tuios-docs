@@ -1,0 +1,644 @@
+---
+title: "The Inbox, the queue and review"
+description: "The Inbox, the queue and review: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `add-reply-history` <Since verb="add-reply-history" /> [#add-reply-history]
+
+Keep a message the person sent to an agent in the reply history. The same message again moves to the end. A message keeps at most 256 KiB of pastes and images: past that the largest are dropped and named. Only the person adds to it, with a live human\_nonce.
+
+| Param         | Type      | Required | Default | Description                                                                                                                       |
+| ------------- | --------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `target`      | string    | yes      |         | The key the client keeps the history under.                                                                                       |
+| `parts`       | \[]object | yes      |         | The message, as queue-prompt takes it.                                                                                            |
+| `human_nonce` | string    |          |         | The nonce from the attach reply of a client attached now. The TUI sends its own. Without a live one the call is not the person's. |
+
+| Result field | Type      | Description                   |
+| ------------ | --------- | ----------------------------- |
+| `dropped`    | \[]string | The blocks too large to keep. |
+
+```json
+{"id":1,"verb":"add-reply-history","params":{"target":"claude-code:/work/api","parts":[{"kind":"text","text":"rerun with -count=1"}],"human_nonce":"<from the attach reply>"}}
+```
+
+## `answer-ask` <Since verb="answer-ask" /> [#answer-ask]
+
+Answer an ask-human question for the person. Only a client attached right now can, with the nonce from its attach reply: an agent never can. The answer must be one of the question's options. The first answer wins; a later one is answered with the one that stands and applied false.
+
+| Param            | Type   | Required | Default | Description                                                                                                                                                                                 |
+| ---------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request_id`     | string |          |         | The request\_id of the ask item.                                                                                                                                                            |
+| `answer`         | string |          |         | One of the item's options.                                                                                                                                                                  |
+| `human_nonce`    | string |          |         | The nonce the daemon issued in an attach reply, for a client attached now over the same kind of connection. The TUI sends its own.                                                          |
+| `question`       | string |          |         | The question the answer was picked from. When given and it is not the item's, nothing is answered: applied is false with reason changed. The TUI always sends it.                           |
+| `upgrade_dialog` | bool   |          |         | The answer is a key pressed in a client's live upgrade dialog. A live upgrade's ask takes only an answer that carries it. The TUI sends it from that dialog alone, and gui-bridge drops it. |
+
+| Result field  | Type   | Description                                                             |
+| ------------- | ------ | ----------------------------------------------------------------------- |
+| `request_id`  | string | The question answered.                                                  |
+| `answer`      | string | The answer that stands: this one when applied, an earlier one when not. |
+| `applied`     | bool   | False when an earlier answer stands or the question changed.            |
+| `reason`      | string | answered, or how the question ended before this answer, or changed.     |
+| `answered_by` | string | The id of the client whose answer stands.                               |
+
+```json
+{"id":1,"verb":"answer-ask","params":{"request_id":"9f86d081884c7d65","answer":"yes","human_nonce":"<from the attach reply>"}}
+```
+
+## `cancel-queued` <Since verb="cancel-queued" /> [#cancel-queued]
+
+Drop messages from a pane's delivery queue before they are typed. The person, with a live human\_nonce, may drop any entry; a pane only the entries it queued; a linked machine only the entries it queued; a caller outside every pane every entry but the person's. An entry being typed cannot be dropped. Dropping a stalled entry closes its Inbox question; the entries behind it are typed at the pane's next rest, one reached after the stalled entry was typed. A linked machine that gave no name drops only what it queued on the same connection.
+
+| Param         | Type   | Required | Default | Description                                                                                                                                                                                                                          |
+| ------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                             |
+| `window`      | string |          |         | Window id or name. With all, omit it to target the focused window. With id, omit it to find the entry in any pane of the session.                                                                                                    |
+| `id`          | string |          |         | The entry to drop.                                                                                                                                                                                                                   |
+| `all`         | bool   |          | `false` | Drop every entry of the window the caller may drop.                                                                                                                                                                                  |
+| `human_nonce` | string |          |         | The attached client's nonce, to drop as the person. One that does not verify is refused with not\_human.                                                                                                                             |
+| `host`        | string |          |         | A machine from \[hosts]: drop from a pane's queue there, over the link. The link drops only the entries this machine queued there. Only a caller outside every pane may ask; the far machine's policy for this one must allow write. |
+
+| Result field | Type      | Description                                  |
+| ------------ | --------- | -------------------------------------------- |
+| `cancelled`  | \[]string | The entries dropped.                         |
+| `queued`     | int       | How many entries the pane's queue holds now. |
+
+```json
+{"id":1,"verb":"cancel-queued","params":{"session":"work","window":"build","all":true}}
+```
+
+```json
+{"id":1,"verb":"cancel-queued","params":{"session":"work","id":"q3"}}
+```
+
+## `checkpoint-diff` <Since verb="checkpoint-diff" /> [#checkpoint-diff]
+
+Read what one turn changed: the diff of a checkpoint against the pane's checkpoint before it, or against HEAD when it was taken for the first one. Nothing in the repository, its index or its working tree is changed. The text is the repository's, so it is marked untrusted.
+
+| Param     | Type      | Required | Default | Description                                                                                                              |
+| --------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string    |          |         | Window id or name. Omit to target the focused window.                                                                    |
+| `n`       | int       |          |         | The checkpoint. Omit for the newest.                                                                                     |
+| `paths`   | \[]string |          |         | Only these paths, relative to the repository root. Omit for every changed file.                                          |
+| `context` | int       |          | `3`     | Lines of context around each change, 0 to 20.                                                                            |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                     |
+| ------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`    | string    | The session of the pane.                                                                                                                                                                                                                                        |
+| `window`     | string    | The pane, by id.                                                                                                                                                                                                                                                |
+| `worktree`   | string    | The root of the work tree.                                                                                                                                                                                                                                      |
+| `checkpoint` | object    | The checkpoint read: n, ref, commit, tree, head, kind (turn or safety), pane, session, turn, state, label, worktree, at (Unix nanoseconds), and skipped and skipped\_count (the untracked files left out as larger than max\_untracked\_mb, omitted when none). |
+| `base`       | string    | What the diff runs from: checkpoint N, HEAD \<hash>, or an empty tree.                                                                                                                                                                                          |
+| `base_tree`  | string    | The tree the diff runs from.                                                                                                                                                                                                                                    |
+| `files`      | \[]object | One entry per changed file, as review-diff returns them.                                                                                                                                                                                                        |
+| `totals`     | object    | files, added and removed over the whole diff.                                                                                                                                                                                                                   |
+| `truncated`  | bool      | The diff passed a cap (400 files, 2 MiB, 5000 lines in a file) and the files past it carry counts only.                                                                                                                                                         |
+| `untrusted`  | bool      | Always true: the text is the repository's, not the daemon's.                                                                                                                                                                                                    |
+
+```json
+{"id":1,"verb":"checkpoint-diff","params":{"session":"work","window":"build","n":2}}
+```
+
+## `dismiss-attention` <Since verb="dismiss-attention" /> [#dismiss-attention]
+
+Close one Inbox item for the person. Only a client attached right now can do it, with the nonce from its attach reply: an agent cannot clear what is waiting for the person. Dismissing a finished item marks the pane's turns seen, and dismissing mail marks the person's mail in the thread read. An item of a linked host is hidden on this daemon only, until that host changes it; nothing on that host is marked.
+
+| Param         | Type   | Required | Default | Description                                                                                                                        |
+| ------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | string |          |         | The item id list-attention printed.                                                                                                |
+| `human_nonce` | string |          |         | The nonce the daemon issued in an attach reply, for a client attached now over the same kind of connection. The TUI sends its own. |
+
+| Result field | Type   | Description                                                                                                               |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `id`         | string | The item that was closed.                                                                                                 |
+| `kind`       | string | Its kind. One of `approval`, `plan`, `ask`, `question`, `mail`, `errored`, `resume`, `finished`, `outbox` or `held_mail`. |
+| `session`    | string | Its session.                                                                                                              |
+| `host`       | string | The linked host the item came from. Omitted for this machine.                                                             |
+| `dismissed`  | bool   | Always true on success.                                                                                                   |
+
+```json
+{"id":1,"verb":"dismiss-attention","params":{"id":"17","human_nonce":"<from the attach reply>"}}
+```
+
+## `get-approval` <Since verb="get-approval" /> [#get-approval]
+
+Read a held approval or plan whole: the summary, the tool and its target, the answers it takes, the plan text of a plan, and the risk rules its command matched with why. Served only while the hook holds it. The text is the agent's, so it is marked untrusted.
+
+| Param        | Type   | Required | Default | Description                                                                                                                                                     |
+| ------------ | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request_id` | string | yes      |         | The request\_id of the Inbox item.                                                                                                                              |
+| `session`    | string |          |         | The session the approval is in. When given, an approval in another session is not found. From a pane without the admin grant it is the pane's own unless named. |
+
+| Result field   | Type      | Description                                       |
+| -------------- | --------- | ------------------------------------------------- |
+| `request_id`   | string    | The hold.                                         |
+| `kind`         | string    | approval or plan. One of `approval` or `plan`.    |
+| `session`      | string    | The session of the pane whose prompt is held.     |
+| `window`       | string    | The pane whose prompt is held.                    |
+| `summary`      | string    | The line the person answers from.                 |
+| `tool`         | string    | The tool the call is for, when the hook named it. |
+| `target`       | string    | What the tool acts on: the command, or the path.  |
+| `options`      | \[]string | The answers it takes.                             |
+| `always_scope` | \[]string | What always allows from now on.                   |
+| `plan`         | string    | A plan's text, at most 32 KiB.                    |
+| `plan_sha`     | string    | The digest reply-approval takes for a plan.       |
+| `risk`         | \[]object | The risk rules matched, each with rule and why.   |
+| `deny_message` | bool      | Whether a deny may carry a reason.                |
+| `untrusted`    | bool      | Always true: the text is the agent's.             |
+
+```json
+{"id":1,"verb":"get-approval","params":{"request_id":"9f86d081884c7d65"}}
+```
+
+## `list-attention` <Since verb="list-attention" /> [#list-attention]
+
+List the Inbox: everything in every session waiting for the person, on this machine and on every linked host. An item is an approval, a plan to approve or a question (a pane on needs\_input), a question put with ask-human (kind ask), mail to human, a pane on errored, or a finished turn nobody has looked at. Items are grouped in that order, oldest first inside each group. Every change to the list is an attention event on subscribe.
+
+| Param             | Type      | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------- | --------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`         | string    |          |         | Only list items in this session. Omit for every session. Unlike most verbs, an omitted session does not mean the most recently active one. Without host it names a session on this machine.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `kinds`           | \[]string |          |         | Only list these kinds. Omit for all of them. One of `approval`, `plan`, `ask`, `question`, `mail`, `errored`, `resume`, `finished`, `outbox` or `held_mail`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `host`            | string    |          |         | Only list items of this machine: "local" for this one, or a linked host by name. Omit for every machine.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `select`          | string    |          |         | A selector: space-separated key:value terms, all of which must match, each with comma-separated alternatives. Keys: harness (id or program name), state, needs:you, session (glob), group (fan-out group, glob), host (local or a host name, glob), name (window name, glob), cwd (the directory or under it; \~ is home), task (a task card the pane holds, by id, glob), stage (the stage of a card the pane holds), parent and root (the parent agent pane, or the first of its chain, by window id or a start of it). Keeps the items it matches. An item's state is the one its kind stands for: needs\_input for an approval or a question, errored, and done for finished; mail and resume have none. group and cwd are known only for items of this machine. |
+| `include_snoozed` | bool      |          | `false` | Also list the items the person snoozed, each with snoozed\_until.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items`      | \[]object | One entry per item: id, kind, host, session, window, workspace, harness, name, summary, options, request\_id, expires, always\_scope, since, seq, thread, count, completion\_seq, stale, seen\_at. request\_id, expires and always\_scope are set only on an approval a hook holds on this machine (see request-approval); options is then the decisions reply-approval takes. An ask item carries request\_id and options too: the question's id and its answers, which answer-ask takes. since is when the item started waiting, in unix nanoseconds. seq is the Inbox revision of its last change. summary is one line, with control characters removed, likely secrets masked and at most 160 bytes. thread is the mail thread, and count is the unread messages it stands for (mail) or the turns (finished). seen, on a mail item, is how many of count were seen with a peek and not read. host is empty for this machine; an item of a linked host has an id of the form host:id. stale is true for an item of a host whose link is down, and seen\_at is when that host was last heard from, in unix nanoseconds. Additive fields, each absent when unset: snoozed\_until on a snoozed item listed with include\_snoozed (unix nanoseconds, -1 for until it changes), marked\_unread on a finished item the person reopened, risk (the risk rules an approval matched), deny\_message (the harness takes a reason with a deny), and plan\_lines and plan\_sha on a plan item. |
+| `counts`     | object    | Open items per kind over the whole Inbox, every machine included, before the session, kinds and host filters. Every kind is present.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `total`      | int       | How many items are listed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `seq`        | int       | The event seq the answer is current to. Subscribe with after\_seq set to it and the boot\_id below, and every attention event after the listing is replayed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `boot_id`    | string    | The daemon start the seq belongs to.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+```json
+{"id":1,"verb":"list-attention"}
+```
+
+```json
+{"id":1,"verb":"list-attention","params":{"kinds":["approval","question"]}}
+```
+
+```json
+{"id":1,"verb":"list-attention","params":{"session":"work"}}
+```
+
+```json
+{"id":1,"verb":"list-attention","params":{"host":"build"}}
+```
+
+```json
+{"id":1,"verb":"list-attention","params":{"select":"harness:codex needs:you"}}
+```
+
+## `list-checkpoints` <Since verb="list-checkpoints" /> [#list-checkpoints]
+
+List the checkpoints of a pane: the state of its git work tree, saved each time its agent finished a turn that changed a file, and before each restore. Oldest first. The labels are the agent's prompts, so the result is marked untrusted.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+
+| Result field  | Type      | Description                                                                                                                                                                                                                                                          |
+| ------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`     | string    | The session of the pane.                                                                                                                                                                                                                                             |
+| `window`      | string    | The pane, by id.                                                                                                                                                                                                                                                     |
+| `worktree`    | string    | The root of the work tree the pane is in, symbolic links resolved.                                                                                                                                                                                                   |
+| `enabled`     | bool      | Whether checkpoints are taken: \[agents.checkpoints] enabled.                                                                                                                                                                                                        |
+| `keep`        | int       | How many checkpoints one pane keeps: \[agents.checkpoints] keep.                                                                                                                                                                                                     |
+| `checkpoints` | \[]object | One entry per checkpoint: n, ref, commit, tree, head, kind (turn or safety), pane, session, turn, state, label, worktree, at (Unix nanoseconds), and skipped and skipped\_count (the untracked files left out as larger than max\_untracked\_mb, omitted when none). |
+| `untrusted`   | bool      | Always true: the labels are the agent's text.                                                                                                                                                                                                                        |
+
+```json
+{"id":1,"verb":"list-checkpoints","params":{"session":"work","window":"build"}}
+```
+
+## `list-queued` <Since verb="list-queued" /> [#list-queued]
+
+List the messages waiting in a pane's delivery queue, or in every pane of the session.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                                                                                                                               |
+| --------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                  |
+| `window`  | string |          |         | Window id or name. Omit to list every pane of the session.                                                                                                                                                                                                                                |
+| `host`    | string |          |         | A machine from \[hosts]: list a pane's queue there, over the link. Session and window name the pane there. The person's replies queued from this machine are by link:THIS-MACHINE there. Only a caller outside every pane may ask; the far machine's policy for this one must allow list. |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                           |
+| ------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`    | string    | The session listed.                                                                                                                                                                                                                                                   |
+| `entries`    | \[]object | id, session, window, name, at (Unix nanoseconds), by (human, shell, the queueing pane's window id, or link:HOST), from when given, preview (the first line, at most 80 characters) and state (waiting, delivering or stalled) per entry, next first within each pane. |
+
+```json
+{"id":1,"verb":"list-queued","params":{"session":"work","window":"build"}}
+```
+
+## `mark-attention` <Since verb="mark-attention" /> [#mark-attention]
+
+Snooze an Inbox item, wake it, mark a finished pane unread, restore an item closed a moment ago, or settle an agent, for the person. Only a client attached right now can, with the nonce from its attach reply: an agent cannot hide or reorder what the person reads.
+
+| Param          | Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | string |          |         | The item. Or name it with session, window and kind. With unsettle: the id settle returned, to put that item back in the Inbox.                                                                                                                                                                                                                                                                                                                    |
+| `session`      | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                                                                                                                                                          |
+| `window`       | string |          |         | Window id or name. Omit to target the focused window.                                                                                                                                                                                                                                                                                                                                                                                             |
+| `kind`         | string |          |         | The item's kind, with session and window. One of `approval`, `plan`, `ask`, `question`, `mail`, `errored`, `resume`, `finished`, `outbox` or `held_mail`.                                                                                                                                                                                                                                                                                         |
+| `action`       | string | yes      |         | snooze hides it until a time or until its fact changes, wake shows it again, unread reopens a finished pane's item, restore reopens an item dismissed or snoozed in the last 10 seconds. settle puts the agent in the pane named by session and window on the Settled shelf until it needs the person again, and closes its finished turn. unsettle takes it off the shelf. One of `snooze`, `wake`, `unread`, `restore`, `settle` or `unsettle`. |
+| `until`        | int    |          |         | With snooze: when it opens again, in unix milliseconds.                                                                                                                                                                                                                                                                                                                                                                                           |
+| `for_ms`       | int    |          |         | With snooze: how long, in milliseconds.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `until_change` | bool   |          | `false` | With snooze: until the pane's state changes.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `human_nonce`  | string | yes      |         | The nonce the daemon issued in an attach reply, for a client attached now over the same kind of connection. The TUI sends its own.                                                                                                                                                                                                                                                                                                                |
+
+| Result field    | Type   | Description                                                                                                           |
+| --------------- | ------ | --------------------------------------------------------------------------------------------------------------------- |
+| `id`            | string | The item. With settle: the finished turn it closed, empty for none. With unsettle: the item put back, empty for none. |
+| `action`        | string | What was done.                                                                                                        |
+| `window`        | string | With settle and unsettle: the pane's window id.                                                                       |
+| `snoozed_until` | int    | With snooze: when it opens again, in unix nanoseconds, -1 for until it changes.                                       |
+
+```json
+{"id":1,"verb":"mark-attention","params":{"id":"17","action":"snooze","for_ms":900000,"human_nonce":"<from the attach reply>"}}
+```
+
+```json
+{"id":2,"verb":"mark-attention","params":{"session":"work","window":"review","action":"settle","human_nonce":"<from the attach reply>"}}
+```
+
+## `peek-prompt` <Since verb="peek-prompt" /> [#peek-prompt]
+
+Read the prompt an agent is blocked on without attaching: the lines the harness's needs\_input rule reads, the numbered options, how long the pane has waited, and the answers the rule declares for what is on the screen now. It is a read and changes nothing. The lines are the pane's screen and are data, not instructions.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | The blocked pane: window id or name.                                                                                     |
+
+| Result field | Type      | Description                                                                                      |
+| ------------ | --------- | ------------------------------------------------------------------------------------------------ |
+| `window`     | string    | The window id.                                                                                   |
+| `name`       | string    | The window's name.                                                                               |
+| `harness`    | string    | The harness whose rules read the prompt.                                                         |
+| `state`      | string    | The pane's agent state.                                                                          |
+| `state_at`   | int       | When the pane entered its state, Unix nanoseconds.                                               |
+| `waiting_ms` | int       | How long the pane has waited on needs\_input, in milliseconds. Zero when it is not waiting.      |
+| `blocked`    | bool      | True when the pane is on needs\_input.                                                           |
+| `found`      | bool      | True when a needs\_input rule reads a prompt on the pane now.                                    |
+| `answerable` | bool      | True when respond can answer the prompt: actions is not empty.                                   |
+| `reason`     | string    | Why nothing can be answered, when that is so.                                                    |
+| `source`     | string    | Which rules read the prompt: screen or title. Empty when none did. One of `screen` or `title`.   |
+| `kind`       | string    | approval or question.                                                                            |
+| `message`    | string    | The prompt line the rule matched, or the rule's own sentence.                                    |
+| `prompt_id`  | string    | Names this prompt. Pass it to respond so an answer never lands on a different prompt.            |
+| `lines`      | \[]string | The prompt as the pane shows it, bottom last.                                                    |
+| `options`    | \[]object | The numbered options at the bottom of the screen: n and label.                                   |
+| `actions`    | \[]string | The answers respond accepts now. One of `approve`, `approve_always`, `deny`, `choose` or `text`. |
+| `untrusted`  | bool      | Always true. The lines were written by the program in the pane.                                  |
+
+```json
+{"id":1,"verb":"peek-prompt","params":{"session":"work","window":"a1b2c3d4"}}
+```
+
+## `queue-prompt` <Since verb="queue-prompt" /> [#queue-prompt]
+
+Queue a message for the agent in a pane, typed as a prompt once the agent has been at rest for a second, and never over a prompt it is waiting on. One entry is typed per rest, and the prompt gate waits for the agent to show it took it; an entry it did not take is marked stalled, never typed again, and opens an Inbox question. A queue holds at most \[agents.queue] max messages, and dies with the daemon, the pane, or the agent leaving the pane. It types into the pane, so a pane may queue only for a pane that holds nothing it does not, and its entry is checked against its grants again when it is typed. Who queued it (by) comes from the connection: human only with a live human\_nonce, the pane's id for a pane, link:HOST over a link, shell otherwise.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`     | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `window`      | string    |          |         | The agent's window, by id or name. Omit to target the focused window. It must run an agent tuios knows of; human is refused with no\_keyboard.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `text`        | string    |          |         | The message, at most 16 KiB. Required without parts. With parts it is ignored, so a client can send the message both ways and a daemon older than parts types the text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `parts`       | \[]object |          |         | The message as ordered parts, at most 64 and 8 MiB in all: \{kind: text, text} for typed text, \{kind: paste, text, n} for a pasted block, and \{kind: image, data, n} for an image, data being the file in base64 (at most 8 MiB, 8 images a message), where n is the block's number as the person saw it. When the message is typed, its blocks go in their place if it is 12 KiB or less and the pane takes a bracketed paste. Otherwise each block is written to a file in the paste folder on the pane's machine, kept for 24 hours, and the typed text names it: \[Pasted text #1: PATH, 42 lines]. Each image is written to a file there too; the harness's \[input] images says whether its path goes in a paste of its own (path\_paste), in the text (path\_text), or is refused (none). The text parts with the labels must fit 16 KiB. Over a link, blocks need files in the link's policy. |
+| `human_nonce` | string    |          |         | The attached client's nonce, to queue as the person (by human). One that does not verify is refused with not\_human.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `from`        | string    |          |         | The window the message is from. From a pane, its own; omit it there. human needs human\_nonce.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `client_id`   | string    |          |         | The client's own name for this message, at most 128 bytes. Use a random id. A second call from the same sender with the same client\_id for the same pane queues nothing and answers as the first did, with duplicate true. The daemon keeps the last 256 for 7 days, in memory, and forgets them when it restarts. It does not go with host.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `host`        | string    |          |         | A machine from \[hosts]: queue for a pane there. This daemon passes the message to that machine's daemon over the link, where it is queued by link:THIS-MACHINE and typed. Session and window name the pane there. Only a caller outside every pane may send one; the far machine's policy for this one must allow write, and files for a block or an image.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+| Result field | Type   | Description                                                                                                                 |
+| ------------ | ------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `id`         | string | The entry, which cancel-queued takes.                                                                                       |
+| `position`   | int    | Its place in the queue, 1 for next.                                                                                         |
+| `queued`     | int    | How many entries the queue holds now.                                                                                       |
+| `delivering` | bool   | True when it is next and the agent is at rest now, so it is typed within about a second rather than after the agent's turn. |
+| `parts`      | int    | With parts, how many were read. A daemon older than parts leaves it out.                                                    |
+| `duplicate`  | bool   | True when client\_id was seen: nothing was queued, and the rest is the first answer.                                        |
+
+```json
+{"id":1,"verb":"queue-prompt","params":{"session":"work","window":"build","text":"make the backoff jitter configurable"}}
+```
+
+```json
+{"id":1,"verb":"queue-prompt","params":{"session":"work","window":"build","parts":[{"kind":"text","text":"this test fails: "},{"kind":"paste","text":"--- FAIL: TestJitter\n...","n":1}]}}
+```
+
+## `release-agent-message` <Since verb="release-agent-message" /> [#release-agent-message]
+
+Pass a message from another machine that this machine held for the person (hold\_mail in its link policy) on to the window it was for. Only the person at a client attached right now can, with the nonce from its attach reply. The message is delivered as a new message with its original sender and origin, and the held copy is marked read. A message is released once.
+
+| Param         | Type   | Required | Default | Description                                                                                                              |
+| ------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `id`          | int    | yes      |         | The message\_id of the held message, as read-agent-messages -w human shows it, or held\_id on its Inbox item.            |
+| `human_nonce` | string |          |         | The nonce the daemon issued in an attach reply, for a client attached now. The TUI sends its own.                        |
+
+| Result field | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `held_id`    | int    | The held message.                                   |
+| `message_id` | int    | The message that was delivered.                     |
+| `to`         | string | The window it was delivered to, empty for a notice. |
+| `to_name`    | string | That window's name.                                 |
+| `thread_id`  | int    | The delivered message's thread.                     |
+
+```json
+{"id":1,"verb":"release-agent-message","params":{"session":"work","id":12,"human_nonce":"<from the attach reply>"}}
+```
+
+## `reply-approval` <Since verb="reply-approval" /> [#reply-approval]
+
+Answer a held approval for the person. Only a client attached right now can, with the nonce from its attach reply: an agent never can. The first reply wins; a later one is answered with the decision that stands and applied false. A decision closes the Inbox item as answered and moves the pane to working. ask gives the prompt back to the pane with no decision.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                                                                                                                               |
+| ------------- | --------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request_id`  | string    |          |         | The request\_id of the Inbox item. Or name the pane with session and window instead.                                                                                                                                                                                                                      |
+| `session`     | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                  |
+| `window`      | string    |          |         | The pane whose held prompt to answer, when request\_id is not given.                                                                                                                                                                                                                                      |
+| `decision`    | string    |          |         | once, always or deny, whichever the item's options offer, or ask to give the prompt back to the pane. One of `once`, `always`, `deny` or `ask`.                                                                                                                                                           |
+| `message`     | string    |          |         | The reason for a deny, which the harness passes to the model. One line, at most 500 bytes.                                                                                                                                                                                                                |
+| `human_nonce` | string    |          |         | The nonce the daemon issued in an attach reply, for a client attached now over the same kind of connection. The TUI sends its own.                                                                                                                                                                        |
+| `summary`     | string    |          |         | The item's summary the decision was made from. Required for once and always: an allow without it is refused with invalid\_params and nothing is answered. When the hold is now on another line, nothing is answered: applied is false with reason changed, and the hold runs on. A deny may leave it out. |
+| `risk_ack`    | \[]string |          |         | For once or always on an item that matched risk rules: exactly the item's risk list, which says the person saw them. Without it such an allow is refused with risk\_unacknowledged. A deny needs none.                                                                                                    |
+| `plan_sha`    | string    |          |         | For a plan item: the plan\_sha of the plan that was shown. An answer without it, or for another plan, is not applied.                                                                                                                                                                                     |
+
+| Result field  | Type   | Description                                                                                                                                      |
+| ------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `request_id`  | string | The hold that was answered.                                                                                                                      |
+| `decision`    | string | The decision that stands: this reply's when applied, an earlier one's when not, ask when the prompt was given back, empty when the line changed. |
+| `applied`     | bool   | False when an earlier reply had already answered it, or the line changed.                                                                        |
+| `reason`      | string | How the hold ended: answered, or handed\_back. changed when the hold is on another line than summary, and nothing was answered.                  |
+| `summary`     | string | With reason changed, the line the hold is on now.                                                                                                |
+| `answered_by` | string | The id of the client whose answer stands.                                                                                                        |
+| `session`     | string | The pane's session, when the reply ended the hold.                                                                                               |
+| `window`      | string | The pane, when the reply ended the hold.                                                                                                         |
+
+```json
+{"id":1,"verb":"reply-approval","params":{"request_id":"9f86d081884c7d65","decision":"once","human_nonce":"<from the attach reply>"}}
+```
+
+## `reply-history` <Since verb="reply-history" /> [#reply-history]
+
+Read what the person sent to an agent, oldest first, for the reply editor's up and ctrl+r. It is kept in the daemon's memory only and ends with it: 100 messages a target, 64 targets, the least used going first. Only the person reads it, with a live human\_nonce.
+
+| Param         | Type   | Required | Default | Description                                                                                                                       |
+| ------------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `target`      | string | yes      |         | The key the client keeps the history under, such as the agent's harness and folder. At most 512 bytes.                            |
+| `human_nonce` | string |          |         | The nonce from the attach reply of a client attached now. The TUI sends its own. Without a live one the call is not the person's. |
+
+| Result field | Type      | Description                                                                                                            |
+| ------------ | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `target`     | string    | The target read.                                                                                                       |
+| `entries`    | \[]object | parts (as queue-prompt takes them), at (unix ms), and dropped: the blocks too large to keep, such as "Pasted text #1". |
+
+```json
+{"id":1,"verb":"reply-history","params":{"target":"claude-code:/work/api","human_nonce":"<from the attach reply>"}}
+```
+
+## `request-approval` <Since verb="request-approval" /> [#request-approval]
+
+Hold a pane's permission prompt for an answer from the Inbox. tuios agent-hook calls it for a harness named in \[agents.approvals]; the call does not answer until the person answers with reply-approval or the hold ends, and a hold that ends with no decision leaves the harness to ask in its pane. The pane must already be on needs\_input with kind approval. Refused over a link, and a caller inside a pane may only hold its own pane's prompt. Send nothing else on the connection while it waits: the daemon reads it only to see the caller go, and a byte sent is discarded.
+
+| Param          | Type      | Required | Default    | Description                                                                                                                                                                                                                                                                                                                       |
+| -------------- | --------- | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`      | string    |          |            | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                                          |
+| `window`       | string    |          |            | The pane whose prompt is held, normally $TUIOS\_PANE\_ID.                                                                                                                                                                                                                                                                         |
+| `harness`      | string    |          |            | The harness the prompt belongs to, by id or alias. Nothing is held unless \[agents.approvals] enabled names it, or the pane is one start-agent --protocol opened.                                                                                                                                                                 |
+| `options`      | \[]string |          |            | The decisions the harness can take. Omit for once and deny. always is dropped unless always\_scope shows what it adds. One of `once`, `always` or `deny`.                                                                                                                                                                         |
+| `summary`      | string    |          |            | The line the person answers from: the whole request, as the hook reported it. The held item shows it for as long as the hold runs. Nothing is held (reason not\_shown) when the Inbox could not show it as it is: longer than 160 bytes, with a control or format character, whitespace it would collapse, or text it would mask. |
+| `always_scope` | \[]string |          |            | What always allows from now on, one rule per line, shown beside the key. Required for always to be offered: one to four lines, each shown as it is.                                                                                                                                                                               |
+| `kind`         | string    |          | `approval` | What is held: approval for a tool call, plan for a plan an agent in plan mode asks to have approved. One of `approval` or `plan`.                                                                                                                                                                                                 |
+| `plan`         | string    |          |            | With kind plan: the plan's text, at most 32 KiB. get-approval serves it while the hold runs.                                                                                                                                                                                                                                      |
+| `tool`         | string    |          |            | The tool the call is for, as the harness names it (Bash, Edit), which the risk rules match on.                                                                                                                                                                                                                                    |
+| `target`       | string    |          |            | What the tool acts on: the command line, or the path.                                                                                                                                                                                                                                                                             |
+| `deny_message` | bool      |          | `false`    | Whether the harness passes a reason with a deny to its model, so the Inbox may offer to type one.                                                                                                                                                                                                                                 |
+| `cwd`          | string    |          |            | The folder the call runs in, as the harness sent it. The risk rules resolve a relative path against it. Omit it and the pane's own folder is used.                                                                                                                                                                                |
+
+| Result field  | Type   | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request_id`  | string | The hold's id, empty when nothing was held.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `decision`    | string | The person's answer, or empty when there is none and the harness should ask in its pane. One of `once`, `always` or `deny`.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `message`     | string | What the person gave as the reason for a deny, one line.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `reason`      | string | Why the call returned: answered, or why there is no answer. disabled: the harness is not in \[agents.approvals]. not\_blocked: the pane is not on needs\_input with kind approval. not\_shown: the summary could not be shown as it is. viewed: the person has the pane in front of them, or turned to it. timeout, handed\_back (enter on the item, or reply-approval ask), superseded (a newer request for the pane), caller\_gone, shutdown, and the Inbox close reasons resolved, dismissed, window\_closed, session\_closed and evicted. |
+| `answered_by` | string | The id of the client the answer came from.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+```json
+{"id":1,"verb":"request-approval","params":{"session":"work","window":"build","harness":"claude-code","options":["once","always","deny"],"summary":"approve Bash: go test ./...","always_scope":["Bash(go test:*) in .claude/settings.local.json"]}}
+```
+
+## `respond` <Since verb="respond" /> [#respond]
+
+Answer the prompt an agent is blocked on, with the keys its harness's manifest declares, without attaching. It reads the prompt again first and refuses with prompt\_changed when the pane left needs\_input, when the prompt is not the one prompt\_id names, or when another client already answered it: the first answer wins. It then waits up to timeout for the pane to leave needs\_input and returns its state. Only the person may call it: a client attached right now passing its attach nonce, or, when the daemon runs with \[daemon] respond\_from\_shell, a process outside every pane. A pane the person gave the respond grant may also call it, for a pane in its own session, in its fan group when it also holds fan, and anywhere when it also holds admin.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                                         |
+| ------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`     | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                            |
+| `window`      | string    |          |         | The blocked pane: window id or name.                                                                                                                                                                                |
+| `action`      | string    |          |         | The answer. approve, approve\_always and deny press the keys the rule declares; choose presses an option's number; text types value and submits it. One of `approve`, `approve_always`, `deny`, `choose` or `text`. |
+| `value`       | string    |          |         | The option number for choose, or the answer for text.                                                                                                                                                               |
+| `prompt_id`   | string    |          |         | The prompt\_id peek-prompt gave. With it, a prompt that changed since the peek is refused rather than answered. Without it, whatever prompt is on the pane now is answered.                                         |
+| `human_nonce` | string    |          |         | The nonce from the attach reply of a client attached now. The Inbox sends its own.                                                                                                                                  |
+| `timeout`     | int       |          | `5000`  | Milliseconds to wait for the pane to leave needs\_input after the answer, at most 30000.                                                                                                                            |
+| `risk_ack`    | \[]string |          |         | For an approving action on a prompt that matched risk rules: exactly the rules it matched. A deny needs none.                                                                                                       |
+
+| Result field | Type   | Description                                                                                                                                                                                     |
+| ------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `window`     | string | The window id.                                                                                                                                                                                  |
+| `action`     | string | The action taken.                                                                                                                                                                               |
+| `sent`       | string | What was pressed, in words: the keys, or text.                                                                                                                                                  |
+| `prompt_id`  | string | The prompt that was answered.                                                                                                                                                                   |
+| `settled_by` | string | How the wait ended: state (the pane left needs\_input), prompt (another prompt, or none, is on the screen), gone (the window closed) or timeout. One of `state`, `prompt`, `gone` or `timeout`. |
+| `state`      | string | The pane's agent state when the wait ended.                                                                                                                                                     |
+| `message`    | string | The pane's agent message when the wait ended.                                                                                                                                                   |
+| `by_pane`    | string | The pane that answered under its respond grant. Absent when the person answered.                                                                                                                |
+
+```json
+{"id":1,"verb":"respond","params":{"session":"work","window":"a1b2c3d4","action":"approve","prompt_id":"<from peek-prompt>","human_nonce":"<from the attach reply>"}}
+```
+
+## `restore-checkpoint` <Since verb="restore-checkpoint" /> [#restore-checkpoint]
+
+Put a pane's git work tree back to a checkpoint. The work tree is first saved as a safety checkpoint, so the restore can be undone by restoring that one. Only files that differ are written or removed. The index, HEAD, the branch and ignored files are not changed. Refused while the pane's agent is working or waiting on a prompt, unless force is given.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+| `n`       | int    | yes      |         | The checkpoint to restore.                                                                                               |
+| `force`   | bool   |          | `false` | Restore while the agent is mid-turn.                                                                                     |
+
+| Result field | Type      | Description                                                                               |
+| ------------ | --------- | ----------------------------------------------------------------------------------------- |
+| `session`    | string    | The session of the pane.                                                                  |
+| `window`     | string    | The pane, by id.                                                                          |
+| `worktree`   | string    | The root of the work tree.                                                                |
+| `restored`   | object    | The checkpoint restored.                                                                  |
+| `safety`     | object    | The checkpoint that holds the work tree as it was before the restore. Restore it to undo. |
+| `written`    | \[]string | The files written from the checkpoint.                                                    |
+| `removed`    | \[]string | The files removed, which the checkpoint does not have.                                    |
+| `skipped`    | \[]string | The submodules that differ from the checkpoint. A restore does not change a submodule.    |
+
+```json
+{"id":1,"verb":"restore-checkpoint","params":{"session":"work","window":"build","n":1}}
+```
+
+## `review-diff` <Since verb="review-diff" /> [#review-diff]
+
+Read what the agent in a pane changed: the diff of its worktree against the base it was made from, or for a plain repository against the upstream merge base, untracked files included (one larger than max\_untracked\_mb is listed as skipped and not read) and ignored files left out. Nothing in the repository, its index or its working tree is changed. The text is the repository's, so it is marked untrusted.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                                                                                           |
+| ------------- | --------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`     | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                              |
+| `window`      | string    |          |         | Window id or name. Omit to target the focused window.                                                                                                                                                                                                                 |
+| `base`        | string    |          |         | The ref to diff against. Omit for the worktree's base, else the upstream merge base, else HEAD (uncommitted changes only).                                                                                                                                            |
+| `against`     | string    |          |         | A fan sibling session to diff against instead of a base: the two attempts compared with each other.                                                                                                                                                                   |
+| `uncommitted` | bool      |          | `false` | Only what is not committed yet, against HEAD.                                                                                                                                                                                                                         |
+| `paths`       | \[]string |          |         | Only these paths, relative to the repository root. Omit for every changed file.                                                                                                                                                                                       |
+| `context`     | int       |          | `3`     | Lines of context around each change, 0 to 20.                                                                                                                                                                                                                         |
+| `index`       | string    |          |         | Read the worktree's index instead of the base. unstaged is the index against the working files, untracked files included. staged is HEAD against the index. Omit for the diff against the base. Not with base, against or uncommitted. One of `unstaged` or `staged`. |
+| `highlight`   | bool      |          | `false` | Add the syntax colour and the changed part to each line: hl and changed. classes names the colour classes.                                                                                                                                                            |
+
+| Result field   | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`      | string    | The session of the pane reviewed.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `window`       | string    | The pane reviewed, by id: the one its notes are kept for.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `repo_root`    | string    | The repository's main checkout.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `worktree`     | string    | The worktree the diff was read from, symbolic links resolved.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `base`         | string    | The base as named (the ref given, the worktree's base, the upstream branch, or HEAD), empty with against. With index unstaged it is index, with index staged it is HEAD.                                                                                                                                                                                                                                                                                                          |
+| `base_sha`     | string    | The commit the diff runs from: the merge base of HEAD and the base, or HEAD for uncommitted changes only. With index it is a tree: the index, or HEAD's tree.                                                                                                                                                                                                                                                                                                                     |
+| `index`        | string    | The index mode read, unstaged or staged. Absent without index.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `classes`      | \[]string | With highlight: the names of the colour classes, in the order of their numbers in hl. Absent without highlight.                                                                                                                                                                                                                                                                                                                                                                   |
+| `uncommitted`  | bool      | The diff shows only what is not committed: asked for, or no base was found.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `tree_sha`     | string    | The tree the working state was written to, for a later diff of the same state.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `against`      | string    | The sibling session, when one was given.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `against_tree` | string    | The tree the sibling's working state was written to, with against.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `files`        | \[]object | One entry per changed file: path, old\_path, status (A, M, D, R, or U for untracked), added, removed, binary, truncated, and hunks, each with header, old\_start, old\_lines, new\_start, new\_lines and lines of op (context, add or delete), old, new, text and no\_newline. With highlight a line also has hl, its colour as \[start, end, class] runs in bytes of text, and changed, the \[start, end] bytes that changed against its paired line. Each is absent when empty. |
+| `totals`       | object    | files, added and removed over the whole diff.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `truncated`    | bool      | The diff passed a cap (400 files, 2 MiB, 5000 lines in a file) and the files past it carry counts only.                                                                                                                                                                                                                                                                                                                                                                           |
+| `notes`        | \[]object | The pane's review notes, found again in this diff, as review-note lists them.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `untrusted`    | bool      | Always true: the text is the repository's, not the daemon's.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+```json
+{"id":1,"verb":"review-diff","params":{"session":"api-fan-retry-2"}}
+```
+
+```json
+{"id":1,"verb":"review-diff","params":{"session":"work","window":"build","uncommitted":true}}
+```
+
+```json
+{"id":1,"verb":"review-diff","params":{"session":"work","window":"build","index":"unstaged"}}
+```
+
+## `review-note` <Since verb="review-note" /> [#review-note]
+
+Keep the review notes on a pane's changes: add one on a line or a hunk, edit, remove, list or clear them. Notes are held by the daemon per worktree, so every client and the CLI see the same ones, and follow their line as the diff moves. A note is the person's only with a live human\_nonce, and a pane without admin adds or edits notes only on panes it could type into.
+
+| Param         | Type   | Required | Default | Description                                                                                                                       |
+| ------------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `action`      | string | yes      |         | What to do. One of `add`, `edit`, `remove`, `list` or `clear`.                                                                    |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.          |
+| `window`      | string |          |         | Window id or name. Omit to target the focused window.                                                                             |
+| `path`        | string |          |         | The file the note is on, relative to the repository root. Needed to add.                                                          |
+| `line`        | int    |          |         | The line the note is on, on side. Omit with hunk for a note on the whole hunk.                                                    |
+| `side`        | string |          | `new`   | Which side of the diff line counts on. One of `new` or `old`.                                                                     |
+| `quote`       | string |          |         | The text of the line, which finds the line again when the diff moves.                                                             |
+| `hunk`        | string |          |         | The hunk header the note is on.                                                                                                   |
+| `text`        | string |          |         | The note, at most 1000 bytes. Needed to add and edit.                                                                             |
+| `id`          | string |          |         | The note to edit or remove.                                                                                                       |
+| `human_nonce` | string |          |         | The nonce from the attach reply of a client attached now. The TUI sends its own. Without a live one the call is not the person's. |
+
+| Result field | Type      | Description                                                                                                                                |
+| ------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`    | string    | The session of the pane.                                                                                                                   |
+| `window`     | string    | The pane the notes are for, by id.                                                                                                         |
+| `worktree`   | string    | The worktree the notes are kept on.                                                                                                        |
+| `id`         | string    | The note added or edited.                                                                                                                  |
+| `removed`    | int       | How many notes remove or clear dropped.                                                                                                    |
+| `kept`       | int       | clear only: how many of the pane's notes were left because this caller may not change them (the person's, or another pane's or machine's). |
+| `notes`      | \[]object | The pane's notes after the call, by path then line: id, path, side, line, quote, hunk\_header, text, by, at, sent\_at and outdated.        |
+
+```json
+{"id":1,"verb":"review-note","params":{"action":"add","session":"work","window":"build","path":"api/retry.go","line":42,"quote":"if err == nil {","text":"log the attempt number here too"}}
+```
+
+```json
+{"id":1,"verb":"review-note","params":{"action":"list","session":"work","window":"build"}}
+```
+
+## `review-stage` <Since verb="review-stage" /> [#review-stage]
+
+Stage or unstage a change in the worktree of a pane. Name a whole file, one hunk, or some lines of a hunk. Only the index changes. The working files do not change. Every result carries an undo object. Send it back with action undo to undo the call. The undo result carries its own undo object, which redoes the call.
+
+| Param         | Type   | Required | Default | Description                                                                                                                                  |
+| ------------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `action`      | string | yes      |         | What to do. One of `stage`, `unstage` or `undo`.                                                                                             |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                     |
+| `window`      | string |          |         | Window id or name. Omit to target the focused window.                                                                                        |
+| `path`        | string |          |         | The file, relative to the repository root. Needed to stage and unstage.                                                                      |
+| `hunk`        | string |          |         | The hunk header, exactly as review-diff returned it. Stage reads it from index unstaged, unstage from index staged. Omit for the whole file. |
+| `lines`       | \[]int |          |         | Indices into the lines of the hunk. Only added and removed lines count. Context lines are ignored. Omit for the whole hunk.                  |
+| `context`     | int    |          | `3`     | The context of the diff the hunk came from, 0 to 20. It must match that diff.                                                                |
+| `undo`        | object |          |         | For action undo: the undo object of the result to undo, with entries and after.                                                              |
+| `human_nonce` | string |          |         | The nonce from the attach reply of a client attached now. The TUI sends its own. Without a live one the call is not the person's.            |
+
+| Result field | Type   | Description                                                                                                                                                                               |
+| ------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`    | string | The session of the pane.                                                                                                                                                                  |
+| `window`     | string | The pane, by id.                                                                                                                                                                          |
+| `worktree`   | string | The worktree whose index changed.                                                                                                                                                         |
+| `path`       | string | The file named.                                                                                                                                                                           |
+| `action`     | string | The action done: stage, unstage or undo.                                                                                                                                                  |
+| `undo`       | object | entries: the index entries of the paths touched before the call, each path with mode and sha, or absent. after: the same paths after the call. Send it with action undo to undo the call. |
+
+```json
+{"id":1,"verb":"review-stage","params":{"action":"stage","session":"work","window":"build","path":"api/retry.go","hunk":"@@ -40,7 +40,9 @@ func Do(ctx context.Context","lines":[3,4]}}
+```
+
+```json
+{"id":1,"verb":"review-stage","params":{"action":"unstage","session":"work","window":"build","path":"api/retry.go"}}
+```
+
+```json
+{"id":1,"verb":"review-stage","params":{"action":"undo","session":"work","window":"build","undo":{"entries":[{"path":"api/retry.go","mode":"100644","sha":"<sha>"}],"after":[{"path":"api/retry.go","mode":"100644","sha":"<sha>"}]}}}
+```
+
+## `send-review` <Since verb="send-review" /> [#send-review]
+
+Send a pane's unsent review notes to its agent as one message, through the delivery queue: typed now when the agent is at rest, else when it next comes to rest. The message says it is from the person only with a live human\_nonce, and labels each note written by someone other than the sender with its author. It types into the pane, so a pane may send only to a pane that holds nothing it does not, and a note whose author may not type there now is withheld.
+
+| Param         | Type      | Required | Default | Description                                                                                                                       |
+| ------------- | --------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `session`     | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.          |
+| `window`      | string    |          |         | Window id or name. Omit to target the focused window.                                                                             |
+| `ids`         | \[]string |          |         | Only these notes. Omit for every unsent one.                                                                                      |
+| `now`         | bool      |          | `false` | Type it now or not at all: refuse with agent\_blocked or not\_ready instead of queueing.                                          |
+| `human_nonce` | string    |          |         | The nonce from the attach reply of a client attached now. The TUI sends its own. Without a live one the call is not the person's. |
+
+| Result field      | Type      | Description                                                                                                                                                                 |
+| ----------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `notes`           | int       | How many notes the message carries.                                                                                                                                         |
+| `ids`             | \[]string | The notes sent, now marked with sent\_at.                                                                                                                                   |
+| `queued_id`       | string    | The queue entry, which cancel-queued takes.                                                                                                                                 |
+| `position`        | int       | Its place in the pane's queue, 1 for next.                                                                                                                                  |
+| `queued`          | int       | How many messages the pane's queue holds now.                                                                                                                               |
+| `delivering`      | bool      | The message is next and the agent is at rest, so it is typed within about a second.                                                                                         |
+| `withheld`        | \[]string | Notes left out, not sent and not marked: their author (a pane, or a linked machine) may not type into this pane now, or the pane that wrote them is gone. Absent when none. |
+| `withheld_reason` | string    | Why the first withheld note was left out. Absent when none.                                                                                                                 |
+
+```json
+{"id":1,"verb":"send-review","params":{"session":"work","window":"build","human_nonce":"<from the attach reply>"}}
+```

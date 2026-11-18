@@ -1,0 +1,392 @@
+---
+title: "Verbs: Windows"
+description: "Verbs: Windows: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## list-windows [#list-windows]
+
+List the windows in a session.
+
+Params: `session` (optional).
+
+Request:
+
+```json
+{"verb": "list-windows", "params": {"session": "work"}}
+```
+
+Response:
+
+```json
+{"result": {
+  "type": "window_list",
+  "total": 2,
+  "focused_index": 0,
+  "focused_window_id": "7e02...",
+  "current_workspace": 1,
+  "workspace_windows": [2, 0, 0, 0, 0, 0, 0, 0, 0],
+  "windows": [
+    {"window_id": "7e02...", "index": 0, "title": "zsh", "display_name": "editor",
+     "workspace": 1, "focused": true, "minimized": false, "x": 0, "y": 0,
+     "width": 80, "height": 24, "pty_id": "4bff..."}
+  ]
+}}
+```
+
+A window that runs a program other than its shell has `foreground_cmd`, the
+program's name. It is omitted at a shell prompt.
+
+A window whose process runs on another machine also has `host`. While the link
+to it is lost and the pane is being reattached, it has `host_link:
+"reconnecting"` and `host_link_until`, the unix time the far machine stops
+keeping the process (see [A pane that outlives its link](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#a-pane-that-outlives-its-link)).
+
+A window with a pane on this daemon also has `history_rows` and `revision`,
+the numbers [capture-pane](/docs/control-protocol/verbs-input-and-output#capture-pane) reports. A reader can compare
+`revision` with the one it last captured and skip the panes that did not
+change.
+
+A window whose process runs on this machine also has `pid`, the process the
+pane started, and `tty`, the path of its terminal device. A zoomed window has
+`zoomed: true`. A floating window has `floating: true`. It sits over the tiled
+windows at its own rectangle.
+
+A window that a process in another pane opened has `started_by`, that pane
+as `{"session", "window"}`. See
+[Which pane started a pane](/docs/control-protocol/verbs-search#which-pane-started-a-pane).
+
+## get-window [#get-window]
+
+Describe one window, as the client protocol's `GetWindow` command does. With
+a client attached the client answers, with its cursor and process fields;
+with none, the daemon answers with the window's `list-windows` entry. The
+window is resolved by the daemon either way, so a target that matches nothing
+is `window_not_found`. A client that does not answer in time is not waited on
+twice: the daemon's entry follows.
+
+Params: `session` and `window` (both optional; `window` omitted means the
+focused window).
+
+It is a read, like `list-windows`: a pane holding `read` may call it on its
+own session and its fan group, and a restricted connection on a session in
+reach. `tuios get-window` uses it.
+
+Request:
+
+```json
+{"verb": "get-window", "params": {"session": "work", "window": "build"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "window", "window_id": "7e02...", "index": 1, "title": "zsh",
+ "display_name": "build", "workspace": 1, "focused": false, "minimized": false,
+ "agent_state": "idle", "width": 80, "height": 24, "pty_id": "4bff..."}}
+```
+
+## new-window [#new-window]
+
+Create a new window in a session.
+
+Params, all optional: `session`, `name` (window name; omit to use the shell's
+title), `workspace` (workspace number; omit for the calling pane's workspace,
+else the one the session shows), `cwd`
+(directory to start in; omit for the caller's directory when the caller runs
+in a pane, else the focused pane's), `focus` (default true;
+pass false to leave the focus where it is), `command` (argv to exec instead of a
+shell, not parsed by any shell; with a client attached, the window closes when
+it exits), `host` (run the window's process on a machine from the `[hosts]`
+table; omit or pass `local` for this machine), and `close_on_exit` (default
+false; close the window when its process exits, also with no client attached.
+Without it, a detached session keeps the window until something closes it),
+`keep_open` (default false; keep the window after its process exits, with a
+line that shows the exit status under the last output; not with
+`close_on_exit`), `wait` (default false; answer when the process exits, with
+`exit_code` and, when a signal stopped it, `signal`; not for a window on
+another machine), `timeout` (with `wait`, milliseconds before the
+`timeout` error; 0 waits with no limit), and `env` (an object of variables
+to set in the process; checked as `start-agent` checks its `env`; not for a
+window on another machine, and refused from another machine), and
+`shell_integration` (`auto` or `off`: whether the pane's bash or zsh starts
+with OSC 133 prompt marks on; omit it for `[shell] integration`; no effect on
+a window that runs a command). `new-session`
+takes the same `env` for its first window, and refuses it with `window` false.
+
+A daemon that does not know `keep_open` and `wait` refuses them with
+`invalid_params`, as it refuses any parameter it does not know. A daemon from
+before that refusal ignores them: the result has no `keep_open` and no
+`exit_code`. A caller checks for those fields.
+
+Request:
+
+```json
+{"verb": "new-window", "params": {"session": "work", "name": "build"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "window_created", "window_id": "9a3c...", "name": "build"}}
+```
+
+## split-window, zoom-window, swap-window, resize-window [#split-window-zoom-window-swap-window-resize-window]
+
+The layout verbs. Each one names a pane with `window`. Without `window`, a
+caller in a pane of the session acts on its own pane, and any other caller on
+the focused pane. The daemon changes the layout itself, so these work with no
+client attached. An attached client lays its panes out again from the result,
+and a client that attaches later shows it.
+
+`split-window` cuts a pane in two and opens a new window in the new half. Params:
+`side` (`left`, `right`, `up` or `down`: the side of the pane the new pane
+takes) or `direction` (`vertical` for right, `horizontal` for below), `ratio`
+(the new pane's share in percent, 1 to 99; omit for half), and `name`,
+`command`, `cwd`, `focus`, `keep_open`, `close_on_exit`, `env`, `host`,
+`shell_integration` and `grants` as for `new-window`. Without `cwd`, the pane starts in the caller's
+directory when the caller runs in a pane. The new pane is on the workspace of
+the pane it cuts. A floating, minimized or popup pane cannot be split
+(`invalid_params`). The verb turns tiling on when it is off. The result is
+new-window's, with `type` `window_split`, `side` and `direction`.
+
+`zoom-window` zooms a pane to fill its workspace. Params: `zoom` (true or false;
+omit to toggle). Zooming a pane on the workspace the session shows focuses it.
+The result has `window_id`, `zoomed` and `changed`.
+
+`swap-window` swaps two tiled panes. Params: `with` (required, the other pane).
+The panes must be on one workspace. The focus does not move.
+
+`resize-window` moves one border of a tiled pane. Params: `direction` (required:
+`right` and `down` move a border right or down, `left` and `up` move it left
+or up) and `amount` (percent of the layout's width or height, 1 to 50;
+default 5). The border is the one on that side of the pane, or the one on the
+other side when the pane is at the edge there. The result has `changed`,
+false when no border could move.
+
+`move-window` takes `beside` (a pane), `side` (default `right`) and `ratio`:
+the window leaves its place and splits that pane, on that pane's workspace.
+
+In the master-stack and scrolling layouts, which place panes by order, an
+attached client does the swap and the resize.
+
+```json
+{"verb": "split-window", "params": {"session": "work", "window": "build", "side": "down", "ratio": 30, "focus": false, "command": ["tail", "-f", "app.log"]}}
+{"verb": "swap-window", "params": {"session": "work", "window": "build", "with": "logs"}}
+{"verb": "resize-window", "params": {"session": "work", "window": "logs", "direction": "up", "amount": 10}}
+{"verb": "zoom-window", "params": {"session": "work", "window": "build", "zoom": true}}
+```
+
+## popup [#popup]
+
+Open a popup: a floating pane that runs one command and closes when the command
+exits. Needs an attached client, and fails with `needs_client` when there is
+none.
+
+Params: `command` (required argv), `session` (optional), `width` and `height`
+(optional, cells such as `"60"` or a share of the pane region such as `"60%"`,
+default `"80%"` and `"60%"`), `name`, `cwd`, `workspace` and `dim` (all optional),
+`wait`, `capture_stdout` and `timeout` (optional, below), and `scratch` and
+`scratch_name` (optional). `scratch` starts a scratch group, the layout a key
+shows and hides, with its first pane. The pane is not a popup: it is a tiled
+window on the group's own workspace, numbered from 1000 up, which is never
+the session's current workspace. `scratch_name` names the group: empty is the
+built-in scratch terminal of `toggle_scratch`, and a `[[keybindings.command]]`
+entry of type scratch uses its own name. With `scratch`, `command` is optional
+and defaults to the shell. A session has one group per name, so a second call
+with the same name fails with `invalid_params`. A `new-window` with the
+group's workspace adds a pane to the group, and one with a scratch workspace
+no group is on fails. `list-windows` marks each pane of a group with
+`"scratch": true` and its `"scratch_name"`. Every group survives a daemon
+restart, hidden, each pane with a new shell and its saved history.
+
+`dim` is `0` to `90`. Omitted, it inherits `appearance.popup_dim`
+(`appearance.modal_dim` for a TML popup); explicit `0` turns it off. Dimming
+applies only while the popup has focus.
+
+The popup's command starts at the size the popup has on the screen: the size
+the caller asked for, in the session's pane region.
+
+With `wait` the call stays open until the command exits, and answers with
+`{"type": "popup_result", "window_id", "name", "exit_code"}`. `exit_code` is
+-1 when a signal ended the command, which is how closing the popup by hand
+ends it. `capture_stdout` (which needs `wait`) gives the command a pipe the
+daemon owns as its standard output instead of the popup, and adds `stdout`
+(at most 1 MiB) and `stdout_truncated` to the answer. A picker such as fzf
+draws on the terminal and prints only the choice, so the choice is what comes
+back. It is refused on Windows. `timeout` bounds the wait in milliseconds; 0,
+the default, waits as long as the popup is open, and a wait that runs out
+fails with `timeout` and leaves the popup open. None of this grants anything:
+the caller picked the command, and what comes back is what it printed.
+
+The size the caller asks for is session state and the rectangle it resolves to
+is not. Each attached client centres the popup in its own pane region, the way
+each client computes its own zoom box.
+
+Request:
+
+```json
+{"verb": "popup", "params": {"session": "work", "command": ["fzf"], "width": "60%"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "popup_opened", "window_id": "9a3c...", "name": "fzf",
+            "workspace": 1, "pty_id": "4bff...", "width": "60%", "height": "60%"}}
+```
+
+## close-window [#close-window]
+
+Close a window.
+
+Params: `session` (optional), `window` (optional target; defaults to the focused
+window). A window target matches, in order, an exact window ID, a unique ID
+prefix, an exact custom name, then an exact title.
+
+Request:
+
+```json
+{"verb": "close-window", "params": {"session": "work", "window": "build"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "ok"}}
+```
+
+## close-workspace [#close-workspace]
+
+Close every pane on a workspace, like tmux `kill-window`. A scratch pane stays
+unless the workspace named is its scratch workspace. A pane that calls it needs
+the `admin` grant.
+
+Params: `session` (optional), `workspace` (optional; defaults to the current
+workspace).
+
+Request:
+
+```json
+{"verb": "close-workspace", "params": {"session": "work", "workspace": 2}}
+```
+
+Response:
+
+```json
+{"result": {"type": "workspace_closed", "workspace": 2, "closed": ["a6e55709-...", "75684348-..."]}}
+```
+
+## pip [#pip]
+
+Pin a pane as the attached client's picture-in-picture view, or unpin it. The
+view is a small live copy of the pane in a corner of the client's screen. It
+shows while another pane has the focus.
+
+Params: `session` (optional), `window` (optional; a window ID or name),
+`off` (optional bool). Omit `window` to pin the client's focused pane. Naming
+the pinned pane again unpins it. `off` unpins whatever is pinned and takes no
+`window`.
+
+The view belongs to the client, not to the session. It is not in session
+state, so the verb needs an attached client and fails with `needs_client`
+without one. The verb reaches one client: with more than one attached, the
+client that `run-command` reaches. A client attached to a session on another
+machine refuses the command from that machine's daemon, because the view is
+part of the person's own screen.
+
+Request:
+
+```json
+{"verb": "pip", "params": {"session": "work", "window": "agent"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "pip", "pinned": true, "window_id": "6a7ad980-..."}}
+```
+
+## screenshot [#screenshot]
+
+Render a window to a styled image file. The picture is drawn from the pane's
+own cells, so colors, styles and OSC 8 links are exact, and the window chrome
+in it is drawn by the renderer rather than scraped off a client's border. It
+runs daemon side for the reason `capture-pane` does, so it answers on a
+detached session with nobody attached.
+
+Params:
+
+- `session` (optional), `window` (optional).
+- `format` (optional): `png` (the default), `svg`, `ansi`, `html` or `txt`.
+  Any other value is rejected with `invalid_params`.
+- `frame` (optional): `window` (the default), `plain` or `none`. `ansi` and
+  `txt` are frameless whatever this says.
+- `theme` (optional): render in this theme instead of the session's. Indexed
+  and basic cells re map cleanly; truecolor cells, which is most modern TUI
+  output, are unchanged by it.
+- `scrollback` (optional bool): put the pane's history above the screen.
+- `lines` (optional int): bound the history to the last N rows. Needs
+  `scrollback`.
+- `cursor` (optional bool): draw the cursor cell.
+- `out` (optional): write here instead of generating a name under
+  `screenshot.directory`.
+
+Everything else about the picture comes from the `screenshot.*` options.
+
+Request:
+
+```json
+{"verb": "screenshot", "params": {"session": "work", "window": "build", "format": "svg"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "screenshot", "path": "/home/u/Pictures/tuios/tuios-build-2026-08-25-204003.svg",
+            "host": "daemon", "format": "svg", "cols": 78, "rows": 22, "bytes": 2407, "warnings": []}}
+```
+
+The verb always writes a file and returns its path. There is no bytes in the
+envelope route: the protocol is line delimited JSON, a scrollback PNG is
+megabytes, and a second delivery path is a second set of bugs. `host` names the
+machine the path is on, so a script never has to assume; a CLI reaching the
+daemon over its unix socket is on that machine by construction.
+
+`warnings` is always present and empty when there is nothing to say. The one
+that matters is the no theme case: tuios can never read the host terminal's
+palette, so a session with no theme set renders basic and indexed colors in the
+xterm reference defaults and says so. Truecolor cells are exact regardless, and
+`theme` re renders in any installed palette.
+
+A screenshot cannot contain kitty images a pane is displaying. Those are host
+side placements, not cells; the capture shows whatever cells sit under them.
+
+Region and full screen captures are not verbs. They need a viewport, a layout
+and composed chrome, which only an attached client has, and they are reached
+from capture mode in the TUI.
+
+## resize [#resize]
+
+Resize a window's PTY.
+
+Params: `session` (optional), `window` (optional), `width` (required, positive),
+`height` (required, positive).
+
+Request:
+
+```json
+{"verb": "resize", "params": {"session": "work", "width": 100, "height": 40}}
+```
+
+Response:
+
+```json
+{"result": {"type": "resized", "width": 100, "height": 40}}
+```

@@ -1,0 +1,394 @@
+---
+title: "Verbs: Input and output"
+description: "Verbs: Input and output: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## send-keys [#send-keys]
+
+Send keys to a window's program: arrows, page keys, Enter, `ctrl+c`. Tokens
+are split on spaces and commas, and every token is parsed before anything is
+sent. A token is a key name (`Enter` `Tab` `BTab` `Space` `Comma` `Escape`
+`Backspace` `Up` `Down` `Right` `Left` `Home` `End` `PageUp` `PageDown`
+`Insert` `Delete` `F1` to `F12`, case-insensitive, also spelled `arrow-up`,
+`ArrowUp`, `KEY_UP`, `<Up>`, `PgDn`, `Esc`, `Return`, `BSpace` and the like),
+a single character, either of those after `ctrl+`, `alt+` or `shift+` (or
+tmux's `C-`, `M-`, `S-`, or `^C`), an escape sequence written `\e[A`,
+`\x1b[A`, `\033[A` or `^[[A`, or `PREFIX` for the leader key. A word that
+looks like a key name and is not one is `invalid_params` and nothing is
+sent; any other word is typed as its letters.
+
+Where the keys go:
+
+- With `window`, to that window's terminal, attached or not. Arrows, `Home`
+  and `End` follow the pane's application cursor keys mode. `PREFIX` with a
+  window and a client attached is `invalid_params`.
+- Without `window` and with a client attached, to the client, which reads
+  them as the person's keys: the window manager or the focused window.
+- Otherwise, and always for `literal` or a pane without `admin`, to the
+  terminal of the window named or the focused one.
+
+Params: `session` (optional), `window` (optional), `keys` (required), `literal`
+(optional bool, send the text through unchanged), `raw` (optional bool, treat
+each character as its own key), `repeat` (optional int, 1 to 1000, send the
+sequence that many times).
+
+Request:
+
+```json
+{"verb": "send-keys", "params": {"session": "work", "window": "docs", "keys": "Down", "repeat": 5}}
+```
+
+Response:
+
+```json
+{"result": {"type": "ok", "sent_to": "window", "window_id": "3a42ab8f-9eca-4738-8991-5f21aeb206f3", "window": "docs", "keys": 5}}
+```
+
+`sent_to` is `client` when the attached client took the keys; there is no
+window then.
+
+### Key grammar [#key-grammar]
+
+The key grammar is stable and closed. A key name or a modifier that is not in
+this list is refused with `invalid_params`, and nothing is sent. `list-keys`
+returns the same list, so an adapter can build its key table from it.
+
+Named keys, with the other spellings each one takes:
+
+| Key                           | Also accepted                                                                       |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `Enter`                       | `Return`, `Ret`, `CR`, `KPEnter`                                                    |
+| `Tab`                         |                                                                                     |
+| `BTab`                        | `BackTab`, `STab`, `shift+Tab`                                                      |
+| `Space`                       | `Spc`                                                                               |
+| `Comma`                       | the `,` character, which cannot be a key by itself because keys are split on commas |
+| `Escape`                      | `Esc`                                                                               |
+| `Backspace`                   | `BSpace`, `BS`, `BkSp`                                                              |
+| `Up`, `Down`, `Right`, `Left` |                                                                                     |
+| `Home`, `End`                 |                                                                                     |
+| `PageUp`                      | `PgUp`, `PPage`, `Prior`, `PrevPage`                                                |
+| `PageDown`                    | `PgDn`, `PgDown`, `PageDn`, `NPage`, `Next`, `NextPage`                             |
+| `Insert`                      | `Ins`, `IC`                                                                         |
+| `Delete`                      | `Del`, `DC`                                                                         |
+| `F1` to `F12`                 |                                                                                     |
+
+A name matches without case, and without `-`, `_` or spaces. These wrappers
+are also taken: `<Up>`, `KEY_UP`, `ArrowUp`, `arrow-up` and `up-arrow`.
+
+Modifiers go in front of a named key or of one character:
+
+| Modifier | Spellings                                                                                                       |
+| -------- | --------------------------------------------------------------------------------------------------------------- |
+| ctrl     | `ctrl+`, `control+`, `ctl+`, `C-`, and `^` before one character (`^C`)                                          |
+| alt      | `alt+`, `opt+`, `option+`, `meta+`, `M-`                                                                        |
+| shift    | `shift+`, `S-`                                                                                                  |
+| super    | `super+`, `cmd+`, `command+`, `win+`. Only the window manager of an attached client takes it. A pane refuses it |
+
+The spellings are the ones config.toml, herdr keys and a tape take too. `meta`
+is Alt everywhere, as it is to tmux, emacs and readline.
+
+ctrl combines with a letter, and with `@`, `[`, `\`, `]`, `^`, `_`, `?`,
+`Space`, `2`, `6` and `-`. Modifiers on a named key are sent the xterm way,
+for example `ctrl+Up` is `ESC [1;5A`.
+
+The other tokens:
+
+- One character is that character.
+- `PREFIX` is the leader key. It goes only to an attached client.
+- A token that starts with `\e`, `\E`, `\x1b`, `\033`, `\u001b`, `^[` or
+  the ESC byte is an escape sequence. It is sent as it is.
+- Any other word is typed as its characters. A word that looks like a key
+  name and is not one (`Dwon`, `F13`) is refused.
+
+Keys are split on spaces and commas. To send a comma, use `Comma`. To send a
+space, use `Space`. `repeat` is 1 to 1000.
+
+## list-keys [#list-keys]
+
+Return the send-keys key grammar: every named key with its aliases, the
+modifiers with their spellings, and the other kinds of token. The list is the
+one in [Key grammar](#key-grammar). It reads no session, and any connection may
+call it.
+
+Request:
+
+```json
+{"verb": "list-keys"}
+```
+
+Response (shortened):
+
+```json
+{"result": {"type": "key_list",
+  "keys": [{"name": "Enter", "aliases": ["cr", "kpenter", "ret", "return"]}, {"name": "Tab", "aliases": []}],
+  "modifiers": [{"name": "ctrl", "spellings": ["ctrl+", "control+", "ctl+", "C-", "^"]}],
+  "ctrl_characters": ["@", "[", "\\", "]", "^", "_", "?", "space", "2", "6", "-"],
+  "escape_prefixes": ["\\e", "\\E", "\\x1b", "\\033", "\\u001b", "^[", "ESC byte"],
+  "prefix_token": "PREFIX", "separators": [" ", ","], "max_repeat": 1000}}
+```
+
+## send-text [#send-text]
+
+Send literal text to a window's PTY. Unlike send-keys the text is written to the
+PTY verbatim with no key parsing, so it is always safe and always goes straight
+to the daemon owned PTY. Include a trailing newline to submit a line.
+
+Params: `session` (optional), `window` (optional), `text` (required),
+`paste` (optional, default false), `submit` (optional, default false).
+
+With `paste`, the text goes in as a paste. Control characters other than tab,
+line feed and carriage return are removed. The text is wrapped in the
+bracketed paste delimiters when the program in the pane turned bracketed
+paste on. The tmux shim's `paste-buffer` uses it.
+
+With `submit: true`, the text is typed the way `ask-agent` types a prompt: as
+one paste, in bracketed paste delimiters when the program in the pane has
+bracketed paste on, then a short wait for the paste to be taken in, then the
+Enter key of the harness in the pane.
+
+Request:
+
+```json
+{"verb": "send-text", "params": {"session": "work", "text": "echo hello\n"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "ok"}}
+```
+
+## paste-image [#paste-image]
+
+Writes an image to a file on the machine where a window's process runs, and
+returns the path of the file there. The client calls it when the person pastes
+an image. Then the client pastes the path into the window as text. For a
+window whose process runs on a host, the daemon sends the image to that host
+with `paste-pane-image` on a new link connection. The host writes the file.
+
+A window of this daemon with an `ssh` or `mosh` client in its foreground gets
+the file on the machine of that client. The daemon reads the command line from
+the process, never from what the pane prints. It resolves the line and each
+`[hosts]` entry (`ssh_options` and `addr`) with `ssh -G`, through the same
+program the links use. An entry matches only when the host name, the user, the
+port, `proxyjump` and `proxycommand` are the same. A remote command, such as
+`ssh -t host tmux`, is a session over there. With exactly one match, the daemon
+asks the host for a drop folder (`file-drop-dir`), copies the image there with
+a transfer, and answers with the host and the path there.
+
+The paste is refused with `unknown_host`, and the sentence for the person in
+`hint.detail`, when no entry matches, when more than one does, when the line
+cannot be read (`-F`, an `-o` the daemon does not know), or when the shell
+over there reports, with OSC 7, a folder on another `[hosts]` machine (ssh
+inside ssh). Nothing is written then. A tunnel (`-N`, or `-f`, `-n` or `-W`
+without `-t`) reads no keys, and its image is written here.
+
+Params: `session` (optional), `window` (optional, the focused window when
+empty), `content` (required), `human_nonce` (required).
+
+`content` is the image, base64. The image is PNG, JPEG, GIF, WebP, BMP or
+TIFF, and 8 MB or less when decoded. The daemon reads the type from the bytes
+and gives the file the matching extension. Other content is `invalid_params`.
+
+`human_nonce` is the attach nonce of the person's client, attached to the same
+session. A call without it, with a nonce of another session, or from a process
+inside a pane is `not_human`, and nothing is written.
+
+The file is mode 0600, in the `paste` directory next to the socket, which is
+mode 0700. The daemon deletes it after one hour, and deletes the files it wrote
+when it stops. A daemon that starts deletes the expired files in the directory.
+The directory keeps at most 50 images and 100 MB, and the oldest go first. A
+`paste` directory that is a symbolic link is refused with `internal`.
+
+Request:
+
+```json
+{"id": 1, "verb": "paste-image", "params": {"session": "work", "window": "a1b2", "content": "iVBORw0KGgo...", "human_nonce": "..."}}
+```
+
+Response:
+
+```json
+{"id": 1, "result": {"type": "pasted_image", "session": "work", "window": "a1b2", "host": "build", "path": "/run/user/1000/tuios/paste/tuios-paste-20261001-101500-3f2a9c0d1e2b.png", "bytes": 48213}}
+```
+
+`host` is present only when the file is on another machine. A host that
+cannot take the image is `host_unreachable`. Over a link, `paste-image` needs
+`write` and `files`, and the nonce must come from an attach on the
+`link-human` socket. A host whose policy refuses the image gives `forbidden`.
+The daemon passes that refusal on with the host's hint and sets `hint.host` to
+the host's name here.
+
+## run [#run]
+
+Type one command line at a pane's shell prompt, wait for the shell to report
+that it finished, and return its exit status and what it printed.
+
+It rests on the shell's OSC 133 marks: A where the prompt starts, B where the
+input starts, C when the command runs and `D;<status>` when it finishes. fish
+and zsh send them with prompt integration on, bash with a setup, and every
+shell a terminal like Ghostty, kitty or WezTerm injects its script into. The
+daemon reads them from the pane's own output, so nothing needs installing in
+tuios.
+
+Params:
+
+- `session` (optional), `window` (optional; the focused window when omitted).
+- `command` (required string): one line, with no control characters. It is
+  typed as a bracketed paste when the shell has asked for one, then submitted
+  with Enter. Several commands are joined with `;` or `&&`.
+- `timeout` (optional int): milliseconds to wait for the command. Default
+  30000\. The command keeps running after a timeout.
+- `lines` (optional int): keep only the last N lines of the output.
+
+What it refuses, with nothing typed:
+
+- `no_shell_integration`: the shell has sent no mark. A pane that has not
+  sent one yet gets three seconds to draw its first prompt, so a window
+  opened a moment ago is not refused for being slow to start. The same code,
+  with a message that says "prompt marks only", refuses a pane whose shell
+  has run a command without the C mark (`prompt_marks_only` in
+  `list-windows`). A fresh pane cannot show that before a command runs, so the
+  first `run` there types; when the shell draws a new prompt with no C first,
+  that `run` returns this error at once rather than at its timeout, and says
+  the command was typed. bash needs 4.4 or newer for the bash recipe's C mark.
+- `not_at_prompt`: a command is running in the pane. The message names it, and
+  the hint is the `wait-for command-finished` call with the pane's
+  `command_seq`. Another `run` in the same pane that has not ended yet is
+  refused the same way, with the message "another run is typing or running",
+  so two callers sharing a pane never type into one line: a pane runs one
+  `run` at a time.
+- `invalid_params`: the command holds a newline or another control
+  character. A newline at a prompt is Enter, so a second line would run as a
+  second command the result says nothing about.
+
+Response:
+
+```json
+{"result": {"type": "command_result", "session": "work", "window": "4f1c...", "cmdline": "go test ./...", "exit_code": 1, "duration_ms": 8123, "command_seq": 5, "output": "--- FAIL: TestX ...", "truncated": false}}
+```
+
+`exit_code` is omitted when the shell sent no status, which bash integrations
+do for a command ended with ctrl+c. `output` is plain text read out of the
+pane between the C and D marks, at most its last 256 KiB; `truncated` says it
+was cut or its start had already left the scrollback. `cmdline` is the command
+line as the shell showed it, cut to 512 bytes, with likely secrets masked the
+way an Inbox summary is.
+
+A timeout returns `timeout` with a hint naming `wait-for command-finished`
+with the `command_seq` from before the command, which matches as soon as it
+finishes, or at once if it already has.
+
+`run` grants nothing that `send-text` and `capture-pane` do not: a caller that
+can type into a pane and read it back can already do all of it. What it adds is
+the refusal to type into a running program.
+
+## capture-pane [#capture-pane]
+
+Capture a pane's content, rendered from the daemon side terminal emulator.
+
+Params:
+
+- `session` (optional), `window` (optional).
+- `source` (optional): `visible` (the viewport, the default), `recent`
+  (viewport plus scrollback) or `last-command-output` (what the last finished
+  command printed, read between its shell's OSC 133 marks; see [run](#run)).
+  Any other value is rejected with `invalid_params`; the hint names the
+  accepted set. `last-command-output` is plain text, so `styled`, `ansi` and
+  `resolved` are refused with it; its result adds `cmdline`, `exit_code`
+  (omitted when the shell sent none), `command_seq` and `truncated`, and it
+  fails with `no_shell_integration` when no command has finished under the
+  marks.
+- `styled` (optional bool): include ANSI styling escape sequences. Default is
+  plain text.
+- `scrollback` (optional bool): alias for `source: "recent"`.
+- `ansi` (optional bool): alias for `styled`.
+- `resolved` (optional bool): rewrite ANSI index colours to 24-bit RGB so the
+  capture matches what a themed client paints. Index colours are the SGR forms
+  `30-37`/`90-97` (foreground), `40-47`/`100-107` (background) and
+  `38;5;n`/`48;5;n`; each maps through the palette when it names one of the
+  theme's sixteen, and otherwise through the fixed formulas of the standard
+  256-colour cube (indices 16-231) and grey ramp (232-255), which every
+  consumer draws identically. True colour (`38;2;r;g;b`) passes through
+  untouched, as does any parameter that is not a plain integer: a colon-coded
+  sub-parameter such as `4:3` (curly underline) travels verbatim instead of
+  being flattened into another attribute. Asking for `resolved` implies
+  styling, so the reply reports `styled: true`. Default is `false`.
+- `palette` (optional \[]string): the 16 hex colours (`#rrggbb`) a client's
+  theme paints indices 0-15 with, used by a `resolved` capture. When present it
+  must have exactly 16 entries; anything else is rejected with
+  `invalid_params`. Absent, `resolved` falls back to the xterm defaults.
+- `lines` (optional int): when greater than zero and no region is given, keep
+  only the last N lines.
+- `start`, `end` (optional ints): a 1 based inclusive line region. When set, the
+  region wins over `lines`.
+- `unwrap` (optional bool): join the rows the terminal wrapped because a line
+  was longer than the pane, so each line comes back as the program wrote it. A
+  row that ends with a newline stays a line of its own. `lines`, `start` and
+  `end` then count the joined lines. The result adds `unwrapped: true`.
+- `trim` (optional bool): drop the blank lines at the end of the capture. The
+  result adds `trimmed: true`.
+
+A daemon from v0.8.0 on that does not know `unwrap` or `trim` refuses the
+call with `invalid_params`, and its hint names the parameter. A daemon older
+than v0.8.0 ignores them and omits `unwrapped` and `trimmed`.
+
+Request:
+
+```json
+{"verb": "capture-pane", "params": {"session": "work", "source": "recent", "lines": 20}}
+```
+
+Response:
+
+```json
+{"result": {"type": "pane_content", "source": "recent", "styled": false, "resolved": false, "content": "...",
+  "history_rows": 1840, "revision": 902113, "boot_id": "9f2c41d07a3e8b65"}}
+```
+
+A `visible` or `recent` capture also reports these fields:
+
+- `history_rows` is the number of scrollback lines above the screen. A
+  `recent` capture holds these lines and then the screen. So a reader that
+  asked for N lines has older lines to load when N is less than
+  `history_rows` plus the screen rows.
+- `revision` grows each time the pane's content can change. Output that
+  reaches the emulator moves it, and so does a resize. Two captures of one
+  source and one style with the same `revision` have the same content, so a
+  reader can skip a grid it already has.
+- `boot_id` names the daemon start. `revision` counts from 0 again when the
+  daemon restarts. Compare two revisions only when their `boot_id` is the
+  same.
+
+The content and the two numbers are read under one lock, so the revision is
+the one the content was taken at. `list-windows` reports `history_rows` and
+`revision` for every window, so a reader can check many panes with one call.
+
+The reply echoes `resolved` so a consumer can tell whether the capture it
+received was rewritten. Without `resolved`, a `styled` capture emits the
+colours exactly as the guest sent them: a program that draws with SGR `31`
+comes back as `\x1b[31m`, and the consumer resolves that index against its
+own palette. That is the intended contract: appearance is client-owned and
+the daemon has no theme. `resolved` exists for consumers that render the
+capture verbatim and therefore need the colours already resolved; it takes
+the palette explicitly so the daemon still knows nothing about themes.
+
+```json
+{"verb": "capture-pane", "params": {"session": "work", "source": "visible", "styled": true, "resolved": true, "palette": ["#45475a", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#bac2de", "#585b70", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#a6adc8"]}}
+```
+
+Content is physical rows, not logical lines: a line longer than the pane width
+was wrapped by the emulator and comes back as several rows, so `lines`, `start`
+and `end` count wrapped rows. There is no unwrapped capture. Earlier builds
+documented a reserved `recent-unwrapped` source that was accepted but behaved
+exactly like `recent`; it is now rejected rather than silently ignored, because
+the emulator does not record which rows are continuations and unwrapping them
+would mean guessing. A caller that needs logical lines should widen the pane
+with `resize` before capturing.

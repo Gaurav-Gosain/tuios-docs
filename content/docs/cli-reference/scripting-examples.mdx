@@ -1,0 +1,573 @@
+---
+title: "Scripting Examples"
+description: "Scripting Examples: part of the CLI Reference of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CLI_REFERENCE.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CLI_REFERENCE.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CLI_REFERENCE.md). The [CLI Reference](/docs/cli-reference) page lists every part.
+
+## Scripting Examples [#scripting-examples]
+
+These remote control and inspection commands enable powerful scripting workflows.
+
+### `tuios whoami` <Since command="whoami" /> [#tuios-whoami]
+
+Show where this command runs, as the daemon sees it now.
+
+**Usage:**
+
+```bash
+tuios whoami [--json]
+```
+
+The daemon finds the caller's pane from the kernel's record of the process,
+not from its environment, so every id whoami prints exists now. It prints the
+pane (its id, name and workspace), the session, the grants the pane holds, the
+focused pane and the workspace the session shows, the clients attached to the
+session, the daemon (version, pid, socket, and the server name of a named
+daemon) and the host. Outside every pane it says so, and lists every attached
+client.
+
+The `TUIOS_*` variables a pane starts with are never rewritten. After a
+`rename-session`, `TUIOS_SESSION` still holds the old name. `stale_env` lists
+each of `TUIOS_PANE_ID`, `TUIOS_WINDOW_ID`, `TUIOS_SESSION` and
+`TUIOS_SOCKET` that is set and no longer matches, so a script can use the ids
+whoami printed instead.
+
+```bash
+tuios whoami --json | jq -r '.session'
+tuios whoami --json | jq -r '.focused_window_id'
+```
+
+```json
+{"success": true, "message": "whoami", "in_pane": true,
+ "window_id": "3a42ab8f-...", "short_id": "3a42ab8f", "name": "worker",
+ "workspace": 1, "session": "work", "grants": ["admin"],
+ "focused_window_id": "9c1d...", "focused_name": "editor", "current_workspace": 1,
+ "clients": [{"client_id": "client-17...", "pid": 4242, "session": "work"}],
+ "daemon": {"version": "v0.12.0", "pid": 811, "socket": "/tmp/tuios-501/tuios.sock"},
+ "host": "devbox", "stale_env": []}
+```
+
+### Create and Focus Windows [#create-and-focus-windows]
+
+```bash
+#!/bin/bash
+# Create a development layout
+
+# Create windows and capture their IDs
+EDITOR_ID=$(tuios run-command --json NewWindow "editor" | jq -r '.window_id')
+TERMINAL_ID=$(tuios run-command --json NewWindow "terminal" | jq -r '.window_id')
+LOGS_ID=$(tuios run-command --json NewWindow "logs" | jq -r '.window_id')
+
+# Enable tiling
+tuios run-command ToggleTiling
+
+# Send commands to each window
+tuios send-keys --literal --raw "nvim ." && tuios send-keys Enter
+tuios run-command FocusWindow "$TERMINAL_ID"
+tuios run-command FocusWindow "$LOGS_ID"
+tuios send-keys --literal --raw "tail -f /var/log/system.log" && tuios send-keys Enter
+```
+
+### Query and React to State [#query-and-react-to-state]
+
+```bash
+#!/bin/bash
+# Wait for a specific condition
+
+# Wait until there are at least 3 windows
+while true; do
+    WINDOW_COUNT=$(tuios session-info --json | jq '.window_count')
+    if [ "$WINDOW_COUNT" -ge 3 ]; then
+        echo "Ready with $WINDOW_COUNT windows"
+        break
+    fi
+    sleep 0.5
+done
+```
+
+### Run a Command and Wait for It [#run-a-command-and-wait-for-it]
+
+When the pane's shell marks its commands with OSC 133, one call does it and
+exits with the build's own status:
+
+```bash
+tuios new-window build
+tuios run -w build --timeout 120000 --lines 40 -- go build ./...
+```
+
+Without shell integration, assemble a marker:
+
+```bash
+#!/bin/bash
+# Open a window, run a build in it, and block until it finishes.
+# The marker is assembled by printf so the literal BUILD_OK never appears in
+# the command line the pane echoes, which would match the wait immediately.
+
+tuios new-window build
+tuios send-text -w build 'go build ./... ; printf "BUILD_%s %s\n" OK "$?"
+'
+
+if tuios wait-for window-output -w build --pattern 'BUILD_OK' --timeout 120000; then
+    tuios capture-pane -w build --scrollback --lines 5
+else
+    tuios capture-pane -w build --scrollback --lines 40
+    exit 1
+fi
+```
+
+### Integration with Other Tools [#integration-with-other-tools]
+
+```bash
+#!/bin/bash
+# Use fzf to select and focus a window
+
+WINDOW=$(tuios list-windows --json | \
+    jq -r '.windows[] | "\(.display_name)\t\(.window_id)"' | \
+    fzf --with-nth=1 | \
+    cut -f2)
+
+if [ -n "$WINDOW" ]; then
+    tuios run-command FocusWindow "$WINDOW"
+fi
+```
+
+### Automated Testing [#automated-testing]
+
+```bash
+#!/bin/bash
+# Run a command and verify output
+
+tuios send-keys --literal --raw "echo 'test-marker-12345'" && tuios send-keys Enter
+sleep 0.5
+
+# The marker shows twice once the command ran: in the echoed command line and
+# in its output
+COUNT=$(tuios capture-pane | grep -c 'test-marker-12345')
+if [ "$COUNT" -ge 2 ]; then
+    echo "command ran"
+fi
+```
+
+---
+
+### `tuios tml` <Since command="tml" /> [#tuios-tml]
+
+Show a TML document in tuios: a dashboard, a test result or a question. TML is
+a markup for terminal surfaces: a tree of known components, such as text,
+tables, stats, charts, tabs and buttons, with a JSON state. tuios draws it with
+your theme's colours. Keys and the mouse work in it. The daemon keeps the
+surface, so it stays when you detach and comes back when you attach.
+
+**Usage:**
+
+```bash
+tuios tml show FILE [--popup | --pane] [--wait] [--width W] [--height H]
+tuios tml show FILE --events
+tuios tml patch SURFACE OPS
+tuios tml replace SURFACE FILE [--keep-state]
+tuios tml get SURFACE
+tuios tml list [-s SESSION]
+tuios tml close SURFACE [VALUE]
+tuios tml validate FILE
+tuios tml render FILE [--width N] [--height N] [--state JSON] [--tab ID] [--ansi]
+```
+
+FILE is a TML text or TML JSON file, or `-` for standard input.
+
+`tml show` checks the document, opens it and prints the surface id and the
+window id. A popup floats over the panes and needs an attached client. Press
+`esc` to close it, unless the document uses `esc`. A pane (`--pane`) is tiled
+like any pane.
+
+With `--wait` the command stays open until the surface closes. It prints the
+value the document closed with as JSON, such as `"rerun"`, and exits with
+status 0. It prints `null` and exits with status 1 when the person closed the
+surface without a value. It exits with status 2 when a program closed it with
+`tml close`: the value it prints is then not the person's answer.
+
+With `--events` the command prints the answer, then one JSON line for each
+`tml-event` of the surface: an `emit` action the person ran, and the close,
+which is the last line. A script that reads them is the surface's owner. It
+answers with `tml patch`, a JSON Patch on the state (`-` reads it from standard
+input), or `tml replace`, a new document. A patch with a `test` that no longer
+matches is refused: read the state with `tml get` and send it again.
+`tml list` names the open surfaces of a session.
+
+`tml close` closes a surface. VALUE is JSON, and a waiting `tml show` prints
+it.
+
+From a pane, these commands need the `write` grant, and `tml patch`,
+`tml replace` and `tml close` work only on the surfaces that pane opened. A
+button's `pane('send-text', ...)` runs with the opening pane's grants, and tuios
+asks the person before a surface first types into a pane. `tml validate` prints each problem with its line, the node and the fix,
+and exits with status 1 when the document has errors. It needs no daemon.
+
+`tml render` prints the document drawn as text, as tuios draws it in a pane,
+and opens nothing. The width is the terminal's width, or 100 when standard
+output is not a terminal. Without `--height` the document gets the rows it
+takes. `--state` replaces the state, `--tab` opens a tab by its id, and `--ansi`
+keeps the colours as ANSI escape sequences. It exits with status 1 and prints
+the problems when the document is not valid. It needs no daemon.
+
+`tuios capture-pane` on a TML window prints the surface as drawn, at the
+window's size, with its state and the view of the client that last reported
+one: the open tab, the cursor rows and the scroll place.
+
+**Flags of `tml show`:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--popup`: Show it as a popup (the default)
+- `--pane`: Show it as a tiled pane
+- `--name <name>`: Name for the window (default: the document's title)
+- `--width`, `--height`: Popup size in cells or percent (default: 80% and 60%)
+- `--workspace <n>`: Workspace to open it on
+- `--wait`: Stay open until the surface closes, and print its value
+- `--timeout <ms>`: With `--wait`, how long to wait
+- `--json`: Output the result as JSON
+- `--events`: Print the surface's events as JSON lines until it closes
+
+**Examples:**
+
+```bash
+# Show a report as a popup
+tuios tml show report.tml
+
+# Show a dashboard as a pane, from standard input
+some-generator | tuios tml show - --pane
+
+# Ask a question and use the answer
+answer=$(tuios tml show confirm.tml --wait)
+
+# Own a dashboard from a script: answer each rerun with a patch
+tuios tml show dash.tml --events | while IFS= read -r line; do
+  case $line in
+    *'"type":"tml_opened"'*) id=$(printf '%s' "$line" | jq -r .surface) ;;
+    *'"name":"rerun"'*) tuios tml patch "$id" '[{"op":"replace","path":"/runs","value":2}]' ;;
+  esac
+done
+```
+
+A small document:
+
+```xml
+<tml version="1" title="Deploy">
+  <state>{"tag": "v0.11.0"}</state>
+  <col pad="1" gap="1">
+    <text>Deploy <b>{state.tag}</b> to production?</text>
+    <row gap="2">
+      <button key="y" kind="primary" on-press="close('yes')">Deploy</button>
+      <button key="n" on-press="close('no')">Cancel</button>
+    </row>
+  </col>
+</tml>
+```
+
+The person can move a surface between a popup and a pane: `ctrl+b t f`, the
+`dock` control on a popup's top border, or `float` on the pane's title bar.
+The document keeps its state. Each document a pane shows is also listed in
+the agents view, on the agent's Artifacts tab.
+
+The verbs behind these commands are `tml-open`, `tml-patch`, `tml-replace`,
+`tml-get`, `tml-list`, `tml-close`, `tml-place` and `tml-validate`, in
+[protocol.md](/docs/control-protocol). The events are `tml-event`.
+
+### `tuios mermaid` <Since command="mermaid" /> [#tuios-mermaid]
+
+Draw the Mermaid diagrams of a file in the terminal, or save them as SVG or PNG.
+
+**Usage:**
+
+```bash
+tuios mermaid FILE [--format svg|png|kitty|text] [-o FILE] [--diagram N] [--theme NAME] [--background theme|none] [--fit] [--kitty-medium auto|file|direct]
+```
+
+FILE is a Mermaid source (`.mmd`), a Markdown file, or `-` for standard input.
+`--kitty-medium` says how frames reach the terminal with `--format kitty`: `auto`
+(the default), `file` or `direct`.
+A Markdown file gives each of its `mermaid` code blocks.
+
+| Output  | When                                                                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `kitty` | The terminal shows kitty graphics: kitty itself, or tuios on such a terminal. The picture fits the terminal width |
+| `text`  | Any other terminal. Box-drawing characters draw the diagram, and the labels are text                              |
+| `svg`   | The output is not a terminal                                                                                      |
+
+tuios draws eight diagram types itself: flowcharts, sequence diagrams, state
+diagrams, class diagrams, ER diagrams, gantt charts, pie charts and mindmaps.
+The sketch plugin draws the other types, such as timelines, git graphs and
+sankey diagrams. Install it with `tuios plugins install sketch`. Then
+`tuios mermaid` runs the plugin for such a diagram, with `--format`, `--out`,
+`--cols`, `--diagram` and `--theme`. Without the plugin, the command says what
+to run and exits 3. `--watch` and `--demo` draw the eight types only. A TML
+panel draws another type with the plugin too. Without the plugin it shows the
+source, and a notice says what to run.
+
+`text` draws every type of the eight. Another type is written as its source,
+with a note on stderr. A drawing wider than the terminal
+is written at its full width, with a note on stderr.
+
+The text of a `kitty` picture has the size of the terminal's text, so the
+diagrams of a file have one text size. A small diagram is not made larger. A
+diagram wider than the terminal is made smaller to fit the width. A diagram
+taller than the terminal keeps its size and goes up into the scrollback: scroll
+up to see its top. `--fit` also makes it smaller to fit the height, two rows
+shorter than the terminal at most. The picture takes a fixed box of cells, so
+the next diagram starts under it. A blank line goes between two diagrams.
+
+A `kitty` or `png` picture has the background colour of the theme.
+`--background none`, or `background = "none"` in `[mermaid]`, leaves the
+background clear, so the diagram is on the background of your terminal. The
+labels keep their contrast against the theme's background colour, so use a
+theme that matches your terminal. An SVG has no background.
+
+`-o FILE` saves to a file, as SVG or PNG from its extension. With more than one
+diagram, the files get `-2`, `-3` and so on. `--scale` sets the pixels per SVG
+unit of a PNG, 2 by default. `--cols` and `--rows` set the size in cells.
+
+The colours come from your tuios theme, held to contrast floors against the
+terminal background. `--theme NAME`, or `theme` in `[mermaid]`, picks another
+theme:
+
+| Theme                                                                                           | From                                  |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `tuios`                                                                                         | Your tuios theme. This is the default |
+| `pele`                                                                                          | pele's own colours                    |
+| `flexoki`, `flexoki-dark`                                                                       | The pele.run site, light and dark     |
+| `nord`, `everforest`, `gruvbox`, `rose-pine`                                                    | pele's launch video                   |
+| `catppuccin-mocha`, `catppuccin-latte`, `tokyo-night`, `dracula`, `solarized-light`, `kanagawa` | Those terminal themes                 |
+
+Text in a theme colour that lands on a fill the diagram sets itself changes to
+the theme's text or background colour, where that reads better.
+
+tuios does not typeset math. A label with `$$...$$` shows its TeX source as text.
+
+**Live view:**
+
+```bash
+tuios mermaid FILE --watch [--split]
+tuios mermaid [FILE] --demo [--loop]
+```
+
+`--watch` fills the terminal with the diagram and draws it again each time the
+file is saved. In a terminal with kitty graphics the diagram moves to its new
+layout: boxes slide and grow, new parts fade in, removed parts fade out. In
+other terminals the text drawing is drawn again. `--split` shows the source
+beside the diagram, or above it on a tall terminal. `--motion` sets the length
+of a motion, 260ms by default.
+
+`--demo` types a diagram one character at a time, for a recording. With FILE it
+types that diagram line by line, or the diagrams of a Markdown file one after
+the other. Without FILE it types a built-in flowchart. `--loop` starts again
+two seconds after the end. Press `r` to start again and `q` to quit.
+
+The live view sends no frames and uses no CPU while nothing moves.
+tuios.dev/sketch draws the diagrams. It is a Go port of pele
+and draws flowcharts, sequence diagrams, state diagrams, class diagrams, ER diagrams, pie charts, mindmaps, gantt charts, XY charts, timelines, quadrant charts, user journeys, kanban boards, git graphs, sankey diagrams, block diagrams, architecture diagrams, requirement diagrams, C4 diagrams, packet diagrams, radar charts, treemaps, info diagrams, tree views, Ishikawa diagrams, Cynefin diagrams, event models, Venn diagrams, Wardley maps, railroad diagrams, use case diagrams, agent flows and swimlane diagrams now. A diagram of another type gives
+an error and its source. The command exits 1 when a diagram cannot be drawn.
+
+---
+
+### `tuios mcp` <Since command="mcp" /> [#tuios-mcp]
+
+Serve tuios to an agent harness as a Model Context Protocol server over stdin
+and stdout. The harness starts it; nobody runs it by hand.
+
+```bash
+tuios mcp [--write] [--scope own|all]
+```
+
+**Flags:**
+
+- `--write`: Also list the tools that type into panes: `tuios_send_text`,
+  `tuios_send_keys`, `tuios_ask_agent`, `tuios_respond`, `tuios_fan` and
+  `tuios_delegate`
+- `--scope`: `own` (the default) reaches only the session of the pane the
+  server runs in, its fan group, and the sessions a `fan` from it started.
+  `all` reaches every session, for a harness that runs outside tuios
+
+**Tools, by default:** `tuios_list_agents`, `tuios_list_windows`,
+`tuios_get_agent_state`, `tuios_capture_pane`, `tuios_peek_prompt`,
+`tuios_wait_for`, `tuios_read_agent_messages`, `tuios_send_agent_message`,
+`tuios_set_agent_state`, `tuios_set_agent_meta` and `tuios_events`. Four of
+them change state. `tuios_set_agent_state` and `tuios_set_agent_meta` change
+the caller's own record. `tuios_send_agent_message` sends mail.
+`tuios_read_agent_messages` marks the mail it returns as read. No default tool
+types into a pane. Each is a
+daemon verb, and its input schema is generated from the verb table, so it takes
+the verb's own parameters. `tuios_events` follows the event stream: it returns
+what happened since `after_seq`, or waits up to `wait_ms` for the next events,
+and answers with the `last_seq` and `boot_id` to pass to the next call.
+`last_seq` is where the daemon's stream stood when the call returned, even when
+none of the events since were ones the call may see, so a server held to a
+quiet session still moves forward. Only when `max_events` cuts the replay
+short is it the seq of the last event returned.
+
+**How it is held to its grant:** every tool call opens its own connection to
+the daemon and calls `restrict-connection` on it first, so the daemon refuses
+what the flags do not grant, with `forbidden`. The server finds its pane from
+the kernel's record of its pid, and where the kernel cannot say, from
+`TUIOS_PANE_ID` and `TUIOS_PANE_TOKEN`. A server with `--scope own` that runs
+in no pane reaches nothing. A daemon too old to know `restrict-connection` runs
+nothing, and the tool says to restart it. Text read from a pane or a message is
+marked as data, not instructions. See [restrict-connection](/docs/control-protocol/verbs-agents-and-messages#restrict-connection).
+
+The daemon's socket is `TUIOS_SOCKET` when the harness passes it, else the one
+`tuios` always uses. A harness that starts its MCP servers without
+`XDG_RUNTIME_DIR` still finds the daemon under `/run/user/<uid>` on Linux, as
+every command does.
+
+**Registering it:**
+
+```bash
+# Hooks and the MCP server without the tools that type into panes
+tuios integration install claude-code --mcp
+
+# With the tools that type into panes
+tuios integration install codex --mcp-write
+
+# By hand, in Claude Code
+claude mcp add --scope user tuios -- tuios mcp
+```
+
+---
+
+### `tuios ssh` <Since command="ssh" /> [#tuios-ssh]
+
+Run TUIOS as an SSH server for remote access.
+
+By default, SSH sessions connect to the TUIOS daemon for persistent sessions with multi-client support. This means:
+
+- Sessions persist even when clients disconnect
+- Multiple clients can view/control the same session simultaneously
+- Session state (windows, workspaces) is preserved across reconnections
+
+**Usage:**
+
+```bash
+tuios ssh [flags]
+```
+
+**Flags:**
+
+- `--host <string>`: SSH server host (default: "localhost")
+- `--port <string>`: SSH server port (default: "2222")
+- `--key-path <string>`: Path to SSH host key (auto-generated if not specified)
+- `--default-session <string>`: Default session name for all connections
+- `--ephemeral`: Run in ephemeral mode (standalone, no daemon)
+- `--authorized-keys <string>`: Path to the public keys allowed to connect (default: `~/.config/tuios/authorized_keys`). Keys with options are not accepted
+- `--no-auth`: Give every connection a shell without checking who it is (trusted networks only)
+- `--handshake-timeout <duration>`: Close a connection that does not log in within this time (default: `2m0s`). `0` turns the limit off
+- `--idle-timeout <duration>`: Close a connection after this time with no traffic (default: `0`, off)
+- `--max-handshakes <int>`: Close a new connection at once when this many connections are logging in (default: `32`). `0` turns the limit off
+- `--max-sessions <int>`: Refuse a new session when this many sessions are open (default: `64`). `0` turns the limit off
+
+The four limit flags replace the same values in the `[ssh]` section of the
+config file. A limit flag that you do not give keeps the value in the file. See
+[SSH server limits](/docs/configuration#ssh-server-limits).
+
+**Who can connect:**
+
+Every connection gets a shell on the machine running the server, so the server
+checks who is connecting. It reads public keys from
+`~/.config/tuios/authorized_keys`. It does not read `~/.ssh/authorized_keys`
+unless you name that file with `--authorized-keys`.
+
+- With keys: only the holders of those keys connect. Add a key while the server
+  runs and it works on the next connection.
+- With no keys file: the server does not start, on `localhost` too. It prints
+  three ways to start: add your public key to
+  `~/.config/tuios/authorized_keys`, pass
+  `--authorized-keys ~/.ssh/authorized_keys`, or pass `--no-auth`.
+- With `--no-auth`: every connection is accepted and the server prints one
+  warning at startup. On `localhost`, every user on this machine can connect.
+  On any other host, use it only on a network you trust.
+
+TUIOS does not read `~/.ssh/authorized_keys` by itself. TUIOS does not apply
+the rules in `sshd_config` to those keys.
+
+A keys file that cannot be read, does not parse, or holds no key stops startup.
+Only an absent file means "no keys are configured".
+
+TUIOS does not accept a key that has options, such as `command=`, `from=` or
+`restrict`. TUIOS cannot apply these options, and every session is a full
+TUIOS. The server writes the line numbers of these keys to its log. A file
+that holds only keys with options stops startup. To let such a key in, add it
+again with no options to `~/.config/tuios/authorized_keys`.
+
+```bash
+# Let one key in. Use your public key file, for example ~/.ssh/id_ed25519.pub
+mkdir -p ~/.config/tuios
+cat ~/.ssh/id_ed25519.pub >> ~/.config/tuios/authorized_keys
+tuios ssh --host 0.0.0.0 --port 2222
+
+# Use the keys that sshd accepts
+tuios ssh --host 0.0.0.0 --authorized-keys ~/.ssh/authorized_keys
+```
+
+The interface flags (`--theme`, `--border-style`, `--dockbar-position`,
+`--ascii-only`, and the rest of the appearance set) apply to every served
+session, layered over the server's config file the same way a local run
+layers them.
+
+Settings changed from the in-app settings page apply to that session only;
+the server operator's config file is never written from an SSH client.
+
+**Session Selection Priority:**
+
+1. `--default-session` flag (if specified)
+2. SSH username (if not generic like "tuios", "root", "anonymous")
+3. SSH command argument (e.g., `ssh host attach mysession`)
+4. First available session or create new
+
+**Examples:**
+
+```bash
+# Start SSH server on default port (daemon mode). Needs
+# ~/.config/tuios/authorized_keys, --authorized-keys or --no-auth
+tuios ssh
+
+# Start on custom port
+tuios ssh --port 8022
+
+# Listen on all interfaces
+tuios ssh --host 0.0.0.0 --port 2222
+
+# Read the allowed public keys from somewhere else
+tuios ssh --authorized-keys /etc/tuios/authorized_keys
+
+# Use custom host key
+tuios ssh --key-path /path/to/host_key
+
+# All clients share a single session
+tuios ssh --default-session shared
+
+# Run in ephemeral mode (no session persistence)
+tuios ssh --ephemeral
+```
+
+**Connecting:**
+
+```bash
+# Basic connection
+ssh -p 2222 localhost
+
+# Connect to a specific session via username
+ssh -p 2222 mysession@localhost
+
+# Connect to a specific session via command
+ssh -p 2222 localhost attach mysession
+```
+
+**Multi-Client Behavior:**
+
+- When multiple clients connect to the same session, `window_size` in `[daemon]` sets the size of the session: the client that last had input (the default), the smallest client, or the largest client. See [SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#session-size-with-more-than-one-client)
+- State changes (window create/move, workspace switch, etc.) are broadcast to all clients in real-time
+- Clients are notified when others join or leave the session
+
+---

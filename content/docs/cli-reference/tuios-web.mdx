@@ -1,0 +1,933 @@
+---
+title: "tuios-web (Separate Binary)"
+description: "tuios-web (Separate Binary): part of the CLI Reference of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CLI_REFERENCE.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CLI_REFERENCE.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CLI_REFERENCE.md). The [CLI Reference](/docs/cli-reference) page lists every part.
+
+## `tuios-web` (Separate Binary) [#tuios-web-separate-binary]
+
+**Security Notice:** The web terminal functionality has been extracted to a separate binary (`tuios-web`) to provide better security isolation. This prevents the web server from being used as a potential backdoor in the main TUIOS binary.
+
+By default, web sessions connect to the TUIOS daemon for persistent sessions with multi-client support. This means:
+
+- Sessions persist even when browser tabs close
+- Multiple browsers/tabs can view/control the same session simultaneously
+- Session state (windows, workspaces) is preserved across reconnections
+- Settings changed from the in-app settings page apply to that session only; the server's config file is never written from a browser
+
+**Installation:**
+
+```bash
+# Homebrew
+brew install tuios-web
+
+# AUR
+yay -S tuios-web-bin
+
+# Go install
+go install github.com/Gaurav-Gosain/tuios/cmd/tuios-web@latest
+```
+
+**Usage:**
+
+```bash
+tuios-web [flags]
+```
+
+**Flags:**
+
+- `--host <string>`: Web server host (default: "localhost")
+- `--port <string>`: Web server port (default: "7681")
+- `--read-only`: Disable input from clients (view only mode). A read-only client does not set the session size under `window_size` `largest` or `latest`. See [SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#session-size-with-more-than-one-client)
+- `--max-connections <int>`: Maximum concurrent connections (default: 0 = unlimited)
+- `--cert <path>`: TLS certificate in PEM form (serves HTTPS; required to bind a non-loopback host)
+- `--key <path>`: TLS private key in PEM form (required with `--cert`)
+- `--auto-tls`: Generate and serve a self-signed certificate (managed with `tuios-web cert`)
+- `--insecure`: Serve a non-loopback host over plain HTTP, unencrypted (trusted networks only)
+- `--random-password`: Make a new password at start and print it
+- `--password-file <path>`: Read the password from the first line of this file. The file must be yours, with mode 600 or 400 (on Windows, only you, SYSTEM and Administrators may read it)
+- `--user <string>`: User name the browser must give with the password (default: "tuios")
+- `--no-auth`: Serve a non-loopback host with no password (trusted networks only). Not with `0.0.0.0` or `::`
+- `--allow-host <name>`: On a loopback `--host`, also accept this host name (no port) in the Host header, for example for a reverse proxy. Needs a password or `--no-auth`. You can give it more than one time
+- `--touch <auto|on|off>`: Touch support and the on-screen key bar (default: auto-detect)
+- `--default-session <string>`: Default session name for all connections (creates shared session)
+- `--ephemeral`: Disable daemon mode (sessions don't persist)
+- `--theme <name>`: Color theme forwarded to TUIOS instances
+- `--show-keys`: Enable showkeys overlay
+- `--ascii-only`: Use ASCII characters instead of Nerd Font icons
+- `--border-style <style>`: Window border style
+- `--dockbar-position <pos>`: Dockbar position
+- `--hide-window-buttons`: Hide window control buttons
+- `--window-button-style <style>`: Window control style: `pill`, `dots`
+- `--window-button-position <position>`: Which end they sit on: `right`, `left`
+- `--scrollback-lines <int>`: Scrollback buffer size
+- `--no-animations`: Disable UI animations
+- `--debug`: Enable debug logging
+
+**Who can connect:**
+
+Every browser that opens tuios-web gets a shell on this machine, and
+go-to reaches every session. Set a password to control who
+connects. The browser asks for the user name and the password.
+
+- `--random-password`: tuios-web makes a new password at start and prints it
+  with a URL that holds it.
+- `--password-file <path>`: tuios-web reads the password from the first line
+  of the file. The file must belong to you, with mode 600 or 400. On Windows,
+  only you, SYSTEM and Administrators may read or change it.
+- `TUIOS_WEB_PASSWORD`: tuios-web reads the password from this environment
+  variable. It does not pass the variable to panes. But your own processes
+  can still read it from `/proc`. Use `--password-file` instead.
+
+There is no flag that takes the password itself. Other users can see command
+line arguments in `ps`. A password from a file or from `TUIOS_WEB_PASSWORD`
+that is shorter than 12 characters gets a warning at start, because
+tuios-web does not slow down wrong guesses.
+
+- On `localhost`: the password is optional. With no password, other users on
+  this machine can connect. tuios-web prints one line at start to say so. Use
+  `--random-password` to stop this. tuios-web accepts a session only when the
+  Host header names this machine, such as `localhost` or `127.0.0.1`. This
+  stops a web page that points its own name at 127.0.0.1 (DNS rebinding).
+- Behind a reverse proxy on this machine: use `--allow-host <name>` to accept
+  the proxy's host name. Give the name with no port. A proxied setup needs a
+  password, so `--allow-host` does not start without a password or
+  `--no-auth`. It works only with a loopback `--host`.
+- On any other host: tuios-web does not start without a password. TLS
+  encrypts the connection, but it does not check who connects. Pass
+  `--no-auth` to serve anyway, on a network you trust. `--no-auth` does not
+  work with `0.0.0.0` or `::`. These addresses also listen on this machine,
+  where a web page in your browser can open a shell. Give the address of one
+  interface.
+
+**Subcommands:**
+
+- `tuios-web cert`: Show the status of the self-signed TLS certificate `--auto-tls` uses
+- `tuios-web cert new|info|path|remove`: Rotate, explain, locate, or delete it
+
+**Features:**
+
+- Full TUIOS experience in the browser
+- WebGL-accelerated rendering via xterm.js for smooth 60fps
+- WebSocket and WebTransport (HTTP/3 over QUIC) protocols
+- Bundled JetBrains Mono Nerd Font for proper icon rendering
+- Settings panel for transport, renderer, and font size preferences
+- Cell-based mouse event deduplication (80-95% traffic reduction)
+- Automatic reconnection with exponential backoff
+- Self-signed TLS certificate generation for development
+- No CGO dependencies (pure Go)
+- **Persistent sessions via daemon mode** (default)
+- **Multi-client support**: multiple browsers share the same session
+
+**Examples:**
+
+```bash
+# Start web server on default port (daemon mode)
+tuios-web
+
+# Start on custom port
+tuios-web --port 8080
+
+# Reach the server from a phone on the same network, over TLS with a
+# self-signed certificate tuios-web generates and keeps for you, and a
+# password that tuios-web makes and prints
+tuios-web --host 0.0.0.0 --port 7681 --auto-tls --random-password
+
+# Or bring your own certificate and keep the password in a file
+mkdir -p ~/.config/tuios
+(umask 077; head -c 18 /dev/urandom | base64 > ~/.config/tuios/web-password)
+tuios-web --host 0.0.0.0 --port 7681 --cert tuios-cert.pem --key tuios-key.pem \
+  --password-file ~/.config/tuios/web-password
+
+# Same, on a network you trust, with nothing encrypted and no password.
+# --no-auth needs the address of one interface. It does not work with 0.0.0.0
+tuios-web --host 192.168.1.20 --port 7681 --insecure --no-auth
+
+# Start in read-only mode (view only)
+tuios-web --read-only
+
+# Start with theme and show-keys overlay
+tuios-web --theme dracula --show-keys
+
+# Limit concurrent connections
+tuios-web --max-connections 10
+
+# All clients share a single session
+tuios-web --default-session shared
+
+# Run in ephemeral mode (no session persistence)
+tuios-web --ephemeral
+```
+
+**Multi-Client Behavior:**
+
+- When multiple clients connect to the same session, `window_size` in `[daemon]` sets the size of the session: the client that last had input (the default), the smallest client, or the largest client. See [SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#session-size-with-more-than-one-client)
+- State changes (window create/move, workspace switch, etc.) are broadcast to all clients in real-time
+- Clients are notified when others join or leave the session
+
+**Accessing:**
+
+```bash
+# Open in browser
+open http://localhost:7681
+
+# For HTTPS/WebTransport (development with self-signed cert)
+open https://localhost:7681
+
+# Note: Your browser will show a security warning for the self-signed certificate.
+# Click "Advanced" and proceed to accept the certificate.
+```
+
+**Protocol Selection:**
+The client automatically selects the best available transport:
+
+1. **WebTransport (HTTP/3 over QUIC)**: Lower latency, better multiplexing (requires HTTPS)
+2. **WebSocket (fallback)**: Broad browser compatibility
+
+For complete documentation, see [Web Terminal Mode](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/WEB.md).
+
+---
+
+### `tuios config` <Since command="config" /> [#tuios-config]
+
+Manage TUIOS configuration file.
+
+**Subcommands:**
+
+- `tuios config path`: Print configuration file path
+- `tuios config edit`: Edit configuration in $EDITOR
+- `tuios config reset`: Reset configuration to defaults
+- `tuios config apply`: Apply `config.toml` to the running daemon and clients now
+- `tuios config browse`: Search the settable options and set one, in an explorer
+- `tuios config files`: List the files the config is read from
+- `tuios config origin`: Show which file sets each key
+- `tuios config prune`: Remove the keys of config.toml that have their default value
+
+#### `tuios config apply` <Since command="config apply" /> [#tuios-config-apply]
+
+Apply `config.toml` to the running daemon now, including the changes that give
+panes or other machines more than they had.
+
+Every tuios client on this machine also applies the file as it is now.
+
+A process in a pane can write `config.toml`, so the daemon applies a change to
+the bounds of panes and links at once only when the change gives less: a
+narrower `[agents.permissions]` default or `[hosts]` link policy. A wider
+policy, a new host to dial and a new `[notify]` destination wait for this
+command or for a daemon restart. Run it from a terminal outside tuios. From
+inside a pane it is refused.
+
+```bash
+tuios config apply
+```
+
+#### `tuios config path` <Since command="config path" /> [#tuios-config-path]
+
+Print the location of the TUIOS configuration file.
+
+**Example:**
+
+```bash
+tuios config path
+# Output: /Users/username/.config/tuios/config.toml
+```
+
+#### `tuios config edit` <Since command="config edit" /> [#tuios-config-edit]
+
+Open the configuration file in your default editor.
+
+**Requirements:** The `$EDITOR` or `$VISUAL` environment variable must be set. Falls back to vim, vi, nano, or emacs if found.
+
+**Example:**
+
+```bash
+export EDITOR=vim
+tuios config edit
+```
+
+#### `tuios config browse` <Since command="config browse" /> [#tuios-config-browse]
+
+Open the settable options in an explorer you can search. Each option shows its
+type, default, current value and source. These are what
+`tuios list-options --json` and `tuios get-config --json` print. Press `enter`
+on an option to set it. The explorer sets it the way `tuios set-config` does,
+with the same refusals, and shows the error `set-config` prints. It needs a
+running daemon.
+
+```bash
+tuios config browse [-s session]
+```
+
+Press `/` to search, the arrow keys or `j` and `k` to move, and `tab` or a
+click on a tab to show one group. `J` and `K` scroll the detail pane. `q` or
+`esc` leaves it. An explorer opens only with its own flag or subcommand, never
+because the output is a terminal, so a script or an agent in a pane always gets
+the plain output.
+
+#### `tuios config files` <Since command="config files" /> [#tuios-config-files]
+
+List the files the config is read from, from lowest to highest precedence:
+the files in the `include` list, the files in `config.d`, then config.toml. A
+file that tuios cannot write shows as read-only. An include that names a
+missing file or makes a cycle shows as a warning.
+
+```bash
+tuios config files [--json]
+```
+
+#### `tuios config origin` <Since command="config origin" /> [#tuios-config-origin]
+
+Show which file sets each key, and the earlier files that set the same key.
+Give a key to show that key and the keys under it only. A key that no file sets
+has its default value.
+
+```bash
+tuios config origin [key] [--json]
+tuios config origin hosts
+```
+
+See [Split the config into several files](/docs/configuration#split-the-config-into-several-files).
+
+#### `tuios config prune` <Since command="config prune" /> [#tuios-config-prune]
+
+Remove the keys of config.toml that have their default value. An older tuios
+wrote every key into config.toml, and config.toml wins over the files it
+includes and the files in `config.d`. After the prune, a key that another file
+sets takes the value of that file. The command lists those keys first and asks
+before it changes the file. `--yes` skips the question, and a run with no
+terminal needs it. The `[startup]` keys stay. The command keeps comments and
+the `include` list.
+
+```bash
+tuios config prune --dry-run   # show the keys, change nothing
+tuios config prune
+tuios config prune --yes       # do not ask
+```
+
+#### `tuios config reset` <Since command="config reset" /> [#tuios-config-reset]
+
+Reset the configuration file to default settings.
+
+**Warning:** This will overwrite your existing configuration after confirmation.
+The new config.toml is the one a first start writes: comments, `[startup]`
+tiled and daemon on, and no other setting. It keeps the `include` list, and
+lists the other files that still apply.
+
+**Example:**
+
+```bash
+tuios config reset
+# Prompts: Are you sure you want to reset to defaults? (yes/no):
+```
+
+---
+
+### `tuios actions` <Since command="actions" /> [#tuios-actions]
+
+Your actions: the `[[actions]]` entries of config.toml and the
+`[[keybindings.command]]` entries, each the action `user:NAME`
+([KEYBINDINGS.md](/docs/keybindings#your-actions)).
+
+```
+tuios actions [--json]
+tuios actions list [NAME] [--json]
+tuios actions run NAME [-s SESSION] [--dry-run [-w PANE]] [--json]
+```
+
+With no subcommand, `tuios actions` lists the built-in actions a launcher
+outside tuios can offer: the rows of the command palette that run as a key
+would, each with its name, palette title and section. A launcher runs one with
+`tuios run-command -s SESSION Action NAME`. Your own actions follow, named
+`user:NAME` in the section "Your actions"; one offered only on targets that
+are not a pane, such as `targets = ["card"]`, is left out. `--json` gives
+`actions` (`name`, `title`, `category`, `description`, and `user: true` on
+your own) and `harnesses` (`id`, `name`, `command`), the agents
+`tuios start-agent` knows. When config.toml cannot be read, the built-in
+actions are still listed and `config_note` says why. It reads only the binary,
+config.toml and your harness manifests, with no daemon, and writes no
+config.toml when there is none. Rex's `tuios.lua` reads it at each config load
+([REX.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/REX.md)).
+
+`list` prints each action's name, key, source (`actions` or `command key`) and
+what it runs; with NAME, that one action, and for an entry tuios ignores, why. `run` runs it as its key would, in the
+client attached to the session, on the focused pane, through `run-command`:
+from inside a pane it needs the respond grant. `--dry-run` runs nothing and
+prints the arguments the action would run, with the placeholders filled from
+the pane `-w` names (default: the focused pane), each argument quoted on its
+own line.
+
+### `tuios keybinds` <Since command="keybinds" /> [#tuios-keybinds]
+
+List the keybindings, check them for conflicts, and change them in
+`config.toml`.
+
+**Aliases:** `keys`, `kb`
+
+**Subcommands:**
+
+- `tuios keybinds list`: List every keybinding and the action it runs
+- `tuios keybinds list-custom`: List the keybindings that differ from the defaults
+- `tuios keybinds browse [search]`: Search the keybindings in an explorer
+- `tuios keybinds doctor`: Report each key that two actions claim, and each key tuios takes from the pane
+- `tuios keybinds explain <key>`: Say what tuios does with one key
+- `tuios keybinds unbind <action> [key]`: Take a key off one action
+- `tuios keybinds free <key>`: Hand a key back to the program in the pane
+
+#### `tuios keybinds list` <Since command="keybinds list" /> [#tuios-keybinds-list]
+
+List every action and the keys that run it, as your `config.toml` sets them.
+
+**Flags:**
+
+- `--json`: Print the rows as a JSON array
+
+**Example:**
+
+```bash
+tuios keybinds list
+
+# The keys of one action
+tuios keybinds list --json | jq -r '.[] | select(.action == "toggle_tiling") | .keys[]'
+```
+
+**Output:** One table for each scope, in this order. Each table has the
+columns Keys, Action and Description.
+
+- The scopes: Global, Window mode, Terminal mode, Sidebar, Sidebar files,
+  Sidebar agents, Inbox, Inbox prompt, Mailbox, Prefix, each prefix menu with
+  its chord (Window, Minimize, Workspace, Debug, Tape and Layout), and Script
+  playback. A key in a prefix menu shows with its chord, such as `ctrl+b L 5`.
+- Commands: the `[[keybindings.command]]` entries, by description. See
+  [KEYBINDINGS.md](/docs/keybindings#command-keys).
+- The fixed keys, which tuios reads itself and you cannot rebind: Copy mode
+  (with the `[[keybindings.copy_pipe]]` entries), Hints mode, Message view,
+  Spotlight, Lists and panels, Mouse and Sidebar mouse. The help overlay shows
+  the same rows.
+- No key: the actions that have no key. Bind one in `config.toml`, or run it
+  from the command palette.
+
+An action that a config leaves with no key shows `(none)` in its scope.
+
+**JSON output:** An array of rows. Each row has these fields:
+
+- `scope`: where the keys act, such as `window`, `prefix.layout`,
+  `sidebar.files`, `copy_mode`, `mouse`, or `unbound`
+- `scope_name`: the title of the table
+- `chord`: what you press to reach the scope, such as `ctrl+b L`. Empty for a
+  mode
+- `section`: the `config.toml` table, `command`, `copy_pipe`, or empty for a
+  fixed key
+- `action`: the action name. Empty for a fixed key with no action
+- `keys`: the keys that run the action, with the chord
+- `description`: what the keys do
+- `fixed`: true for a key that no table binds
+- `unbound`: true for an action with no key
+- `shadowed`: keys that the config gives the action, which a different action
+  in the scope takes first
+
+#### `tuios keybinds browse` <Since command="keybinds browse" /> [#tuios-keybinds-browse]
+
+Open every keybinding in an explorer you can search. The rows are the rows of
+`tuios keybinds list --json`, and the tabs are their scopes. A search given on
+the command line starts the explorer with it.
+
+```bash
+tuios keybinds browse
+tuios keybinds browse spotlight
+```
+
+Press `/` to search, the arrow keys or `j` and `k` to move, and `tab` or a
+click on a tab to show one group. `J` and `K` scroll the detail pane. `q` or
+`esc` leaves it. An explorer opens only with its own flag or subcommand, never
+because the output is a terminal, so a script or an agent in a pane always gets
+the plain output.
+
+#### `tuios keybinds list-custom` <Since command="keybinds list-custom" /> [#tuios-keybinds-list-custom]
+
+List only the keybindings that your `config.toml` changes.
+
+**Example:**
+
+```bash
+tuios keybinds list-custom
+```
+
+**Output:** Three-column table showing:
+
+- Action name
+- Default keybinding
+- Your custom keybinding
+
+#### `tuios keybinds unbind` <Since command="keybinds unbind" /> [#tuios-keybinds-unbind]
+
+Take a key off one action and write the change to `config.toml`.
+
+```bash
+# Stop w closing a window, leaving x
+tuios keybinds unbind close_window w
+
+# Leave the action with no key at all
+tuios keybinds unbind close_window
+```
+
+An action with no keys is written as an empty list:
+
+```toml
+[keybindings.window_management]
+close_window = []
+```
+
+That is not the same as leaving the action out of the file. An action the file
+does not mention gets its default back the next time tuios starts. An empty list
+stays empty.
+
+#### `tuios keybinds doctor` <Since command="keybinds doctor" /> [#tuios-keybinds-doctor]
+
+Report each key that two actions claim, each key that tuios takes from the pane,
+and each of those keys that a common program uses. Each finding names its
+evidence: `certain` comes from the tuios key routing, `observed` comes from a
+pane, and `reference` comes from a list of common program defaults and is not
+detection. `--json` prints the same report the keybind manager shows.
+
+```bash
+tuios keybinds doctor
+tuios keybinds doctor --guest vim
+```
+
+`--guest PROGRAM` treats that program as the one running in the pane.
+
+#### `tuios keybinds explain` <Since command="keybinds explain" /> [#tuios-keybinds-explain]
+
+Show each scope that a key acts in, and whether the program in the pane gets the
+key. It also shows the key that the terminal sends the same way, and the common
+programs that use the key. The key recorder in the keybind manager shows the
+same answer.
+
+```bash
+tuios keybinds explain ctrl+p
+tuios keybinds explain alt+left --guest vim --json
+```
+
+`--guest PROGRAM` treats that program as the one running in the pane.
+
+#### `tuios keybinds free` <Since command="keybinds free" /> [#tuios-keybinds-free]
+
+Take one key off every action in every scope, so the program in your pane
+receives it.
+
+```bash
+# Give alt+left back to your shell
+tuios keybinds free alt+left
+```
+
+Every scope at once is the point. A key tuios still claims anywhere is a key the
+program never sees. Two keys cannot be freed this way: the leader key, which is
+`keybindings.leader_key` and is moved rather than unbound, and a handful of keys
+the input path reads directly. The command says so instead of reporting success.
+
+You can do both from inside tuios as well. Open the keybind manager with the
+leader key then `k`, or from the command palette, and press `ctrl+d` on a
+binding to remove it or `ctrl+x` to take its key off every action. Typing `#`
+in the command palette searches actions rather than commands: `Enter` runs the
+action and `ctrl+e` opens the keybind manager on it.
+
+---
+
+### `tuios notify test` <Since command="notify test" /> [#tuios-notify-test]
+
+Send a test notification through each provider in the `[notify]` table, and
+say the result for each provider. See
+[CONFIGURATION.md](/docs/configuration#push-notifications-to-your-phone).
+
+**Usage:**
+
+```bash
+tuios notify test [--json]
+```
+
+This command sends from its own process, not from the daemon. It reads a
+`token_env` variable from your shell. The daemon reads it from its own
+environment. The output shows the host of each provider and never a token
+or the full address. It sends the same way the daemon does. The command
+exits with 1 when a provider fails.
+
+**Output:**
+
+```
+ntfy (ntfy.sh): sent.
+pushover (api.pushover.net): sent.
+webhook (hooks.example.com): failed. The server answered 401 Unauthorized. Check the token.
+```
+
+**Flags:**
+
+- `--json`: Output a list with `provider`, `host`, `ok` and `error` for each provider
+
+---
+
+### `tuios notify push` <Since command="notify push" /> [#tuios-notify-push]
+
+Register, list and remove the phones that get Inbox items by Web Push. See
+[CONFIGURATION.md](/docs/configuration#web-push-to-a-phone).
+
+**Usage:**
+
+```bash
+tuios notify push register --device NAME --subscription FILE [--kind KIND]... [--json]
+tuios notify push ls [--json]
+tuios notify push rm NAME [--json]
+```
+
+Each command holds a presence on its own connection to the daemon, and sends
+the nonce of that presence. Run them in a terminal outside tuios. From a pane
+the daemon refuses them.
+
+`register` reads the phone's push subscription from `FILE`, or from stdin
+when `FILE` is `-`. The subscription holds secrets, so the command line never
+takes them: other processes can read it. The file is JSON, in the shape that
+`PushSubscription.toJSON()` gives:
+
+```json
+{"endpoint": "https://push.example.net/s/abc", "keys": {"p256dh": "BKZ91bcH...", "auth": "GT7vKYlZ..."}}
+```
+
+`register` also reads `endpoint`, `p256dh` and `auth` at the top level.
+Give `--kind` once for each Inbox kind to push. Without it the phone gets
+`approval`, `plan`, `ask` and `question`. A second `register` with the same
+`--device` replaces the phone. The Inbox shows an item for each
+registration.
+
+`ls` shows each phone with the origin of its push service and its kinds,
+and the daemon's VAPID public key. A phone app needs the key before it
+subscribes.
+
+**Output:**
+
+```
+$ tuios notify push ls
+pixel: https://push.example.net, approval, plan, ask, question
+VAPID public key: BCM4cML1lw6X1BHn3-nOS6-QtjYUql5FDx-etpdO8RHCTTipUMWpGY46YBB4bLwbc31yGx_O9LQVABj-B0Dqvp0
+```
+
+**Flags:**
+
+- `--json`: Output the daemon's reply as JSON
+- `--human-nonce`: Use this nonce instead of a presence of the command's own
+
+---
+
+### `tuios status` <Since command="status" /> [#tuios-status]
+
+Write one OSC 7501 report, the Program Status Protocol, for a script. tuios
+shows it as the pane's agent state, in the rail and in the Inbox. Other
+terminals that read the protocol show it too. See
+[PROGRAM\_STATUS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/PROGRAM_STATUS.md).
+
+**Usage:**
+
+```bash
+tuios status [idle|working|done|blocked|error] [flags]
+```
+
+The report goes to the controlling terminal, so it is not lost when the
+output of the script goes to a file or a pipe. The command refuses a report
+that a terminal must discard, and says why.
+
+Some processes have no controlling terminal, such as the shell tool of an
+agent. In a tuios pane, such a process sends the report to the daemon for its
+pane (`TUIOS_PANE_ID`). Outside tuios, or when the daemon does not take the
+report, the report goes to standard output.
+
+**Flags:**
+
+- `--kind <kind>`: What a blocked program waits for: `permission`, `question` or `auth`. Only with `blocked`
+- `--progress <n>`: Progress from 0 to 100. Only with `working` or `blocked`
+- `--app <name>`: The program's name, such as `cargo`. 1 to 32 letters, digits, `.`, `_`, `+` or `-`
+- `--title <text>`: A short label for the record, at most 192 bytes
+- `--msg <text>`: One line that says what the program does or waits for, at most 2048 bytes
+- `--id <id>`: The record to address, such as `build/test`. Empty for the main record
+- `--clear`: Remove the record and the records under it. Without `--id`, remove all records
+- `--stdout`: Write the report to standard output, not to the terminal
+
+**Examples:**
+
+```bash
+tuios status working --app build --msg 'Compiling' --progress 40
+tuios status blocked --kind permission --app deploy --msg 'Approve deploy to production?'
+tuios status done --app build --msg 'Built 12 crates'
+tuios status --clear --id eu-west
+```
+
+---
+
+### `tuios update` <Since command="update" /> [#tuios-update]
+
+Replace this tuios with the newest published release.
+
+```bash
+# See whether there is a newer release, without installing it
+tuios update --check
+
+# Install it
+tuios update
+
+# Include prereleases
+tuios update --check --pre
+```
+
+**Flags:**
+
+- `--check`: Report what would be installed and change nothing
+- `--pre`: Count a prerelease as the newest release
+
+**What it will and will not replace.** This only updates a binary that came from
+a release archive, which is what the [install script](/docs/cli-reference#quick-install-script-linuxmacos)
+downloads. Every other way of installing tuios has something that owns the file,
+and overwriting one of those leaves its records describing a file that is no
+longer there. The command detects where the binary came from and refuses with
+the right command instead:
+
+| Installed by                                          | `tuios update` | What to run                                                                       |
+| ----------------------------------------------------- | -------------- | --------------------------------------------------------------------------------- |
+| Install script, or a release archive unpacked by hand | Updates it     | `tuios update`                                                                    |
+| Homebrew                                              | Refuses        | `brew upgrade tuios`, or `brew upgrade --cask tuios-ghostty` for the ghostty cask |
+| AUR or another system package                         | Refuses        | `yay -S tuios-bin`                                                                |
+| Nix                                                   | Refuses        | `nix profile upgrade tuios`                                                       |
+| `go install`                                          | Refuses        | `go install github.com/Gaurav-Gosain/tuios/cmd/tuios@latest`                      |
+| `scripts/install.sh` from a checkout                  | Refuses        | `git pull && ./scripts/install.sh`                                                |
+
+**tuios-web** is updated at the same time when it sits beside `tuios`. The two
+talk to one daemon and it compares their versions, so they move together or not
+at all: both are downloaded and verified before either is put in place.
+
+**Checksums.** Every download is checked against the release's `checksums.txt`.
+A file that does not match is discarded, nothing is installed, and the old
+binary is untouched.
+
+**The running daemon** keeps the old build, and update leaves it alone. Sessions you have open go on working. On macOS and Linux, `tuios daemon upgrade` moves the running daemon to the installed build with every pane's program still running; see [`tuios daemon upgrade`](/docs/cli-reference/daemon-mode#tuios-daemon-upgrade). It says why when the daemon cannot be upgraded live, and then `tuios restart-server`, or "Restart the daemon" in the command palette, moves it: panes are restored, and the programs that were running in them are not. update prints both commands, with `--server NAME` on a named server.
+
+Set `GITHUB_TOKEN` or `GH_TOKEN` to raise the release lookup's rate limit. It is
+never required and no token is created for you.
+
+The lookup and the download need no other program. They honour `HTTPS_PROXY`
+and `NO_PROXY`. A download follows redirects to `https` addresses only. The
+token goes in a request header and is not sent to the host a download
+redirects to.
+
+---
+
+### `tuios layout` <Since command="layout" /> [#tuios-layout]
+
+Manage saved layout templates.
+
+**Subcommands:**
+
+- `tuios layout list`: List all saved layout templates (`--json` for a script: `name`, `windows`, `tiled`, `created_at`)
+- `tuios layout save <name>`: Save the panes of the workspace a session shows as a layout template
+- `tuios layout load <name>`: Load a layout template into the workspace a session shows
+- `tuios layout delete <name>`: Delete a saved layout template
+- `tuios layout dir`: Print the layout templates directory path
+- `tuios layout export <name>`: Print a layout template as a tape script
+
+#### `tuios layout list` <Since command="layout list" /> [#tuios-layout-list]
+
+List all saved layout templates.
+
+**Example:**
+
+```bash
+tuios layout list
+```
+
+#### `tuios layout save` <Since command="layout save" /> [#tuios-layout-save]
+
+Save the panes of the workspace a session shows as a layout template: where
+each pane is, its name and folder, and how the workspace is tiled, with its
+split tree. Works with no client attached.
+
+**Usage:**
+
+```bash
+tuios layout save <name> [-s <session>] [--json]
+```
+
+**Example:**
+
+```bash
+tuios layout save three-up
+tuios layout save review -s api
+```
+
+#### `tuios layout load` <Since command="layout load" /> [#tuios-layout-load]
+
+Load a layout template into the workspace a session shows. The panes there are
+reused in order, the ones the layout lacks are opened in their folder with their
+name and command, and the ones it does not name are minimized. A `bsp` layout
+gets its split tree back. Works with no client attached.
+
+**Usage:**
+
+```bash
+tuios layout load <name> [-s <session>] [--json]
+```
+
+**Example:**
+
+```bash
+tuios layout load three-up
+tuios layout load review -s api
+```
+
+#### `tuios layout delete` <Since command="layout delete" /> [#tuios-layout-delete]
+
+Delete a saved layout template by name.
+
+**Usage:**
+
+```bash
+tuios layout delete <name>
+```
+
+**Example:**
+
+```bash
+tuios layout delete dev-layout
+```
+
+#### `tuios layout dir` <Since command="layout dir" /> [#tuios-layout-dir]
+
+Print the path to the layout templates directory.
+
+**Example:**
+
+```bash
+tuios layout dir
+# Output: /home/user/.config/tuios/layouts
+```
+
+#### `tuios layout export` <Since command="layout export" /> [#tuios-layout-export]
+
+Print a saved layout template as a tape script on stdout. The script turns
+tiling on or off as the layout had it, opens one window per saved window,
+renames each window that had a name, and types the `cd` and startup command
+each window was saved with. Run it with `tuios tape play` or, against a
+running session, `tuios tape exec`.
+
+The template itself is a JSON file in the directory `tuios layout dir` prints;
+copy that file to share the layout as it is stored.
+
+**Usage:**
+
+```bash
+tuios layout export <name>
+```
+
+**Example:**
+
+```bash
+tuios layout export dev-layout > dev-layout.tape
+tuios tape play dev-layout.tape
+```
+
+---
+
+### `tuios completion` [#tuios-completion]
+
+Generate shell completion scripts for command-line autocompletion.
+
+**Supported shells:**
+
+- bash
+- zsh
+- fish
+- powershell
+
+**Usage:**
+
+```bash
+tuios completion [shell]
+```
+
+**Examples:**
+
+**Bash:**
+
+```bash
+# Generate and install completion
+tuios completion bash > /etc/bash_completion.d/tuios
+
+# Or for user-specific completion
+tuios completion bash > ~/.local/share/bash-completion/completions/tuios
+source ~/.bashrc
+```
+
+**Zsh:**
+
+```bash
+# Generate and install completion
+tuios completion zsh > "${fpath[1]}/_tuios"
+
+# Or add to your .zshrc
+echo "autoload -U compinit; compinit" >> ~/.zshrc
+tuios completion zsh > ~/.zsh/completions/_tuios
+```
+
+**Fish:**
+
+```bash
+# Generate and install completion
+tuios completion fish > ~/.config/fish/completions/tuios.fish
+```
+
+**PowerShell:**
+
+```bash
+# Generate completion script
+tuios completion powershell > tuios.ps1
+
+# Add to your PowerShell profile
+echo ". $(pwd)/tuios.ps1" >> $PROFILE
+```
+
+---
+
+### `tuios help` [#tuios-help]
+
+Get help about any command.
+
+**Usage:**
+
+```bash
+tuios help [command] [--json] [-i]
+```
+
+**Flags:**
+
+- `--json`: Print the command and every command under it as JSON: each
+  command's path, usage line, short and long help, examples, aliases and flags
+- `-i`, `--interactive`: Open the same command tree in an explorer you can
+  search. The detail pane shows the command's usage, help and flags
+
+Press `/` to search, the arrow keys or `j` and `k` to move, and `tab` or a
+click on a tab to show one group. `J` and `K` scroll the detail pane. `q` or
+`esc` leaves it. An explorer opens only with its own flag or subcommand, never
+because the output is a terminal, so a script or an agent in a pane always gets
+the plain output.
+
+**Examples:**
+
+```bash
+tuios help              # Show general help
+tuios help ssh          # Show help for ssh command
+tuios help config edit  # Show help for config edit subcommand
+tuios help --json       # Every command as JSON
+tuios help -i           # Search the commands in an explorer
+```
+
+---

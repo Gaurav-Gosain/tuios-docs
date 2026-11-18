@@ -1,0 +1,70 @@
+---
+title: "Verbs: Options, themes and the dock"
+description: "Verbs: Options, themes and the dock: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## set-option [#set-option]
+
+Set a session option. The value is recorded in daemon owned session state so a
+later get-option reads it back, and works with no client attached. When a TUI is
+attached the change is also routed to it so options it understands apply to the
+live renderer; `applied` reports whether that live apply succeeded. With no TUI
+attached, `applied` is false and the value waits. The next TUI that attaches
+applies it.
+
+Params: `session` (optional), `key` (required), `value` (optional), `no_save`
+(optional bool).
+
+With `no_save` true, the client applies the value and does not write it to a
+config file. Later saves of other settings leave the key alone too. The value
+stays until the client exits, or until the option is set again without
+`no_save`. A value that waits for a client keeps `no_save`. The response
+always has `no_save`. A daemon that predates the param leaves it out of the
+response and saves the value. `no_save` is refused with `invalid_params` for
+`agents.enabled`, and when the attached client is too old to hold a value.
+
+Request:
+
+```json
+{"verb": "set-option", "params": {"session": "work", "key": "border_style", "value": "rounded"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "option_set", "key": "border_style", "value": "rounded", "applied": true, "no_save": false}}
+```
+
+## get-option [#get-option]
+
+Read a session option previously set with set-option.
+
+Params: `session` (optional), `key` (required).
+
+Request:
+
+```json
+{"verb": "get-option", "params": {"session": "work", "key": "border_style"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "option", "key": "border_style", "value": "rounded"}}
+```
+
+A key that was never set returns an `option_not_found` error.
+
+`daemon.window_size` is the daemon's own. `set-option` applies it to the
+session at once and answers `applied: true` and `scope: "session"`, with no
+client involved. While a client from before the option is attached, the
+answer also has `in_force: "smallest"` and a `reason`. `get-option` of the key
+answers with `source: "config"` and the daemon's `[daemon] window_size` when
+the session has no value of its own.

@@ -1,0 +1,203 @@
+---
+title: "Window and Workspace Commands"
+description: "Window and Workspace Commands: part of the CLI Reference of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CLI_REFERENCE.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CLI_REFERENCE.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CLI_REFERENCE.md). The [CLI Reference](/docs/cli-reference) page lists every part.
+
+## Window and Workspace Commands [#window-and-workspace-commands]
+
+The layout commands (`split-window`, `zoom-window`, `swap-window`,
+`resize-window` and `move-window --beside`) work with no client attached. The
+daemon changes the layout, and a client that attaches later shows it. Without
+`-w`, a layout command run in a pane acts on that pane, and one run outside
+every pane acts on the focused pane.
+
+Each command in this part takes `-s, --session` to name the session and
+`--json` to print JSON.
+
+### `tuios focus-window` <Since command="focus-window" /> [#tuios-focus-window]
+
+Move the focus to a pane and print the pane that has it.
+
+```bash
+tuios focus-window [window] [flags]
+```
+
+Give exactly one of a window, `--relative` or `--direction`:
+
+- `[window]`: a pane by name or id. The client switches to the workspace of the
+  pane.
+- `--relative next|prev`: the next or the previous pane on this workspace.
+- `--direction left|right|up|down`: the pane on that side. It needs an attached
+  client. With `appearance.focus_wrap` on, it wraps at the edge of a tiled
+  layout to the pane on the far side.
+
+The window and `--relative` forms work on a detached session.
+
+```bash
+tuios focus-window build
+tuios focus-window --relative next
+tuios focus-window --direction left
+```
+
+### `tuios move-window` <Since command="move-window" /> [#tuios-move-window]
+
+Move a window to another workspace, to another session, or next to another
+pane, and say where it came from.
+
+```bash
+tuios move-window [workspace] [flags]
+```
+
+- `-w, --window`: the window to move. The default is the focused one.
+- `--follow`: switch to the workspace after the move.
+- `--to-session NAME`: move the window to another session. The program in it
+  keeps running, and the window keeps its id and its scrollback. The workspace
+  is optional then: without it, the window goes to the workspace that session
+  shows. A popup, a scratch pane, a TML pane and a pane on another machine
+  cannot move.
+- `--beside PANE`: put the window next to that pane, on its workspace.
+  `--side left|right|up|down` names the side (default: right). `--ratio
+  PERCENT` is the share of the space it gets. Without `-w`, this moves the pane
+  you run it in, or the focused pane outside every pane.
+
+It works on a detached session.
+
+```bash
+tuios move-window 3
+tuios move-window 2 -w build --follow
+tuios move-window -s work -w build --to-session review
+tuios move-window -w logs --beside editor --side down --ratio 30
+```
+
+### `tuios select-workspace` <Since command="select-workspace" /> [#tuios-select-workspace]
+
+Show a workspace, as the workspace keys do.
+
+```bash
+tuios select-workspace 2
+tuios select-workspace 2 -s work
+```
+
+To name a workspace, use [`tuios set-workspace-name`](/docs/cli-reference/remote-control-commands-part-2#tuios-set-workspace-name).
+To move a window to one, use [`tuios move-window`](#tuios-move-window).
+
+### `tuios list-workspaces` <Since command="list-workspaces" /> [#tuios-list-workspaces]
+
+List the workspaces of a session, with the name of each, how many windows it
+holds and which one shows.
+
+```bash
+tuios list-workspaces
+tuios list-workspaces --json | jq '.workspaces[] | select(.window_count == 0)'
+```
+
+### `tuios set-window` <Since command="set-window" /> [#tuios-set-window]
+
+Rename a window, or minimize and restore it. Give only the flags you want to
+change. The command leaves the rest as it is.
+
+- `-w, --window`: the window. The default is the focused one.
+- `--name NAME`: the custom name. `--name ""` clears it, and the window shows
+  the title its shell sets.
+- `--minimize`: minimize the window.
+- `--restore`: restore a minimized window.
+
+```bash
+tuios set-window --name "api tests"
+tuios set-window -w build --name ""
+tuios set-window -w build --minimize
+tuios set-window -w build --restore
+```
+
+### `tuios split-window` <Since command="split-window" /> [#tuios-split-window]
+
+Divide a pane, open a new pane beside it, and print the id of the new pane.
+
+```bash
+tuios split-window <left|right|up|down|horizontal|vertical> [command...] [flags]
+```
+
+The side names where the new pane goes. `horizontal` puts it below and
+`vertical` puts it to the right. Words after the side are the command the new
+pane runs, as for `new-window`. The command turns tiling on when it is off.
+
+- `-w, --window`: the pane to divide. The default is the pane you run it in, or
+  the focused pane outside every pane.
+- `--ratio PERCENT`: the share of the new pane. The default is half.
+- `--no-focus`: keep the focus where it is.
+- `--cwd DIR`: the directory to start in. The default is your directory in a
+  pane, or the directory of the focused pane.
+- `--name NAME`: a name for the new pane.
+- `--keep-open`: keep the pane after its program exits.
+
+```bash
+tuios split-window right
+tuios split-window down -w build --ratio 30 --no-focus -- tail -f app.log
+```
+
+### `tuios zoom-window` <Since command="zoom-window" /> [#tuios-zoom-window]
+
+Zoom a pane so that it fills its workspace, or end the zoom. Without `--on` or
+`--off`, the command toggles the zoom. A zoom of a pane on the workspace you see
+also focuses it.
+
+```bash
+tuios zoom-window -w build --on
+tuios zoom-window -w build --off
+```
+
+### `tuios swap-window` <Since command="swap-window" /> [#tuios-swap-window]
+
+Swap two tiled panes of one workspace. Each pane takes the place of the other.
+The focus stays where it is.
+
+```bash
+tuios swap-window -w build logs
+```
+
+### `tuios resize-window` <Since command="resize-window" /> [#tuios-resize-window]
+
+Move a border of a tiled pane by a percent of the layout, from 1 to 50. The
+default is 5.
+
+```bash
+tuios resize-window <left|right|up|down> [percent] [flags]
+tuios resize-window up 10 -w logs
+```
+
+`right` and `down` move a border right or down. `left` and `up` move it left or
+up. The border is the one on that side of the pane, or the other one when the
+pane is at the edge there.
+
+### `tuios set-layout` <Since command="set-layout" /> [#tuios-set-layout]
+
+Turn tiling on or off, reset the splits, flip a split, and shape the
+master-stack layout. It needs an attached client.
+
+- `--tiling true|false`: tile the panes, or stop.
+- `--equalize`: reset the splits of the layout on screen. In BSP, every split
+  goes back to half. In master-stack, the master ratio goes back to its
+  configured value, and the other panes share the rest evenly.
+- `--rotate`: flip the axis of the split that holds the focused pane.
+- `--master-position left|right|top|bottom|center`: the side the master panes
+  take.
+- `--masters N`: how many panes are master panes, from 1 to 9.
+
+`--master-position` and `--masters` apply to the current workspace, which keeps
+them until you change them. Tiling applies first, so `--equalize` and
+`--rotate` work in the same call. See
+[LAYOUT\_MODES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/LAYOUT_MODES.md#master-stack-layout).
+
+```bash
+tuios set-layout --tiling true
+tuios set-layout --equalize
+tuios set-layout --rotate
+tuios set-layout --master-position center --masters 2
+```

@@ -1,0 +1,579 @@
+---
+title: "Files and worktrees"
+description: "Files and worktrees: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `bundle-worktree` <Since verb="bundle-worktree" /> [#bundle-worktree]
+
+Read a worktree session's work out in chunks so it can cross a link: its commits as a git bundle, then its uncommitted work as a binary patch. The first call makes the transfer and answers with its first chunk. Later calls pass the token and the next offset. tuios worktree pull is the caller.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                     |
+| --------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | The worktree session to read. Required on the first call. Never guessed.                                                                                        |
+| `full`    | bool   |          | `false` | Bundle the branch's whole history. Without it only the commits past the merge base with the worktree's base are carried, and the reader must have base\_commit. |
+| `token`   | string |          |         | The transfer to read on, from the first call's reply. Only the connection that made a transfer can read it.                                                     |
+| `offset`  | int    |          | `0`     | Where to read from: the next of the previous reply.                                                                                                             |
+| `release` | bool   |          | `false` | With token, end the transfer without reading the rest.                                                                                                          |
+
+| Result field   | Type   | Description                                                                                                               |
+| -------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `token`        | string | The transfer's token. It ends after its last chunk, on release, when this connection closes, or after ten minutes unread. |
+| `content`      | string | This chunk, base64, at most 4 MB before encoding.                                                                         |
+| `offset`       | int    | Where this chunk starts.                                                                                                  |
+| `next`         | int    | Where the next chunk starts.                                                                                              |
+| `done`         | bool   | True on the last chunk, after which the token is gone.                                                                    |
+| `repo`         | string | First call only: the repository's name.                                                                                   |
+| `origin_url`   | string | First call only: the repository's origin URL, empty when it has none.                                                     |
+| `branch`       | string | First call only: the branch the worktree has checked out.                                                                 |
+| `base`         | string | First call only: the ref the worktree was made from, empty when it is not known.                                          |
+| `base_commit`  | string | First call only: the commit the bundle assumes the reader has, empty for a full bundle.                                   |
+| `head`         | string | First call only: the commit the branch is at.                                                                             |
+| `full`         | bool   | First call only: true when the bundle carries the whole history.                                                          |
+| `bundle_bytes` | int    | First call only: how many bytes of the transfer are the bundle, zero when the branch has no commits past base\_commit.    |
+| `patch_bytes`  | int    | First call only: how many bytes after the bundle are the patch, zero when nothing is uncommitted.                         |
+| `changes`      | int    | First call only: how many paths the patch touches, untracked files included.                                              |
+| `size`         | int    | First call only: the transfer's whole length.                                                                             |
+| `sha256`       | string | First call only: the SHA-256 of the whole transfer, for the reader to check.                                              |
+
+```json
+{"id":1,"verb":"bundle-worktree","params":{"session":"api-fan-add-retry-2"}}
+```
+
+```json
+{"id":2,"verb":"bundle-worktree","params":{"token":"<token>","offset":4194304}}
+```
+
+## `compare-fan` <Since verb="compare-fan" /> [#compare-fan]
+
+Compare the attempts of a fan: one row per sibling session with its branch, agent, state, changed files and lines against the base (committed and uncommitted work, untracked files included), the last verify-fan check and the last command its shells finished. A sibling the caller could not name itself is left out.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                                                                       |
+| --------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Any session of the fan. Omit for the most recently active session.                                                                                                                                                                |
+| `changes` | bool   |          | `true`  | Count the changed files and lines of each attempt, a few git calls per sibling.                                                                                                                                                   |
+| `detail`  | bool   |          | `false` | With changes, also list each attempt's files (file\_list, at most 8, most changed first) and its first changed lines (lines, at most 6). Two more git calls per sibling. From a linked machine, detail needs write in its policy. |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                                                                                                |
+| ------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group`      | string    | The fan's group.                                                                                                                                                                                                                                                                                                                                           |
+| `repo`       | string    | The repository the fan is of.                                                                                                                                                                                                                                                                                                                              |
+| `repo_root`  | string    | The repository's main checkout.                                                                                                                                                                                                                                                                                                                            |
+| `base`       | string    | The base the attempts were made from: the fan's base, or the main checkout's branch for a fan made from HEAD.                                                                                                                                                                                                                                              |
+| `rows`       | \[]object | One per sibling: session, branch, path, agent, harness, state, files, added, removed, ahead, dirty, base\_sha, prompt\_status, verify, last\_command (cmdline, exit, at, window), gone, and note when git could not count. Also cost, the cost its agent reported, started\_at and done\_at, notes from the verdict, and file\_list and lines with detail. |
+| `prompt`     | string    | The task the fan gave the attempts.                                                                                                                                                                                                                                                                                                                        |
+| `verdict`    | object    | The judge's pick, when set-fan-verdict recorded one: pick, summary, reasons, judge and at.                                                                                                                                                                                                                                                                 |
+| `total`      | int       | How many rows.                                                                                                                                                                                                                                                                                                                                             |
+
+```json
+{"id":1,"verb":"compare-fan","params":{"session":"api-fan-retry-1"}}
+```
+
+## `fan` <Since verb="fan" /> [#fan]
+
+Fan a prompt out across several agents. Creates count worktrees and sessions, starts an agent in each, and types each session's prompt into its agent once the agent shows it is at its prompt. Returns as soon as the sessions exist. An agent that is not ready for 30 seconds turns its prompt\_status to held and raises a question in the Inbox; the prompt is still typed when it is ready.
+
+| Param             | Type      | Required | Default  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------- | --------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `count`           | int       |          |          | How many worktrees and agents, 1 to 16. Required unless prompts is given, which sets it.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `agent`           | string    |          |          | The agent to run in every session, as one string: a harness id or program name (claude, codex, gemini), or any program, with its arguments after it ("codex --model o5"). Words are split the way a shell splits them, quotes included, and exec'd directly; nothing is expanded. Required unless agents is given.                                                                                                                                                                           |
+| `agents`          | \[]string |          |          | Several agents, each written as agent is, cycled across the sessions: \["claude","codex"] with count 4 is claude, codex, claude, codex. Takes no agent.                                                                                                                                                                                                                                                                                                                                      |
+| `prompt`          | string    |          |          | The prompt every agent gets. It is typed as one paste (wrapped in bracketed paste when the agent has it on) and submitted with a carriage return, the way ask-agent types a question. Required unless prompts is given.                                                                                                                                                                                                                                                                      |
+| `prompts`         | \[]string |          |          | One prompt per session, in order. count defaults to how many there are and must equal it when given. Takes no prompt.                                                                                                                                                                                                                                                                                                                                                                        |
+| `repo`            | string    |          |          | A directory inside the repository. Required unless repo\_url is passed.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `base`            | string    |          |          | Ref every branch starts from. Omit for HEAD of the main checkout.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `name`            | string    |          |          | Branch stem, which names the fan. The branches are the stem, then stem-2, stem-3 and so on. A name that is already a fan in the repository is refused with fan\_exists unless join is given. Omit for fan/ and the first words of the first prompt, which moves on to a free name. A name can have only A-Z, a-z, 0-9 and / . \_ -. Any other character is refused.                                                                                                                          |
+| `join`            | string    |          |          | A session of an existing fan to add the attempts to. The caller must reach that session. Omit to start a new fan.                                                                                                                                                                                                                                                                                                                                                                            |
+| `ready_timeout`   | int       |          | `600000` | Milliseconds to wait for each agent to be ready before giving up on its prompt.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `env`             | object    |          |          | Environment variables for every agent, name to value, on top of the daemon's. PATH in it is where the programs are looked up, so an agent the caller can run is found. The tuios CLI sends its PATH. TUIOS\_ names, TMUX and TMUX\_PANE are refused, and a call from another machine may not pass env at all. Not saved: a restored pane starts with the daemon's environment.                                                                                                               |
+| `task`            | string    |          |          | A task card the fan works on, such as t3. The card gets the fan's group and fan\_id, and moves from todo or plan to doing. It keeps no holder, since the fan's attempts work on it, and claim-task next skips it while the fan has a session. A fan check and the attempts' pull requests then move it (see \[tasks] auto\_stage). The caller needs what claim-task needs, and the card must be held by no pane but the caller's, not blocked and not done, checked before anything is made. |
+| `task_session`    | string    |          |          | The session of task. Omit for the caller's own session, or outside every pane the most recently active one.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `human_nonce`     | string    |          |          | With task: the attached client's nonce, so the stamp is the person's (by human).                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `model`           | string    |          |          | The model for every agent, passed with the flag each harness's manifest names (\[launch] model\_flag). Refused when one of the agents takes no model flag.                                                                                                                                                                                                                                                                                                                                   |
+| `effort`          | string    |          |          | The effort for every agent, one of each harness's \[launch] efforts.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `permission_mode` | string    |          |          | The permission mode for every agent, one of each harness's \[launch] permissions. From an agent pane it is held to the caller's own mode.                                                                                                                                                                                                                                                                                                                                                    |
+| `grants`          | \[]string |          |          | What the new pane may do through tuios: read, write, fan, respond, admin, or none. Omit for the default of \[agents.permissions], or, from a pane without admin, the calling pane's own grants. A pane may give only what it holds, and admin does not include respond. A window on another machine holds what that machine gives it. One of `read`, `write`, `fan`, `respond`, `files`, `task`, `admin` or `none`.                                                                          |
+| `setup`           | string    |          |          | A shell line to run with sh -c in each new worktree, in a window named setup, before the agent or shell starts. It holds no grants. Omit for \[worktree] setup in config.toml. An empty string runs none.                                                                                                                                                                                                                                                                                    |
+| `setup_async`     | bool      |          |          | Start the agent at once beside the setup. Omit for \[worktree] setup\_async. Without it the agent waits for the setup to pass, and a failed setup removes the new worktree and the branch it made when nothing in them is anyone's work. A failed async setup keeps both.                                                                                                                                                                                                                    |
+| `repo_url`        | string    |          |          | The repository by its origin URL, for a caller on another machine. This daemon finds its own checkout whose origin is the same repository. Pass repo or repo\_url, not both.                                                                                                                                                                                                                                                                                                                 |
+| `repos_root`      | string    |          |          | With repo\_url, the directory on this machine to look under, and to clone into. Absolute, or starting with \~/. Omit to look under \~/src, \~/dev, \~/code, \~/projects, \~/repos, \~/git, \~/work, \~/go/src, the home directory itself and tuios's own clone directory.                                                                                                                                                                                                                    |
+| `clone`           | bool      |          | `false`  | With repo\_url, clone the repository when no checkout is found. Only https, ssh and git URLs are cloned.                                                                                                                                                                                                                                                                                                                                                                                     |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                                                      |
+| ------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group`      | string    | The branch stem, which is the group's name in list-worktrees.                                                                                                                                                                                                                                                    |
+| `repo`       | string    | The repository's name.                                                                                                                                                                                                                                                                                           |
+| `repo_root`  | string    | The repository's main checkout on this machine.                                                                                                                                                                                                                                                                  |
+| `cloned`     | bool      | True when the repository was cloned by this call. Absent otherwise.                                                                                                                                                                                                                                              |
+| `agent`      | string    | The harness id started in the first session, empty for a program no manifest recognises.                                                                                                                                                                                                                         |
+| `command`    | string    | The command started in the first session.                                                                                                                                                                                                                                                                        |
+| `prompt`     | string    | The first session's prompt, as given.                                                                                                                                                                                                                                                                            |
+| `sessions`   | \[]object | One entry per session: session, branch, path, window\_id, and the agent (harness id) and command started in it. hook\_error is there when that session's after-new-worktree hook failed. setup is there when the session runs a setup, and agent\_pending with no window\_id while a sync setup holds the agent. |
+| `total`      | int       | How many sessions were started.                                                                                                                                                                                                                                                                                  |
+| `task`       | object    | With task: the card as stamped, as list-tasks gives a row.                                                                                                                                                                                                                                                       |
+| `task_note`  | string    | With task: why nothing was stamped, when the card was removed while the fan was made.                                                                                                                                                                                                                            |
+
+```json
+{"id":1,"verb":"fan","params":{"count":3,"agent":"claude","prompt":"Add a retry to the client.","repo":"/src/api"}}
+```
+
+```json
+{"id":1,"verb":"fan","params":{"count":3,"agents":["claude","codex --model o5","gemini"],"prompt":"Add a retry to the client.","repo":"/src/api","env":{"PATH":"/usr/local/bin:/usr/bin:/bin"}}}
+```
+
+## `file-preview` <Since verb="file-preview" /> [#file-preview]
+
+Make the preview of a file on this machine. An image comes scaled to max\_px on its long side, a PDF page and a film frame as an image (with pdftoppm and ffmpeg there), text as its first 256 KiB, and anything else as its type and size.
+
+| Param            | Type   | Required | Default  | Description                                                                                                 |
+| ---------------- | ------ | -------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `path`           | string | yes      |          | The file. An absolute path, or one that starts with \~.                                                     |
+| `max_px`         | int    |          | `1600`   | The longest side of an image, at most 4096.                                                                 |
+| `page`           | int    |          | `1`      | The PDF page.                                                                                               |
+| `pages_known`    | bool   |          | `false`  | The caller knows the page count, so pdfinfo does not run.                                                   |
+| `words`          | bool   |          | `false`  | Send the PDF page's words from pdftotext in place of its picture.                                           |
+| `at_ms`          | int    |          |          | The position in a film of the frame to send. Without it the frame is 5 % in.                                |
+| `duration_known` | bool   |          | `false`  | The caller knows the film's facts, so ffprobe does not run.                                                 |
+| `no_frame`       | bool   |          | `false`  | Send only the film's facts.                                                                                 |
+| `format`         | bool   |          | `false`  | Lay out a JSON file for reading.                                                                            |
+| `details`        | bool   |          | `false`  | Send the file's permissions, what git says of it, its diff and a PDF page's words, in place of the preview. |
+| `offset`         | int    |          |          | Send a window of a text file from this byte, whole lines only, in place of the preview.                     |
+| `limit`          | int    |          | `262144` | The most bytes in that window, at most 1 MiB.                                                               |
+| `find`           | string |          |          | Look for this text in a text file, in place of the preview. Lower case ignores case.                        |
+| `from`           | int    |          |          | The byte find starts at.                                                                                    |
+| `back`           | bool   |          |          | Find goes toward the start of the file.                                                                     |
+| `line`           | int    |          |          | Find the start of this line number, in place of the preview.                                                |
+
+| Result field  | Type   | Description                                                                                                    |
+| ------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `kind`        | string | image, svg, pdf, video, text, dir or binary. One of `image`, `svg`, `pdf`, `video`, `text`, `dir` or `binary`. |
+| `image`       | string | The picture, base64, as mime says: the image, the page or the frame.                                           |
+| `mime`        | string | The picture's type for image, pdf and video, and the file's type otherwise.                                    |
+| `width`       | int    | An image's own width.                                                                                          |
+| `height`      | int    | An image's own height.                                                                                         |
+| `text`        | string | text and svg: the content.                                                                                     |
+| `truncated`   | bool   | text: the file is longer than what was sent.                                                                   |
+| `offset`      | int    | A window: the byte it starts at. find and line: the start of the line found, or -1.                            |
+| `reached`     | int    | find and line: how far the read went. Call again from there when the search ran out of time.                   |
+| `counted`     | int    | line: the lines passed.                                                                                        |
+| `next_offset` | int    | A window: the byte the next window starts at.                                                                  |
+| `pdf`         | string | pdf, when this machine cannot draw the page: the file, base64, at most 8 MiB.                                  |
+| `pages`       | int    | pdf: the page count, when pdfinfo is there.                                                                    |
+| `words`       | string | pdf, when asked for: the page's words.                                                                         |
+| `no_tool`     | string | pdf: the tool this machine needs and does not have.                                                            |
+| `at_ms`       | int    | video: the position of the frame sent.                                                                         |
+| `formatted`   | bool   | text: the JSON was laid out.                                                                                   |
+| `entries`     | array  | archive: the listing, with name, size and dir.                                                                 |
+| `capped`      | bool   | archive: the listing stopped at a bound.                                                                       |
+| `head`        | string | binary: the first 16 KiB, base64.                                                                              |
+| `details`     | bool   | The reply holds the details asked for.                                                                         |
+| `mode`        | string | details: the permissions.                                                                                      |
+| `owner`       | string | details: the file's owner.                                                                                     |
+| `group`       | string | details: the file's group.                                                                                     |
+| `git`         | string | details: what git says of the file.                                                                            |
+| `diff`        | string | details: the diff of a changed file.                                                                           |
+| `video_codec` | string | video: the codec, from ffprobe.                                                                                |
+| `audio_codec` | string | video: the codec of the sound, from ffprobe, when it has sound.                                                |
+| `fps`         | number | video: the frames each second, from ffprobe.                                                                   |
+| `duration_ms` | int    | video: the length.                                                                                             |
+| `note`        | string | Why there is no picture, in words a person can act on.                                                         |
+| `size`        | int    | The file's size.                                                                                               |
+| `mtime`       | int    | The file's modification time, Unix ms.                                                                         |
+
+```json
+{"id":1,"verb":"file-preview","params":{"path":"~/Pictures/cat.jpg","max_px":1200}}
+```
+
+## `keep-fan` <Since verb="keep-fan" /> [#keep-fan]
+
+Keep one attempt of a fan and remove the others: each sibling's worktree and session go, the way remove-worktree removes them, each on its own. A sibling with uncommitted changes is left in place unless stash or force says what to do with them. Files git ignores are deleted with a worktree and never stashed: compare-fan with detail lists them. Branches are never deleted. With merge, the kept attempt's branch is first merged into its base, as ship-merge does.
+
+| Param        | Type      | Required | Default | Description                                                                                                                                                                                             |
+| ------------ | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`    | string    | yes      |         | The attempt to keep.                                                                                                                                                                                    |
+| `stash`      | bool      |          | `false` | Stash a sibling's uncommitted changes before removing it.                                                                                                                                               |
+| `force`      | bool      |          | `false` | Discard a sibling's uncommitted changes.                                                                                                                                                                |
+| `merge`      | bool      |          | `false` | First merge the kept attempt's branch into its base in the main checkout, as ship-merge does. A merge that conflicts or is refused stops the call before any sibling is removed.                        |
+| `merge_mode` | string    |          | `merge` | With merge: merge, squash or ff-only, as ship-merge takes mode. One of `merge`, `squash` or `ff-only`.                                                                                                  |
+| `into`       | string    |          |         | With merge: the branch to merge into. Omit for the base the attempt was made from.                                                                                                                      |
+| `group`      | string    |          |         | The fan's group, as compare-fan gave it. When given, a session of another fan is refused.                                                                                                               |
+| `repo_root`  | string    |          |         | The fan's repository, as compare-fan gave it. When given, a session of another repository is refused.                                                                                                   |
+| `fan_id`     | string    |          |         | The fan's ID, as compare-fan gave it. When given, a session of another fan of the same name is refused.                                                                                                 |
+| `siblings`   | \[]string |          |         | The attempts the caller showed it would remove. When given, a fan whose other attempts differ is refused whole.                                                                                         |
+| `ignored`    | object    |          |         | Per attempt to remove, the ignored\_hash compare-fan gave for the list the caller showed. When given, an attempt whose ignored files changed, or that has no entry, is refused, and nothing is removed. |
+
+| Result field | Type      | Description                                                                                                                |
+| ------------ | --------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `kept`       | string    | The session kept.                                                                                                          |
+| `branch`     | string    | The kept session's branch.                                                                                                 |
+| `group`      | string    | The fan's group.                                                                                                           |
+| `removed`    | \[]object | One per sibling: session and removed, with remove-worktree's result when it was removed, or note and code when it was not. |
+| `left`       | int       | How many siblings were not removed.                                                                                        |
+| `merge`      | object    | With merge: what ship-merge returns for the kept attempt. Omitted without merge.                                           |
+
+```json
+{"id":1,"verb":"keep-fan","params":{"session":"api-fan-retry-1"}}
+```
+
+```json
+{"id":1,"verb":"keep-fan","params":{"session":"api-fan-retry-1","stash":true}}
+```
+
+```json
+{"id":1,"verb":"keep-fan","params":{"session":"api-fan-retry-1","merge":true,"merge_mode":"squash"}}
+```
+
+## `list-worktrees` <Since verb="list-worktrees" /> [#list-worktrees]
+
+List the sessions whose directory is a git worktree, with the repository, branch, agent state and fan prompt status of each.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                     |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repo`    | string |          |         | Only worktrees of this repository, by name.                                                                                                                                     |
+| `group`   | string |          |         | Only the sessions of this fan-out, by its branch stem.                                                                                                                          |
+| `session` | string |          |         | Only this session's worktree. The close dialog asks for the one it deletes, so the counts under changes run git there and nowhere else.                                         |
+| `changes` | bool   |          | `false` | Run git in the matching worktrees and report the count of uncommitted changes, the commits ahead of base, and whether the branch is merged. Off by default because it runs git. |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `worktrees`  | \[]object | One entry per worktree session: session, repo, repo\_root, branch, path, base, group, main (true when the entry is the repository's main checkout, which no worktree verb acts on), managed, gone, state, harness, windows, attached, prompt\_status, prompt\_note, launched\_from (the session whose pane ran the fan, only when a pane did), pr (the branch's pull request as ship-status reports it, only when tuios knows of one), setup (the worktree setup's record, only when it ran one: command, async, state of pending, running, passed or failed, exit, started\_at, finished\_at, tail with the last four lines, agent of waiting, started or not\_started, removed and branch\_removed after a failed sync setup, and note), and with changes: changes, ahead, merged, and merged\_into. merged is true when the branch has commits of its own and merging it into base, or into the upstream of base, changes nothing. A merge commit, a fast-forward, a rebase and a squash all count. merged\_into names the ref, only when merged is true. No fetch is run, so a remote ref is as git last fetched it. |
+| `total`      | int       | How many entries.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+```json
+{"id":1,"verb":"list-worktrees"}
+```
+
+```json
+{"id":1,"verb":"list-worktrees","params":{"repo":"api","changes":true}}
+```
+
+## `new-worktree` <Since verb="new-worktree" /> [#new-worktree]
+
+Create a git worktree of a repository and a session in it. The worktree goes under tuios's worktree directory, named by repository and branch. The branch is created from base when it does not exist.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                                                                                               |
+| ------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repo`        | string    |          |         | A directory inside the repository: its main checkout or any of its worktrees. Required unless repo\_url is passed.                                                                                                                                                        |
+| `branch`      | string    |          |         | Branch to check out in the worktree. Created from base when it does not exist.                                                                                                                                                                                            |
+| `base`        | string    |          |         | Ref a new branch starts from. Omit for HEAD of the main checkout.                                                                                                                                                                                                         |
+| `name`        | string    |          |         | Name for the session. Omit for \<repo>-\<branch>, with every slash in the branch turned into a hyphen.                                                                                                                                                                    |
+| `command`     | \[]string |          |         | Argv to exec as the first window's process instead of a shell. No shell parses it, so nothing needs quoting.                                                                                                                                                              |
+| `new_branch`  | bool      |          |         | Refuse with branch\_exists when the branch, its worktree folder or its session exists already, instead of checking out a branch that exists.                                                                                                                              |
+| `prompt`      | string    |          |         | A first prompt for the agent in command, typed once it is at its prompt, as start-agent and fan type theirs. The call waits for it to be taken, unless a sync setup holds the agent.                                                                                      |
+| `setup`       | string    |          |         | A shell line to run with sh -c in each new worktree, in a window named setup, before the agent or shell starts. It holds no grants. Omit for \[worktree] setup in config.toml. An empty string runs none.                                                                 |
+| `setup_async` | bool      |          |         | Start the agent at once beside the setup. Omit for \[worktree] setup\_async. Without it the agent waits for the setup to pass, and a failed setup removes the new worktree and the branch it made when nothing in them is anyone's work. A failed async setup keeps both. |
+| `repo_url`    | string    |          |         | The repository by its origin URL, for a caller on another machine. This daemon finds its own checkout whose origin is the same repository. Pass repo or repo\_url, not both.                                                                                              |
+| `repos_root`  | string    |          |         | With repo\_url, the directory on this machine to look under, and to clone into. Absolute, or starting with \~/. Omit to look under \~/src, \~/dev, \~/code, \~/projects, \~/repos, \~/git, \~/work, \~/go/src, the home directory itself and tuios's own clone directory. |
+| `clone`       | bool      |          | `false` | With repo\_url, clone the repository when no checkout is found. Only https, ssh and git URLs are cloned.                                                                                                                                                                  |
+
+| Result field      | Type   | Description                                                                                                                                                                        |
+| ----------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`         | string | Name of the new session.                                                                                                                                                           |
+| `session_id`      | string | Id of the new session.                                                                                                                                                             |
+| `repo`            | string | The repository's name: the base name of its main checkout.                                                                                                                         |
+| `repo_root`       | string | The repository's main checkout.                                                                                                                                                    |
+| `branch`          | string | The branch the worktree has checked out.                                                                                                                                           |
+| `created_branch`  | bool   | True when the branch was created by this call.                                                                                                                                     |
+| `path`            | string | The worktree's directory.                                                                                                                                                          |
+| `window_id`       | string | Id of the agent's or the shell's window. Absent while a sync setup holds it.                                                                                                       |
+| `pty_id`          | string | Id of that window's PTY. Absent while a sync setup holds it.                                                                                                                       |
+| `cloned`          | bool   | True when the repository was cloned by this call. Absent otherwise.                                                                                                                |
+| `hook_error`      | string | Why the after-new-worktree hook failed, with the last lines of its stderr. The worktree, the session and the first window are kept. Absent when the hook succeeded or none is set. |
+| `prompt_status`   | string | With prompt: sent, stalled, not\_sent, held, or pending while a sync setup holds the agent. list-worktrees reports it later too.                                                   |
+| `prompt_note`     | string | Why the prompt is not sent. Absent when it is.                                                                                                                                     |
+| `setup`           | object | The setup's record as list-worktrees reports it. Absent when no setup runs.                                                                                                        |
+| `setup_window_id` | string | Id of the setup's window. Absent when no setup runs.                                                                                                                               |
+| `setup_error`     | string | Why the setup's window could not start. The worktree and the session are kept. Absent otherwise.                                                                                   |
+| `agent_pending`   | bool   | True while a sync setup holds the agent. There is then no window\_id: the agent's window opens when the setup passes.                                                              |
+
+```json
+{"id":1,"verb":"new-worktree","params":{"repo":"/src/api","branch":"feat/retry"}}
+```
+
+```json
+{"id":1,"verb":"new-worktree","params":{"repo":"/src/api","branch":"feat/retry","base":"main","command":["claude"]}}
+```
+
+```json
+{"id":1,"verb":"new-worktree","params":{"repo_url":"git@github.com:acme/api.git","repos_root":"~/src","branch":"feat/retry"}}
+```
+
+```json
+{"id":1,"verb":"new-worktree","params":{"repo":"/src/api","branch":"feat/retry","command":["claude"],"prompt":"Add a retry to the client."}}
+```
+
+## `remove-worktree` <Since verb="remove-worktree" /> [#remove-worktree]
+
+Remove a worktree session's worktree with git worktree remove, and kill the session. Uncommitted changes are refused unless stash keeps them in git stash or force discards them. The branch is never deleted.
+
+| Param          | Type   | Required | Default | Description                                                                                                |
+| -------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `session`      | string |          |         | The worktree session to remove. Never guessed.                                                             |
+| `stash`        | bool   |          | `false` | Move uncommitted changes into git stash before removing, under the message "tuios: \<branch>".             |
+| `force`        | bool   |          | `false` | Discard uncommitted changes. This is the one destructive option, and it does nothing without being passed. |
+| `keep_session` | bool   |          | `false` | Leave the session running after the worktree is removed.                                                   |
+
+| Result field     | Type   | Description                                     |
+| ---------------- | ------ | ----------------------------------------------- |
+| `session`        | string | The session the worktree belonged to.           |
+| `branch`         | string | The branch, which still exists.                 |
+| `path`           | string | The directory that was removed.                 |
+| `changes`        | int    | How many uncommitted changes the worktree held. |
+| `stashed`        | bool   | True when the changes went into git stash.      |
+| `discarded`      | bool   | True when the changes were discarded by force.  |
+| `session_killed` | bool   | True when the session was killed.               |
+| `branch_kept`    | bool   | Always true.                                    |
+
+```json
+{"id":1,"verb":"remove-worktree","params":{"session":"api-feat-retry"}}
+```
+
+```json
+{"id":1,"verb":"remove-worktree","params":{"session":"api-feat-retry","stash":true}}
+```
+
+## `ship-commit` <Since verb="ship-commit" /> [#ship-commit]
+
+Stage every change in a pane's git work tree, untracked files included and ignored ones not, and commit it on the branch checked out there. git runs with the person's own identity, signing and hooks, and the message is used as given. Refused while the pane's agent is working or waiting on a prompt, unless force is given.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+| `message` | string |          |         | The commit message. Omit to use the pane's last prompt or turn summary. The call is refused when there is none.          |
+| `force`   | bool   |          | `false` | Commit while the agent is mid-turn.                                                                                      |
+
+| Result field | Type   | Description                  |
+| ------------ | ------ | ---------------------------- |
+| `session`    | string | The session of the pane.     |
+| `window`     | string | The pane, by id.             |
+| `worktree`   | string | The root of the work tree.   |
+| `branch`     | string | The branch the commit is on. |
+| `commit`     | string | The new commit.              |
+| `message`    | string | The message the commit has.  |
+
+```json
+{"id":1,"verb":"ship-commit","params":{"session":"work","window":"build","message":"Add a retry to the client"}}
+```
+
+## `ship-merge` <Since verb="ship-merge" /> [#ship-merge]
+
+Merge a worktree pane's branch into its base branch in the repository's main checkout. The main checkout must have that branch checked out and no uncommitted change. A merge that conflicts is aborted, the main checkout is left as it was, and the conflicting files are reported. Uncommitted changes in the worktree are not merged. Nothing is forced.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                                      |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                         |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                                                                                            |
+| `into`    | string |          |         | The branch to merge into. Omit for the base the worktree was made from, else the branch the main checkout is on.                                                                                 |
+| `mode`    | string |          | `merge` | merge fast-forwards when it can and makes a merge commit when it cannot. squash makes one commit. ff-only refuses a branch that cannot be fast-forwarded. One of `merge`, `squash` or `ff-only`. |
+| `message` | string |          |         | The message of the merge or squash commit. Omit for git's own.                                                                                                                                   |
+
+| Result field   | Type   | Description                                                                    |
+| -------------- | ------ | ------------------------------------------------------------------------------ |
+| `session`      | string | The session of the worktree.                                                   |
+| `worktree`     | string | The root of the worktree.                                                      |
+| `repo_root`    | string | The main checkout merged in.                                                   |
+| `branch`       | string | The branch merged.                                                             |
+| `into`         | string | The branch merged into.                                                        |
+| `mode`         | string | merge, squash or ff-only.                                                      |
+| `before`       | string | The commit into was on before.                                                 |
+| `after`        | string | The commit into is on now.                                                     |
+| `commits`      | int    | How many commits of the branch into did not have.                              |
+| `fast_forward` | bool   | Whether into only moved forward.                                               |
+| `up_to_date`   | bool   | Whether into already had every commit, so nothing changed.                     |
+| `uncommitted`  | int    | How many uncommitted changes the worktree holds, which the merge did not take. |
+
+```json
+{"id":1,"verb":"ship-merge","params":{"session":"work","window":"build"}}
+```
+
+```json
+{"id":1,"verb":"ship-merge","params":{"session":"work","window":"build","into":"main","mode":"squash"}}
+```
+
+## `ship-pr` <Since verb="ship-pr" /> [#ship-pr]
+
+Push a pane's branch and open a pull request for it with the gh CLI, as the person is logged in to gh. tuios holds no GitHub token. When the branch already has an open pull request, the push updates it and no new one is opened. The first call answers confirm\_required with what would happen and a token. Call again with that token. A caller inside a pane, or on a restricted connection, also needs the person to allow it in the Inbox.
+
+| Param        | Type   | Required | Default  | Description                                                                                                                          |
+| ------------ | ------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`    | string |          |          | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.             |
+| `window`     | string |          |          | Window id or name. Omit to target the focused window.                                                                                |
+| `remote`     | string |          |          | The remote to push to. Omit for the one the branch follows, else the only one, else origin.                                          |
+| `confirm`    | string |          |          | The token from the confirm\_required answer to a call without it. The call goes ahead only with the token of what it would send now. |
+| `request_id` | string |          |          | Come back for the person's answer to a question an earlier call put in the Inbox.                                                    |
+| `wait`       | int    |          | `120000` | How long to wait for the person's answer in the Inbox, in milliseconds, at most 3600000.                                             |
+| `base`       | string |          |          | The branch the pull request merges into. Omit for the base the worktree was made from, else the repository's default branch.         |
+| `title`      | string |          |          | The title. With title and body both omitted, gh fills them from the commits.                                                         |
+| `body`       | string |          |          | The body. Needs title.                                                                                                               |
+| `draft`      | bool   |          | `false`  | Open it as a draft.                                                                                                                  |
+
+| Result field  | Type           | Description                                                                                                                                                                                     |
+| ------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`     | string         | The session of the pane.                                                                                                                                                                        |
+| `window`      | string         | The pane, by id.                                                                                                                                                                                |
+| `worktree`    | string         | The root of the work tree.                                                                                                                                                                      |
+| `branch`      | string         | The branch pushed.                                                                                                                                                                              |
+| `commit`      | string         | The commit pushed.                                                                                                                                                                              |
+| `remote`      | string         | The remote pushed to.                                                                                                                                                                           |
+| `created`     | bool           | Whether a new pull request was opened. False when one was already open.                                                                                                                         |
+| `pr`          | object or null | The pull request: number, url, state (open, merged or closed), checks (pass, fail or pending, omitted when there are none), passed, failed, pending, branch and checked\_at (Unix nanoseconds). |
+| `approved_by` | string         | human when the person allowed it in the Inbox, omitted when the caller is the person.                                                                                                           |
+
+```json
+{"id":1,"verb":"ship-pr","params":{"session":"work","window":"build","draft":true}}
+```
+
+## `ship-push` <Since verb="ship-push" /> [#ship-push]
+
+Push a pane's branch to a remote and set it as the branch's upstream. Never forced. The first call answers confirm\_required with what would be pushed and a token. Call again with that token to push. A caller inside a pane, or on a restricted connection, also needs the person to allow it in the Inbox, and the call waits for that answer.
+
+| Param        | Type   | Required | Default  | Description                                                                                                                          |
+| ------------ | ------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`    | string |          |          | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.             |
+| `window`     | string |          |          | Window id or name. Omit to target the focused window.                                                                                |
+| `remote`     | string |          |          | The remote to push to. Omit for the one the branch follows, else the only one, else origin.                                          |
+| `confirm`    | string |          |          | The token from the confirm\_required answer to a call without it. The call goes ahead only with the token of what it would send now. |
+| `request_id` | string |          |          | Come back for the person's answer to a question an earlier call put in the Inbox.                                                    |
+| `wait`       | int    |          | `120000` | How long to wait for the person's answer in the Inbox, in milliseconds, at most 3600000.                                             |
+
+| Result field  | Type   | Description                                                                              |
+| ------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `session`     | string | The session of the pane.                                                                 |
+| `window`      | string | The pane, by id.                                                                         |
+| `worktree`    | string | The root of the work tree.                                                               |
+| `branch`      | string | The branch pushed.                                                                       |
+| `commit`      | string | The commit pushed.                                                                       |
+| `remote`      | string | The remote pushed to.                                                                    |
+| `url`         | string | Where the push went: the push URL's host and path, without user name, password or token. |
+| `approved_by` | string | human when the person allowed it in the Inbox, omitted when the caller is the person.    |
+
+```json
+{"id":1,"verb":"ship-push","params":{"session":"work","window":"build"}}
+```
+
+## `ship-status` <Since verb="ship-status" /> [#ship-status]
+
+Read the pull request of a pane's branch as tuios last saw it, and with refresh ask gh now. A worktree session with an open pull request is polled in the background while a client is attached. Off when gh is not installed.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+| `refresh` | bool   |          | `false` | Ask gh now instead of reading what tuios last saw.                                                                       |
+
+| Result field | Type           | Description                                                                                                                                                                                                                    |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`    | string         | The session of the pane.                                                                                                                                                                                                       |
+| `window`     | string         | The pane, by id.                                                                                                                                                                                                               |
+| `worktree`   | string         | The root of the work tree.                                                                                                                                                                                                     |
+| `branch`     | string         | The branch checked out there, empty on a detached HEAD.                                                                                                                                                                        |
+| `gh`         | bool           | Whether the gh CLI is installed.                                                                                                                                                                                               |
+| `pr`         | object or null | The pull request: number, url, state (open, merged or closed), checks (pass, fail or pending, omitted when there are none), passed, failed, pending, branch and checked\_at (Unix nanoseconds). Null when tuios knows of none. |
+
+```json
+{"id":1,"verb":"ship-status","params":{"session":"work","window":"build"}}
+```
+
+## `stash-get` <Since verb="stash-get" /> [#stash-get]
+
+Read one stashed file back as bytes, so it can cross a link. Only a path this session's stash printed is served, and a file over 8 MB is refused.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `path`    | string |          |         | A stored path, as stash-put or stash-list printed it.                                                                    |
+
+| Result field | Type   | Description                              |
+| ------------ | ------ | ---------------------------------------- |
+| `path`       | string | The stored path.                         |
+| `name`       | string | The stored file's base name.             |
+| `hash`       | string | The sha256 of the content, hex.          |
+| `bytes`      | int    | How many bytes the content holds.        |
+| `media_type` | string | The type read from the extension.        |
+| `kind`       | string | image or file. One of `image` or `file`. |
+| `content`    | string | The bytes, base64.                       |
+
+```json
+{"id":1,"verb":"stash-get","params":{"session":"work","path":"/run/user/1000/tuios/stash/<id>/<hash>.png"}}
+```
+
+## `stash-list` <Since verb="stash-list" /> [#stash-list]
+
+List the files in a session's store, with the size of each, whether a message still names it, and how many the store has evicted. The oldest file no message names is the next one dropped when the session hits its cap.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+
+| Result field     | Type      | Description                                                                                                                |
+| ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `dir`            | string    | The directory holding this session's stored files.                                                                         |
+| `entries`        | \[]object | One entry per file, oldest use first: path, name, hash, bytes, media\_type, kind, source, stored\_at, referenced, missing. |
+| `total`          | int       | How many files are stored.                                                                                                 |
+| `bytes`          | int       | How many bytes they take together.                                                                                         |
+| `evicted`        | int       | How many files this store has deleted to make room since the session started.                                              |
+| `max_file_bytes` | int       | The per-file cap in bytes.                                                                                                 |
+| `max_bytes`      | int       | The per-session cap in bytes.                                                                                              |
+
+```json
+{"id":1,"verb":"stash-list","params":{"session":"work"}}
+```
+
+## `stash-put` <Since verb="stash-put" /> [#stash-put]
+
+Copy a file into the session's own file store and answer with the stored path. The stored file lives as long as the session and is deleted when the session is killed or the daemon stops. Attach the stored path to a message like any other path.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                                           |
+| --------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                              |
+| `path`    | string |          |         | Absolute path to an existing regular file on the daemon's host. The daemon opens and copies it as the user that started it. With content, the daemon does not open it. It only names the stored file. |
+| `content` | string |          |         | The file's bytes, base64, for a file on another machine. At most 8 MB decoded. The path then gives the extension and the source label. From a linked machine, content is required.                    |
+
+| Result field      | Type   | Description                                                                                                             |
+| ----------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `path`            | string | The stored path. Attach this, or hand it to another agent.                                                              |
+| `hash`            | string | The sha256 of the content, hex. The stored name is this plus the source's extension.                                    |
+| `bytes`           | int    | How many bytes were stored.                                                                                             |
+| `media_type`      | string | The type read from the extension, the same way an attachment's is.                                                      |
+| `kind`            | string | image or file, from the media type. One of `image` or `file`.                                                           |
+| `stored_at`       | int    | Unix-nano time the file was stored, or last asked for.                                                                  |
+| `deduped`         | bool   | True when these bytes were already stored. Nothing new was written and the path is the one that already existed.        |
+| `evicted`         | int    | How many files this put deleted to make room.                                                                           |
+| `evictions`       | int    | How many files this session's store has deleted in total. A number that moved means a file stashed earlier may be gone. |
+| `session_bytes`   | int    | How many bytes this session's store holds now.                                                                          |
+| `session_entries` | int    | How many files this session's store holds now.                                                                          |
+| `max_file_bytes`  | int    | The per-file cap in bytes.                                                                                              |
+| `max_bytes`       | int    | The per-session cap in bytes.                                                                                           |
+
+```json
+{"id":1,"verb":"stash-put","params":{"session":"work","path":"/tmp/flame.png"}}
+```
+
+## `verify-fan` <Since verb="verify-fan" /> [#verify-fan]
+
+Run one check in every attempt of a fan: a window named verify in each sibling session runs the command with sh -c and records whether it passed. The window holds no grants, so the check cannot call tuios. It closes when the check passes and stays open, so the output can be read, when it fails. The command is always the caller's; none is read from the repository. A check still running in a sibling is stopped first.
+
+| Param        | Type   | Required | Default | Description                                                                                                                                                                          |
+| ------------ | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`    | string |          |         | Any session of the fan. Omit for the most recently active session.                                                                                                                   |
+| `command`    | string | yes      |         | The command to run, as a shell line, at most 4096 bytes.                                                                                                                             |
+| `timeout_ms` | int    |          |         | How long a check may run before it counts as failed and its window is closed, in milliseconds. Omit for no limit.                                                                    |
+| `env`        | object |          |         | Environment variables for the check, name to value, on top of the daemon's, with the rules of fan's env. The tuios CLI sends its PATH. A call from another machine may not pass env. |
+
+| Result field | Type      | Description                                                                                                                              |
+| ------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `group`      | string    | The fan's group.                                                                                                                         |
+| `command`    | string    | The command as it runs.                                                                                                                  |
+| `sessions`   | \[]string | The sessions a check was started in. Results reach clients as the verify field of each session's worktree, and compare-fan reports them. |
+| `skipped`    | \[]object | Siblings no check was started in: session and reason. Omitted when none.                                                                 |
+
+```json
+{"id":1,"verb":"verify-fan","params":{"session":"api-fan-retry-1","command":"go test ./..."}}
+```

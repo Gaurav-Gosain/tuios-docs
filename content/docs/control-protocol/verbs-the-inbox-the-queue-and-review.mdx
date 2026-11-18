@@ -1,0 +1,1063 @@
+---
+title: "Verbs: The Inbox, the queue and review"
+description: "Verbs: The Inbox, the queue and review: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## review-diff [#review-diff]
+
+What the agent in a pane changed. The pane is `window` (default the focused
+one) of `session`, and the repository is the session's worktree when the pane
+is in it, else the repository holding the pane's directory; none is
+`not_repo`, and so is a pane whose process runs on another machine. The
+working state, committed or not, untracked files included and ignored files
+left out, is written as a git tree through a temporary copy of the worktree's
+index, so its index, its files and what the agent staged are not changed.
+An untracked file larger than `[agents.checkpoints] max_untracked_mb` is left
+out of the tree and never read; it is listed with status `U`, `skipped` true
+and no counts or hunks. Every git call of one diff together is bounded at 10 seconds (`git_failed`
+past it). [AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#reviewing-an-agents-changes) has the
+whole contract.
+
+Params: `session`, `window`, `base` (a ref; omit for the worktree's recorded
+base, else the merge base with the upstream, else `HEAD`), `against` (another
+session of the same fan: the two attempts diffed with each other; not with
+`base` or `uncommitted`), `uncommitted` (only what is not committed, against
+`HEAD`), `paths` (at most 256, relative, each taken literally), `context` (0
+to 20, default 3), `index` (`unstaged` or `staged`; see below). A `base` that does not resolve, or reads as an option, is
+`invalid_params`, and so is an `against` that is not another attempt of the
+fan. A named or recorded base is taken through its merge base with `HEAD`.
+
+```json
+{"verb": "review-diff", "params": {"session": "api-fan-retry-2"}}
+```
+
+```json
+{"result": {"type": "review_diff", "session": "api-fan-retry-2", "window": "4be1c09a-...",
+ "repo_root": "/src/api", "worktree": "/home/u/.local/share/tuios/worktrees/api/fan-retry-2",
+ "base": "main", "base_sha": "1a760e8f...", "uncommitted": false, "tree_sha": "9d0c...",
+ "files": [
+  {"path": "api/retry.go", "status": "M", "added": 12, "removed": 1, "hunks": [
+   {"header": "@@ -40,7 +40,19 @@ func Do(ctx context.Context", "old_start": 40, "old_lines": 7, "new_start": 40, "new_lines": 19,
+    "lines": [{"op": "context", "old": 40, "new": 40, "text": "\tfor attempt := 0; ; attempt++ {"},
+              {"op": "delete", "old": 41, "text": "\t\tif err := f(); err == nil {"},
+              {"op": "add", "new": 41, "text": "\t\terr := f()"}]}]},
+  {"path": "docs/retry.md", "status": "U", "added": 9, "removed": 0, "hunks": []}],
+ "totals": {"files": 2, "added": 21, "removed": 1}, "truncated": false,
+ "notes": [], "untrusted": true}}
+```
+
+`status` is `A`, `M`, `D`, `R` (with `old_path`) or `U` (untracked: new and
+not yet added to git). A line's `op` is `context`, `add` or `delete`, with
+`old` and `new` its numbers on each side, and `no_newline` on the last line
+of a side without one. Past 400 files, 2 MiB of diff text, or 5000 lines in
+one file, a file carries its counts with `truncated` and no hunks, and the
+diff says `truncated`. A binary file has `binary` and counts only. With
+`against`, `base` and `base_sha` are empty and `against` and `against_tree`
+name the other attempt.
+
+Every call finds the pane's notes again in the diff it read and returns them
+as `notes`, as `review-note` lists them. The answer is marked `untrusted`: the
+text is the repository's.
+
+`index` reads the worktree's own index instead of a base. `unstaged` is the
+index (written with `git write-tree`) against the working files, untracked
+files included as `U`. `staged` is `HEAD` (the empty tree before the first
+commit) against the index. `base` is then `index` or `HEAD`, `base_sha` is a
+tree, and the result has `index`. It takes no `base`, `against` or
+`uncommitted`. The notes are returned, and are not moved by an index diff. A
+hunk's `header` and its `lines` are the same as `review-stage` reads them for
+the same `index` and `context`.
+
+`highlight` (default false) adds two fields to each line. `hl` is the
+syntax colour: `[start, end, class]` runs in bytes of `text`, where `class`
+is a number. The result's `classes` names the numbers in order (`plain`,
+`keyword`, `type`, ...). `changed` is the `[start, end]` bytes of a removed
+or added line that changed against the line it pairs with. Each field is
+absent when it is empty. The old side and the new side of a hunk are each
+coloured as one text. A truncated file, a binary file and a very large text
+are not coloured.
+
+A pane without `admin` reads its own session and fan group, and the session
+`against` names must be in its reach too. Over a link it needs `write`, since
+it returns file contents.
+
+## review-stage [#review-stage]
+
+Stage or unstage a change in the worktree under a pane. Only the index
+changes. The working files do not change. One call runs at a time in a
+worktree.
+
+Params: `session`, `window` (as for `review-diff`), `action` (`stage`,
+`unstage` or `undo`), `path` (relative to the repository root), `hunk` (a
+header exactly as `review-diff` returned it; omit for the whole file),
+`lines` (indices into that hunk's `lines`; only added and removed lines
+count; omit for the whole hunk), `context` (the context of that diff, default
+3\), `undo` (for `undo`), `human_nonce`.
+
+- `stage` reads the `unstaged` diff of `path` again. A whole file is
+  `git add -A`, which also stages a deletion or an untracked file. A hunk or
+  lines become a patch applied with `git apply --cached`: an unselected
+  added line is left out, and an unselected removed line stays.
+- `unstage` reads the `staged` diff. A whole file is `git reset`, or a
+  removal from the index before the first commit. A hunk or lines are the
+  reverse: an unselected added line stays, and an unselected removed line is
+  left out.
+- A rename and its old path are staged together, and only whole, as is a
+  binary file (`whole_file_only`). A hunk no longer in the diff is
+  `hunk_changed`.
+- Every result has `undo`: `entries`, the index entries of the paths touched
+  before the call (`{path, mode, sha}`, or `{path, absent: true}`), and
+  `after`, the same paths after it.
+- `undo` takes that object. It is `index_changed` unless the index still
+  holds `after`. Then it writes `entries` back with `git update-index`, and
+  answers with `undo` swapped, so sending that back redoes the call.
+
+```json
+{"verb": "review-stage", "params": {"action": "stage", "session": "work",
+ "path": "list.txt", "hunk": "@@ -8,5 +8,7 @@ seven", "lines": [4]}}
+```
+
+```json
+{"result": {"type": "review_stage", "session": "work", "window": "ee773ef6-...",
+ "worktree": "/src/repo", "path": "list.txt", "action": "stage",
+ "undo": {"entries": [{"path": "list.txt", "mode": "100644", "sha": "e68fa666..."}],
+          "after": [{"path": "list.txt", "mode": "100644", "sha": "e5dcefbe..."}]}}}
+```
+
+It is the person's tool: refused on a restricted connection, `admin` for a
+pane, `write` over a link. A `human_nonce` that is given must be live. The
+review overlay calls it with the keys `a`, `d`, `A`, `D` and `z`.
+
+## review-note [#review-note]
+
+Keep the notes on a pane's changes. They are held by the daemon per worktree
+and per pane: at most 200 on a worktree, 1000 bytes each, saved across a
+restart for the panes that come back, and dropped with the pane or the
+worktree.
+
+Params: `action` (required: `add`, `edit`, `remove`, `list`, `clear`),
+`session`, `window`, and:
+
+- `add`: `path` (relative to the repository root), then `line` (from 1) with
+  `side` (`new`, the default, or `old` for a removed line numbered as in the
+  base) and `quote` (the line's text; omit it and the daemon reads it from the
+  file, new side), or `hunk`, a hunk header, for a note on the whole hunk;
+  `text`.
+- `edit`: `id`, `text`. The note becomes the caller's and unsent again.
+- `remove`: `id`. `clear`: every note the caller may remove; `kept` in the
+  result counts the ones left because the caller may not change them.
+- `human_nonce`: with a live nonce the note is the person's (`by: human`). A
+  nonce that does not verify is `not_human`.
+
+```json
+{"verb": "review-note", "params": {"action": "add", "session": "work", "window": "build", "path": "api/retry.go", "line": 42, "text": "log the attempt number here too"}}
+```
+
+```json
+{"result": {"type": "review_notes", "session": "work", "window": "4be1c09a-...", "worktree": "/src/api", "id": "n3",
+ "notes": [{"id": "n3", "path": "api/retry.go", "side": "new", "line": 42, "quote": "if err == nil {",
+  "text": "log the attempt number here too", "by": "shell", "at": 1790000000000000000}]}}
+```
+
+A note carries `id`, `path`, `side`, `line`, `quote` or `hunk_header`,
+`text`, `by` (`human`, a pane's window id, `shell`, or `link:HOST`), `at`,
+`sent_at` once sent, and `outdated` when its line could not be found again.
+Notes are listed by path, then line.
+
+Who may change a note: the person any note, a pane or a linked machine only
+the notes it wrote, a caller outside every pane every note but the person's.
+Another's note is `forbidden`. A pane needs `write` and reaches its own
+session and fan group; over a link it needs `write`. A note is typed into its
+pane when it is sent, so a pane without `admin` may add or edit notes only on
+itself or a pane that holds nothing it does not, the rule `send-text` follows;
+elsewhere it is `forbidden`. A pane on another machine calling through its
+report channel is `forbidden`.
+
+## send-review [#send-review]
+
+Send a pane's unsent notes, or the ones `ids` names (sent or not), to its
+agent as one message through the delivery queue (see
+[The delivery queue](/docs/control-protocol/verbs-agents-and-messages#the-delivery-queue)). The pane must run an agent
+(`invalid_params` otherwise). The notes are marked `sent_at` when queued.
+
+Params: `session`, `window`, `ids`, `now` (send only when the agent is at
+rest with nothing queued: `not_ready` for a busy one, `agent_blocked` for one
+on `needs_input`, and nothing is queued), `human_nonce`.
+
+```json
+{"verb": "send-review", "params": {"session": "work", "window": "build", "human_nonce": "<from the attach reply>"}}
+```
+
+```json
+{"result": {"type": "review_sent", "session": "work", "window": "4be1c09a-...", "notes": 2, "ids": ["n3", "n4"],
+ "queued_id": "q7", "position": 1, "queued": 1, "delivering": true}}
+```
+
+The message reads "Review notes on your changes (vs BASE), from SENDER:",
+then one numbered entry per note (`path:line`, `on "quote"` cut to 120
+characters, or the hunk's range and header; `outdated` said when it is), the
+note's text indented under it, and "Address each note, then say which you
+changed." The sender is "the person" only with a live `human_nonce`, "pane
+NAME" from a pane, "a caller on HOST" over a link, and "a script" otherwise.
+A note written by someone other than the sender carries a line under its
+place naming its author, "(written by pane NAME)", with ", not by the
+person" when the person sends it, so no pane's note reads as the person's.
+
+Each note is typed with the authority of whoever wrote it, checked as it is
+now: a note by a pane that no longer holds `write` reach to the session, or
+may not type into the pane (it holds more than the author), or whose pane is
+gone, and a note by a linked machine whose link may no longer write, is
+withheld. It is left out, not marked sent, and listed in `withheld` with
+`withheld_reason`. When every note picked is withheld the call is `forbidden`
+and nothing is queued. Editing a note makes it the editor's.
+BASE is the base of the pane's last `review-diff`. A message over 16 KiB is
+`invalid_params`. Errors: `no_notes` when nothing is unsent, `queue_full`,
+`not_human`, `forbidden`.
+
+It types into the pane, so it is held like `queue-prompt`: a pane needs
+`write`, may send only to a pane that holds nothing it does not and is not on
+`needs_input` unless it holds `respond`, and is checked again when the
+message is typed. Over a link it needs `write`.
+
+## list-checkpoints [#list-checkpoints]
+
+The checkpoints of a pane, oldest first. A checkpoint is the pane's git work
+tree saved as a commit under `refs/tuios/checkpoints/<window id>/<n>`: when
+its agent finishes a turn that changed a file, and before each restore. See
+[Turn checkpoints](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#turn-checkpoints) for when one is taken.
+The repository is found as for `review-diff`: none is `not_repo`, and so is a
+pane whose process runs on another machine.
+
+Params: `session`, `window`.
+
+```json
+{"verb": "list-checkpoints", "params": {"session": "work", "window": "build"}}
+```
+
+```json
+{"result": {"type": "checkpoint_list", "session": "work", "window": "4be1c09a-...",
+ "worktree": "/src/api", "enabled": true, "keep": 50, "untrusted": true,
+ "checkpoints": [
+  {"n": 1, "ref": "refs/tuios/checkpoints/4be1c09a-.../1", "commit": "e958e3b...", "tree": "9d24e28...",
+   "head": "95f2766...", "kind": "turn", "pane": "4be1c09a-...", "session": "work", "turn": 1,
+   "state": "done", "label": "Add a retry with backoff.", "worktree": "/src/api", "at": 1791102811086683744}]}}
+```
+
+`kind` is `turn` or `safety`. `turn` is the pane's finished-turn count
+(`completion_seq`) when the checkpoint was taken, and `head` is `HEAD` then.
+`label` is the prompt of the turn, else the line it ended with, else the
+state's message, at most 120 bytes. The answer is marked `untrusted`: the
+labels are the agent's text. `enabled` and `keep` are
+`[agents.checkpoints]`. A pane without `admin` needs `read` in its own
+session and fan group. Over a link it needs `list`.
+
+## checkpoint-diff [#checkpoint-diff]
+
+What one turn changed: a checkpoint's tree against the pane's checkpoint
+before it, or for the first one against `HEAD` when it was taken (the empty
+tree in a repository with no commit). Nothing in the repository changes.
+
+Params: `session`, `window`, `n` (omit for the newest), `paths` (at most 256,
+relative, each taken literally), `context` (0 to 20, default 3). A number the
+pane has no checkpoint for is `no_checkpoint`, with the numbers it has in
+the hint's `available`.
+
+```json
+{"verb": "checkpoint-diff", "params": {"session": "work", "window": "build", "n": 2}}
+```
+
+```json
+{"result": {"type": "checkpoint_diff", "session": "work", "window": "4be1c09a-...", "worktree": "/src/api",
+ "checkpoint": {"n": 2, "kind": "turn", "...": "..."}, "base": "checkpoint 1", "base_tree": "9d24e28...",
+ "files": [{"path": "notes.txt", "status": "M", "added": 1, "removed": 0, "hunks": ["..."]}],
+ "totals": {"files": 1, "added": 1, "removed": 0}, "truncated": false, "untrusted": true}}
+```
+
+`files`, `totals` and `truncated` are as `review-diff` returns them, with the
+same caps. A file the base does not have is `A`: the checkpoint does not say
+whether git tracked it. A pane without `admin` needs `read`. Over a link it
+needs `write`, since it returns file contents.
+
+## restore-checkpoint [#restore-checkpoint]
+
+Put a pane's git work tree back to a checkpoint. The daemon first saves the
+work tree as a `safety` checkpoint, labelled "before restoring checkpoint N",
+so restoring that one undoes the restore. Then it writes the files that
+differ between the two trees and removes the files the checkpoint does not
+have, through a temporary index. The index, `HEAD`, the branch and the stash
+do not change, and ignored files are in no checkpoint and are not touched,
+so nothing git can see is lost. `git status` afterwards shows the restored
+files as changes against the index. A submodule that differs is left as it
+is and listed in `skipped`.
+
+The checkpoint can have a file where the disk has one that no checkpoint
+holds, such as an ignored file. Then the restore is `invalid_params`,
+`available` lists those paths, and nothing changes. Writing over such a file
+would lose it.
+
+Params: `session`, `window`, `n` (required), `force`. While the pane's agent
+is `working` or `needs_input` the restore is `not_ready` and changes nothing,
+since the agent would go on writing: wait for the turn to end, or pass
+`force`. A checkpoint taken in another work tree than the one the pane is in
+now is `invalid_params`. Errors: `no_checkpoint`, `git_failed` (when it
+fails after the safety checkpoint, the hint says to restore that one).
+
+```json
+{"verb": "restore-checkpoint", "params": {"session": "work", "window": "build", "n": 1}}
+```
+
+```json
+{"result": {"type": "checkpoint_restored", "session": "work", "window": "4be1c09a-...", "worktree": "/src/api",
+ "restored": {"n": 1, "...": "..."}, "safety": {"n": 3, "kind": "safety", "...": "..."},
+ "written": ["notes.txt"], "removed": [], "skipped": []}}
+```
+
+A restore writes the files the pane's agent works on, so a pane without
+`admin` needs `write`, and may restore only a pane that holds nothing it does
+not, as `review-note` adds notes. Over a link it needs `write`.
+
+## list-attention [#list-attention]
+
+List the Inbox: everything waiting for the person, in every session on this
+daemon and on every linked host it follows (see [Following linked
+hosts](#following-linked-hosts)). Each item is one of these kinds, and the list
+is grouped in this order, oldest first inside each group:
+
+| Kind       | Opens when                                                                                                                                                                                                                                          | Closes when                                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `approval` | A pane goes to `needs_input` with `blocked_by` `approval`. `risk` names the risk rules its line matched.                                                                                                                                            | The pane leaves `needs_input`.                                                                                                              |
+| `plan`     | A hook holds a plan with `request-approval` `kind: plan`. It is the pane's `approval` item for as long as the hold runs, with `plan_lines` and `plan_sha`.                                                                                          | The pane leaves `needs_input`, the person answers, or the hold ends (it is an `approval` again).                                            |
+| `ask`      | `ask-human` puts a question to the person. `summary` is the question, `options` its answers and `request_id` the question's id.                                                                                                                     | The person answers it (`answered`, with `answer` and `answered_by`) or dismisses it, the asking pane asks another (`superseded`) or closes. |
+| `question` | A pane goes to `needs_input` with any other `blocked_by`, or none.                                                                                                                                                                                  | The pane leaves `needs_input`.                                                                                                              |
+| `mail`     | A message to `human` lands in a thread. One item per thread; `count` is the unread messages.                                                                                                                                                        | The person's mail in the thread is read.                                                                                                    |
+| `errored`  | A pane goes to `errored`.                                                                                                                                                                                                                           | The pane leaves `errored`.                                                                                                                  |
+| `resume`   | A restore brings back a pane with a conversation its harness can resume, with `daemon.resume_agents` on `ask`. The summary is the command.                                                                                                          | `resume-agent` types it, or the pane goes to `working` or `needs_input` (an agent is running there again).                                  |
+| `finished` | A pane's `completion_seq` goes up as it comes to rest.                                                                                                                                                                                              | An attached client focuses the pane, the agent starts another turn (`working`), blocks, or errors.                                          |
+| `outbox`   | `send-agent-message` with `host` is kept here because that machine's link is down, or a kept message was refused there. One item per machine, with `for_host`; `count` is the messages waiting, and the summary says how many and the last refusal. | Everything waiting was delivered and nothing was refused, or `dismiss-attention`, which also discards what waits.                           |
+
+Every item also closes when its pane closes (mail excepted: the message is
+still unread), when its session ends, and on `dismiss-attention`. A pane has at
+most one blocking item, one errored item and one finished item, so a harness
+repeating itself or a fan of agents moving together updates rows rather than
+adding them, and an update that changes nothing publishes nothing.
+
+A blocking or errored item follows the pane's latest report, not only its state
+changes. A pane that stays on `needs_input` and reports a new `blocked_by` or
+message (a harness hook that says `approval` after the screen tier already set
+`needs_input`, say) updates its item: it moves between `question` and
+`approval`, and its summary is the new message. The item keeps its id and its
+`since`. A change of the pane's name, harness or workspace updates it the same
+way. None of this is an `agent-state` event, since the state did not change,
+and no hook fires for it; only the `attention` event with action `updated` is
+sent.
+
+Params: `session` (optional; unlike most verbs, omitted means every session;
+without `host` it names a session on this machine), `kinds` (optional list,
+from `approval`, `plan`, `ask`, `question`, `mail`, `errored`, `resume`, `finished`, `outbox`),
+`include_snoozed` (optional bool: also list the items the person snoozed,
+after the open ones and in the same order among themselves, each with
+`snoozed_until`; they are not in `counts`), `host`
+(optional: `local` for this machine or a linked host's name; omitted means
+every machine; an unknown name is `unknown_host`), `select` (optional, a
+[selector](#selectors): keeps the items it matches, reading an item's state
+from its kind, `needs_input` for an approval or a question, `errored`, `done`
+for finished; `group` and `cwd` are known for items of this machine only).
+
+Response:
+
+```json
+{"result": {"type": "attention_list", "items": [{"id": "17", "kind": "approval", "session": "fan-3", "window": "3f2a9c1e", "workspace": 1, "harness": "claude-code", "name": "claude", "summary": "approve Bash: go test ./...", "since": 1790142942055373000, "seq": 41}], "counts": {"approval": 1, "question": 0, "mail": 0, "errored": 0, "resume": 0, "finished": 0}, "total": 1, "seq": 1180, "boot_id": "9f2c41d07a3e8b65"}}
+```
+
+Item fields: `id` (stable, never reused on this machine; an item of a linked
+host is `host:id`, the host's own id after the colon), `kind`, `host` (empty
+for this machine, the host's name for an item of a linked host), `session`,
+`window`, `workspace`, `harness`, `name`, `summary`, `options` (the decisions
+`reply-approval` takes, set only while a hook holds the item), `request_id` and
+`expires` (the held request and when its hold ends, in unix nanoseconds; see
+[request-approval](#request-approval)), `always_scope` (what answering
+`always` adds, one rule per line, set only while held with `always` offered),
+`since`
+(unix nanoseconds, when the item started waiting; an update keeps it), `seq`
+(the Inbox revision of the item's last change), `thread` and `count` (mail),
+`seen` (mail: how many of `count` were seen with a peek and not read),
+`completion_seq` (finished), `snoozed_until` (a snoozed item listed with
+`include_snoozed`: when it opens again, in unix nanoseconds, or -1 for when
+its fact changes), `marked_unread` (a finished item the person reopened with
+`mark-attention` `unread`), `stale` and `seen_at` (an item of a host whose
+link is down: what the host said last, and when this daemon last heard from
+it, in unix nanoseconds), `held_id` and `held_for` (mail from another machine
+held for the person by `hold_mail`: the message `release-agent-message` takes
+and the window it was for), `for_host` (outbox: the machine the mail waits
+for).
+
+`summary` is text an agent wrote. The daemon keeps it to one line, removes
+control characters, masks what looks like a credential (`TOKEN=...`,
+`password: ...`, `Bearer ...`) and cuts it to 160 bytes before it is stored,
+sent to a subscriber or written to disk. The masking is a net for the common
+shapes, not a guarantee.
+
+`seq` and `boot_id` are the stream position the answer is current to. To follow
+the Inbox without missing anything, list it and then subscribe with
+`types: ["attention"]`, `after_seq` and `boot_id` from the listing. Every change
+after the listing is replayed; a `gap` means list again.
+
+Persistence: part of the queue survives a daemon restart. On start the daemon
+keeps the `finished` and `errored` items whose session and pane came back. It
+drops `approval` and `question` items, because the prompt died with the process
+that painted it, and `mail` items, because the message ring they point into
+does not survive a restart and thread ids start again from 1, so a saved item
+could only be merged into an unrelated new thread. An item opened while the
+saved queue is still loading keeps its id and wins over a saved item for the
+same pane and kind. A saved item whose id such an item already holds is kept
+under a fresh id, so no two items ever share one. A snoozed `finished` or
+`errored` item is saved with `snoozed_until` and comes back asleep; one whose
+time passed while the daemon was down wakes on start. It drops `resume` items
+too: the restore that runs on start opens them again from each window's
+`agent_session_id`, after the saved items are loaded. `outbox` items are
+opened again from the outbox, which is saved on its own and survives a
+restart whole.
+
+Wire compatibility: new verb and new event type. An older daemon answers
+`unknown_verb`, and the tuios client then shows the Inbox as unavailable.
+
+## Selectors [#selectors]
+
+A selector addresses every agent pane that fits a description. It is one
+string of terms separated by spaces, all of which must match; a term is
+`key:value`, and commas in the value are alternatives. The keys are `harness`
+(the harness id, or a program name a manifest detects), `state`, `needs`
+(only `needs:you`: `needs_input` or `errored`), `session` (glob), `group` (the
+fan-out group, glob), `host` (`local` or a host name, glob), `name` (window
+name, glob), `cwd` (the directory or under it; a leading `~` is the
+daemon's home), `task` (a task card the pane holds, by id, glob; see
+[Task verbs](/docs/control-protocol/verbs-agents-and-messages#task-verbs)) and `stage` (the stage of a card the pane holds;
+a done card has no holder, so `stage:done` matches no pane). Globs are `path.Match`: `*` does not cross a slash. A term a
+pane cannot answer does not match. A selector that does not parse is
+`invalid_params` naming `select`, with the keys in `accepted`.
+
+Reads: `list-agents`, `list-host-agents`, `list-attention` and `wait-for`
+(`agent-state`) keep what the selector matches. Writes: `send-agent-message`
+and `ask-agent` send to every agent pane on this machine the selector matches,
+in every session, and take no `session`, no `window` or `to`, and for a message
+no `reply_to`. A write reaches at most 32 panes, an ask at most 16; more is
+`invalid_params`, and none is `window_not_found`.
+
+A write is confirmed before anything is sent. Without `confirm` the call fails
+with `confirm_required`:
+
+```json
+{"id": 1, "error": {"code": "confirm_required", "message": "the selector matches 2 panes; nothing was sent",
+ "hint": {"param": "confirm", "available": ["api-fan-retry/codex (3f2a9c1e)", "web/codex (91bd07aa)"],
+  "confirm": "5c1f0e9ad2b37744", "detail": "..."}}}
+```
+
+The token is a hash of the set of panes (each by window id). The call again
+with `"confirm": "5c1f0e9ad2b37744"` goes ahead only if the selector still
+matches exactly that set; otherwise it fails with `confirm_required` again and
+the new set. `list-agents` with the same `select` answers with the same token
+in `confirm`. The token is not a secret and grants nothing: it only says the
+caller saw the set.
+
+A confirmed message answers `agent_messages_sent`:
+
+```json
+{"result": {"type": "agent_messages_sent", "select": "harness:codex", "sent": 2, "failed": 0, "total": 2,
+ "results": [{"session": "api-fan-retry", "window": "3f2a9c1e-...", "name": "codex", "ok": true, "message_id": 14, "thread_id": 14},
+             {"session": "web", "window": "91bd07aa-...", "name": "codex", "ok": true, "message_id": 3, "thread_id": 3}]}}
+```
+
+A confirmed ask answers `agent_replies`, with `replies` holding one row per
+pane: `ok`, and either the fields of a single ask's answer (`reply`,
+`settled_by`, `state`, `lines`, `truncated`, `waited_for`) or `error` with the
+code, message and hint the single ask would have failed with. `answered` and
+`failed` count them, and `untrusted` is always true.
+
+Each pane of a write goes through the checks of a single call: the rate cap
+per pane, the `human` rules, `agent_blocked` for a pane on `needs_input`
+unless `allow_blocked`, the wait for a working pane unless `force`, and the
+loop guard. `from` may name the sender's pane in another session by its exact
+window id. A call that names `select` from a pane on another machine running
+its calls through its owner is refused with `forbidden`, since such a call
+acts only as the window it is drawn in.
+
+## dismiss-attention [#dismiss-attention]
+
+Close one Inbox item for the person.
+
+Params: `id` (required), `human_nonce` (required: the nonce from the attach
+reply of a TUI client attached right now, over the same kind of connection as
+this call).
+
+Only the person may clear what is waiting for the person. An agent in a pane
+has no attach and so no nonce, and gets `not_human`. The nonce is checked the
+way a reply from `human` is (see "A process inside a pane cannot act as the
+person" under [Changes to existing verbs](/docs/control-protocol/versioning#changes-to-existing-verbs)): a
+caller inside a pane of this daemon, or on a link stream the hub did not vouch
+for, gets `not_human` even with a live nonce, and where the kernel gives both
+pids the caller must be the process that holds the attach. A client attached to any
+session may dismiss items in any session, since the Inbox spans them. A second
+dismiss of the same item, or an id that is not open, is `invalid_params`.
+
+Dismissing a `finished` item marks the pane's turns seen. Dismissing a `mail`
+item marks the person's unread mail in the thread read. The other kinds only
+leave the list; the pane's agent state is not touched, and a later transition
+opens a new item. A snoozed item can be dismissed by its id too.
+
+For 10 seconds after, the dismiss can be undone with
+[mark-attention](#mark-attention) `restore`, except on an `outbox` item, whose
+dismiss discarded the mail, and an `ask`, whose asker was told.
+
+An item of a linked host is hidden on this daemon and nothing else: nothing on
+the host is marked, and the item comes back when the host changes it. The
+result then carries `host`.
+
+Response:
+
+```json
+{"result": {"type": "attention_dismissed", "id": "17", "kind": "approval", "session": "fan-3", "dismissed": true}}
+```
+
+## mark-attention [#mark-attention]
+
+Snooze an Inbox item, wake it, mark a finished pane unread, restore an item
+dismissed or snoozed in the last 10 seconds, or settle an agent, for the
+person.
+
+Params: `action` (required: `snooze`, `wake`, `unread`, `restore`, `settle`
+or `unsettle`), `id`, or `session`, `window` and `kind` to name the item by
+what it is about (`unread`, `settle` and `unsettle` need only `session` and
+`window`), `human_nonce` (required, as for
+[dismiss-attention](#dismiss-attention)). With `snooze`, exactly one of
+`until` (unix milliseconds, within the next year), `for_ms` (at most a year)
+and `until_change` (true).
+
+- `snooze` closes an open item with the reason `snoozed`. It opens again with
+  its id and `since` when its time comes, when its fact changes (the pane
+  reports something the item does not already say, or a hook starts holding
+  the approval), or on `wake` or `restore`. A report that repeats what the
+  item says leaves it asleep. `until_change` waits only for the change. A
+  snooze of an item already asleep changes when it wakes. Only these kinds
+  can be snoozed: `finished`, `errored`, `mail`, `resume`, `question`, and an
+  `approval` no hook is holding. A held approval, a `plan` and an `ask` wait
+  on an answer, and `outbox` is about a link, so each is `invalid_params`.
+- `wake` opens a snoozed item now.
+- `unread` reopens a pane's finished turn: the daemon forgets that it was
+  seen, so the next client to focus the pane marks it seen again, and a
+  `finished` item opens (or an open one is marked) with `marked_unread`. The
+  pane must be on this machine, have finished a turn, and be at rest.
+- `restore` reopens an item this daemon closed for a dismiss or a snooze less
+  than 10 seconds ago, with its id and `since`. A restored `finished` item
+  forgets the look again, like `unread`; restored `mail` comes back as a row,
+  and its messages stay read. An approval, question, plan or error comes back
+  only while the pane is still in the state it was about, and nothing comes
+  back over a newer item about the same thing. The check and the reopen are
+  one step: a transition that arrives during a restore lands after it and
+  closes the restored item as it would any other.
+- `settle` puts the agent in the pane on the Settled shelf: the window
+  state's `agent_settled` is true until the agent needs the person again
+  (it goes to `needs_input`, `errored` or `none`, finishes a turn, or sends
+  the person mail) or until `unsettle`. It closes the pane's open `finished`
+  item as a dismiss does, and the answer names that item as `id`. A pane
+  with no agent, a pane on `needs_input`, and a pane with any other open
+  item are `invalid_params`. A settle that changes the pane runs the
+  `after-settle` hook with `TUIOS_SETTLE_REASON=person`.
+- `unsettle` takes the agent off the shelf. With `id`, the item `settle`
+  closed, it also restores that item as `restore` does, and the answer names
+  it as `id` when it came back.
+
+An item of a linked host is snoozed on this daemon only, like a dismiss:
+nothing on the host changes, and the item wakes when the host changes it or
+its time comes. `unread` does not reach another machine's panes.
+
+A client finds out whether a daemon has this verb by asking `list-verbs` for
+it once per attach; tuios's own client hides its snooze, undo and unread keys
+from a daemon that does not.
+
+Only the person can: the call is refused to a pane without `admin`
+(`forbidden`), needs `respond` over a link, and carries the nonce, checked as
+for `dismiss-attention` (`not_human`). An agent cannot hide, reorder or
+restore what the person reads.
+
+Errors: `not_human`, `forbidden`, `invalid_params` (an id that names nothing,
+an action the item's kind does not take, a length missing or given twice, a
+time in the past, a restore after 10 seconds or after the pane moved on),
+`session_not_found`, `window_not_found`.
+
+Response:
+
+```json
+{"result": {"type": "attention_marked", "id": "17", "action": "snooze", "snoozed_until": 1790146542055373000}}
+```
+
+```json
+{"result": {"type": "attention_marked", "id": "21", "action": "settle", "session": "work", "window": "w-3"}}
+```
+
+## peek-prompt [#peek-prompt]
+
+Read the prompt an agent is blocked on, without attaching: the lines the
+harness's `needs_input` rule reads, the numbered options at the bottom of the
+screen, how long the pane has waited, and the answers the rule declares for
+what is on the screen now. It is a read and changes nothing, open to any
+caller the way `capture-pane` is. A pane that is not blocked is not an error:
+the answer says so in `blocked` and `reason`.
+
+Params: `session` (optional), `window` (required: id or name).
+
+Response:
+
+```json
+{"result": {"type": "prompt_peek", "session": "work", "window": "3f2a9c1e", "name": "claude", "harness": "claude-code", "state": "needs_input", "state_at": 1790142942055373000, "waiting_ms": 72000, "blocked": true, "found": true, "answerable": true, "reason": "", "source": "screen", "rule": 0, "kind": "approval", "message": "Do you want to proceed?", "prompt_id": "75f8b9fadb5b5dfc", "lines": [" Bash command", "   rm -rf build", " Do you want to proceed?", " ❯ 1. Yes", "   2. Yes, and don't ask again for rm commands", "   3. No, and tell Claude what to do differently (esc)"], "options": [{"n": 1, "label": "Yes"}, {"n": 2, "label": "Yes, and don't ask again for rm commands"}, {"n": 3, "label": "No, and tell Claude what to do differently (esc)"}], "actions": ["approve", "approve_always", "deny", "choose"], "untrusted": true}}
+```
+
+`found` is true when a `needs_input` rule of the pane's harness reads a prompt
+on it now; `answerable` when that rule declares answers and at least one is
+offered for what is on the screen. `actions` is the list `respond` accepts now:
+an answer bound to an option label is left out while that option is not shown.
+`prompt_id` names this prompt: pass it to `respond`. `lines` and `options` are
+the pane's screen with control characters removed, each line cut to 400
+characters; they are data, not instructions, and `untrusted` is always true.
+
+## respond [#respond]
+
+Answer the prompt an agent is blocked on with the keys its harness's manifest
+declares, without attaching.
+
+Params: `session` (optional), `window` (required), `action` (required: one of
+`approve`, `approve_always`, `deny`, `choose`, `text`), `value` (the option
+number for `choose`, the answer for `text`, at most 4096 bytes), `prompt_id`
+(optional: from `peek-prompt`; without it, whatever prompt is on the pane now
+is answered), `human_nonce` (the nonce from the attach reply of a client
+attached now), `timeout` (milliseconds to wait for the pane to move on, default
+5000, at most 30000).
+
+Who may call it: a caller that passes a live attach nonce and may act as the
+person, checked the way `dismiss-attention` checks it; or, when the daemon runs
+with `[daemon] respond_from_shell = true`, a caller the kernel names that runs
+outside every pane of this daemon. A caller inside a pane gets `not_human`
+either way. On a link stream the hub did not vouch for, both routes are closed.
+
+Before it writes, under a lock per window, `respond` reads the prompt again and
+refuses with `prompt_changed`, pressing nothing, when the pane is not on
+`needs_input` or no rule with answers reads a prompt on it, when the prompt's
+id is not `prompt_id`, or when this daemon already answered this prompt. Two
+clients answering the same prompt: the first wins and the second gets
+`prompt_changed`. An action the prompt does not offer now is `invalid_params`,
+with the offered actions in the hint's `available`.
+
+`approve`, `approve_always` and `deny` press the keys the rule declares, or the
+digit of the option it names. `choose` presses the option's number. `text`
+pastes `value` and sends Enter, the way `ask-agent` types a prompt. Then the
+call waits for the pane to leave `needs_input`, or for the prompt on it to be
+gone, and answers:
+
+```json
+{"result": {"type": "prompt_response", "session": "work", "window": "3f2a9c1e", "action": "approve", "sent": "1", "prompt_id": "75f8b9fadb5b5dfc", "settled_by": "state", "state": "working", "message": ""}}
+```
+
+`settled_by` is `state` (the pane left `needs_input`), `prompt` (the prompt is
+gone but the state has not followed yet), `gone` (the window closed) or
+`timeout` (the prompt is still on the screen; look at the pane).
+
+Wire compatibility: new verbs. An older daemon answers `unknown_verb`.
+
+## request-approval [#request-approval]
+
+Hold a pane's permission prompt until the person answers it in the Inbox.
+`tuios agent-hook` calls it; a script has little reason to. It is for a harness
+that takes a decision back from its hook: Claude Code's and Qwen Code's `PermissionRequest`
+hook, and opencode or Kilo through the plugin tuios installs. The call does not
+answer until the person answers with `reply-approval` or the hold ends, and it
+is opt in: nothing is held unless `[agents.approvals]` in the config names the
+harness, or the pane is one `start-agent` opened with `protocol` (see
+[Headless agents: protocol](/docs/control-protocol/verbs-agents-and-messages#headless-agents-protocol)).
+
+```toml
+[agents.approvals]
+enabled = ["claude-code", "opencode"]
+hold_seconds = 120
+```
+
+Params: `session` (optional), `window` (required), `harness` (required, an id
+or alias), `options` (optional list of the decisions the harness can take, from
+`once`, `always`, `deny`; omitted means `once` and `deny`), `summary`
+(required: the line the person answers from, which must be the whole request),
+`always_scope` (optional list: what `always` allows from now on, one rule per
+line).
+
+The pane must already be on `needs_input` with an `approval` item open, which
+the hook's own report sets up just before. The item then carries `request_id`,
+`options`, `expires` and `always_scope`, its `summary` becomes the given line
+for as long as the hold runs, and the Inbox shows the keys that answer it.
+
+The person answers from that line, so it has to be the whole request. The hook
+only asks for a call whose effect one argument decides and whose line shows
+that argument in full (see
+[Approvals from the Inbox](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#approvals-from-the-inbox)). The
+daemon checks again: a `summary` the Inbox could not show as it is, because it
+is longer than 160 bytes, has a control or format character (a bidi override,
+a zero width space), a newline, tab or doubled space, or text the Inbox would
+mask as a secret, holds nothing and answers at once with reason `not_shown`.
+`always` is dropped from `options` unless `always_scope` has one to four
+lines, each of which passes the same check, so `always` is never offered
+without the rules it adds on screen.
+
+Response, when the person answered:
+
+```json
+{"result": {"type": "approval_result", "request_id": "9f86d081884c7d65", "decision": "once", "reason": "answered", "answered_by": "client-1790155072046345000"}}
+```
+
+`decision` is `once`, `always` or `deny`, or empty when there is none. An empty
+decision means the harness should ask in its pane, as it would have without
+tuios, and `reason` says why:
+
+| `reason`                                                              | Meaning                                                                                                                   |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `answered`                                                            | The person answered. `decision` is set, and `message` too when they gave a reason for a deny.                             |
+| `disabled`                                                            | `[agents.approvals]` does not name the harness. Answered at once.                                                         |
+| `not_blocked`                                                         | The pane is not on `needs_input` with an `approval` item. Answered at once.                                               |
+| `not_shown`                                                           | The Inbox could not show `summary` as it is. Answered at once.                                                            |
+| `viewed`                                                              | A client of the person has the pane focused, or focused it during the hold. The prompt is quickest to answer in the pane. |
+| `timeout`                                                             | `hold_seconds` passed (120 by default, kept between 10 and 300).                                                          |
+| `handed_back`                                                         | The person pressed enter on the item to go to the pane, or sent `reply-approval` with `ask`.                              |
+| `superseded`                                                          | A newer `request-approval` for the same pane replaced this one.                                                           |
+| `caller_gone`                                                         | The caller closed its connection, which is how a harness that gave up on its hook shows.                                  |
+| `shutdown`                                                            | The daemon is stopping.                                                                                                   |
+| `resolved`, `dismissed`, `window_closed`, `session_closed`, `evicted` | The Inbox item closed for that reason: the pane moved on, the person dismissed it, and so on.                             |
+
+Who may call it: it is refused with `forbidden` over a link, and a caller inside
+a pane of this daemon may only hold its own pane's prompt (the daemon places the
+caller by its process ancestry, then its controlling terminal, then its
+`TUIOS_PANE_ID`; a caller it cannot place is refused). What the caller gets back
+is the answer to the prompt it asked about, nothing more.
+
+Send nothing else on the connection while the call waits. The daemon reads it
+only to notice the caller going away, and a byte that arrives is discarded.
+
+Robustness: a daemon that is gone, restarts during the hold, or predates the
+verb (`unknown_verb`) gives the hook an error, and the hook prints nothing. A
+hold is not saved across a restart. The hook only ever prints a decision the
+daemon returned and the harness was offered.
+
+## reply-approval [#reply-approval]
+
+Answer a held approval for the person.
+
+Params: `request_id` (the item's; or name the pane with `session` and `window`
+instead), `decision` (required: `once`, `always`, `deny`, or `ask` to give the
+prompt back to the pane with no decision), `message` (optional, the reason for
+a deny, passed to the model; one line, at most 500 bytes), `human_nonce`
+(required, as for `dismiss-attention`), `summary` (optional: the item's
+`summary` the decision was made from; the TUI always sends it).
+
+When `summary` is given and the hold is now on another line, nothing is
+answered: the response has `applied: false`, reason `changed`, an empty
+`decision` and the `summary` the hold is on now, and the hold runs on so the
+person can read it and answer. This closes the gap between drawing an item and
+the key arriving. `ask` is never refused this way.
+
+Only a client attached right now can answer, with the nonce its attach reply
+carried, checked exactly as `dismiss-attention` checks it: a caller inside a
+pane, or on a link the hub did not vouch for, gets `not_human` even with a live
+nonce. No mail, `ask-agent`, `send-keys` or `send-text` reaches a hold, so an
+agent cannot approve its own call or another agent's.
+
+A decision the item's `options` do not offer is `invalid_params`, and so is a
+request that is not held. The first reply wins: a later reply for the same
+request answers with the decision that stands and `applied: false`, and changes
+nothing. A decision closes the Inbox item with reason `answered` and moves the
+pane to `working`. `ask` ends the hold and leaves the item open.
+
+Response:
+
+```json
+{"result": {"type": "approval_replied", "request_id": "9f86d081884c7d65", "decision": "once", "applied": true, "reason": "answered", "answered_by": "client-1790155072046345000", "session": "fan-3", "window": "3f2a9c1e"}}
+```
+
+Wire compatibility: both verbs are new, and the item fields are additive. An
+older daemon answers `unknown_verb`, which the hook reads as no decision.
+`reply-approval` must carry `summary` for an allow (`once` or `always`): an
+allow without it answers nothing and is refused with `invalid_params`, so a
+caller cannot approve a call by not saying which line it read. A `deny` may
+leave it out. The TUI Inbox and guios have always sent it.
+
+A client's push that moves the focus to a held pane ends the hold as `viewed`
+only when the person moved it. A push made while the client ran a routed
+`run-command`, or keys from `send-keys` or a tape, carries
+`focus_by_command`, and the hold runs on. `focus-window`, which the daemon
+carries out itself, never ended a hold.
+
+## Risky approvals and plans [#risky-approvals-and-plans]
+
+Two additions to held approvals make an allow harder to give by mistake: risk
+rules, and plans.
+
+**Risk rules.** The daemon matches every approval against the rules of
+`[agents.approvals.risk]`: the shipped ones (recursive delete, force push, hard
+reset, clean, discard changes, pipe to shell, sudo, disk, wide permissions,
+database, infrastructure, outside the worktree) unless `builtin = false`, and
+the person's own. See [Risk rules](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#risk-rules) for what each one
+matches. They run on a held call's `tool` and `target` when the hook names
+them, else on its `summary`, and on the line of every `approval` item nobody
+holds (tuios's own hooks report `approve <Tool>: <what>`, which is read as that
+tool and argument; any other line is read as a command). The names of the rules
+that matched are the item's `risk`. That line is clipped and redacted, so a line
+that does not show the whole call also carries `cut short` in `risk`, which is
+acknowledged like a rule. A path in such a line is read only up to the `***`,
+or, for the last word of a clipped line, up to the `...` the clip adds. A
+`...` at any other place is part of the path. `outside the worktree` measures
+from the pane's root: the first of the session's worktree when tuios made it,
+the folder the pane started in, and the folder its agent started in
+(`agent_cwd` on the first `set-agent-state` of the agent session) that is
+narrower than the home folder. A `cd`, an OSC 7 or a later report does not
+move it. A pane with no root has every absolute or `~` path read as outside.
+Links are resolved before paths are compared. A relative path is read from
+the folder the call runs in: the `cwd` the hook sends on `request-approval`,
+else the folder the pane's process is in. A `cd` earlier in the command moves
+that folder, and a `cd` in a subshell or a pipeline ends with it. A relative
+path is outside when that folder is not known or is outside the root. A path
+with a variable in it, other than a leading `$HOME`, is outside. `outside the worktree` names a
+cut path only when the part the line shows already leaves the worktree. A
+Codex `apply_patch` line always carries `cut short`, because every patch
+starts with `*** Begin Patch`. A daemon that
+read no config file uses the shipped rules.
+
+- `reply-approval` with `once` or `always` on an item with `risk` must carry
+  `risk_ack` naming exactly those rules, in any order. Otherwise the call is
+  refused with `risk_unacknowledged` (the hint's `accepted` lists the rules),
+  nothing is answered and the hold runs on. A deny needs none.
+- `respond` holds its allowing answers to the same rule, against the risk of
+  the pane's Inbox item: `approve`, `approve_always`, `text`, and `choose`
+  unless the option presses exactly the keys the prompt's deny does. From a
+  pane answering under its `respond` grant, such an answer is refused with
+  `forbidden` even with `risk_ack`, unless `panes_may_allow = true`. A deny is
+  always taken.
+- This is a change for an older client: one that sends no `risk_ack` cannot
+  allow a risky call from the Inbox or the peek. The harness asks in its pane
+  as before once the hold ends. Nothing changes for a call no rule matched.
+
+The rules are a speed bump, not a sandbox: a command written to hide what it
+does passes them, and the harness's own permission system stays the boundary.
+
+**Plans.** `request-approval` with `kind: plan` holds a plan an agent in plan
+mode asks to have approved (Claude Code's `ExitPlanMode`). `plan` is its text,
+at most 32 KiB of UTF-8, required with `kind: plan` and refused without it.
+`summary` is only its title: it is cleaned the way every item line is rather
+than refused. Nothing is held (reason `disabled`) when `hold_plans = false`.
+While the hold runs the pane's item is of kind `plan`, with `plan_lines` and
+`plan_sha` (the SHA-256 of the text, hex); the pane's `blocked_by` stays
+`approval`. When the hold ends without an answer, the item is the pane's
+`approval` again, with no plan fields.
+
+- `reply-approval` with `once` or `always` on a plan must carry `plan_sha`,
+  the digest of the plan that was shown. Without it, or with another, nothing
+  is answered: `applied: false`, reason `changed`, and the result carries the
+  hold's `plan_sha`. `deny` keeps the agent planning and needs none; its
+  `message` reaches the model.
+- `get-approval` serves the text while the hold runs.
+
+**Deny reasons.** `deny_message: true` on `request-approval` says the harness
+passes a deny's reason to its model (Claude Code, opencode, Kilo), and the item
+carries it so the Inbox offers to type one. The reason itself is
+`reply-approval`'s `message`, cleaned and cut to 500 bytes.
+
+`tool` (at most 128 bytes) and `target` (at most 16 KiB) are what the hook
+names the call as; longer is `invalid_params`.
+
+Wire compatibility: every field is additive. A hook sends `kind`, `plan`,
+`tool`, `target`, `cwd` and `deny_message` only to a daemon whose
+`request-approval` lists them, and does not hold a plan at all with a daemon that does not list
+`plan`, which would hold it as a plain approval.
+
+## get-approval [#get-approval]
+
+Read a held approval or plan whole.
+
+Params: `request_id` (required), `session` (optional: when given, a hold in
+another session is not found; from a pane without `admin` it is the pane's own
+unless named).
+
+Response:
+
+```json
+{"result": {"type": "approval", "request_id": "9f86d081884c7d65", "kind": "plan", "session": "web", "window": "3f2a9c1e", "summary": "plan: Refactor the retry loop", "tool": "", "target": "", "options": ["once", "always", "deny"], "always_scope": ["Mode accept edits, for this session"], "plan": "# Refactor the retry loop\n1. ...", "plan_sha": "5d41402abc4b2a76b9719d911017c592...", "risk": [], "deny_message": true, "untrusted": true}}
+```
+
+`risk` is `[{"rule": "...", "why": "..."}]` for each rule the call matched. The
+text is the agent's, so the result is marked `untrusted`. A request that is not
+held, or held in another session than `session`, is `invalid_params`. Scope:
+`read`; over a link, `list`.
+
+## answer-ask [#answer-ask]
+
+Answer an `ask` item for the person. Only a client attached right now can,
+with `human_nonce` from its attach reply and from a process outside every pane,
+the proof `reply-approval` takes; anything else is `not_human`.
+
+Params: `request_id` (required), `answer` (required: one of the item's
+`options`, else `invalid_params` naming them), `human_nonce` (required),
+`question` (optional: the question the answer was picked from; when it is not
+the item's, nothing is answered and the reply says `applied: false`,
+`reason: changed`), `upgrade_dialog` (optional: a key pressed in a client's live upgrade dialog sent the answer. A live upgrade's ask takes only an answer that carries it, and `gui-bridge` drops it from what its renderer sends).
+
+Response:
+
+```json
+{"result": {"type": "ask_answered", "request_id": "9f86d081884c7d65", "answer": "no", "applied": true, "reason": "answered", "answered_by": "client-1790155072046345000"}}
+```
+
+The first answer wins. A later one gets `applied: false` with the answer that
+stands. The item closes with reason `answered`, carrying `answer` and
+`answered_by`, so every other client can say it was answered elsewhere.
+
+Wire compatibility: both verbs are new and the item fields are the ones an
+approval already uses. An older client lists an `ask` item under its own
+heading, or not at all, and cannot answer it; an older daemon answers
+`unknown_verb`.
+
+## Following linked hosts [#following-linked-hosts]
+
+A daemon with a `[hosts]` table follows the agents and the Inbox of every
+linked host. For each host whose link is up it opens one connection over the
+link, calls `list-attention` with `host: "local"` there, and subscribes to
+`attention`, `agent-state`, `agent-message`, `session-created`,
+`session-closed`, `window-created` and `window-closed` from the listing's `seq`
+and `boot_id`. From then on:
+
+- The host's own items are mirrored into this Inbox (see
+  [list-attention](#list-attention)). Items the host mirrors from its own
+  hosts are not passed on: they are that machine's to report.
+- A burst of the host's agent and session events refreshes a cache of the
+  host's `list-sessions` and `list-agents` answers, then publishes
+  `host-changed` and pushes `MsgHostsChanged` to the attached clients.
+- With `subscribe` `hosts: true`, a subscriber also receives the host's
+  `agent-state`, `session-created` and `session-closed` events, with `host`
+  set, `session` and `window` cut to 128 bytes, and nothing else from the
+  host's event.
+
+When the link drops, the host's items are marked `stale` with `seen_at`, and
+`list-host-sessions` and `list-host-agents` answer from the cache with `stale`
+and `fetched_at`. On a redial the stream resumes from the last `seq` it
+delivered; a `gap` from the host, or a host that restarted, lists again.
+
+A host whose tuios has no `list-attention` or no resumable stream is followed
+by polling, as every host was before: `list-hosts` reports `events: "polling"`
+with an `events_note` that names the update, and the tuios client keeps its
+poll for it.
+
+Everything a host sends is data from another machine. Lines are bounded to 1
+MiB, an item's kind must be one this build knows and its id a short token,
+its text is cleaned and cut as a local summary is, a host holds at most 256
+items here, apart from this machine's so it cannot evict one of them, and the
+cache keeps at most 512 sessions and 2048 agent rows per host. Nothing a host
+sends runs a command, types into a pane, fires a hook or marks anything on
+this machine.
+
+## Reports from a pane on another machine [#reports-from-a-pane-on-another-machine]
+
+A window's process can run on another machine (`new-window` with `host`). Its
+reports travel back over a connection the owner opened, since the link is
+dialled one way:
+
+1. The owner sends `window`, its window id, with `open-pane`. The far daemon
+   exports it to the process as `TUIOS_PANE_ID` and returns `calls_token`.
+2. The owner calls `pane-calls` with `pane` and `token` on a new connection.
+   After the reply the connection carries requests from the far daemon,
+   `{"id":1,"verb":"set-agent-state","params":{...}}`, one per line, and the
+   owner answers each with `{"id":1,"result":{...}}` or
+   `{"id":1,"error":{...}}`, in any order.
+3. On the far machine, a call of `set-agent-state`, `set-agent-meta`,
+   `set-agent-session` or `report-agent-activity` with `window`,
+   `read-agent-messages` with `to`,
+   `send-agent-message` with `from`, or `wait-for` with condition
+   `agent-message` and `window`, set to the pane's id or window id, is sent to
+   the owner, and the owner's answer is the answer.
+
+How the grant is held to that:
+
+- The far daemon forwards only for a caller that runs in the pane: the pane's
+  process, a descendant of it, or a process on the pane's terminal, by the pid
+  the kernel gave for the connection. Anyone else naming the pane gets
+  `forbidden`. A platform that does not give the pid forwards nothing.
+- Only the verbs above cross; `wait-for` for anything but `agent-message` is
+  `forbidden`.
+- The owner runs each request as the window itself: `session` and the
+  addressing param are overwritten with the window's own, `transcript_path`,
+  `harness_pid`, `human_nonce`, `from_host` and `any_session` are dropped,
+  `send-agent-message` from anyone but the window is `forbidden`, and the call
+  runs as a caller inside a pane, so it cannot act as the person. A far daemon
+  that writes its own requests gets no more than the pane's process would.
+- `send-agent-message` may attach only paths in the session's stash, as on
+  the link: its process and the far daemon are on the other machine, so a
+  path names a file on the owner they cannot see. Any other path is
+  `invalid_params` before it is looked at, so the answer does not say whether
+  the file exists on the owner.
+- `wait-for` runs on the owner with `timeout` capped at one hour, whatever the
+  request said, and ends when the channel it came on ends. The owner does not
+  wait for calls in flight before it opens the next channel.
+- `pane-calls` needs the token, which only the owner saw. At most 16 calls per
+  pane are in flight, and lines are bounded to 1 MiB.
+
+An owner from before this sends no `window`, and the far daemon exports no
+`TUIOS_PANE_ID` and answers a call naming the pane id with
+`protocol_mismatch`. A far daemon from before this refuses `open-pane` with
+`invalid_params`, because it checks every request against its schema and its
+`open-pane` has no `window`. Nothing is spawned by that refusal and the
+connection still takes requests, so the owner sends `open-pane` again on it
+without `window`. The pane opens as before, with no `calls_token`, and the
+owner opens no channel.
+
+## A pane that outlives its link [#a-pane-that-outlives-its-link]
+
+`open-pane` with `"resumable": true` asks the far daemon to keep the pane
+through a dropped connection. The far daemon decides for how long, from its
+own `hosted_grace` for the asking machine (ten minutes by default, `"0"` for
+none, at most a day), and says so in the reply:
+
+```json
+{"id": 1, "result": {"type": "pane", "pane": "f2c1...", "calls_token": "...", "resume_token": "9e0a...", "grace": 600}}
+```
+
+With no grace given there is no `resume_token`, and the pane ends with its
+connection as it always did. With one, the far daemon reads the process's
+output whether or not a connection is attached, keeps the last 64 KB, and
+counts every byte. When the connection drops it waits `grace` seconds. The
+asking daemon reattaches on a new connection:
+
+```json
+{"id": 1, "verb": "open-pane", "params": {"resume": {"pane": "f2c1...", "token": "9e0a...", "offset": 18234}}}
+```
+
+`offset` is how many bytes of output it has received. The reply is
+`{"type":"pane","pane":...,"resumed":true,"gap":false,"grace":600}`, and after
+it the connection carries what was missed from `offset` on, then the live
+stream, exactly as after an open. `gap` is true when more was missed than the
+ring holds; the whole ring is sent then. A wrong token is `forbidden`, and a
+pane whose process exited or whose grace ran out is `unknown_pane`: both are
+final. A reattach closes a connection still attached to the pane.
+
+## release-agent-message [#release-agent-message]
+
+```json
+{"id": 1, "verb": "release-agent-message", "params": {"session": "work", "id": 12, "human_nonce": "<from the attach reply>"}}
+```
+
+Delivers the held message as a new message to the window it was for, with its
+original sender, `origin` and `origin_host`, and `released_from` set to the
+held id. The held copy is marked `released` and read, and its Inbox item closes
+when nothing else in the thread is unread. Only a client attached right now can
+call it, with its nonce (`not_human` otherwise), and over a link it needs
+`respond`. A message is released once; a second call, or an id that is not a
+held message the ring still holds, is `invalid_params`. A window that closed
+while the message was held is `window_not_found`.
+
+Result: `held_id`, `message_id`, `to`, `to_name`, `thread_id`.

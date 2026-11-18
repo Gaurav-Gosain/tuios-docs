@@ -1,0 +1,177 @@
+---
+title: "Other machines"
+description: "Other machines: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `attach-presence` <Since verb="attach-presence" /> [#attach-presence]
+
+Hold the person's nonce on this connection without a screen. The reply carries human\_nonce, which respond, reply-approval, answer-ask and dismiss-attention take as the person's, by the same rules as an attach nonce: only from outside every pane, over a link only on a stream the hub vouched for, and only from the process that holds it. The presence does not attach: it does not change the session size, focus or view a pane, or receive broadcasts. The connection serves other verbs as before, and the presence ends when it closes.
+
+| Param     | Type   | Required | Default | Description                                                                                        |
+| --------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | The session the nonce is for. The nonce then acts only in that session. Omit it for every session. |
+
+| Result field  | Type   | Description                                              |
+| ------------- | ------ | -------------------------------------------------------- |
+| `human_nonce` | string | The nonce. Send it from this process, as human\_nonce.   |
+| `client_id`   | string | This connection's client id, which answered\_by reports. |
+| `session`     | string | The session, when one was named.                         |
+
+```json
+{"id":1,"verb":"attach-presence"}
+```
+
+## `list-host-agents` <Since verb="list-host-agents" /> [#list-host-agents]
+
+List the agent panes of every session on this machine and on every configured host. Hosts are asked at once, so a slow one costs only its own entry.
+
+| Param    | Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host`   | string |          |         | One host by name, or "local" for this machine. Omit for every host.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `all`    | bool   |          |         | List every window on each host, not just the panes identified as agents.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `select` | string |          |         | A selector: space-separated key:value terms, all of which must match, each with comma-separated alternatives. Keys: harness (id or program name), state, needs:you, session (glob), group (fan-out group, glob), host (local or a host name, glob), name (window name, glob), cwd (the directory or under it; \~ is home), task (a task card the pane holds, by id, glob), stage (the stage of a card the pane holds), parent and root (the parent agent pane, or the first of its chain, by window id or a start of it). Keeps only the rows it matches, on every host; a host term matches the entry's host. A host from before selectors sends no group, so a group term matches none of its rows. |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `hosts`      | \[]string | One entry per host, local first, carrying the agent rows of every session on it, each row naming its session. session is set only when every row is in one session. An entry that failed carries an error and a code; when the host answered before, it also carries the rows it last gave, with stale true and fetched\_at in unix seconds. events says how this daemon follows the host: live, polling, or empty while the link is down. |
+| `select`     | string    | The selector as parsed, when one was given.                                                                                                                                                                                                                                                                                                                                                                                                |
+
+```json
+{"id":1,"verb":"list-host-agents"}
+```
+
+```json
+{"id":1,"verb":"list-host-agents","params":{"host":"build"}}
+```
+
+```json
+{"id":1,"verb":"list-host-agents","params":{"select":"harness:codex state:idle"}}
+```
+
+## `list-host-sessions` <Since verb="list-host-sessions" /> [#list-host-sessions]
+
+List sessions on this machine and on every configured host. Hosts that do not answer are listed with their status.
+
+| Param  | Type   | Required | Default | Description                                                         |
+| ------ | ------ | -------- | ------- | ------------------------------------------------------------------- |
+| `host` | string |          |         | One host by name, or "local" for this machine. Omit for every host. |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hosts`      | \[]string | One entry per host, local first, carrying that host's status and its sessions. An entry that failed carries an error and a code; when the host answered before, it also carries the sessions it last gave, with stale true and fetched\_at in unix seconds. Each session carries agent\_state, the most urgent agent state among its panes, so a listing can say which sessions want a person without a second call, and space when it is filed under one on its host. events says how this daemon follows the host. |
+
+```json
+{"id":1,"verb":"list-host-sessions"}
+```
+
+```json
+{"id":1,"verb":"list-host-sessions","params":{"host":"build"}}
+```
+
+## `list-hosts` <Since verb="list-hosts" /> [#list-hosts]
+
+List the machines named in the \[hosts] config table, with the state of each link.
+
+No params.
+
+| Result field      | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hosts`           | \[]string | One entry per configured host, carrying its name, address, status, plain reason, remote daemon version, control protocol range, the last time it answered, and events: live when this daemon streams the host's agents and Inbox, polling when the host's tuios is too old to (events\_note says what to update), empty while the link is not up. queued is how many messages this daemon holds for the host until its link is back. cores, load1, mem\_pct and agents\_working are the host's load from the last hello on the link, at load\_at (Unix seconds), and rtt\_ms is that hello's round trip in milliseconds; all are absent until a hello from the host carried a load. |
+| `total`           | int       | How many hosts are configured.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `events_push`     | bool      | Always true from a daemon that pushes host changes: host-changed on subscribe, and a hosts-changed push to attached clients.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `config_problems` | \[]string | Config entries that were dropped, with the reason for each. Omitted when there are none.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+```json
+{"id":1,"verb":"list-hosts"}
+```
+
+## `open-host-connection` <Since verb="open-host-connection" /> [#open-host-connection]
+
+Turn this connection into a connection to the daemon on one host. After the reply, every byte written here reaches that daemon and every byte it writes comes back. Send nothing until the reply has arrived.
+
+The connection stays open after the reply.
+
+| Param           | Type   | Required | Default | Description                                                                                                                                                              |
+| --------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `host`          | string |          |         | A host by name from the \[hosts] config table.                                                                                                                           |
+| `ssh_auth_sock` | string |          |         | The caller's SSH\_AUTH\_SOCK. With \[daemon] ssh\_agent = "follow", the agent link the link's ssh forwards points at it while this caller is the newest person attached. |
+
+| Result field     | Type   | Description                                                                                                             |
+| ---------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `host`           | string | The host the connection reaches.                                                                                        |
+| `daemon_version` | string | The version the host's daemon reported when the link came up. It is what the host said, not a fact this daemon checked. |
+| `protocol`       | int    | The control protocol version the host's daemon reported.                                                                |
+
+```json
+{"id":1,"verb":"open-host-connection","params":{"host":"build"}}
+```
+
+## `register-push` <Since verb="register-push" /> [#register-push]
+
+Register a phone's Web Push subscription, so the phone gets Inbox items while it sleeps. When an item of a kind the phone asked for opens, the daemon posts a payload encrypted for the phone (RFC 8291, aes128gcm) to its push service, signed with the daemon's VAPID key (RFC 8292), and posts a close when the item closes. The same device name replaces the phone it names, but not over a link. Each registration opens an Inbox item named phone NAME. Only the person: a live human\_nonce from an attach or a presence with no session (a phone gets the Inbox of every session), and over a link the respond capability. At most 16 phones.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                                                                                                              |
+| ------------- | --------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoint`    | string    |          |         | The push service's address for the phone. https, or http on a loopback or private IP address when \[notify.webpush] allow\_insecure is true. A loopback or private address needs allow\_insecure also with https, and the daemon checks the address a name resolves to when it connects. |
+| `p256dh`      | string    |          |         | The phone's public key: the uncompressed P-256 point (65 bytes), base64url.                                                                                                                                                                                                              |
+| `auth`        | string    |          |         | The phone's authentication secret: 16 bytes, base64url.                                                                                                                                                                                                                                  |
+| `device`      | string    |          |         | A name for the phone, 1 to 64 bytes. remove-push takes it. Over a link, the name of a registered phone is refused.                                                                                                                                                                       |
+| `kinds`       | string\[] |          |         | The Inbox kinds to push. Default: approval, plan, ask and question.                                                                                                                                                                                                                      |
+| `human_nonce` | string    |          |         | The nonce of an attach, or of an attach-presence made with no session, from the same process.                                                                                                                                                                                            |
+
+| Result field       | Type      | Description                                                                                                   |
+| ------------------ | --------- | ------------------------------------------------------------------------------------------------------------- |
+| `device`           | string    | The phone's name.                                                                                             |
+| `kinds`            | string\[] | The kinds it gets.                                                                                            |
+| `replaced`         | bool      | True when a phone of that name was registered before.                                                         |
+| `vapid_public_key` | string    | The daemon's VAPID public key, the uncompressed point, base64url: the applicationServerKey to subscribe with. |
+| `machine`          | string    | This machine's name, as the payload carries it.                                                               |
+
+```json
+{"id":1,"verb":"register-push","params":{"endpoint":"https://push.example.net/s/abc","p256dh":"BNc...","auth":"tBH...","device":"pixel","human_nonce":"<from attach-presence>"}}
+```
+
+## `stream-pane` <Since verb="stream-pane" /> [#stream-pane]
+
+Stream one pane as bytes, for a client that is not tuios. The reply is one JSON line, and after it the connection carries binary frames both ways: a type byte, a 4-byte big-endian length, then the payload. From the daemon: S snapshot (u64 seq, u16 cols, u16 rows, then bytes that paint the pane on a fresh emulator of that size), O output (u64 seq after the frame's last byte, then the pane's bytes), R resize (u64 seq, u16 cols, u16 rows), E error (JSON code and message, for a refused frame or a lease that was not renewed; the stream goes on), X exit (the reason: exited N when the pane's program exited with status N, killed N when signal N ended it, closed when its window closed first, or refused: … when the caller may no longer read it; the connection then closes). From the client: I input (at most 64 KiB of bytes typed into the pane, checked as send-text is), L lease (u16 cols, u16 rows, 0 0 to release; send it again every 10 seconds, or the lease ends after 30). Skip a frame type you do not know: read its length and drop that many bytes. At most 4 I frames wait for a pane that does not read, and the next gets E busy. The stream never changes the pane's size or the session's. A lease holds the pane at most at its size while the stream is open, and the pane goes back to the size its clients asked for when the lease ends.
+
+The connection stays open after the reply.
+
+| Param        | Type   | Required | Default | Description                                                                                                                                                                                                                                                                            |
+| ------------ | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`    | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                               |
+| `window`     | string |          |         | The pane to stream: a window id or name.                                                                                                                                                                                                                                               |
+| `from_seq`   | int    |          |         | The seq the client reached on an earlier stream of this pane. With boot\_id, the stream resumes there when the daemon still holds the bytes after it.                                                                                                                                  |
+| `boot_id`    | string |          |         | The boot\_id of the stream from\_seq came from. A different one means the daemon restarted, and the stream starts with a snapshot.                                                                                                                                                     |
+| `lease_cols` | int    |          |         | Hold the pane at most this many columns wide while the stream is open. Needs lease\_rows. It needs what resize needs.                                                                                                                                                                  |
+| `lease_rows` | int    |          |         | Hold the pane at most this many rows high while the stream is open. Needs lease\_cols.                                                                                                                                                                                                 |
+| `session_id` | string |          |         | The session by its id, which a rename does not change. It wins over session. The reply carries it.                                                                                                                                                                                     |
+| `fit`        | bool   |          |         | Make the lease a viewer's: while no TUI client shows the session, the pane takes the size of the largest fit lease held, and goes back to its own size when the last one ends. While a client shows the session, a fit lease only holds the pane smaller.                              |
+| `viewer`     | object |          |         | The terminal the stream shows the pane in: bg, fg (#rrggbb), palette (sixteen comma-separated #rrggbb), kitty and sixel (bool). While no TUI client shows the session, the daemon answers the pane's OSC 10, 11 and 4, DA1 and kitty graphics queries from the newest viewer's report. |
+
+| Result field | Type   | Description                                                                                                        |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------------------ |
+| `mode`       | string | resume: the first frames are output from from\_seq. snapshot: the first frame is S. One of `resume` or `snapshot`. |
+| `seq`        | int    | The stream position the first frame starts at.                                                                     |
+| `cols`       | int    | The pane's width at seq.                                                                                           |
+| `rows`       | int    | The pane's height at seq.                                                                                          |
+| `boot_id`    | string | This daemon start. Send it back with from\_seq to resume.                                                          |
+| `session`    | string | The pane's session.                                                                                                |
+| `session_id` | string | The pane's session id, which a rename does not change.                                                             |
+| `window`     | string | The pane's window id.                                                                                              |
+| `title`      | string | The pane's title.                                                                                                  |
+
+```json
+{"id":1,"verb":"stream-pane","params":{"session":"work","window":"build"}}
+```
+
+```json
+{"id":1,"verb":"stream-pane","params":{"session":"work","window":"build","from_seq":48211,"boot_id":"<from the last reply>","lease_cols":45,"lease_rows":20}}
+```

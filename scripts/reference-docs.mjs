@@ -1,13 +1,13 @@
 // Writes the reference pages of the docs from the tuios repository, so the
 // site and the repo cannot say two things about one topic:
 //
-//   content/docs/cli-reference.mdx     from docs/CLI_REFERENCE.md
+//   content/docs/cli-reference/        from docs/CLI_REFERENCE.md
 //   content/docs/configuration.mdx     from docs/CONFIGURATION.md
 //   content/docs/keybindings.mdx       from docs/KEYBINDINGS.md
 //   content/docs/option-reference.mdx  from docs/config-options.md
 //   content/docs/default-keys.mdx      from docs/keybindings-defaults.md
-//   content/docs/control-protocol.mdx  from docs/protocol.md
-//   content/docs/protocol-verbs.mdx    from docs/protocol-verbs.md
+//   content/docs/control-protocol/     from docs/protocol.md
+//   content/docs/protocol-verbs/       from docs/protocol-verbs.md
 //
 //   bun scripts/reference-docs.mjs <tuios checkout> <ref>
 //
@@ -24,7 +24,14 @@
 //   badge.
 // - A link to one of these docs goes to its page. A link to any other file in
 //   the repo goes to that file on GitHub at the pinned commit.
-import { readFile, writeFile } from "node:fs/promises";
+//
+// A doc too large for one page is split into a folder (see `split` below):
+// an index page at the old URL, and one page per section or verb topic. A
+// heading keeps its anchor on the page it moves to.
+// lib/reference/anchors.json maps each moved anchor to its page, so a link to
+// the old URL with that anchor still lands (components/mdx/anchor-redirect.tsx)
+// and scripts/commands.mjs links each command to the right page.
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import GithubSlugger from "github-slugger";
 import { toString as textOf } from "mdast-util-to-string";
@@ -50,6 +57,30 @@ export const pages = [
       "Every tuios command and flag, with examples. Sessions, windows, input and output, agents, remote hosts, tapes, environment variables and exit codes.",
     icon: "Terminal",
     lead: "To search every command by name or flag, use the [command finder](/docs/commands).",
+    // The general sections stay on the index. Each command group gets a page.
+    split: {
+      index: [
+        "overview",
+        "installation",
+        "usage",
+        "commands",
+        "theming",
+        "agent-skill",
+        "global-flags",
+        "common-usage-examples",
+        "environment-variables",
+        "when-something-goes-wrong",
+        "exit-codes",
+        "version-information",
+        "command-migration-guide",
+        "related-documentation",
+      ],
+      names: {
+        "daemon-mode-session-persistence": "daemon-mode",
+        "tuios-web-separate-binary": "tuios-web",
+      },
+      budget: 100_000,
+    },
   },
   {
     slug: "configuration",
@@ -98,6 +129,27 @@ export const pages = [
     description:
       "Drive a TUIOS daemon from scripts and programs with line-delimited JSON on its socket.",
     icon: "Terminal",
+    // The verbs section gets a page per verb topic, named by the "Verbs by
+    // topic" section of this doc.
+    split: {
+      index: [
+        "transport-and-framing",
+        "connecting",
+        "request-envelope",
+        "response-envelope",
+        "calling-a-verb-from-a-command",
+        "verbs-by-topic",
+        "examples",
+        "error-codes",
+        "how-verbs-interact-with-an-attached-client",
+        "herdr-compatibility",
+        "a-client-built-on-these-verbs-the-tmux-shim",
+        "examples-from-a-shell",
+      ],
+      names: { "versioning-and-introspection": "versioning" },
+      byTopic: { verbs: { prefix: "verbs-", title: "Verbs: " } },
+      budget: 120_000,
+    },
   },
   {
     slug: "protocol-verbs",
@@ -106,10 +158,15 @@ export const pages = [
     description:
       "Every verb of the TUIOS control protocol, with its arguments, its reply and an example.",
     icon: "Braces",
+    split: {
+      index: [],
+      byTopic: { verbs: { prefix: "", title: "" } },
+      budget: 300_000,
+    },
   },
 ];
 
-const pageOf = new Map(pages.map((p) => [p.source, `/docs/${p.slug}`]));
+const pageOf = new Map(pages.map((p) => [p.source, p.slug]));
 
 async function since() {
   const data = JSON.parse(
@@ -129,20 +186,6 @@ function badgeFor(text, source, known) {
   return cmd && known.commands[cmd]
     ? { name: "command", value: cmd }
     : undefined;
-}
-
-function rewriteUrl(url, source, ref) {
-  if (url.startsWith(SITE)) return url.slice(SITE.length) || "/";
-  if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith("#")) return url;
-  const [file, hash] = url.split("#");
-  const target = path.posix.normalize(
-    path.posix.join(path.posix.dirname(source), file),
-  );
-  const anchor = hash ? `#${hash}` : "";
-  const page = pageOf.get(target);
-  if (page) return page + anchor;
-  if (target.startsWith("..")) return url;
-  return `${REPO}/blob/${ref}/${target}${anchor}`;
 }
 
 // The raw HTML in the repo docs is plain tags such as <kbd> and <details>,
@@ -183,11 +226,47 @@ function fixHtml(node) {
   return { ...node, value: node.value.replace(/<br\s*>/gi, "<br />") };
 }
 
-export async function render(page, src, ref, known) {
+// Where an anchor of a page went: anchors.get(slug).get(id) is the path of
+// the part that holds it. A page that is not split is all one part.
+function pathOf(anchors, slug, id) {
+  return anchors.get(slug)?.get(id) ?? `/docs/${slug}`;
+}
+
+// A site path such as /docs/cli-reference#tuios-run, moved to the part that
+// holds the anchor. Other URLs come back as they are.
+export function remapDocs(url, anchors) {
+  const m = url.match(/^\/docs\/([\w-]+)#([\w.-]+)$/);
+  if (!m || !anchors.has(m[1])) return url;
+  return `${pathOf(anchors, m[1], m[2])}#${m[2]}`;
+}
+
+function rewriteUrl(url, source, ref, ctx) {
+  if (url.startsWith(SITE))
+    return remapDocs(url.slice(SITE.length) || "/", ctx.anchors);
+  if (url.startsWith("#")) {
+    const at = pathOf(ctx.anchors, ctx.slug, url.slice(1));
+    return at === ctx.path ? url : at + url;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
+  if (url.startsWith("/")) return remapDocs(url, ctx.anchors);
+  const [file, hash] = url.split("#");
+  const target = path.posix.normalize(
+    path.posix.join(path.posix.dirname(source), file),
+  );
+  const anchor = hash ? `#${hash}` : "";
+  const slug = pageOf.get(target);
+  if (slug) {
+    return (hash ? pathOf(ctx.anchors, slug, hash) : `/docs/${slug}`) + anchor;
+  }
+  if (target.startsWith("..")) return url;
+  return `${REPO}/blob/${ref}/${target}${anchor}`;
+}
+
+// Reads a doc: drops the title, a table of contents and the do-not-edit note,
+// and gives each heading the anchor GitHub gives it (node.data.id).
+async function parse(page, src) {
   const md = await readFile(path.join(src, page.source), "utf8");
   const tree = unified().use(remarkParse).use(remarkGfm).parse(md);
-
-  // Drop the title and a table of contents.
   const kept = [];
   let skip = 0;
   for (const node of tree.children) {
@@ -210,12 +289,163 @@ export async function render(page, src, ref, known) {
     if (!skip) kept.push(node);
   }
   tree.children = kept;
-
   const slugger = new GithubSlugger();
+  visit(tree, "heading", (node) => {
+    node.data = { ...node.data, id: slugger.slug(textOf(node).trim()) };
+  });
+  return { md, tree };
+}
+
+// The size of some nodes in the markdown source, in bytes.
+function sizeOf(nodes) {
+  return nodes.reduce(
+    (n, node) => n + (node.position.end.offset - node.position.start.offset),
+    0,
+  );
+}
+
+// Cuts a list of nodes at each heading of the given depth. The nodes before
+// the first such heading are the head.
+function cut(nodes, depth) {
+  const head = [];
+  const parts = [];
+  for (const node of nodes) {
+    if (node.type === "heading" && node.depth === depth) parts.push([node]);
+    else if (parts.length) parts.at(-1).push(node);
+    else head.push(node);
+  }
+  return { head, parts };
+}
+
+// The verb topics of protocol.md: each "Verbs by topic" heading, with the
+// verbs its links name. A verb no topic names goes to "other-verbs".
+function topicsOf(tree) {
+  const { parts } = cut(tree.children, 2);
+  const section = parts.find((p) => p[0].data.id === "verbs-by-topic") ?? [];
+  const topics = [];
+  const topicOf = new Map();
+  for (const sub of cut(section, 3).parts) {
+    const topic = { id: sub[0].data.id, title: textOf(sub[0]).trim() };
+    topics.push(topic);
+    visit({ type: "root", children: sub }, "link", (link) => {
+      const verb = link.url.match(/protocol-verbs\.md#([\w-]+)$/)?.[1];
+      if (verb && !topicOf.has(verb)) topicOf.set(verb, topic.id);
+    });
+  }
+  return { topics, topicOf };
+}
+
+// The topic of a verb heading such as "split-window, zoom-window": the topic
+// of its first verb. A heading with no verb, such as "Selectors", stays in the
+// topic of the heading before it.
+function topicFor(heading, topicOf, previous) {
+  for (const word of textOf(heading).split(/[\s,]+/)) {
+    const verb = word.replace(/`/g, "");
+    if (topicOf.has(verb)) return topicOf.get(verb);
+  }
+  return previous ?? "other-verbs";
+}
+
+// Splits a part over the budget at its headings of the given depth, so no
+// page is larger than the budget unless one section is.
+function chunk(part, budget, depth) {
+  if (sizeOf(part.nodes) <= budget) return [part];
+  // As many chunks as the budget needs, each near the same size.
+  const total = sizeOf(part.nodes);
+  const target = total / Math.ceil(total / budget);
+  const { head, parts } = cut(part.nodes, depth);
+  const chunks = [[...head]];
+  for (const p of parts) {
+    if (
+      chunks.at(-1).length &&
+      sizeOf(chunks.at(-1)) + sizeOf(p) / 2 > target
+    ) {
+      chunks.push([]);
+    }
+    chunks.at(-1).push(...p);
+  }
+  if (chunks.length === 1) return [part];
+  return chunks.map((nodes, i) => ({
+    ...part,
+    // Not "-2": fumadocs search names the entries of a page URL-0, URL-1 and
+    // so on, so a page named URL-2 would collide with one of them.
+    slug: i ? `${part.slug}-part-${i + 1}` : part.slug,
+    title: `${part.title} (part ${i + 1} of ${chunks.length})`,
+    nodes,
+  }));
+}
+
+// The parts of a page: the index (slug ""), then one part per section or
+// verb topic that moves to a page of its own.
+function split(page, tree, topicInfo) {
+  const conf = page.split;
+  if (!conf) return [{ slug: "", title: page.title, nodes: tree.children }];
+  const { head, parts: sections } = cut(tree.children, 2);
+  const index = { slug: "", title: page.title, nodes: [...head] };
+  const parts = [];
+  for (const section of sections) {
+    const id = section[0].data.id;
+    const byTopic = conf.byTopic?.[id];
+    if (conf.index.includes(id)) {
+      index.nodes.push(...section);
+    } else if (byTopic) {
+      // The heading and the text before the first verb stay on the index.
+      const { head: intro, parts: verbs } = cut(section, 3);
+      index.nodes.push(...intro);
+      const groups = new Map();
+      let topic;
+      for (const verb of verbs) {
+        topic = topicFor(verb[0], topicInfo.topicOf, topic);
+        if (!groups.has(topic)) groups.set(topic, []);
+        groups.get(topic).push(...verb);
+      }
+      // In the order of "Verbs by topic".
+      const order = topicInfo.topics.map((t) => t.id);
+      const known = [...groups.keys()].sort(
+        (a, b) => order.indexOf(a) - order.indexOf(b),
+      );
+      for (const t of known) {
+        const title = topicInfo.topics.find((x) => x.id === t)?.title ?? t;
+        parts.push({
+          slug: byTopic.prefix + t,
+          title: byTopic.title + title,
+          nodes: groups.get(t),
+          // The verbs are H3 under the section's H2, which stays on the
+          // index. On their own page they become H2.
+          promote: true,
+        });
+      }
+    } else {
+      parts.push({
+        slug: conf.names?.[id] ?? id,
+        title: textOf(section[0]).trim(),
+        nodes: section,
+      });
+    }
+  }
+  const out = [index];
+  for (const p of parts) out.push(...chunk(p, conf.budget, 3));
+  for (const p of out) {
+    if (sizeOf(p.nodes) > conf.budget) {
+      console.warn(
+        `${page.slug}/${p.slug || "index"}: ${sizeOf(p.nodes)} bytes of markdown, over the budget of ${conf.budget}`,
+      );
+    }
+  }
+  return out;
+}
+
+function partPath(page, part) {
+  return part.slug ? `/docs/${page.slug}/${part.slug}` : `/docs/${page.slug}`;
+}
+
+function renderPart(page, part, parts, ref, known, ctx) {
+  const tree = { type: "root", children: structuredClone(part.nodes) };
   visit(tree, (node, index, parent) => {
     if (node.type === "heading") {
       const text = textOf(node).trim();
-      const id = slugger.slug(text);
+      const id = node.data.id;
+      if (part.promote) node.depth = Math.max(2, node.depth - 1);
       const badge = badgeFor(text, page.source, known);
       if (badge) {
         node.children.push(
@@ -233,10 +463,10 @@ export async function render(page, src, ref, known) {
       node.children.push({ type: "text", value: ` [#${id}]` });
     }
     if (node.type === "link" || node.type === "definition") {
-      node.url = rewriteUrl(node.url, page.source, ref);
+      node.url = rewriteUrl(node.url, page.source, ref, ctx);
     }
     if (node.type === "image") {
-      node.url = rewriteUrl(node.url, page.source, ref).replace(
+      node.url = rewriteUrl(node.url, page.source, ref, ctx).replace(
         "/blob/",
         "/raw/",
       );
@@ -257,26 +487,129 @@ export async function render(page, src, ref, known) {
     .use(remarkStringify, { bullet: "-", emphasis: "_", rule: "-" })
     .stringify(tree);
 
-  // remark-stringify escapes the bracket of a heading id, "\\[#id]". Fumadocs
-  // reads the id either way, and scripts/commands.mjs reads it unescaped.
-  const bodyOut = body.replace(/^(#{1,6} .*) \\\[#([\w.-]+)\]$/gm, "$1 [#$2]");
+  // remark-stringify escapes the bracket of a heading id, "\[#id]", and an
+  // underscore in it, "\_". Fumadocs reads the id either way, and
+  // scripts/commands.mjs reads it plain.
+  const bodyOut = body.replace(
+    /^(#{1,6} .*) \\\[#((?:[\w.-]|\\_)+)\]$/gm,
+    (_, heading, id) => `${heading} [#${id.replaceAll("\\_", "_")}]`,
+  );
 
+  const isIndex = !part.slug;
   const front = [
     "---",
-    `title: ${JSON.stringify(page.title)}`,
-    `description: ${JSON.stringify(page.description)}`,
+    `title: ${JSON.stringify(part.title)}`,
+    `description: ${JSON.stringify(isIndex ? page.description : `${part.title}: part of the ${page.title} of TUIOS.`)}`,
     `icon: ${page.icon}`,
     "---",
     "",
     'import { Since } from "@/components/mdx/since";',
+  ];
+  if (isIndex && parts.length > 1) {
+    front.push(
+      'import { AnchorRedirect } from "@/components/mdx/anchor-redirect";',
+    );
+  }
+  front.push(
     "",
     `{/* Written by scripts/reference-docs.mjs from tuios ${page.source} at ${ref}. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}`,
     "",
-    `This page is ${"`"}${page.source}${"`"} of the [tuios repository](${REPO}/blob/${ref}/${page.source}), at the version this site documents.`,
-    "",
-  ];
-  if (page.lead) front.push(page.lead, "");
+  );
+  const repoLink = `[tuios repository](${REPO}/blob/${ref}/${page.source})`;
+  if (parts.length === 1) {
+    front.push(
+      `This page is ${"`"}${page.source}${"`"} of the ${repoLink}, at the version this site documents.`,
+      "",
+    );
+  } else if (isIndex) {
+    front.push(
+      `These pages are ${"`"}${page.source}${"`"} of the ${repoLink}, at the version this site documents.`,
+      "",
+      `<AnchorRedirect page="${page.slug}" />`,
+      "",
+    );
+  } else {
+    front.push(
+      `This page is one part of ${"`"}${page.source}${"`"} of the ${repoLink}. The [${page.title}](/docs/${page.slug}) page lists every part.`,
+      "",
+    );
+  }
+  if (isIndex && page.lead) front.push(page.lead, "");
+  if (isIndex && parts.length > 1) {
+    front.push(
+      "**The pages of this reference:**",
+      "",
+      ...parts.slice(1).map((p) => `- [${p.title}](${partPath(page, p)})`),
+      "",
+    );
+  }
   return `${front.join("\n")}\n${bodyOut}`;
+}
+
+// Reads every page and splits it. anchors maps each page slug to the part of
+// each of its anchors.
+export async function build(src) {
+  const parsed = new Map();
+  for (const page of pages) parsed.set(page.slug, await parse(page, src));
+  const topicInfo = topicsOf(parsed.get("control-protocol").tree);
+  const anchors = new Map();
+  const built = [];
+  for (const page of pages) {
+    const parts = split(page, parsed.get(page.slug).tree, topicInfo);
+    const ids = new Map();
+    for (const part of parts) {
+      visit({ type: "root", children: part.nodes }, (node) => {
+        if (node.type === "heading")
+          ids.set(node.data.id, partPath(page, part));
+        // An anchor the doc sets itself: <a id="nonce-scope"></a>.
+        if (node.type === "html") {
+          for (const m of node.value.matchAll(/<a\s+(?:id|name)="([^"]+)"/g)) {
+            ids.set(m[1], partPath(page, part));
+          }
+        }
+      });
+    }
+    anchors.set(page.slug, ids);
+    built.push({ page, parts });
+  }
+  return { anchors, built };
+}
+
+export async function render(src, ref, known) {
+  const { anchors, built } = await build(src);
+  const files = [];
+  for (const { page, parts } of built) {
+    for (const part of parts) {
+      const ctx = { anchors, slug: page.slug, path: partPath(page, part) };
+      const name =
+        parts.length === 1
+          ? `${page.slug}.mdx`
+          : `${page.slug}/${part.slug || "index"}.mdx`;
+      files.push({
+        name,
+        text: renderPart(page, part, parts, ref, known, ctx),
+      });
+    }
+    if (parts.length > 1) {
+      const meta = {
+        title: page.title,
+        icon: page.icon,
+        pages: ["index", ...parts.slice(1).map((p) => p.slug)],
+      };
+      files.push({
+        name: `${page.slug}/meta.json`,
+        text: `${JSON.stringify(meta, null, 2)}\n`,
+      });
+    }
+  }
+  // Only the anchors that left the index: the redirect needs no others.
+  const moved = {};
+  for (const [slug, ids] of anchors) {
+    const out = {};
+    for (const [id, at] of ids) if (at !== `/docs/${slug}`) out[id] = at;
+    if (Object.keys(out).length) moved[slug] = out;
+  }
+  return { files, moved, built };
 }
 
 if (import.meta.main) {
@@ -289,9 +622,25 @@ if (import.meta.main) {
   }
   const known = await since();
   const site = new URL("..", import.meta.url).pathname;
-  for (const page of pages) {
-    const out = path.join(site, "content/docs", `${page.slug}.mdx`);
-    await writeFile(out, await render(page, src, ref, known));
-    console.log(`wrote content/docs/${page.slug}.mdx from ${page.source}`);
+  const docs = path.join(site, "content/docs");
+  const { files, moved, built } = await render(src, ref, known);
+  // The script owns these paths: a page that was split before and is not now
+  // (or the other way) leaves nothing behind.
+  for (const { page } of built) {
+    await rm(path.join(docs, `${page.slug}.mdx`), { force: true });
+    await rm(path.join(docs, page.slug), { recursive: true, force: true });
+  }
+  for (const f of files) {
+    const out = path.join(docs, f.name);
+    await mkdir(path.dirname(out), { recursive: true });
+    await writeFile(out, f.text);
+  }
+  const anchorsFile = path.join(site, "lib/reference/anchors.json");
+  await mkdir(path.dirname(anchorsFile), { recursive: true });
+  await writeFile(anchorsFile, `${JSON.stringify(moved, null, 2)}\n`);
+  for (const { page, parts } of built) {
+    console.log(
+      `wrote ${parts.length === 1 ? `content/docs/${page.slug}.mdx` : `${parts.length} pages in content/docs/${page.slug}/`} from ${page.source}`,
+    );
   }
 }

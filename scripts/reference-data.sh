@@ -65,11 +65,14 @@ run "$work/tuios" kill-server >/dev/null 2>&1 || true
 wait "$daemon" 2>/dev/null || true
 daemon=
 
-targets=(lib/commands/commands.json lib/options/options.json lib/keybindings/defaults.json)
-pages=(cli-reference configuration option-reference keybindings default-keys control-protocol protocol-verbs)
-for p in "${pages[@]}"; do targets+=("content/docs/$p.mdx"); done
+# Whole directories: a split reference page is a folder whose files can come
+# and go.
+targets=(lib/commands lib/options lib/keybindings lib/reference content/docs)
 if ((check)); then
-  for t in "${targets[@]}"; do cp "$site/$t" "$work/$(basename "$t").before"; done
+  for t in "${targets[@]}"; do
+    mkdir -p "$work/before/$t"
+    cp -r "$site/$t/." "$work/before/$t/"
+  done
 fi
 
 # The reference pages first: commands.mjs links each command to its heading
@@ -82,7 +85,7 @@ bun "$site/scripts/keybindings.mjs" "$work/darwin.json" "$work/linux.json" "$ref
 if ((check)); then
   stale=0
   for t in "${targets[@]}"; do
-    if ! cmp -s "$site/$t" "$work/$(basename "$t").before"; then
+    if ! diff -rq "$work/before/$t" "$site/$t" >&2; then
       echo "$t does not match tuios $ref. Run: scripts/reference-data.sh <tuios checkout at reference/TUIOS_REF>" >&2
       stale=1
     fi

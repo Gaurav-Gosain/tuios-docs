@@ -1,0 +1,410 @@
+---
+title: "Task cards"
+description: "Task cards: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `add-task` <Since verb="add-task" /> [#add-task]
+
+Add a task card to a session: one unit of work, with a title, the prompt for the pane that takes it, and a stage. The card is kept by the daemon and saved with the session, so it survives the pane that added it and a restart. Who added it (by) comes from the connection.
+
+| Param         | Type   | Required | Default | Description                                                                                                                                                                                                                     |
+| ------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                        |
+| `title`       | string | yes      |         | One line that says what the card is, at most 200 bytes. Control characters are dropped.                                                                                                                                         |
+| `prompt`      | string |          |         | What the pane that takes the card is to do, at most 16 KiB.                                                                                                                                                                     |
+| `stage`       | string |          | `todo`  | The stage it starts in. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                                                                                                                |
+| `project`     | string |          |         | The repository the card is for, by its origin URL. It then shows on that repository's board in every session and on linked machines, and a pane on another machine can claim it with host. Omit for a card of the session only. |
+| `harness`     | string |          |         | The agent the card is for, such as claude-code. Pull dispatch gives it only to that agent. Omit for any agent.                                                                                                                  |
+| `ask_first`   | bool   |          | `false` | The card waits for a person to start it: dispatch never gives it to an agent.                                                                                                                                                   |
+| `machine`     | string |          |         | Where the card's agent starts: any for the machine place-agent picks, or a linked machine's name. Omit for this machine.                                                                                                        |
+| `human_nonce` | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.                                                                                                              |
+
+| Result field       | Type   | Description                                                                                                             |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string | The card.                                                                                                               |
+| `session`          | string | Its session.                                                                                                            |
+| `title`            | string | Its title.                                                                                                              |
+| `preview`          | string | The first line of its prompt, at most 80 characters.                                                                    |
+| `stage`            | string | Its stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                     |
+| `stage_at`         | int    | When it entered the stage, Unix nanoseconds.                                                                            |
+| `holder`           | object | The pane that holds it: window, name, harness, state (read from the pane now) and held\_at. Null when no pane holds it. |
+| `by`               | string | Who added it: human, shell, the adding pane's window id, link:HOST or plugin:ID.                                        |
+| `at`               | int    | When it was added, Unix nanoseconds.                                                                                    |
+| `blocked`          | object | reason, by and at when the card is blocked, else null.                                                                  |
+| `fan`              | object | fan and fan\_id, for a card added in a fan's session.                                                                   |
+| `attachment_count` | int    | How many attachments the card has. Absent for none.                                                                     |
+
+```json
+{"id":1,"verb":"add-task","params":{"session":"work","title":"make the backoff jitter configurable","prompt":"Read api/retry.go and add a jitter option, with a test."}}
+```
+
+## `attach-task` <Since verb="attach-task" /> [#attach-task]
+
+Put a file or a link on a task card. The caller sends the file's bytes; the daemon never reads a path. A file is stored once by its sha256 and goes when no card names it. The kind is read from the content, then the name. The limits are \[tasks] attachment\_max\_mib, attachments\_per\_card and attachment\_session\_mib. A pane changes the attachments of the card it holds, and of the card it finished while that card waits in verify or review; admin, the person, a shell, a link and a plugin change any card's.
+
+| Param            | Type      | Required | Default | Description                                                                                                                                                                                      |
+| ---------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`        | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                         |
+| `id`             | string    | yes      |         | The card, such as t1.                                                                                                                                                                            |
+| `name`           | string    |          |         | The name the card shows it by, at most 120 bytes; control and invisible characters are dropped. Required with content; a pull request link defaults to PR #N, another link to its host and path. |
+| `content`        | string    |          |         | The file, base64 encoded. Pass one of content, files, link, screenshot and capture.                                                                                                              |
+| `files`          | \[]object |          |         | Several files at once, each name and content (base64): one change and one history entry. All of them fit one request line (12 MiB in base64).                                                    |
+| `link`           | string    |          |         | An http or https address. A GitHub pull request's address is kind pr.                                                                                                                            |
+| `note`           | string    |          |         | A line about it, at most 500 bytes.                                                                                                                                                              |
+| `replace`        | bool      |          | `false` | Put it in the place of the attachment with the same name. Without it a name in use with other bytes is refused; the same name with the same bytes is left as it is, so a retry succeeds.         |
+| `screenshot`     | object    |          |         | window (a pane of the card's session), scrollback and lines: the daemon takes a PNG of the pane and attaches it, named after the pane. A pane that calls needs the read grant.                   |
+| `capture`        | object    |          |         | window, scrollback and lines (default 2000): the daemon takes the pane's text and attaches it. A pane that calls needs the read grant.                                                           |
+| `host`           | string    |          |         | The machine that owns the card, for a project card from the pane that holds it there. The attach is passed on over the link; a picture or a text is taken here first. At most 3 MiB crosses.     |
+| `human_nonce`    | string    |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.                                                                               |
+| `remote_window`  | string    |          |         | Over the link only: the window on the calling machine that holds the card. Its daemon sends it; the holder's machine is the link's peer.                                                         |
+| `remote_name`    | string    |          |         | Over the link only: how that window reads on its machine.                                                                                                                                        |
+| `remote_harness` | string    |          |         | Over the link only: the agent that window runs.                                                                                                                                                  |
+
+| Result field  | Type      | Description                                                                                                                |
+| ------------- | --------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `attachment`  | object    | name, kind (image, markdown, mermaid, diff, text, link, pr, file), media\_type, size, hash, url (a link), note, by and at. |
+| `attachments` | \[]object | Every attachment the call named, as the card holds it now.                                                                 |
+| `unchanged`   | \[]string | The names the card held with the same bytes already, left as they were.                                                    |
+| `task`        | object    | The card's row after the attach.                                                                                           |
+
+```json
+{"id":1,"verb":"attach-task","params":{"session":"work","id":"t1","name":"after.png","content":"iVBORw0KGgo=","note":"the fixed layout"}}
+```
+
+```json
+{"id":1,"verb":"attach-task","params":{"session":"work","id":"t1","link":"https://github.com/o/r/pull/12"}}
+```
+
+## `block-task` <Since verb="block-task" /> [#block-task]
+
+Mark a task card stuck, saying what it waits on, or with clear lift the mark. A blocked card keeps its holder and its stage, and claim-task next skips it. To let a card go, use release-task. A pane changes only the card it holds unless it holds admin; the person, a shell, a link and a plugin change any card.
+
+| Param         | Type   | Required | Default | Description                                                                                                              |
+| ------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `id`          | string | yes      |         | The card, such as t1.                                                                                                    |
+| `reason`      | string |          |         | What the card waits on, at most 500 bytes. Required without clear.                                                       |
+| `clear`       | bool   |          | `false` | Lift the block. Not with reason.                                                                                         |
+| `human_nonce` | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.       |
+
+| Result field       | Type   | Description                                                                                                             |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string | The card.                                                                                                               |
+| `session`          | string | Its session.                                                                                                            |
+| `title`            | string | Its title.                                                                                                              |
+| `preview`          | string | The first line of its prompt, at most 80 characters.                                                                    |
+| `stage`            | string | Its stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                     |
+| `stage_at`         | int    | When it entered the stage, Unix nanoseconds.                                                                            |
+| `holder`           | object | The pane that holds it: window, name, harness, state (read from the pane now) and held\_at. Null when no pane holds it. |
+| `by`               | string | Who added it: human, shell, the adding pane's window id, link:HOST or plugin:ID.                                        |
+| `at`               | int    | When it was added, Unix nanoseconds.                                                                                    |
+| `blocked`          | object | reason, by and at when the card is blocked, else null.                                                                  |
+| `fan`              | object | fan and fan\_id, for a card added in a fan's session.                                                                   |
+| `attachment_count` | int    | How many attachments the card has. Absent for none.                                                                     |
+
+```json
+{"id":1,"verb":"block-task","params":{"session":"work","id":"t1","reason":"waiting on the staging API key"}}
+```
+
+```json
+{"id":1,"verb":"block-task","params":{"session":"work","id":"t1","clear":true}}
+```
+
+## `claim-task` <Since verb="claim-task" /> [#claim-task]
+
+Take a task card for a pane: the card id, or with next the oldest card no pane holds that is not blocked or done, and that no fan of another session works on (fan with task). A card in todo or plan moves to doing. The pick and the take are one step, so two panes claiming next at once take two cards. A pane claims only for itself unless it holds admin; outside a pane, name the window. The card is released when its pane closes, its agent leaves the pane, or the daemon restarts.
+
+| Param            | Type   | Required | Default | Description                                                                                                                                                              |
+| ---------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`        | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                 |
+| `id`             | string |          |         | The card to take. Not with next.                                                                                                                                         |
+| `next`           | bool   |          | `false` | Take the oldest open card no pane holds and that is not ask\_first. Not with id. With none to take, the call fails with no\_task.                                        |
+| `window`         | string |          |         | The pane that takes the card, by id or name. From a pane, omit it to claim for that pane. Required outside a pane.                                                       |
+| `human_nonce`    | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.                                                       |
+| `host`           | string |          |         | The machine that owns the card, for a project card claimed, released or finished from the pane that works on it here. The call is passed on over the link for this pane. |
+| `remote_window`  | string |          |         | Over the link only: the window on the calling machine that holds the card. Its daemon sends it; the holder's machine is the link's peer.                                 |
+| `remote_name`    | string |          |         | Over the link only: how that window reads on its machine.                                                                                                                |
+| `remote_harness` | string |          |         | Over the link only: the agent that window runs.                                                                                                                          |
+
+| Result field       | Type   | Description                                                                                                             |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string | The card.                                                                                                               |
+| `session`          | string | Its session.                                                                                                            |
+| `title`            | string | Its title.                                                                                                              |
+| `preview`          | string | The first line of its prompt, at most 80 characters.                                                                    |
+| `stage`            | string | Its stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                     |
+| `stage_at`         | int    | When it entered the stage, Unix nanoseconds.                                                                            |
+| `holder`           | object | The pane that holds it: window, name, harness, state (read from the pane now) and held\_at. Null when no pane holds it. |
+| `by`               | string | Who added it: human, shell, the adding pane's window id, link:HOST or plugin:ID.                                        |
+| `at`               | int    | When it was added, Unix nanoseconds.                                                                                    |
+| `blocked`          | object | reason, by and at when the card is blocked, else null.                                                                  |
+| `fan`              | object | fan and fan\_id, for a card added in a fan's session.                                                                   |
+| `attachment_count` | int    | How many attachments the card has. Absent for none.                                                                     |
+
+```json
+{"id":1,"verb":"claim-task","params":{"session":"work","next":true,"window":"build"}}
+```
+
+```json
+{"id":1,"verb":"claim-task","params":{"session":"work","id":"t1","window":"build"}}
+```
+
+## `detach-task` <Since verb="detach-task" /> [#detach-task]
+
+Take an attachment off a task card. Its file goes when no card names it. A pane changes the attachments of the card it holds, and of the card it finished while that card waits in verify or review; admin, the person, a shell, a link and a plugin change any card's.
+
+| Param            | Type   | Required | Default | Description                                                                                                                              |
+| ---------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`        | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                 |
+| `id`             | string | yes      |         | The card, such as t1.                                                                                                                    |
+| `name`           | string | yes      |         | The attachment's name on the card.                                                                                                       |
+| `human_nonce`    | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.                       |
+| `remote_window`  | string |          |         | Over the link only: the window on the calling machine that holds the card. Its daemon sends it; the holder's machine is the link's peer. |
+| `remote_name`    | string |          |         | Over the link only: how that window reads on its machine.                                                                                |
+| `remote_harness` | string |          |         | Over the link only: the agent that window runs.                                                                                          |
+
+| Result field       | Type   | Description                                                                                                             |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string | The card.                                                                                                               |
+| `session`          | string | Its session.                                                                                                            |
+| `title`            | string | Its title.                                                                                                              |
+| `preview`          | string | The first line of its prompt, at most 80 characters.                                                                    |
+| `stage`            | string | Its stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                     |
+| `stage_at`         | int    | When it entered the stage, Unix nanoseconds.                                                                            |
+| `holder`           | object | The pane that holds it: window, name, harness, state (read from the pane now) and held\_at. Null when no pane holds it. |
+| `by`               | string | Who added it: human, shell, the adding pane's window id, link:HOST or plugin:ID.                                        |
+| `at`               | int    | When it was added, Unix nanoseconds.                                                                                    |
+| `blocked`          | object | reason, by and at when the card is blocked, else null.                                                                  |
+| `fan`              | object | fan and fan\_id, for a card added in a fan's session.                                                                   |
+| `attachment_count` | int    | How many attachments the card has. Absent for none.                                                                     |
+
+```json
+{"id":1,"verb":"detach-task","params":{"session":"work","id":"t1","name":"after.png"}}
+```
+
+## `finish-task` <Since verb="finish-task" /> [#finish-task]
+
+Mark a task card done. Its holder lets it go and its block, if any, is lifted. Finishing a card that is done already changes nothing. A pane changes only the card it holds unless it holds admin; the person, a shell, a link and a plugin change any card.
+
+| Param            | Type   | Required | Default | Description                                                                                                                                                              |
+| ---------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`        | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                 |
+| `id`             | string | yes      |         | The card, such as t1.                                                                                                                                                    |
+| `human_nonce`    | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.                                                       |
+| `host`           | string |          |         | The machine that owns the card, for a project card claimed, released or finished from the pane that works on it here. The call is passed on over the link for this pane. |
+| `remote_window`  | string |          |         | Over the link only: the window on the calling machine that holds the card. Its daemon sends it; the holder's machine is the link's peer.                                 |
+| `remote_name`    | string |          |         | Over the link only: how that window reads on its machine.                                                                                                                |
+| `remote_harness` | string |          |         | Over the link only: the agent that window runs.                                                                                                                          |
+
+| Result field       | Type   | Description                                                                                                             |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string | The card.                                                                                                               |
+| `session`          | string | Its session.                                                                                                            |
+| `title`            | string | Its title.                                                                                                              |
+| `preview`          | string | The first line of its prompt, at most 80 characters.                                                                    |
+| `stage`            | string | Its stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                     |
+| `stage_at`         | int    | When it entered the stage, Unix nanoseconds.                                                                            |
+| `holder`           | object | The pane that holds it: window, name, harness, state (read from the pane now) and held\_at. Null when no pane holds it. |
+| `by`               | string | Who added it: human, shell, the adding pane's window id, link:HOST or plugin:ID.                                        |
+| `at`               | int    | When it was added, Unix nanoseconds.                                                                                    |
+| `blocked`          | object | reason, by and at when the card is blocked, else null.                                                                  |
+| `fan`              | object | fan and fan\_id, for a card added in a fan's session.                                                                   |
+| `attachment_count` | int    | How many attachments the card has. Absent for none.                                                                     |
+
+```json
+{"id":1,"verb":"finish-task","params":{"session":"work","id":"t1"}}
+```
+
+## `get-task` <Since verb="get-task" /> [#get-task]
+
+Read one task card whole: its row, its prompt and its history.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `id`      | string | yes      |         | The card, such as t1.                                                                                                    |
+
+| Result field       | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string    | The card.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `session`          | string    | Its session.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `title`            | string    | Its title.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `preview`          | string    | The first line of its prompt, at most 80 characters.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `stage`            | string    | Its stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `stage_at`         | int       | When it entered the stage, Unix nanoseconds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `holder`           | object    | The pane that holds it: window, name, harness, state (read from the pane now) and held\_at. Null when no pane holds it.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `by`               | string    | Who added it: human, shell, the adding pane's window id, link:HOST or plugin:ID.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `at`               | int       | When it was added, Unix nanoseconds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `blocked`          | object    | reason, by and at when the card is blocked, else null.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `fan`              | object    | fan and fan\_id, for a card added in a fan's session.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `attachment_count` | int       | How many attachments the card has. Absent for none.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `prompt`           | string    | The prompt, as added.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `attachments`      | \[]object | The files and links on the card, in the order they were added: name, kind, media\_type, size, hash, url (a link), note, by and at. get-task-attachment reads one.                                                                                                                                                                                                                                                                                                                                                                  |
+| `history`          | \[]object | Every change, oldest first, at most 100 (the first is kept): action (added, claimed, finished, staged, blocked, unblocked, released, attached, detached), by, at, stage, holder and reason. A release the daemon made has by tuios and reason pane closed, agent left or restart. A stage the daemon moved on its own (\[tasks] auto\_stage) has by tuios and a reason naming the fact: plan held for approval, agent working, fan check started, fan check failed in every attempt, or the pull request opened, merged or closed. |
+
+```json
+{"id":1,"verb":"get-task","params":{"session":"work","id":"t1"}}
+```
+
+## `get-task-attachment` <Since verb="get-task-attachment" /> [#get-task-attachment]
+
+Read one attachment of a task card, with the file's bytes for a file.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `id`      | string | yes      |         | The card, such as t1.                                                                                                    |
+| `name`    | string | yes      |         | The attachment's name on the card.                                                                                       |
+
+| Result field | Type   | Description                                                                                                                                                                   |
+| ------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `attachment` | object | name, kind (image, markdown, mermaid, diff, text, link, pr, file), media\_type, size, hash, url (a link), note, by and at.                                                    |
+| `content`    | string | The file, base64 encoded. Absent for a link.                                                                                                                                  |
+| `pr`         | object | For a pr link: number, url, state (open, merged or closed), title and checks (pass, fail or pending, with passed, failed and pending), read through gh at most once a minute. |
+| `pr_error`   | string | For a pr link gh could not read: why, such as gh not installed or not logged in.                                                                                              |
+
+```json
+{"id":1,"verb":"get-task-attachment","params":{"session":"work","id":"t1","name":"after.png"}}
+```
+
+## `get-task-dispatch` <Since verb="get-task-dispatch" /> [#get-task-dispatch]
+
+Read the task dispatch settings: each board's mode (manual or pull) and the switches that stop dispatch (pause, quiet hours, a board stopped after 3 failures in a row, a usage limit).
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `project` | string |          |         | The project board, by origin URL. Omit for the session's own cards.                                                      |
+
+| Result field  | Type      | Description                                                                                                                                                       |
+| ------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paused`      | bool      | True while dispatch is paused.                                                                                                                                    |
+| `paused_by`   | string    | Who paused it.                                                                                                                                                    |
+| `stopped`     | string    | Why all dispatch stopped on its own, such as usage limit. Empty when it did not.                                                                                  |
+| `quiet`       | string    | The quiet hours, local time, such as 22:00-07:00.                                                                                                                 |
+| `quiet_now`   | bool      | True inside the quiet hours.                                                                                                                                      |
+| `boards`      | \[]object | The boards with a mode or a stop: board, project or session, mode, failures (dispatched cards in a row that did not finish), stopped, verify and verify\_timeout. |
+| `cap`         | int       | Auto's agents at once, in total.                                                                                                                                  |
+| `machine_cap` | int       | Auto's agents at once on one machine.                                                                                                                             |
+| `running`     | int       | Auto's agents now.                                                                                                                                                |
+| `board`       | object    | The board the call named, also when it is manual. An auto board adds preset, running, waiting and note.                                                           |
+
+```json
+{"id":1,"verb":"get-task-dispatch","params":{"project":"git@github.com:acme/api.git"}}
+```
+
+## `list-tasks` <Since verb="list-tasks" /> [#list-tasks]
+
+List a session's task cards, oldest first.
+
+| Param          | Type   | Required | Default | Description                                                                                                                                                                                                              |
+| -------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`      | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                 |
+| `stage`        | string |          |         | Only the cards in this stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                                                                                                   |
+| `holder`       | string |          |         | Only the cards this window holds, by id or name.                                                                                                                                                                         |
+| `open`         | bool   |          | `false` | Leave out the cards that are done.                                                                                                                                                                                       |
+| `project`      | string |          |         | List one repository's cards, by origin URL, from every session. Takes no session or holder.                                                                                                                              |
+| `hosts`        | bool   |          | `false` | With project, or with all\_sessions: also ask each linked machine for its own cards of the project, or for all its project cards. Rows from another machine carry host; machines that did not answer are in hosts\_down. |
+| `all_sessions` | bool   |          | `false` | List the cards of every session on the daemon, in session name order. Takes no session or holder.                                                                                                                        |
+
+| Result field   | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`      | string    | The session listed. Absent with all\_sessions.                                                                                                                                                                                                                                                                                                                                                                               |
+| `all_sessions` | bool      | True when every session was listed. Each row names its session.                                                                                                                                                                                                                                                                                                                                                              |
+| `tasks`        | \[]object | One row per card: id, session, title, preview (the first line of the prompt, at most 80 characters), stage, stage\_at (Unix nanoseconds), holder (window, name, harness, state, held\_at, read from the pane now; null when no pane holds it), by (human, shell, the adding pane's window id, link:HOST or plugin:ID), at, blocked (reason, by, at; null when not blocked) and fan (fan, fan\_id) for a card added in a fan. |
+
+```json
+{"id":1,"verb":"list-tasks","params":{"session":"work","open":true}}
+```
+
+```json
+{"id":1,"verb":"list-tasks","params":{"all_sessions":true}}
+```
+
+## `release-task` <Since verb="release-task" /> [#release-task]
+
+Let a task card go without finishing it. It keeps its stage, and another pane can claim it. A pane changes only the card it holds unless it holds admin; the person, a shell, a link and a plugin change any card.
+
+| Param            | Type   | Required | Default | Description                                                                                                                                                              |
+| ---------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session`        | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                 |
+| `id`             | string | yes      |         | The card, such as t1.                                                                                                                                                    |
+| `human_nonce`    | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.                                                       |
+| `host`           | string |          |         | The machine that owns the card, for a project card claimed, released or finished from the pane that works on it here. The call is passed on over the link for this pane. |
+| `remote_window`  | string |          |         | Over the link only: the window on the calling machine that holds the card. Its daemon sends it; the holder's machine is the link's peer.                                 |
+| `remote_name`    | string |          |         | Over the link only: how that window reads on its machine.                                                                                                                |
+| `remote_harness` | string |          |         | Over the link only: the agent that window runs.                                                                                                                          |
+
+| Result field       | Type   | Description                                                                                                             |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string | The card.                                                                                                               |
+| `session`          | string | Its session.                                                                                                            |
+| `title`            | string | Its title.                                                                                                              |
+| `preview`          | string | The first line of its prompt, at most 80 characters.                                                                    |
+| `stage`            | string | Its stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                     |
+| `stage_at`         | int    | When it entered the stage, Unix nanoseconds.                                                                            |
+| `holder`           | object | The pane that holds it: window, name, harness, state (read from the pane now) and held\_at. Null when no pane holds it. |
+| `by`               | string | Who added it: human, shell, the adding pane's window id, link:HOST or plugin:ID.                                        |
+| `at`               | int    | When it was added, Unix nanoseconds.                                                                                    |
+| `blocked`          | object | reason, by and at when the card is blocked, else null.                                                                  |
+| `fan`              | object | fan and fan\_id, for a card added in a fan's session.                                                                   |
+| `attachment_count` | int    | How many attachments the card has. Absent for none.                                                                     |
+
+```json
+{"id":1,"verb":"release-task","params":{"session":"work","id":"t1"}}
+```
+
+## `remove-task` <Since verb="remove-task" /> [#remove-task]
+
+Remove a task card and its history. A pane needs the admin grant; the person and a shell remove any card.
+
+| Param         | Type   | Required | Default | Description                                                                                                              |
+| ------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `id`          | string | yes      |         | The card, such as t1.                                                                                                    |
+| `human_nonce` | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.       |
+
+| Result field | Type   | Description       |
+| ------------ | ------ | ----------------- |
+| `id`         | string | The card removed. |
+
+```json
+{"id":1,"verb":"remove-task","params":{"session":"work","id":"t1"}}
+```
+
+## `set-task-stage` <Since verb="set-task-stage" /> [#set-task-stage]
+
+Move a task card to a stage by hand. The daemon also moves cards on its own (\[tasks] auto\_stage), only from the stages each fact moves a card from, so a card put in another stage by hand stays there. A move to done is a finish: the holder lets the card go, its block is lifted, and task-finished is sent. A move to the stage the card is in changes nothing. A pane changes only the card it holds unless it holds admin; the person, a shell, a link and a plugin change any card.
+
+| Param         | Type   | Required | Default | Description                                                                                                              |
+| ------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `id`          | string | yes      |         | The card, such as t1.                                                                                                    |
+| `stage`       | string | yes      |         | The stage to move the card to. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                  |
+| `human_nonce` | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.       |
+
+| Result field       | Type   | Description                                                                                                             |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string | The card.                                                                                                               |
+| `session`          | string | Its session.                                                                                                            |
+| `title`            | string | Its title.                                                                                                              |
+| `preview`          | string | The first line of its prompt, at most 80 characters.                                                                    |
+| `stage`            | string | Its stage. One of `todo`, `plan`, `doing`, `verify`, `review`, `shipped` or `done`.                                     |
+| `stage_at`         | int    | When it entered the stage, Unix nanoseconds.                                                                            |
+| `holder`           | object | The pane that holds it: window, name, harness, state (read from the pane now) and held\_at. Null when no pane holds it. |
+| `by`               | string | Who added it: human, shell, the adding pane's window id, link:HOST or plugin:ID.                                        |
+| `at`               | int    | When it was added, Unix nanoseconds.                                                                                    |
+| `blocked`          | object | reason, by and at when the card is blocked, else null.                                                                  |
+| `fan`              | object | fan and fan\_id, for a card added in a fan's session.                                                                   |
+| `attachment_count` | int    | How many attachments the card has. Absent for none.                                                                     |
+
+```json
+{"id":1,"verb":"set-task-stage","params":{"session":"work","id":"t1","stage":"review"}}
+```

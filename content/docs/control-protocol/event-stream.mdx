@@ -1,0 +1,304 @@
+---
+title: "Event stream"
+description: "Event stream: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## Event stream [#event-stream]
+
+The daemon can push events instead of a caller polling. A connection that issues
+the `subscribe` verb is turned into a long-lived event stream; every other
+connection never receives events. Each event is one JSON line carrying a
+daemon-global monotonic `seq`, the daemon's `boot_id`, a `type`, and the fields
+relevant to that type. Two subscribers always see the same `seq` for the same
+event.
+
+`boot_id` is a random id the daemon picks each time it starts. A restarted
+daemon numbers events from 1 again, so a `seq` only identifies an event
+together with the `boot_id` it came with. Keep both if you plan to resume.
+
+A live upgrade ([daemon-upgrade](/docs/control-protocol/verbs-other-verbs#daemon-upgrade)) keeps the `boot_id`, the numbering and the replay ring, so a subscriber the upgrade dropped resumes with `after_seq` as from any other disconnect.
+
+Event types:
+
+| Type                     | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Notable fields                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `window-created`         | A window was created.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `session`, `window`, `pty_id`, `title`                                              |
+| `window-closed`          | A window was removed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `session`, `window`, `pty_id`                                                       |
+| `window-exit`            | A window's shell process exited.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `session`, `window`, `pty_id`                                                       |
+| `window-retitled`        | A window's title or name changed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `session`, `window`, `title`                                                        |
+| `window-focused`         | A window became the focused window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `session`, `window`, `pty_id`                                                       |
+| `window-moved`           | A window moved to another workspace.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `session`, `window`, `pty_id`, `workspace`                                          |
+| `window-minimized`       | A window was minimized.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `session`, `window`, `pty_id`                                                       |
+| `window-restored`        | A minimized window was restored.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `session`, `window`, `pty_id`                                                       |
+| `workspace-switched`     | The session's current workspace changed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `session`, `workspace`                                                              |
+| `workspace-renamed`      | A workspace's name was set, changed or cleared. `title` is the new name, absent when the name was cleared.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `session`, `workspace`, `title`                                                     |
+| `layout-changed`         | The panes on a workspace sit differently: a pane opened, closed, moved, was minimized, zoomed or resized, or the session changed size. Call `list-windows` to read the new rectangles. Sent only to a subscription that names it in `types`, and not kept for replay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `session`, `workspace`                                                              |
+| `agent-state`            | A window's agent state changed, whichever tier changed it. A pane ceasing to be an agent reports `none`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `session`, `window`, `pty_id`, `state`                                              |
+| `agent-seen`             | The person looked at a pane whose agent finished a turn they had not seen (`action` `seen`), or marked it unread again (`action` `unread`). The agent state does not change. `list-agents`' `finished_unread` reads the same fact.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `session`, `window`, `action`                                                       |
+| `agent-message`          | A message was left in the session's ring. `window` is the recipient, or empty for a session-wide notice. Read the message itself with `read-agent-messages`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `session`, `window`                                                                 |
+| `output`                 | A window produced output (activity signal only; the raw bytes still flow over the binary stream).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `session`, `window`, `pty_id`, `bytes`                                              |
+| `bell`                   | A window rang the terminal bell.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `session`, `window`, `pty_id`                                                       |
+| `notification`           | A window sent a desktop notification with OSC 9, OSC 777 or OSC 99. Each text field is capped at 512 bytes. For a pane attributed to a harness the notification may also move its agent state; see [AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#notification-rules).                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `session`, `window`, `pty_id`, `title`, `body`                                      |
+| `mode-changed`           | A terminal mode toggled (for example alt-screen).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `session`, `window`, `mode`, `enabled`                                              |
+| `session-created`        | A session was created.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `session`                                                                           |
+| `session-closed`         | A session was terminated.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `session`                                                                           |
+| `session-labelled`       | A session's display name was set, changed or cleared, by `set-session-name` or any other route. `title` is the new display name, absent when it was cleared. A rename (`rename-session`) raises `session-closed` and `session-created` instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `session`, `title`                                                                  |
+| `client-session-changed` | A daemon connection attached, detached or switched sessions. `session` is the session entered or left. `attached` is `true` when entering and `false` when leaving, including a disconnect while attached. A rename sends `attached: true` with the new name to each client in the session.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `client_id`, `pid`, `session`, `attached`                                           |
+| `gap`                    | Some events were not delivered to this connection. `reason` says why (see below). A gap has no `seq`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `reason`, `dropped`, `boot_id`                                                      |
+| `attention`              | An Inbox item opened, changed or closed. `action` is `open`, `update` or `close`, and `attention` is the item as `list-attention` returns it. On `close` the item carries `closed`: `resolved`, `seen`, `read`, `dismissed`, `answered`, `superseded`, `window_closed`, `session_closed`, `evicted`, `host_removed`, `agents_disabled` (the person turned the agent features off) or `snoozed` (the person snoozed it; it opens again with the same id). An `answered` item also carries `answer` and `answered_by`; the close of a linked host's item never reads `answered` here. `session` and `window` are the item's, so the usual filters apply. An item of a linked host also sets `host`, and a subscriber that filters on a session, window or pane does not get it unless it subscribed with `hosts`. | `session`, `window`, `host`, `action`, `attention`                                  |
+| `host-changed`           | A linked host's link changed state, or what it holds changed: its sessions, windows or agents. List the hosts again to see what. See [Following linked hosts](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#following-linked-hosts).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `host`, `status`                                                                    |
+| `worktree-removed`       | git removed a worktree that tuios made: by `remove-worktree`, or by the undo of a setup or a delegation that did not start. `path` is the folder that is gone. `session` is the worktree's session, which may be gone too. A plugin hook on `worktree.removed` runs on it, with `data.path`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `session`, `path`                                                                   |
+| `prompt`                 | A shell that marks its commands with OSC 133 shows its prompt after anything else: at start, or after a command. A prompt drawn again changes nothing and raises nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `session`, `window`, `pty_id`                                                       |
+| `command-started`        | A shell with OSC 133 marks started a command. `cmdline` is cut to 512 bytes, with likely secrets masked.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `session`, `window`, `pty_id`, `cmdline`                                            |
+| `command-finished`       | That command finished. `exit_code` is absent when the shell sent no status; a prompt with no finish mark ends the command that way. `command_seq` counts the pane's finished commands.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `session`, `window`, `pty_id`, `cmdline`, `exit_code`, `duration_ms`, `command_seq` |
+| `agent-activity`         | One entry of an agent pane's activity ring, as [agent-activity](/docs/control-protocol/verbs-agents-and-messages#agent-activity) returns it. Opt-in: only a subscription whose `types` names it receives it. Not replayed on a resume.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `session`, `window`, `entry`                                                        |
+| `transcript`             | The transcript that a pane is joined to grew, or the entry a Pi session has selected changed. Read it again with [agent-transcript](/docs/control-protocol/verbs-agents-and-messages#agent-transcript). `cursor` is the cursor that a read to the end returns now. When you hold that cursor, there is nothing new. An event for a document or for a Pi session carries no `cursor`: read with the cursor of your last reply. The event carries nothing from the file. It fires at most once for each read the daemon makes, after the 150 ms debounce. Opt-in: only a subscription whose `types` names it receives it. Not replayed on a resume.                                                                                                                                                               | `session`, `window`, `cursor`                                                       |
+| `daemon-upgraded`        | A live upgrade replaced the daemon's image. Raised once, by the image that took the panes over. `title` is the build the panes came from, `body` the build that has them now. `state` is `upgraded`, `fallback` when the new binary could not take them and the previous one did, or `recovered` when the new image died before it was up and the handoff's keeper started the previous binary in its place, under a new daemon pid. No hook runs for it.                                                                                                                                                                                                                                                                                                                                                       | `title`, `body`, `state`                                                            |
+| `transfer`               | A copy the daemon runs (see [Files and transfers](/docs/control-protocol/verbs-other-verbs#files-and-transfers)) changed. `action` is `created`, `state`, `ended` or `removed`, and `transfer` is its row as `transfer-list` returns it. `removed` says a copy that ended left the list, by `transfer-clear` or 30 minutes after it ended, and carries its last row. A state is said once per change; a folder copy going between `running` and `verifying` for each file is not a change. A copy the daemon takes back from its journal at start says `state` once.                                                                                                                                                                                                                                            | `action`, `transfer`                                                                |
+| `transfer-progress`      | A copy's row while its bytes move, at most four a second per copy. Opt-in: only a subscription whose `types` names it receives it. Not replayed on a resume.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `action` (`progress`), `transfer`                                                   |
+| `transfer-file`          | One file of a copy ended. `action` and `file.state` are `done` (copied and checked), `same` (there already with the same bytes), `skipped` (there and different, left as it was), `conflict` (made there during the copy, left as it was) or `failed`. `file` has `id`, `pane`, `rel`, `state`, `sha256`, `code` and `error`. Opt-in: only a subscription whose `types` names it receives it. Not replayed on a resume.                                                                                                                                                                                                                                                                                                                                                                                         | `action`, `file`                                                                    |
+| `task-claimed`           | A pane took a task card. `task` is the card's row as `list-tasks` gives it, and `window` the pane that took it. See [Task verbs](/docs/control-protocol/verbs-agents-and-messages#task-verbs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `session`, `window`, `task`                                                         |
+| `task-finished`          | A task card was marked done. `window` is the pane that held it, empty when none did.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `session`, `window`, `task`                                                         |
+| `task-changed`           | A task card was `added`, `staged`, `blocked`, `unblocked`, `released`, `attached`, `detached` or `removed` (`action`). An attach or a detach carries the attachment's name in `reason`. A release tuios made on its own carries `reason`: `pane closed`, `agent left` or `restart`; a stage move it made on its own carries the fact (see [Task verbs](/docs/control-protocol/verbs-agents-and-messages#task-verbs)); a block carries its reason too. `removed` carries the card's last row.                                                                                                                                                                                                                                                                                                                    | `session`, `action`, `reason`, `task`                                               |
+| `task-dispatch`          | A board's dispatch mode or a switch changed, or dispatch stopped on its own (`action` `stopped`, `reason` such as `3 failures in a row` or `usage limit reported by claude-code`). `dispatch` is the whole status as `get-task-dispatch` gives it. It names no session.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `action`, `reason`, `dispatch`                                                      |
+| `keep-awake`             | The daemon took or dropped its hold that keeps the machine awake, the number of working agent panes changed while `keep_awake` is `agents`, or `keep_awake` changed. `mode` is `off`, `on` or `agents`, `state` is `held` or `released`, `working` counts the working agent panes on this machine, and `reason` says why the machine could not be held awake, when it could not. See [get-keep-awake](/docs/control-protocol/verbs-other-verbs#get-keep-awake). It names no session.                                                                                                                                                                                                                                                                                                                            | `mode`, `state`, `working`, `reason`                                                |
+| `tml-event`              | What a person did on a TML surface that its owner hears: an `emit` action in the document, or the close, which is the surface's last event. `tml` has `surface`, `name` (the emit's name, or `close`), `value` (absent when null), `reason` (on a close: `closed`, `program` or `dismissed`) and `version`. `window` is the TML window. Opt-in: only a subscription whose `types` names it receives it, and a `tml-open` with `events` gets the events of its own surface.                                                                                                                                                                                                                                                                                                                                      | `tml`                                                                               |
+| `tml-surface`            | A TML surface opened, changed or closed, for a client that draws it from verbs (guios), which gets no attach pushes. `tml_surface` has `surface`, `title`, `version`, `doc_version`, `ops` (the JSON Patch on the state that made `version` from `version` - 1, when a patch did and it is at most 64 KiB) and `closed`. A client that holds `version` - 1 applies `ops`; any other reads the surface with `tml-get`, which a changed `doc_version` also asks for. `window` is the TML window. Opt-in, and not kept for replay: a resume over one is marked with a `gap`                                                                                                                                                                                                                                        |                                                                                     |
+
+### What fires when [#what-fires-when]
+
+A mutation reaches the daemon's canonical state by one of two routes. Either the
+daemon mutates its own state (every headless mutation, and the ones it owns even
+with a client attached), or an attached TUI performs the mutation and syncs the
+result back. Both routes converge on the same state, and the window lifecycle
+events are derived from that convergence by diffing the state before and after
+it, so:
+
+- Every window lifecycle event fires **exactly once** per mutation, with the same
+  payload fields and the same relative ordering, whether or not a client is
+  attached. There is no separate "headless only" set of events.
+- Lifecycle events fire for mutations a **human drives from the TUI**, not just
+  for ones a control-plane verb requested. Creating a window with the keyboard
+  raises `window-created` exactly as `new-window` does.
+- The PTY-driven events (`output`, `bell`, `notification`, `mode-changed`, `window-exit`) hang
+  off the PTY rather than off window state, so they have always fired on both
+  routes and are unaffected.
+
+Ordering within a single mutation is stable: closes, then creates, then
+per-window changes (`window-retitled`, `window-moved`,
+`window-minimized`/`window-restored`), then `workspace-renamed`, then
+`session-labelled`, then `workspace-switched`, then `window-focused`. Focus comes last because it is usually a consequence of an
+earlier event in the same batch, so a consumer building a model from the stream
+already knows about the window being focused by the time it is told to focus it.
+
+Two cases are worth stating plainly because they are easy to guess wrong:
+
+- `window-retitled` fires for an **explicit rename** (the `set-window` verb or
+  the TUI's rename) and, separately, when the **shell changes its own title** via
+  an OSC escape sequence. The shell-driven case is reported by the PTY, not by
+  the state diff, so a shell retitling itself raises the event once, not twice.
+- A change that is not a lifecycle change raises nothing. Window geometry,
+  z-order, and alt-screen flags move constantly as a TUI renders and re-tiles;
+  none of them produce events, so an attached client does not flood the stream.
+
+Restoring a session (daemon cold start, or `tuios resurrect`) raises
+`session-created` followed by a `window-created` for each restored window, since
+from a subscriber's point of view those windows come into existence at that
+moment. A plain subscribe carries what happens from the subscription onward,
+and the ack's `seq` is the baseline. Use `list-windows` to establish initial
+state, then follow the stream. A subscriber that reconnects can ask for what it
+missed with `after_seq` (see "Resuming a stream" below).
+
+### subscribe [#subscribe]
+
+Open the event stream on this connection.
+
+Params:
+
+- `session` (optional): only events from this session. Omit it for events from
+  every session. This is unlike most verbs, where an omitted session means the
+  most recently active one.
+- `window` (optional): only events about this window id. The filter compares
+  window ids, so a window name matches nothing.
+- `types` (optional): event types to include; empty means all.
+- `queue` (optional): per-connection queue size; defaults to 256. A size above 4096 is lowered to 4096.
+- `after_seq` (optional): resume. Replay the retained events with a higher
+  `seq` before streaming live. `0` replays everything the daemon still holds.
+- `boot_id` (optional, needs `after_seq`): the boot id `after_seq` came with.
+- `hosts` (optional): also deliver the `agent-state`, `session-created` and
+  `session-closed` events this daemon relays from its linked hosts, each with
+  `host` set, and let `session` and `window` match events of other machines.
+  Without it, an event about another machine reaches only a subscriber that
+  names no session, window or pane, and only an `attention` or `host-changed`
+  event. See [Following linked hosts](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#following-linked-hosts).
+
+Request:
+
+```json
+{"id": 1, "verb": "subscribe", "params": {"session": "work", "types": ["output", "bell"]}}
+```
+
+Ack response (the stream begins after this line):
+
+```json
+{"id": 1, "result": {"type": "subscribed", "seq": 42, "boot_id": "9f2c41d07a3e8b65"}}
+```
+
+Subsequent lines are events, for example:
+
+```json
+{"seq": 43, "type": "output", "session": "work", "window": "1f3c...", "pty_id": "9ab2...", "bytes": 64, "boot_id": "9f2c41d07a3e8b65", "time": 1737200000000000000}
+```
+
+A second `subscribe` on the same connection is rejected with `invalid_request`.
+
+### Resuming a stream [#resuming-a-stream]
+
+The daemon keeps the last 4096 events in a replay ring, apart from `output`
+events, which fire on every PTY read and would push everything else out within
+seconds, and `agent-activity` and `transcript` events, which fire on every
+tool call of every agent. A subscriber that kept the `seq` of the last event it read, and the
+`boot_id` that came with it, can reconnect and pass both:
+
+```json
+{"id": 1, "verb": "subscribe", "params": {"types": ["agent-state"], "after_seq": 118, "boot_id": "9f2c41d07a3e8b65"}}
+```
+
+The ack then carries `replayed`, the number of events that follow before the
+live stream:
+
+```json
+{"id": 1, "result": {"type": "subscribed", "seq": 131, "boot_id": "9f2c41d07a3e8b65", "replayed": 3}}
+```
+
+Every replayed event has a `seq` above `after_seq` and at or below the ack's
+`seq`, and every live event has a higher one, so no event is delivered twice.
+The replay honours the same `session`, `window` and `types` filter as the live
+stream.
+
+When the replay cannot be everything the caller missed, a gap marker comes
+first. Read current state again after a gap (`list-agents`, `list-windows`)
+rather than assuming you saw every change:
+
+| `reason`       | Meaning                                                                                                                                                      | What follows                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `evicted`      | Events after `after_seq` have already left the ring.                                                                                                         | The events the ring still holds, then live.                                                             |
+| `boot_changed` | `boot_id` names another daemon start, or no `boot_id` was passed and `after_seq` is above anything this daemon has assigned. The numbers are not comparable. | Live events only.                                                                                       |
+| `not_retained` | The filter admits `output` events, or names `agent-activity`, and at least one such event was published after `after_seq`. Neither is ever replayed.         | The retained events, then live. Leave `output` and `agent-activity` out of `types` for an exact replay. |
+
+Passing this daemon's own `boot_id` with an `after_seq` it has not reached yet
+is refused with `invalid_params`, and so is `boot_id` without `after_seq`.
+
+### Slow subscriber policy [#slow-subscriber-policy]
+
+Each subscribed connection has a bounded queue. When it is full the daemon drops
+the event and counts the drop rather than blocking; the next event delivered to
+that connection is preceded by a gap marker:
+
+```json
+{"type": "gap", "dropped": 12, "reason": "overflow", "boot_id": "9f2c41d07a3e8b65"}
+```
+
+so the connection learns it fell behind (the `seq` values also jump). One slow
+reader never stalls the daemon or any other subscriber. A client that reconnects
+after an overflow can resume from the last `seq` it read and get the dropped
+events back from the ring, as long as they were not `output` events and have
+not been evicted.
+
+### unsubscribe [#unsubscribe]
+
+Close this connection's event stream. Params: none.
+
+```json
+{"verb": "unsubscribe"}
+```
+
+Response: `{"result": {"type": "unsubscribed"}}`. Closing the connection also
+tears the stream down.
+
+### wait-for [#wait-for]
+
+Block until a condition matches, then return a `wait_result`; return a `timeout`
+error if the condition does not match in time. This is sugar over a short-lived
+subscription and replaces a caller's capture-pane poll loop.
+
+Params: `condition` (required), `session`, `window`, `pattern` (regex, for
+`window-output`), `source` (`visible` or the default recent/scrollback content,
+for `window-output`), `idle` (quiet-period milliseconds, for `window-idle`;
+default 500), `until` (agent state names, comma-separated, for `agent-state`),
+`thread` (any message id in a thread, to narrow `agent-message` to that
+thread), `any_session` (bool, for `agent-state` only: watch every session and
+take no `session` or `window`), `command_seq` (for `command-finished` with a
+`window`), `select` (a selector, for `agent-state` only:
+watch the agent panes it matches in every session, including panes that open
+during the wait; takes no `session`, `window` or `any_session`), `every` (bool,
+with `select`: match only when at least one pane matches and all of them are in
+an `until` state, and answer with them in `panes`), `timeout` (milliseconds;
+default 30000, at most 86400000, which is 24 hours).
+
+A wait ends when its caller closes the connection. It does not wait for its
+timeout then.
+
+Conditions:
+
+- `window-output` matches `pattern` against the target window's captured
+  content. Checked once immediately, then re-checked as the window produces
+  output.
+- `window-exit` resolves when the target window's shell process exits. The
+  result carries `exit_code` (-1 when a signal stopped the process) and
+  `signal` when a signal stopped it. Both are omitted when the status is not
+  known, such as for a window on another machine. An older client ignores
+  them.
+- `window-idle` resolves after the target window produces no output for `idle`
+  milliseconds.
+- `session-exists` resolves when a session named `session` exists.
+- `agent-state` resolves when a window's agent state becomes one of the states
+  named in `until` (checked once immediately, so a pane already in the state
+  resolves at once). With `window` it watches that pane and fails with
+  `window_not_found` if the pane closes mid-wait; without `window` any window
+  in the session matches, which is the "tell me when any agent here needs
+  input" shape. With `any_session` any window in any session matches,
+  including sessions created during the wait; passing `session` or `window`
+  with it, or using it with another condition, is `invalid_params`. The result
+  names the `session`, the `window` and the `state` that matched.
+- `agent-message` resolves when a message arrives. With `window` it watches
+  that inbox, matches the first unread message already there, and fails with
+  `window_not_found` if the inbox's window closes mid-wait. Without `window` it
+  matches any message left in the session after the wait began. `thread`
+  narrows either form to one thread. The result names the message (`message_id`,
+  `kind`, `from`, `subject`) and never carries its body: read it with
+  `read-agent-messages`.
+- `command-finished` resolves when a shell that marks its commands with OSC
+  133 finishes one. With `window` it watches that pane: the next command to
+  finish after the wait starts, or with `command_seq` N the first once the
+  pane has finished more than N, which matches at once when that already
+  happened. Read N from `list-windows` before starting the command and the
+  wait cannot miss it. It fails with `pty_not_found` if the pane's shell
+  exits. Without `window` any pane in the session matches, and `command_seq`
+  is `invalid_params`. The result carries `window`, `cmdline`, `exit_code`
+  (omitted when the shell sent none), `duration_ms` and `command_seq`.
+
+Request:
+
+```json
+{"id": 1, "verb": "wait-for", "params": {"condition": "window-output", "session": "work", "pattern": "build succeeded", "timeout": 60000}}
+```
+
+Response on match:
+
+```json
+{"id": 1, "result": {"type": "wait_result", "condition": "window-output", "matched": true, "window": "", "pattern": "build succeeded"}}
+```
+
+Response on timeout:
+
+```json
+{"id": 1, "error": {"code": "timeout", "message": "timed out waiting for output matching build succeeded"}}
+```

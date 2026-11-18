@@ -1,0 +1,307 @@
+---
+title: "Verbs: Sessions"
+description: "Verbs: Sessions: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## list-sessions [#list-sessions]
+
+List all sessions the daemon holds. No params.
+
+Request:
+
+```json
+{"verb": "list-sessions"}
+```
+
+Response:
+
+```json
+{"result": {"type": "session_list", "sessions": [
+  {"name": "work", "id": "5f...", "window_count": 3, "attached": true, "width": 120, "height": 40}
+]}}
+```
+
+A session filed under a space also carries `space`. See [set-session-space](#set-session-space).
+
+## list-clients [#list-clients]
+
+List every connection to the daemon. No params. Each row carries the daemon's
+client id, the peer pid recorded by the kernel, and the current session name.
+The session is empty while the connection is detached. The pid is zero on
+Windows and the BSDs. For SSH and web clients it names the local server process,
+not the remote SSH process or browser.
+
+Request:
+
+```json
+{"verb": "list-clients"}
+```
+
+Response:
+
+```json
+{"result": {"type": "client_list", "clients": [
+  {"client_id": "client-1790941960197517900", "pid": 4242, "session": "work"}
+]}}
+```
+
+`client-session-changed` carries the session a client entered or left and sets
+`attached` to `true` or `false`. A session rename sends one with the new name
+and `attached: true` for each client in the session.
+
+## switch-session [#switch-session]
+
+Switch an attached client to a different session, in place, as the session
+switcher does.
+
+Params: `name` (required), `host`, `create`, `cwd`, `session`, `client`.
+
+- `name` is the session to show. `host` is a machine from the client's
+  `[hosts]` table. Omit it, or pass `local`, for this daemon.
+- `create` makes the session when it is missing. On this daemon it is made as
+  `new-session` makes one, with `cwd` as its directory. On a host, the client
+  makes it there and opens its first window. `cwd` needs `create`.
+- The client to switch is the one `client` names, else the one that shows
+  `session`, else the one that shows the caller's session when the caller
+  runs in a pane, else the only TUI client attached. With more than one
+  attached and nothing to choose by, the call fails with `invalid_params`.
+
+Request:
+
+```json
+{"verb": "switch-session", "params": {"name": "api", "create": true, "cwd": "/src/api", "session": "work"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "session_switched", "session": "api", "client_id": "client-1790941960197517900", "created": true}}
+```
+
+On this daemon the answer comes when the client shows the session. A missing
+session without `create` fails with `session_not_found`. No client to switch
+fails with `needs_client`. `already: true` says the client showed the session
+already. A pane needs the `admin` grant. Over a link the verb needs `write`.
+
+## detach-client [#detach-client]
+
+Detach attached clients from their sessions, as tmux `detach-client` does.
+The sessions continue to run.
+
+Params: `client`, `session`, `all_other`.
+
+- `client` names one client from `list-clients`. `session` names a session,
+  and every client of it detaches. Give one of the two, or neither.
+- With neither, the verb acts on the client used last in the caller's
+  pane's session, else in the only session with a client.
+- `all_other` keeps the named client, or the client used last, and detaches
+  every other client of its session.
+
+Each detached client gets `MsgSessionEnded` with `detached` set and a
+`reason`, and exits with status 0. An attach with `detach_others` set
+(`tuios attach -d`), or any attach while `[daemon] single_client` is on,
+detaches the other clients of the session in the same way.
+
+Request:
+
+```json
+{"verb": "detach-client", "params": {"session": "work", "all_other": true}}
+```
+
+Response:
+
+```json
+{"result": {"type": "clients_detached", "detached": ["client-1790941960197517900"]}}
+```
+
+An unknown `client` fails with `invalid_params`. A pane needs the `admin`
+grant. Over a link the verb needs `write`.
+
+## ssh-agent-path [#ssh-agent-path]
+
+Report the ssh agent link of a session. With `[daemon] ssh_agent = "follow"`,
+the link points at the agent socket of the client that attached to the
+session or used it last, and new panes get `SSH_AUTH_SOCK` set to it.
+
+Params: `session` (required).
+
+The client sends its socket as `ssh_auth_sock` in its hello. Only `tuios
+attach` and `tuios new` send it. The daemon follows it only for a client that
+may act as the person. The path is resolved once with its symbolic links,
+and the result must be a Unix socket that the user owns. Every folder above it
+must be owned by the user or by root, and no other user may write to it unless
+it is sticky. The link points at the resolved path. When the client leaves,
+the link moves to the client before it. With none left, it points at the
+daemon's own `SSH_AUTH_SOCK` when that passes the same checks, or is removed.
+The daemon removes its links at start, at stop and when the option is off.
+
+Request:
+
+```json
+{"verb": "ssh-agent-path", "params": {"session": "work"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "ssh_agent_path", "session": "work", "path": "/run/user/1000/tuios/agent-3f2a9c1d.sock", "follow": true, "target": "/tmp/ssh-XXXXabc/agent.4242"}}
+```
+
+`target` is absent when there is no link. The verb reads one session: a pane
+needs `read` and the session in reach. Over a link it needs `list`.
+
+The hub side: `open-host-connection` takes `ssh_auth_sock`, the caller's
+socket, because the caller's hello goes to the host and not to this daemon.
+While `ssh_agent` is `"follow"`, this daemon keeps one link for each host
+whose link forwards the agent, `agent-link-<host>-<hash>.sock`. It points at the
+socket of the client that opened a connection to that host, or sent input
+through one, last. Input is the keys, pastes and mouse events a client sends. A state push or a pane resize that a client sends on its own is not input. Input counts at most once a second. The link ssh to such a
+host starts with `SSH_AUTH_SOCK` naming that host's link. The link ssh to any
+other host starts with the daemon's environment, unchanged. A daemon too old to know `ssh_auth_sock` refuses it with
+`invalid_params`, and the client asks again without it.
+
+## display-env [#display-env]
+
+Report the display a new pane of a session gets now. With `[daemon] display =
+"follow"`, the default, a daemon with no `WAYLAND_DISPLAY` or `DISPLAY` of its
+own gives new panes the display of the local client that attached to the
+session or used it last.
+
+Params: `session` (required).
+
+The client sends `display` in its hello: `wayland_display`,
+`xdg_runtime_dir`, `display` and `xauthority`, each as the client has it.
+Only `tuios attach` and `tuios new` send it, and never through a host. A
+daemon that predates the field ignores it. The daemon follows a client only
+when the client is on its own socket, not over a link, has the daemon's uid
+by peer credentials, and may act as the person. A `wayland_display` name is
+looked up in the client's `xdg_runtime_dir`, then the daemon's, then
+`/run/user/<uid>`. The resolved path must be a Unix socket the user owns,
+with every folder above it owned by the user or root and not writable by
+another user unless sticky. `display` must be `:N` or `:N.S`, with a socket
+in `/tmp/.X11-unix` owned by the user or root. `xauthority` must be a file the
+user owns. The session's link, `wayland-<session id>.sock` beside the daemon
+socket, points at the newest client's Wayland socket. When the client leaves,
+the session uses the client before it, and with none left the link is
+removed.
+
+Request:
+
+```json
+{"verb": "display-env", "params": {"session": "work"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "display_env", "session": "work", "follow": true, "own": false, "link": "/tmp/tuios-1000/wayland-3f2a9c1d.sock", "target": "/run/user/1000/wayland-1", "env": {"WAYLAND_DISPLAY": "/tmp/tuios-1000/wayland-3f2a9c1d.sock", "DISPLAY": ":1"}}}
+```
+
+`target` is absent when there is no link, and `env` is empty when the session
+has no display to give. The verb reads one session: a pane needs `read` and
+the session in reach. Over a link it needs `list`.
+
+## session-info [#session-info]
+
+Report details about one session.
+
+Params: `session` (optional).
+
+Request:
+
+```json
+{"verb": "session-info", "params": {"session": "work"}}
+```
+
+Response:
+
+```json
+{"result": {
+  "type": "session_info",
+  "session_name": "work",
+  "session_id": "5f...",
+  "current_workspace": 1,
+  "num_workspaces": 9,
+  "window_count": 3,
+  "tiling_mode": "tiling",
+  "layout_mode": "bsp",
+  "width": 120,
+  "height": 40,
+  "tui_attached": true,
+  "host_focus": "focused",
+  "window_size": "latest",
+  "session_width": 120,
+  "session_height": 40
+}}
+```
+
+`window_size` is the size policy in use for the session: `smallest`,
+`largest` or `latest` (see [SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#session-size-with-more-than-one-client)).
+It is `smallest` while a client from before the option is attached, whatever
+the session is set to. `session_width` and `session_height` are the size the
+daemon gave the session under that policy. `width` and `height` are the size
+the last client sent with its state. A daemon that predates the option omits
+all three.
+
+`host_focus` is whether the person can be looking at the session. Each TUI
+client asks its terminal for focus events (DECSET 1004) and reports every
+change to the daemon. It is `focused` when any attached client's terminal has
+focus, `unfocused` when every attached client's terminal reported losing it,
+and `unknown` when no client is attached or a terminal never reports focus. A
+daemon that predates the field omits it.
+
+`tiling_mode` says only whether tiling is on (`tiling` or `floating`) and keeps
+doing so, because callers already dispatch on those two values. `layout_mode`
+says which tiling layout is in use (`bsp`, `master-stack`, `scrolling`, or
+`unknown` when no client has reported one yet).
+
+## kill-session [#kill-session]
+
+Terminate a session and everything in it.
+
+Params: `session` (required).
+
+Request:
+
+```json
+{"verb": "kill-session", "params": {"session": "work"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "ok"}}
+```
+
+## set-session-space [#set-session-space]
+
+File a session under a space, a named group of related sessions, or take it out of any. A space is only a label on its sessions: it has no record of its own, exists while at least one session is in it, and is saved and restored with each session. `list-sessions` carries `space` on every session that is in one.
+
+Params: `session` (the most recently active when omitted), `space`, `global`. An empty or omitted `space` takes the session out of any space.
+
+`global` sets or clears the session's global mark. `true` marks the session global and takes it out of its space. With a `space` as well, it is refused with `invalid_params`. `false` takes the mark off before the space is set, so one call can move a global session into a space. An omitted `global` leaves the mark as it is.
+
+```json
+{"verb": "set-session-space", "params": {"session": "work", "global": true}}
+```
+
+Request:
+
+```json
+{"verb": "set-session-space", "params": {"session": "work", "space": "payments"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "session_space_set", "session": "work", "space": "payments", "global": false}}
+```
+
+Surrounding whitespace is trimmed first. A space name then follows the session name rules and is at most 64 bytes. Any other is refused with `invalid_params` on `space`. A global session cannot be in a space, so filing one without `global: false` is refused with `invalid_params` (`a global session cannot be in a space`) and nothing changes. `new-session` takes the same `space` param, refused the same way, and files the session as it is made, so it never exists in no space. Its result echoes `space`. Only these two verbs write a session's space: a client's state sync never moves it. A pane needs the `admin` grant, and over a link the verb needs `write`.

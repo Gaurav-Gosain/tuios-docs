@@ -1,0 +1,161 @@
+---
+title: "Workspaces and layout"
+description: "Workspaces and layout: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `layout-template` <Since verb="layout-template" /> [#layout-template]
+
+Save the workspace a session shows as a layout template, load one back, list them, or delete one. Templates are files of this machine (\~/.config/tuios/layouts), so every client reads one list. A load reuses the workspace's panes in order, opens the ones it lacks with their folder and name and types their command, minimizes the ones it does not name, and gives a bsp layout its split tree back. Works with no client attached.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `action`  | string | yes      |         | What to do. One of `list`, `save`, `load` or `delete`.                                                                   |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `name`    | string |          |         | The layout. Needed to save, load and delete.                                                                             |
+
+| Result field | Type      | Description                                                               |
+| ------------ | --------- | ------------------------------------------------------------------------- |
+| `layouts`    | \[]object | list: each layout's name, panes, mode, tiling, created\_at and version.   |
+| `dir`        | string    | list: the folder the layouts are kept in.                                 |
+| `name`       | string    | The layout saved, loaded or deleted.                                      |
+| `panes`      | int       | save and load: how many panes the layout holds, or shows.                 |
+| `mode`       | string    | save and load: the layout mode, bsp, master-stack, scrolling or floating. |
+| `workspace`  | int       | save and load: the workspace.                                             |
+| `path`       | string    | save: the file written.                                                   |
+| `focus`      | string    | load: the pane that has the focus after the load, a pane of the layout.   |
+| `opened`     | int       | load: panes opened for the layout.                                        |
+| `reused`     | int       | load: panes of the workspace that took a place.                           |
+| `minimized`  | int       | load: panes of the workspace the layout does not name, minimized.         |
+| `deleted`    | bool      | delete: the layout was removed.                                           |
+
+```json
+{"id":1,"verb":"layout-template","params":{"action":"save","session":"work","name":"three-up"}}
+```
+
+```json
+{"id":2,"verb":"layout-template","params":{"action":"load","session":"work","name":"three-up"}}
+```
+
+```json
+{"id":3,"verb":"layout-template","params":{"action":"list"}}
+```
+
+## `list-workspaces` <Since verb="list-workspaces" /> [#list-workspaces]
+
+List every workspace with its name, how many windows it holds, and which one is showing.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+
+| Result field        | Type      | Description                                                                                                                                       |
+| ------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspaces`        | \[]object | One row per workspace: workspace, name, window\_count, focused\_window\_id, current, and focus\_history, the windows focused there, newest first. |
+| `current_workspace` | int       | Workspace showing.                                                                                                                                |
+| `order`             | \[]int    | Display order, empty when the workspaces are in their plain ascending order.                                                                      |
+
+```json
+{"id":1,"verb":"list-workspaces","params":{"session":"work"}}
+```
+
+## `run-command` <Since verb="run-command" /> [#run-command]
+
+Run one tape command, or any keybinding action by the name config.toml binds it to. Prefer a verb where one exists: a verb reports what changed, this reports only that the command ran.
+
+| Param     | Type      | Required | Default | Description                                                                                                                                                                                          |
+| --------- | --------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                             |
+| `command` | string    |          |         | Tape command name, e.g. "ToggleZoom" or "SnapLeft", or a keybinding action name, e.g. "toggle\_spotlight" (tuios keybinds list prints them). An action runs on an attached client and takes no args. |
+| `args`    | \[]string |          |         | Arguments for the command.                                                                                                                                                                           |
+
+| Result field | Type   | Description                                                     |
+| ------------ | ------ | --------------------------------------------------------------- |
+| `command`    | string | The command that ran.                                           |
+| `routed`     | bool   | True when an attached client ran it, false when the daemon did. |
+
+```json
+{"id":1,"verb":"run-command","params":{"session":"work","command":"ToggleZoom"}}
+```
+
+## `select-workspace` <Since verb="select-workspace" /> [#select-workspace]
+
+Show a workspace. To rename or reorder workspaces, use set-workspace-name and set-workspace-order.
+
+| Param       | Type   | Required | Default | Description                                                                                                                     |
+| ----------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `session`   | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.        |
+| `workspace` | int    | yes      |         | Workspace number to show.                                                                                                       |
+| `return_to` | int    |          | `0`     | Workspace to show when this workspace loses its last pane, before any other. tuios xpanes sets it to the workspace that ran it. |
+
+| Result field        | Type   | Description                                     |
+| ------------------- | ------ | ----------------------------------------------- |
+| `current_workspace` | int    | Workspace now showing.                          |
+| `focused_window_id` | string | Window focused on it, empty when it holds none. |
+| `window_count`      | int    | How many windows it holds.                      |
+
+```json
+{"id":1,"verb":"select-workspace","params":{"session":"work","workspace":2}}
+```
+
+## `set-layout` <Since verb="set-layout" /> [#set-layout]
+
+Turn tiling on or off, tidy the splits, and shape the master-stack layout. Needs an attached client.
+
+| Param             | Type   | Required | Default | Description                                                                                                              |
+| ----------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`         | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `tiling`          | bool   |          |         | Tile the panes automatically, or let them float.                                                                         |
+| `equalize`        | bool   |          | `false` | Reset every split ratio so the panes share the space evenly.                                                             |
+| `rotate`          | bool   |          | `false` | Flip the axis of the split holding the focused pane.                                                                     |
+| `master_position` | string |          |         | Side the master panes take on the current workspace: left, right, top, bottom or center.                                 |
+| `master_count`    | int    |          |         | How many panes are master panes on the current workspace, 1 to 9.                                                        |
+
+| Result field      | Type   | Description                                                                                                               |
+| ----------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `tiling_mode`     | string | "tiling" or "floating".                                                                                                   |
+| `layout_mode`     | string | Which tiling layout is in effect: bsp, master-stack, scrolling, or "unknown" on a session no client has reported one for. |
+| `master_ratio`    | float  | Fraction of the screen the master pane takes.                                                                             |
+| `master_position` | string | Side the master panes take on the current workspace, or "default" when the workspace uses the client's configured side.   |
+| `master_count`    | int    | How many panes are master panes on the current workspace, or 0 when the workspace uses the client's configured count.     |
+
+```json
+{"id":1,"verb":"set-layout","params":{"session":"work","tiling":true,"equalize":true}}
+```
+
+```json
+{"id":2,"verb":"set-layout","params":{"session":"work","master_position":"center","master_count":1}}
+```
+
+## `set-workspace-name` <Since verb="set-workspace-name" /> [#set-workspace-name]
+
+Name a workspace. The workspace keeps its number for addressing. An unnamed workspace shows the name its active pane gave with OSC 1, else its number.
+
+| Param       | Type   | Required | Default | Description                                                                                                              |
+| ----------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`   | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `workspace` | int    | yes      |         | Workspace number to name.                                                                                                |
+| `name`      | string |          |         | Label for the workspace. Omit or pass an empty string to clear it and fall back to the number.                           |
+
+```json
+{"id":1,"verb":"set-workspace-name","params":{"session":"work","workspace":2,"name":"review"}}
+```
+
+## `set-workspace-order` <Since verb="set-workspace-order" /> [#set-workspace-order]
+
+Put the workspaces in an order, renumbering them: a workspace's number is its position. Each workspace takes its panes, name, focus and layout to its new number.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                 |
+| --------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                    |
+| `order`   | \[]int | yes      |         | Workspace numbers in their new order. The workspaces named take the numbers they hold between them, smallest first, in this order: \[3,1,2] makes 3 workspace 1, 1 workspace 2 and 2 workspace 3. A workspace the list omits keeps its number. Numbers outside the session's range and repeats are dropped. |
+
+```json
+{"id":1,"verb":"set-workspace-order","params":{"session":"work","order":[3,1,2]}}
+```

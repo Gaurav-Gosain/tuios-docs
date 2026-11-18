@@ -1,0 +1,601 @@
+---
+title: "Verbs: Files and worktrees"
+description: "Verbs: Files and worktrees: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## new-worktree [#new-worktree]
+
+Create a git worktree of a repository and a session in it. The worktree goes
+where the daemon's `[worktree] path` template puts it (see
+[Where worktrees go](/docs/configuration#where-worktrees-go)), by default under
+`$XDG_DATA_HOME/tuios/worktrees/<repo>/<branch>`, and the session is
+named `<repo>-<branch>` with every slash in the branch turned into a hyphen. A
+branch that does not exist is created from `base`, or from HEAD. A template
+that does not render is refused with `internal`, and nothing is created.
+
+Params: `repo` (a directory inside the repository, required unless
+`repo_url` is passed), `branch` (required), `base`, `name`, `command` (argv
+for the first window instead of a shell), `repo_url`, `repos_root`, `clone`.
+
+`repo_url` names the repository by its origin URL, for a caller on another
+machine where a path means nothing. The daemon finds its own checkout whose
+origin is the same repository, after folding the spellings git accepts for one
+remote (`https://github.com/o/r`, `git@github.com:o/r.git` and
+`ssh://git@github.com/o/r` are one repository). It looks under `repos_root`
+(absolute, or `~/` for the daemon's home) three levels deep, or when that is
+omitted under `~/src`, `~/dev`, `~/code`, `~/projects`, `~/repos`, `~/git`,
+`~/work`, `~/go/src`, the home itself one level deep, and
+`$XDG_DATA_HOME/tuios/repos`. Two checkouts of one origin are refused with
+`invalid_params`, the hint listing both, and none is `repo_not_found`. With
+`clone`, none is cloned into `repos_root` or `$XDG_DATA_HOME/tuios/repos`. A
+clone fetches only `https`, `ssh` and `git` URLs, or `user@host:path`: a local
+path, a `file` URL, a transport helper such as `ext::` or anything starting
+with a hyphen is refused before git runs, and git runs with
+`GIT_ALLOW_PROTOCOL=https:ssh:git`, no terminal prompt and ssh in batch mode.
+The result carries `cloned: true`.
+
+Request:
+
+```json
+{"verb": "new-worktree", "params": {"repo": "/src/api", "branch": "feat/retry", "base": "main", "command": ["claude"]}}
+{"verb": "new-worktree", "params": {"repo_url": "git@github.com:acme/api.git", "repos_root": "~/src", "branch": "feat/retry"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "worktree_created", "session": "api-feat-retry", "repo": "api", "repo_root": "/src/api",
+ "branch": "feat/retry", "created_branch": true, "path": "/home/u/.local/share/tuios/worktrees/api/feat-retry",
+ "window_id": "...", "pty_id": "..."}}
+```
+
+When the worktree is inside the repository and git does not ignore it, the
+result carries `warning`, a sentence that names the folder to ignore. The
+worktree and session are made all the same.
+
+An `after-new-worktree` hook runs in the worktree before the first window
+starts, and the verb waits for it (60 seconds at most). When it fails, the
+worktree, the session and the first window are kept, and the result carries
+`hook_error`: the exit code and the last lines of the hook's stderr. `fan`
+puts the same field on each session it lists. See [HOOKS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/HOOKS.md).
+
+A session whose first window starts inside a worktree made by hand is recorded
+the same way, by reading the directory. `list-sessions` carries the record as
+`worktree` on the session, and it is what the rail groups by.
+
+## list-worktrees [#list-worktrees]
+
+List the sessions whose directory is a git worktree. A session in the
+repository's main checkout reads as a row with `main` true. No worktree verb
+acts on such a row.
+
+Params: `repo` (filter by repository name), `group` (filter by fan-out stem),
+`changes` (run git in each and report `changes`, `ahead`, `merged` and
+`merged_into`; off by default).
+
+Request:
+
+```json
+{"verb": "list-worktrees", "params": {"changes": true}}
+```
+
+Response:
+
+```json
+{"result": {"type": "worktree_list", "total": 1, "worktrees": [
+  {"session": "api-feat-retry", "repo": "api", "repo_root": "/src/api", "branch": "feat/retry",
+   "path": "/home/u/.local/share/tuios/worktrees/api/feat-retry", "base": "main", "group": "",
+   "managed": true, "gone": false, "main": false, "state": "working", "harness": "claude-code", "windows": 1,
+   "attached": false, "prompt_status": "", "prompt_note": "", "changes": 3, "ahead": 1,
+   "merged": false}]}}
+```
+
+`merged` is true when the branch has changes of its own and its base already
+holds them. A merge commit, a fast-forward, a rebase and a squash all count.
+The daemon checks `base`, then the upstream of `base` when it has one, as git
+last fetched it. It never fetches. `merged_into` names the ref, and is present
+only when `merged` is true. With no `base`, the daemon checks the branch the
+main checkout has checked out.
+
+When the base does not hold the branch tip, the branch must change something
+against its merge base with the base. A commit and its revert change nothing,
+so they are not merged. Then `git merge-tree --write-tree` must give the tree
+of the base itself. It runs with a temporary object directory, so the
+repository gains no objects.
+
+When the base holds the branch tip, the branch's reflog decides. The branch is
+merged when an entry made a commit that the tip holds and `start_commit` does
+not. A branch that only fast-forwarded to commits of its base is not merged. A
+branch with no reflog is not merged. The answer is cached per branch tip and
+base tip.
+
+`gone` is true when the worktree directory no longer exists. The session is
+kept, so what its agent printed can still be read. `state` is the agent state
+rolled up over the session's windows.
+
+## remove-worktree [#remove-worktree]
+
+Remove a worktree session's worktree with `git worktree remove`, and kill the
+session. Uncommitted changes are refused with `worktree_dirty` unless `stash`
+moves them into the repository's stash as `tuios: <branch>` or `force` discards
+them. `force` is the only option that discards work. The branch is never
+deleted, and the daemon never runs `git worktree prune`.
+
+Params: `session` (required), `stash`, `force`, `keep_session`.
+
+Request:
+
+```json
+{"verb": "remove-worktree", "params": {"session": "api-feat-retry", "stash": true}}
+```
+
+Response:
+
+```json
+{"result": {"type": "worktree_removed", "session": "api-feat-retry", "branch": "feat/retry",
+ "path": "/home/u/.local/share/tuios/worktrees/api/feat-retry", "repo": "api", "changes": 3,
+ "stashed": true, "stash_message": "tuios: feat/retry", "discarded": false, "session_killed": true, "branch_kept": true}}
+```
+
+## fan [#fan]
+
+Fan one prompt out across several agents. Creates `count` worktrees and
+sessions, starts the agent in each, and types the prompt into each agent once
+it is ready to read: `idle` or `done`. An agent in `needs_input` is left for
+the person to answer, and the prompt is typed after. `unknown` is not ready for
+a harness whose manifest has an idle rule, which reaches `idle` from its prompt
+box or title (see Changes to existing verbs); if it never does, the prompt is
+left `not_sent` when the wait ends, and `prompt_note` says to send it with
+`send-text`. The prompt goes in as one paste and is submitted with the
+harness's submit key, a carriage return for every bundled harness (see Changes
+to existing verbs). The agent then has five seconds to
+show it took the prompt, the same check `ask-agent` makes. The verb returns as
+soon as the sessions exist. `list-worktrees` reports `prompt_status` per
+session: `pending`, `held`, `sent`, `not_sent` with a `prompt_note`, or
+`stalled` with a `prompt_note` when the prompt was typed and the agent showed
+no sign of taking it. A stalled prompt may still be in the agent's input box.
+`held` is a prompt whose agent has not been ready for 30 seconds and is not on
+`needs_input`: the Inbox holds a `question` for its pane saying it waits at a
+screen tuios does not recognise, and the prompt is typed as soon as the agent
+is ready. The question closes when the prompt is typed or given up on, or when
+the pane's state changes. Once the prompt is typed, `prompt_ready_by` says on
+what: `idle`, `done`, or `quiet` for `unknown` on a harness that cannot show
+idle. The harness the daemon started counts from the start, before detection
+has named the pane's harness.
+
+A fan's sessions reach each other, so joining one is never implicit. A
+`name` that is already a fan in the repository, or is being made by another
+call at that moment, is `fan_exists` for every caller, the person included,
+and nothing is made. To add attempts to a fan on purpose, pass `join` with a
+session of that fan (`name` may then be omitted): the caller must reach that
+session, which the person, a pane with `admin`, the fan's own panes and the
+pane that started it do. Without `name`, the name fan makes from the prompt
+moves on to a free one (`-2`, `-3`). A name can have only the letters A to Z
+and a to z, the digits 0 to 9, and `/ . _ -`. Any other character is refused,
+and the error names it. A refusal lists the fan's sessions only to a caller
+that reaches them.
+
+Each new fan gets a random `fan_id`. Its sessions save it, and a `join` copies
+it. A fan's sessions are the ones with the same `group`, repository and
+`fan_id`, so reach, `compare-fan`, `keep-fan` and `review-diff --against` go
+by it. A fan made under a name while a fan of that name was saved and not
+running, which `disable_auto_restore` allows, stays a fan of its own when
+the saved one comes back, in any order and across restarts. Two records
+from before the field have no `fan_id` and match by name. `list-worktrees`
+rows, the `fan` reply and `compare-fan` carry `fan_id`.
+
+An agent is one string, the way a person types it: a harness id or program
+name, or any program, with its arguments after it (`"codex --model o5"`). It
+is split into words the way a POSIX shell splits them, single and double
+quotes and backslashes included, and exec'd directly; nothing is expanded or
+substituted, and no shell runs. A path must be absolute. A program no manifest
+recognises is ready only once it reports a state of its own.
+
+Params: `count` (1 to 16; required unless `prompts` sets it), `agent` (one
+agent for every session) or `agents` (a list, cycled across the sessions;
+one of the two is required), `prompt` (one for every session) or `prompts`
+(one per session, in order; `count` must equal its length when given), `repo`
+(required unless `repo_url` is passed), `base`, `name` (branch stem),
+`ready_timeout` (milliseconds, default 600000), `env` (an object of variable
+names to values, on top of the daemon's environment; `PATH` in it is where the
+programs are looked up), and `repo_url`, `repos_root` and `clone` as for
+`new-worktree`. The result names the checkout used as `repo_root`.
+
+`env` rules: at most 64 variables, a value at most 32 KiB and all of them at
+most 256 KiB; a name is `[A-Za-z_][A-Za-z0-9_]*`; `TUIOS_` names, `TMUX` and
+`TMUX_PANE` are refused with `invalid_params`, since tuios sets the first for
+every pane and strips the others on purpose; a call from another machine (over
+a link, or from a hosted pane) that passes `env` is refused with `forbidden`,
+because its variables describe that machine. The variables go to the process
+only: they are not logged, not saved, and a pane a restore brings back starts
+with the daemon's environment. The `TUIOS_` variables and `TERM` are set after
+them, so they cannot be overridden.
+
+Each entry of `sessions` gains `agent` (the harness id, empty for a program no
+manifest knows) and `command` (the argv as one line). The top-level `agent`,
+`command` and `prompt` are the first session's. `warning` is as for
+`new-worktree`, said once for the fan.
+
+Request:
+
+```json
+{"verb": "fan", "params": {"count": 3, "agent": "claude", "prompt": "Add a retry to the client.", "repo": "/src/api"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "fan_started", "group": "fan/add-retry-client", "repo": "api", "agent": "claude-code",
+ "command": "claude", "prompt": "Add a retry to the client.", "total": 3, "sessions": [
+  {"session": "api-fan-add-retry-client", "branch": "fan/add-retry-client", "path": "...", "window_id": "..."},
+  {"session": "api-fan-add-retry-client-2", "branch": "fan/add-retry-client-2", "path": "...", "window_id": "..."},
+  {"session": "api-fan-add-retry-client-3", "branch": "fan/add-retry-client-3", "path": "...", "window_id": "..."}]}}
+```
+
+## ship-commit [#ship-commit]
+
+Stage every change in a pane's git work tree, untracked files included and
+ignored ones not, and commit it on the branch checked out there. The pane is
+found as for `review-diff`. A call from inside a pane that names neither
+`session` nor `window` is about the caller's own pane. git runs in the daemon
+with the daemon's environment, which is the person's: their identity, signing
+setup and hooks. The daemon sets no identity and adds nothing to the message.
+When the commit fails, the index is put back as it was.
+
+Params: `session`, `window`, `message`, `force`. Without `message`, the
+message is the pane's last prompt or the line its last turn ended with. With
+neither, the call is `invalid_params`. While the agent is `working` or
+`needs_input` the call is `not_ready`, unless `force`. Errors:
+`nothing_to_commit`, `git_failed`, `not_worktree` (a detached HEAD).
+
+```json
+{"verb": "ship-commit", "params": {"session": "api-feat-retry", "message": "Add a retry to the client"}}
+```
+
+```json
+{"result": {"type": "ship_committed", "session": "api-feat-retry", "window": "4be1c09a-...",
+ "worktree": "/home/u/.local/share/tuios/worktrees/api/feat-retry", "branch": "feat/retry",
+ "commit": "9f2c...", "message": "Add a retry to the client"}}
+```
+
+## ship-merge [#ship-merge]
+
+Merge a worktree pane's branch into its base, in the repository's main
+checkout. The base is `into`, else the base the worktree was made from when
+that is a local branch, else the branch the main checkout is on. The main
+checkout must have that branch checked out, no uncommitted change to a
+tracked file, and no merge or rebase in progress (`checkout_dirty`). A merge
+that conflicts is undone with `git reset --merge` and fails with
+`merge_conflict`, with the files in the hint's `available`. Uncommitted
+changes in the worktree are not merged: `uncommitted` counts them. A pane in
+the main checkout is `not_worktree`.
+
+Params: `session`, `window`, `into`, `mode` and `message`. `mode` is
+`merge`, the default, which fast-forwards when it can, `squash` or `ff-only`.
+`message` is the message of a merge or squash commit.
+
+```json
+{"verb": "ship-merge", "params": {"session": "api-feat-retry", "mode": "squash"}}
+```
+
+```json
+{"result": {"type": "ship_merged", "session": "api-feat-retry", "window": "4be1c09a-...",
+ "worktree": "/home/u/.local/share/tuios/worktrees/api/feat-retry", "repo_root": "/src/api",
+ "branch": "feat/retry", "into": "main", "mode": "squash", "before": "1a2b...", "after": "3c4d...",
+ "commits": 2, "fast_forward": false, "up_to_date": false, "uncommitted": 0}}
+```
+
+`ship-commit` and `ship-merge` write files a pane's agent works on, so a pane
+without `admin` needs `write`, and may name only a pane that holds nothing it
+does not. Over a link they need `write`.
+
+## ship-push and ship-pr [#ship-push-and-ship-pr]
+
+`ship-push` pushes a pane's branch to a remote and sets it as the branch's
+upstream: the remote the branch follows, else the only one, else `origin`,
+or `remote`. It never forces. `ship-pr` pushes the same way, then opens a
+pull request with the person's own gh CLI (`gh pr create --head BRANCH [--base BASE] (--title T --body B | --fill) [--draft]`), and reads it back
+with `gh pr view BRANCH --json state,statusCheckRollup,url,number`. When the
+branch already has an open pull request, none is opened. The daemon holds no
+GitHub token.
+
+Both send work off this machine, so neither sends anything on a first call.
+It answers `confirm_required`: the hint's `available` lists what would be
+sent (the branch, its commit and the remote, the commits, and for `ship-pr`
+the pull request), and `confirm` carries a token. The token is a hash of the
+branch, its commit, the remote and its URL, and the pull request's base,
+title, body and draft flag. Call again with `confirm` set to it. A token for
+anything else is refused again with the new token.
+
+A caller the daemon cannot count as the person also needs the person's yes:
+a process inside a pane, any connection limited with `restrict-connection`, and
+a link, which is refused outright. The daemon puts the question in the Inbox
+as the caller's pane, with the answers `allow` and `deny`, and waits `wait`
+milliseconds (default 120000, at most an hour). When the wait ends first, the
+call fails with `not_ready` and the hint names the `request_id`. Call again
+with the same `confirm` and that `request_id` to wait on. A `deny`, or a
+question dismissed, is `forbidden`.
+
+Params: `session`, `window`, `remote`, `confirm`, `request_id`, `wait`, and
+for `ship-pr` `base`, `title`, `body` (needs `title`), `draft`. Errors:
+`confirm_required`, `no_remote`, `nothing_to_commit` (a branch with no
+commit), `gh_unavailable`, `git_failed`, `command_failed` (gh failed after
+the push), `not_ready`, `forbidden`.
+
+```json
+{"verb": "ship-pr", "params": {"session": "api-feat-retry", "draft": true, "confirm": "5e0b8c1d2f3a4b6c"}}
+```
+
+```json
+{"result": {"type": "ship_pr", "session": "api-feat-retry", "window": "4be1c09a-...", "branch": "feat/retry",
+ "commit": "9f2c...", "remote": "origin", "created": true,
+ "pr": {"number": 12, "url": "https://github.com/o/api/pull/12", "state": "open", "checks": "pending",
+  "passed": 1, "pending": 1, "branch": "feat/retry", "checked_at": 1791105577561633000}}}
+```
+
+The pull request is recorded on the session's `worktree` record as `pr`. Over
+a link both verbs need `write`, and are then refused by the handler.
+
+## ship-status [#ship-status]
+
+The pull request of a pane's branch as the daemon last read it, and with
+`refresh` as gh says now. `gh` says whether the gh CLI is installed. `pr` is
+null when the daemon knows of none. A refresh that finds none clears the
+record, and one that finds one records it.
+
+While a client is attached and a recorded pull request is open, the daemon
+reads each open one again every minute, one gh call at a time, and writes
+the record only when it changed. With none open, with no client, or without
+gh, nothing runs.
+
+```json
+{"verb": "ship-status", "params": {"session": "api-feat-retry", "refresh": true}}
+```
+
+A pane without `admin` needs `read`. Over a link it needs `list`.
+
+## compare-fan [#compare-fan]
+
+The attempts of a fan side by side: one row per session of the fan, in the
+order fan made them. Name any session of the fan; a worktree session that is
+not part of a fan is `invalid_params`, with the fan sessions the caller
+reaches in the hint (a pane without `admin` sees none outside its own reach),
+and a session that is not a worktree is `not_worktree`.
+
+Params: `session`, `changes` (default true: count each attempt's changes,
+which runs a few git calls per sibling: the merge base, a snapshot of the
+working state, the diff, the ahead count and `git status`. All of one
+sibling's calls together are bounded at 10 seconds, and a sibling that passes
+it reports the row without counts, with `note` saying so).
+
+Each row carries `session`, `branch`, `path`, `agent` (as the fan named it),
+`harness`, `state` (rolled up over the session's windows), `prompt_status`,
+and:
+
+- `files`, `added`, `removed`: what the attempt changed against its base,
+  committed and uncommitted work together, untracked files included and
+  ignored files left out. The working state is read through a temporary
+  index that starts as a copy of the worktree's own, so git's stat cache
+  holds and the worktree's own index and files are not touched. The counts
+  run from `base_sha`: the merge base of the attempt's `HEAD` and the fan's
+  `base`, or for a fan made from `HEAD`, of the attempt's `HEAD` and the main
+  checkout's `HEAD`. Counting from the merge base rather than the base's tip
+  means a base that moves on (a fetch, or another attempt merged into it)
+  does not change a row. When no merge base resolves, the counts run from the
+  base's tip and `base_sha` is omitted. `ahead` counts the attempt's commits
+  past `base_sha`, and `dirty` says whether it holds uncommitted work. All are omitted with `changes` false, and when git
+  could not count, in which case `note` says why.
+
+- `verify`: the last `verify-fan` check, as the worktree record holds it.
+
+- `last_command`: the newest command a shell in the session finished, from
+  its OSC 133 marks: `cmdline`, `exit` (omitted when the shell sent none),
+  `at` (unix nanoseconds) and `window`. Omitted when no shell has marked one.
+  An agent's own tool runs do not show here, which is what `verify-fan` is
+  for.
+
+- `gone` when the worktree directory no longer exists.
+
+- `cost`: the cost the attempt's agent reported with `set-agent-meta`, when
+  it did. `started_at`: when its prompt was typed. `done_at`: when its agent
+  last finished a turn. Both are unix nanoseconds, omitted when unknown.
+
+- `notes`: the judge's notes on this attempt, from `set-fan-verdict`.
+
+- With `detail`, `file_list` (at most 8 files, most changed first: `path`,
+  `added`, `removed`) and `lines` (the first 6 changed lines: `op`, `line`,
+  `text`, the text at most 200 bytes). Two more git calls per sibling, in the
+  same 10 seconds.
+
+- With `detail`, also `ignored` (at most 200 entries, a folder git ignores
+  whole being one) and `ignored_count`: the files git ignores in the
+  worktree, which `keep-fan` deletes with it and git stash does not keep.
+  `ignored_error` says why they could not be listed. `ignored_hash` names the
+  list for `keep-fan`.
+
+The result also carries `prompt`, the task the fan gave, and `verdict` when a
+judge reported one: `pick`, `summary`, `reasons`, `by`, `judge` and `at`.
+
+A pane without `admin`, or a connection restricted to its own session, gets
+rows only for the sessions it could name itself: its own session, its fan
+group, and the sessions a fan run from it started. Over a link it needs `list`,
+because it returns counts and states, not file contents.
+
+```json
+{"verb": "compare-fan", "params": {"session": "api-fan-retry"}}
+```
+
+```json
+{"result": {"type": "fan_compare", "group": "fan/retry", "repo": "api", "repo_root": "/src/api",
+ "base": "main", "total": 2, "rows": [
+  {"session": "api-fan-retry", "branch": "fan/retry", "agent": "claude", "harness": "claude-code",
+   "state": "done", "files": 4, "added": 120, "removed": 31, "ahead": 2, "dirty": true,
+   "prompt_status": "sent", "verify": {"command": "go test ./...", "state": "passed", "exit": 0,
+   "started_at": 1790000000000000000, "finished_at": 1790000012000000000}},
+  {"session": "api-fan-retry-2", "branch": "fan/retry-2", "agent": "codex", "harness": "codex",
+   "state": "working", "files": 2, "added": 40, "removed": 3, "ahead": 0, "dirty": true,
+   "prompt_status": "sent", "last_command": {"cmdline": "make lint", "exit": 1, "at": 1790000030000000000, "window": "9c2e..."}}]}}
+```
+
+## verify-fan [#verify-fan]
+
+Run one check in every attempt of a fan. Each session of the fan the caller
+reaches gets a window named `verify`, in its worktree, running the command
+with `sh -c` (`cmd.exe /c` on Windows). The call returns once the windows are
+open; each result lands in the session's worktree record as `verify`, which
+reaches clients with the ordinary state push and which `compare-fan` reports.
+
+- The command is always the caller's, at most 4096 bytes. tuios never reads a
+  check from the repository, so cloning a repository cannot make `fan` run
+  its code.
+- The window holds the grants `none`, whatever the default is, so the check
+  cannot call tuios.
+- The check's exit status reaches the daemon on a pipe the check itself does
+  not inherit, so nothing it prints can pass for its status. A check that
+  passes closes its window. One that fails keeps it open, with the output, and
+  says so; enter closes it. On Windows the window closes either way.
+- `timeout_ms` fails a check that runs longer and closes its window; the
+  record's `note` says it timed out. Without it a check runs until it ends.
+- A check still running in a session is stopped, and its window closed,
+  before the new one starts. So is the window a failed check left open, so
+  running a check again does not pile up windows waiting for enter.
+- A session whose worktree directory is gone is skipped, and `skipped` says
+  so. When nothing could be started the call is `internal`, with the reasons
+  in the hint.
+- `env` adds variables for the check, with the rules of `fan`'s `env`. The
+  tuios CLI sends its `PATH`.
+
+A pane needs the `fan` grant, and reaches its own fan group; the checks start
+only in the sessions it reaches. Over a link it needs `open` and `write`.
+
+Params: `session`, `command` (required), `timeout_ms`, `env`.
+
+```json
+{"verb": "verify-fan", "params": {"session": "api-fan-retry", "command": "go test ./...", "timeout_ms": 600000}}
+```
+
+```json
+{"result": {"type": "fan_verify_started", "group": "fan/retry", "command": "go test ./...",
+ "sessions": ["api-fan-retry", "api-fan-retry-2"]}}
+```
+
+The record while it runs and once it ends:
+
+```json
+{"command": "go test ./...", "state": "running", "started_at": 1790000000000000000}
+{"command": "go test ./...", "state": "failed", "exit": 1, "started_at": 1790000000000000000, "finished_at": 1790000042000000000}
+```
+
+## keep-fan [#keep-fan]
+
+Keep one attempt of a fan and remove the others. Each sibling is removed the
+way `remove-worktree` removes it, each on its own: a sibling with uncommitted
+changes is left in place, with `worktree_dirty`, unless `stash` or `force`
+says what to do with them, and the others still go. Branches are never
+deleted. A check running in a removed sibling is stopped. A session that is
+not part of a fan is `invalid_params`.
+
+Only the person or a caller with `admin` may call it: a pane without `admin`
+and any restricted connection are refused. Over a link it needs `write`.
+
+Files git ignores (`.env`, build output) are deleted with a worktree and are
+not stashed. `compare-fan` with `detail` lists them. `group`, `repo_root` and
+`fan_id`, when given, name the fan the caller read: a session that is no
+longer an attempt of it, after a rename, is `invalid_params` and nothing is
+removed.
+`siblings` and `ignored` name what the caller showed: the attempts to remove,
+and for each the `ignored_hash` compare-fan gave for its ignored files. When
+the other attempts differ, or one's ignored files changed in any way, the
+keep is refused whole.
+
+Params: `session` (required), `stash`, `force`, `merge`, `merge_mode`,
+`into`. With `merge`, the kept attempt's branch is first merged into its
+base, as [ship-merge](#ship-merge) does, with `merge_mode` and `into` as its
+`mode` and `into`. The result then carries `merge`. A merge that conflicts or
+is refused fails the call before any sibling is removed.
+
+```json
+{"verb": "keep-fan", "params": {"session": "api-fan-retry-2"}}
+```
+
+```json
+{"result": {"type": "fan_kept", "kept": "api-fan-retry-2", "branch": "fan/retry-2", "group": "fan/retry",
+ "repo": "api", "left": 1, "removed": [
+  {"session": "api-fan-retry", "removed": true, "branch": "fan/retry", "path": "/home/u/.local/share/tuios/worktrees/api/fan-retry",
+   "changes": 0, "stashed": false, "discarded": false, "session_killed": true, "branch_kept": true},
+  {"session": "api-fan-retry-3", "removed": false, "code": "worktree_dirty",
+   "note": "/home/u/.local/share/tuios/worktrees/api/fan-retry-3 holds 1 uncommitted change. Nothing was removed."}]}}
+```
+
+## bundle-worktree [#bundle-worktree]
+
+Read a worktree session's work out in chunks, so it can cross a link that caps
+a reply line at 16 MB. `tuios worktree pull` is the caller. The transfer is the
+branch's commits as a git bundle, then the uncommitted work, untracked files
+included, as a binary patch against HEAD. The patch is read through a
+temporary index, so the worktree's own index is not touched.
+
+The first call names `session` and makes the transfer. Without `full`, the
+bundle holds only the commits past the merge base of HEAD and the worktree's
+`base`, and the reader must have `base_commit`. With `full`, or when the base
+is not known, it holds the whole branch. A branch with nothing past the base
+has no bundle (`bundle_bytes: 0`). The reply carries `token`, `repo`,
+`origin_url`, `branch`, `base`, `base_commit`, `head`, `full`,
+`bundle_bytes`, `patch_bytes`, `changes` (paths the patch touches), `size`,
+`sha256` of the whole transfer, and the first chunk.
+
+`branch` and `head` are what the worktree's HEAD is on when the call runs, not
+the branch the session was made on. An agent that made its own branch in the
+worktree has that branch carried. A detached HEAD is refused with
+`not_worktree`, since there is no branch to carry. HEAD is read again once the
+bundle and the patch are written, and if it moved in between, from a commit or
+a branch switch, the call answers `git_failed` and nothing is kept. Try again.
+The bundled branch always ends at `head`, and the patch is made against it.
+
+Every reply carries a chunk: `content` (base64, at most 4 MB before encoding),
+`offset`, `next` and `done`. Later calls pass `token` and `offset` set to the
+previous `next`. `release` with `token` ends a transfer early.
+
+A transfer is readable only by the connection that made it. It ends after its
+last chunk, on `release`, when that connection closes, or after ten minutes
+unread, and its files are removed each time. At most four are open on one
+daemon, and past that the call is `rate_limited`. A transfer is capped at
+512 MB.
+
+Request:
+
+```json
+{"verb": "bundle-worktree", "params": {"session": "api-fan-add-retry-2"}}
+{"verb": "bundle-worktree", "params": {"token": "3f...", "offset": 4194304}}
+```
+
+Response to the first call:
+
+```json
+{"result": {"type": "worktree_bundle", "session": "api-fan-add-retry-2", "token": "3f...", "repo": "api",
+ "origin_url": "git@github.com:acme/api.git", "branch": "fan/add-retry-2", "base": "main",
+ "base_commit": "9c1e...", "head": "b07a...", "full": false, "bundle_bytes": 2310, "patch_bytes": 812,
+ "changes": 2, "size": 3122, "sha256": "...", "content": "...", "offset": 0, "next": 3122, "done": true}}
+```
+
+## What a caller on another machine can do with these [#what-a-caller-on-another-machine-can-do-with-these]
+
+`start-agent`, `fan` and `new-worktree` with `repo_url` or `clone`, and
+`bundle-worktree`, grant a caller on a link or in a pane nothing it could not
+already do with `new-window` and a command: start a program in a directory of
+this machine, or read files there. Over a link they are held to the per-host
+link policy ([What a linked machine may do here](/docs/control-protocol/verbs-other-verbs#what-a-linked-machine-may-do-here)):
+`start-agent`, `fan` and `new-worktree` need `open`, and a clone checks `open`
+again at the point it would run. `bundle-worktree` needs `write`, since it
+reads a worktree's files, and `write` already lets a machine type into a shell
+here and read any of them. What they add on their own is bounded: a clone
+fetches only network URLs, the search reads only `.git/config` files under the
+roots named above, and a transfer is only readable by the connection that made
+it.

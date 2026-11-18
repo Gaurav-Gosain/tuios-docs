@@ -1,0 +1,276 @@
+---
+title: "Sessions"
+description: "Sessions: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `detach-client` <Since verb="detach-client" /> [#detach-client]
+
+Detach attached clients from their sessions, as tmux detach-client does. The session keeps running, and each detached client exits with a message. With client, that client. With session, every client of the session. With neither, the client used last in the caller's pane's session, else in the only session with a client. all\_other keeps that one client and detaches the rest of its session.
+
+| Param       | Type   | Required | Default | Description                                                                                   |
+| ----------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------- |
+| `client`    | string |          |         | Id of the client to detach, from list-clients.                                                |
+| `session`   | string |          |         | Session whose clients to detach.                                                              |
+| `all_other` | bool   |          | `false` | Keep the named client, or the client used last, and detach every other client of its session. |
+
+| Result field | Type  | Description                            |
+| ------------ | ----- | -------------------------------------- |
+| `detached`   | array | Ids of the clients that were detached. |
+
+```json
+{"id":1,"verb":"detach-client","params":{"client":"c3"}}
+```
+
+```json
+{"id":1,"verb":"detach-client","params":{"session":"work"}}
+```
+
+```json
+{"id":1,"verb":"detach-client","params":{"session":"work","all_other":true}}
+```
+
+## `display-env` <Since verb="display-env" /> [#display-env]
+
+Report the display a new pane of the session gets now: WAYLAND\_DISPLAY naming the session's Wayland link, and DISPLAY and XAUTHORITY of the newest local client. It is empty unless \[daemon] display is follow, the daemon has no display of its own, and a local client with a display is attached.
+
+| Param     | Type   | Required | Default | Description                      |
+| --------- | ------ | -------- | ------- | -------------------------------- |
+| `session` | string |          |         | Session whose display to report. |
+
+| Result field | Type   | Description                                                                                                  |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------------ |
+| `session`    | string | Session name.                                                                                                |
+| `follow`     | bool   | True when \[daemon] display is follow and the daemon has no display of its own.                              |
+| `own`        | bool   | True when the daemon has a WAYLAND\_DISPLAY or DISPLAY of its own. Its panes keep it, and the follow is off. |
+| `link`       | string | The session's Wayland link. It exists only while an attached client has a Wayland socket.                    |
+| `target`     | string | The client socket the link points at. Absent when there is no link.                                          |
+| `env`        | object | The variables a new pane gets: WAYLAND\_DISPLAY, DISPLAY and XAUTHORITY, each only when set.                 |
+
+```json
+{"id":1,"verb":"display-env","params":{"session":"work"}}
+```
+
+## `kill-session` <Since verb="kill-session" /> [#kill-session]
+
+Terminate a session and every window in it.
+
+| Param     | Type   | Required | Default | Description           |
+| --------- | ------ | -------- | ------- | --------------------- |
+| `session` | string |          |         | Session to terminate. |
+
+```json
+{"id":1,"verb":"kill-session","params":{"session":"work"}}
+```
+
+## `list-clients` <Since verb="list-clients" /> [#list-clients]
+
+List every connection to the daemon and the session it is attached to.
+
+No params.
+
+| Result field | Type      | Description                                                                                           |
+| ------------ | --------- | ----------------------------------------------------------------------------------------------------- |
+| `clients`    | \[]object | One row per connection: client\_id, kernel peer pid, and current session name (empty while detached). |
+
+```json
+{"id":1,"verb":"list-clients"}
+```
+
+## `list-sessions` <Since verb="list-sessions" /> [#list-sessions]
+
+List all sessions the daemon holds.
+
+No params.
+
+```json
+{"id":1,"verb":"list-sessions"}
+```
+
+## `new-session` <Since verb="new-session" /> [#new-session]
+
+Create a session in the daemon, with its first window. The session runs detached until a client attaches to it.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                                                                                                 |
+| ------------- | --------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | string    |          |         | Name for the new session. Omit to have one generated. A name the daemon already holds is refused.                                                                                                                                                                           |
+| `width`       | int       |          | `80`    | Nominal width in columns. An attached client replaces it with its own viewport.                                                                                                                                                                                             |
+| `height`      | int       |          | `24`    | Nominal height in rows. An attached client replaces it with its own viewport.                                                                                                                                                                                               |
+| `window`      | bool      |          | `true`  | Create the first window. Pass false for an empty session you place every window in yourself.                                                                                                                                                                                |
+| `window_name` | string    |          |         | Name for the first window. Omit to use the shell's title.                                                                                                                                                                                                                   |
+| `cwd`         | string    |          |         | Directory the session's windows start in: the first window, and any later one with no directory to inherit. Omit to use the daemon's.                                                                                                                                       |
+| `command`     | \[]string |          |         | Argv to exec as the first window's process instead of a shell. No shell parses it, so nothing needs quoting.                                                                                                                                                                |
+| `space`       | string    |          |         | Space to file the session under, as set-session-space does: trimmed, then held to the session name rules and 64 bytes. Omit for none.                                                                                                                                       |
+| `env`         | object    |          |         | Environment variables for the window's process, name to value, on top of the daemon's. TUIOS\_ names, TMUX and TMUX\_PANE are refused, and a call from another machine may not pass env. Not for a window on another machine. Not saved: a restored pane starts without it. |
+
+| Result field  | Type   | Description                                                                   |
+| ------------- | ------ | ----------------------------------------------------------------------------- |
+| `session`     | string | Name of the new session. Use it as the session parameter of every later call. |
+| `space`       | string | Space the session is filed under. Absent when space was not given.            |
+| `session_id`  | string | Id of the new session.                                                        |
+| `width`       | int    | Nominal width the session was created at.                                     |
+| `height`      | int    | Nominal height the session was created at.                                    |
+| `windows`     | int    | How many windows the session holds: 1, or 0 when window was false.            |
+| `window_id`   | string | Id of the first window. Absent when window was false.                         |
+| `window_name` | string | Name of the first window. Absent when window was false.                       |
+| `pty_id`      | string | Id of the first window's PTY. Absent when window was false.                   |
+
+```json
+{"id":1,"verb":"new-session"}
+```
+
+```json
+{"id":1,"verb":"new-session","params":{"name":"work","window_name":"build","cwd":"/src/api"}}
+```
+
+```json
+{"id":1,"verb":"new-session","params":{"name":"empty","window":false}}
+```
+
+```json
+{"id":1,"verb":"new-session","params":{"name":"ledger","space":"accounts"}}
+```
+
+## `rename-session` <Since verb="rename-session" /> [#rename-session]
+
+Rename a session. The new name is what ls lists, what attach and every verb take, and what new panes get as TUIOS\_SESSION. The old name still reaches the session for panes that already run. The session's display label is cleared.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `name`    | string |          |         | The new name. It must be unique, must not be empty, and must not hold a slash, a backslash or a control character.       |
+
+| Result field | Type   | Description                                                                      |
+| ------------ | ------ | -------------------------------------------------------------------------------- |
+| `type`       | string | Always session\_renamed.                                                         |
+| `session`    | string | The session's new name.                                                          |
+| `old_name`   | string | The name it had before. It still reaches the session for panes that already run. |
+
+```json
+{"id":1,"verb":"rename-session","params":{"session":"work","name":"payments"}}
+```
+
+## `session-info` <Since verb="session-info" /> [#session-info]
+
+Report details about one session.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+
+```json
+{"id":1,"verb":"session-info","params":{"session":"work"}}
+```
+
+## `set-session-accent` <Since verb="set-session-accent" /> [#set-session-accent]
+
+Set a session's accent colour. Every attached client shares it, and it survives a reattach.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                               |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                  |
+| `accent`  | string |          |         | An ANSI colour name ("cyan", "bright blue") or a #rrggbb value, recorded verbatim. Omit or pass an empty string to clear it and let the client pick the session's colour. |
+
+```json
+{"id":1,"verb":"set-session-accent","params":{"session":"work","accent":"cyan"}}
+```
+
+## `set-session-name` <Since verb="set-session-name" /> [#set-session-name]
+
+Set a session's display label. The session keeps its name for addressing, persistence and TUIOS\_SESSION. To change the name, use rename-session.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `name`    | string |          |         | Display label for the session. Omit or pass an empty string to clear it and fall back to the session name.               |
+
+```json
+{"id":1,"verb":"set-session-name","params":{"session":"work","name":"Payments API"}}
+```
+
+## `set-session-space` <Since verb="set-session-space" /> [#set-session-space]
+
+File a session under a space, a named group of related sessions that tuios ls and the sidebar list together, or mark it global. A space exists while at least one session is in it. It survives a daemon restart with the session. A global session is in no space, and filing one is refused unless global is false.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                       |
+| --------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                          |
+| `space`   | string |          |         | The space's name. Surrounding whitespace is trimmed, and the rest follows the session name rules (no slash, backslash or control character) and is at most 64 bytes. Omit or pass an empty string to take the session out of any space.                                                                           |
+| `global`  | bool   |          |         | True marks the session global: it holds panes from more than one machine, is listed in its own group, and a new window in it asks which machine to run on. It takes the session out of its space, and is refused with a space. False takes the mark off before the space is set. Omit to leave the mark as it is. |
+
+| Result field | Type   | Description                                      |
+| ------------ | ------ | ------------------------------------------------ |
+| `type`       | string | Always session\_space\_set.                      |
+| `session`    | string | The session's name.                              |
+| `space`      | string | The space the session is in now, empty for none. |
+| `global`     | bool   | Whether the session is global now.               |
+
+```json
+{"id":1,"verb":"set-session-space","params":{"session":"work","space":"payments"}}
+```
+
+```json
+{"id":1,"verb":"set-session-space","params":{"session":"work","space":""}}
+```
+
+```json
+{"id":1,"verb":"set-session-space","params":{"session":"work","global":true}}
+```
+
+## `ssh-agent-path` <Since verb="ssh-agent-path" /> [#ssh-agent-path]
+
+Report the session's ssh agent link: the path that new panes get as SSH\_AUTH\_SOCK while \[daemon] ssh\_agent is follow, and the client socket it points at now.
+
+| Param     | Type   | Required | Default | Description                   |
+| --------- | ------ | -------- | ------- | ----------------------------- |
+| `session` | string |          |         | Session whose link to report. |
+
+| Result field | Type   | Description                                                            |
+| ------------ | ------ | ---------------------------------------------------------------------- |
+| `session`    | string | Session name.                                                          |
+| `path`       | string | The link. It exists only while an attached client has an agent socket. |
+| `follow`     | bool   | True when \[daemon] ssh\_agent is follow.                              |
+| `target`     | string | The client socket the link points at. Absent when there is no link.    |
+
+```json
+{"id":1,"verb":"ssh-agent-path","params":{"session":"work"}}
+```
+
+## `switch-session` <Since verb="switch-session" /> [#switch-session]
+
+Switch an attached client to another session in place, as go-to does. The client is the one named by client, else the one showing session, else the one showing the caller's own session from a pane, else the only one attached.
+
+| Param     | Type   | Required | Default | Description                                                                                       |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `name`    | string |          |         | Session to switch to.                                                                             |
+| `host`    | string |          |         | Machine from the client's \[hosts] table that holds the session. Omit, or local, for this daemon. |
+| `create`  | bool   |          | `false` | Create the session when it does not exist.                                                        |
+| `cwd`     | string |          |         | With create, the directory the new session's windows start in.                                    |
+| `session` | string |          |         | Session the client to switch shows.                                                               |
+| `client`  | string |          |         | Id of the client to switch, from list-clients.                                                    |
+
+| Result field | Type   | Description                                                       |
+| ------------ | ------ | ----------------------------------------------------------------- |
+| `session`    | string | Session the client now shows.                                     |
+| `host`       | string | Machine the session is on. Absent for this daemon.                |
+| `client_id`  | string | Id of the client that switched.                                   |
+| `created`    | bool   | True when create made the session on this daemon.                 |
+| `already`    | bool   | True when the client already showed the session. Nothing changed. |
+
+```json
+{"id":1,"verb":"switch-session","params":{"name":"api"}}
+```
+
+```json
+{"id":1,"verb":"switch-session","params":{"name":"api","create":true,"cwd":"/src/api"}}
+```
+
+```json
+{"id":1,"verb":"switch-session","params":{"name":"api","host":"build","session":"work"}}
+```

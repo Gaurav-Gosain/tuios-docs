@@ -1,0 +1,138 @@
+---
+title: "Configuration and Appearance Commands"
+description: "Configuration and Appearance Commands: part of the CLI Reference of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CLI_REFERENCE.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CLI_REFERENCE.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CLI_REFERENCE.md). The [CLI Reference](/docs/cli-reference) page lists every part.
+
+## Configuration and Appearance Commands [#configuration-and-appearance-commands]
+
+The `keybinds` commands are in [`tuios keybinds`](/docs/cli-reference/tuios-web#tuios-keybinds). Two of them
+in short:
+
+| Command                              | What it does                                                                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `tuios keybinds preset [name]`       | Show or set the keybind preset (`tuios`, `tmux`, `screen`, `zellij`). `list` shows every preset, `show NAME` prints its file |
+| `tuios keybinds cheatsheet [preset]` | Show the keys a preset keeps, the tuios keys it moved, and what it does not have. `--json`                                   |
+
+### `tuios list-options` <Since command="list-options" /> [#tuios-list-options]
+
+List every option `set-config` takes, with its type, its default, the values
+or the range it accepts, the unit of a number (`ms`, `cells`, `%`) and a
+description.
+
+```bash
+tuios list-options                        # every option
+tuios list-options --section sidebar      # one group
+tuios list-options appearance.sidebar.    # a path prefix
+tuios list-options --search "pane bg"     # a fuzzy search, best match first
+tuios list-options --json | jq -r '.options[].path'
+```
+
+`--search` ranks every option by its path, its value and its description, the
+same search as the settings page. A session override shows next to the
+default. The default of `startup.daemon` and `startup.tiled` is the one for
+this machine. Each JSON row has `path`, `type`, `section`, `description` and
+`default`, and `accepted`, `min`, `max`, `deprecated` and `session_value` when
+they apply.
+
+### `tuios get-config` <Since command="get-config" /> [#tuios-get-config]
+
+Read an option from a running session. It works with or without an attached
+client.
+
+```bash
+tuios get-config border_style
+tuios get-config appearance.sidebar.position --json
+```
+
+An option with no session override reads as the value in `config.toml`. An
+option that `config.toml` does not set reads as its default. `--json` adds
+`source` (`session`, `config` or `default`) and `default`. `agents.enabled` is
+the switch of the daemon, so it reads as the value for every session. Run
+`tuios list-options` to see every path.
+
+### `tuios list-themes` <Since command="list-themes" /> [#tuios-list-themes]
+
+List the themes, or show the colours of one theme with the contrast of each
+colour against the background of that theme.
+
+```bash
+tuios list-themes --filter catppuccin
+tuios list-themes catppuccin_mocha
+tuios list-themes --json | jq -r .active
+```
+
+`--filter TEXT` lists only the ids that contain it. The command reads the
+themes directory again on each call, so a new `<id>.json` there shows at once.
+
+### `tuios import-theme` <Since command="import-theme" /> [#tuios-import-theme]
+
+Convert a kitty, Ghostty, Alacritty or WezTerm colour scheme into a tuios
+theme, and write it to the themes directory.
+
+```bash
+tuios import-theme ~/.config/kitty/current-theme.conf
+tuios import-theme ~/gruvbox.toml --name gruvbox
+tuios set-config appearance.theme gruvbox
+```
+
+The command reads the format from the content of the file, not from its name.
+The colours that the scheme does not set take the xterm defaults. `--name` sets
+the theme id. The default is the name of the file. You can select the theme at
+once, with no restart.
+
+### `tuios theme` <Since command="theme" /> [#tuios-theme]
+
+Work with theme files.
+
+| Command                      | What it does                                                                                                                                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tuios theme export <theme>` | Print a theme as a theme file, with only the colours that are different from its built-in base. `--full` writes all the colours. `--format base16` writes a base16 scheme                                  |
+| `tuios theme share <theme>`  | Print a theme as one line that starts with `tuios-theme:v1:`, to paste in a message                                                                                                                        |
+| `tuios theme reload`         | Read the theme and glyph files again in every tuios client on this machine, and ask each terminal for its colours again. Clients also read the files when a file in the themes or glyphs directory changes |
+
+`theme export` writes a theme from your themes directory against the built-in
+theme it starts from. A built-in theme is written with all its colours.
+
+```bash
+tuios theme export mine > mine.json
+tuios theme export dracula --format base16
+```
+
+### `tuios list-glyphs` <Since command="list-glyphs" /> [#tuios-list-glyphs]
+
+List the glyph sets, or show, role by role, what one set asks for and what
+tuios draws.
+
+```bash
+tuios list-glyphs
+tuios list-glyphs heavy
+tuios set-config appearance.glyphs heavy
+tuios list-glyphs mine --json | jq -r '.problems[]?'
+```
+
+The two columns can differ. A set names only the roles it changes. A glyph with
+the wrong width for its place falls back to the default, so a window button
+stays where the pointer finds it. The second column is what tuios draws. A new
+`<id>.json` in the glyphs directory is a new set, and `"inherits"` starts it
+from a built-in set.
+
+### `tuios logs` <Since command="logs" /> [#tuios-logs]
+
+Print the log of the daemon.
+
+- `-n, --lines N`: how many entries to show. The default is 50. `0` shows all.
+- `--all`: show every stored entry.
+- `-f, --follow`: keep printing new entries.
+- `--clear`: empty the log after printing it.
+
+The daemon keeps the last 1000 entries in memory. It also appends errors and
+basic events to `$XDG_STATE_HOME/tuios/daemon.log`, so a crash leaves a record.
+To log more, run `tuios set-config daemon.log_level messages`. The levels
+`verbose` and `trace` also record pane content, window titles and paths.

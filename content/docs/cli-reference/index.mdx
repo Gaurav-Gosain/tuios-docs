@@ -1,0 +1,1067 @@
+---
+title: "CLI Reference"
+description: "Every tuios command and flag, with examples. Sessions, windows, input and output, agents, remote hosts, tapes, environment variables and exit codes."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+import { AnchorRedirect } from "@/components/mdx/anchor-redirect";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CLI_REFERENCE.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+These pages are `docs/CLI_REFERENCE.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CLI_REFERENCE.md), at the version this site documents.
+
+<AnchorRedirect page="cli-reference" />
+
+To search every command by name or flag, use the [command finder](/docs/commands).
+
+**The pages of this reference:**
+
+- [Daemon Mode (Session Persistence)](/docs/cli-reference/daemon-mode)
+- [Remote Control Commands (part 1 of 2)](/docs/cli-reference/remote-control-commands)
+- [Remote Control Commands (part 2 of 2)](/docs/cli-reference/remote-control-commands-part-2)
+- [Inspection Commands](/docs/cli-reference/inspection-commands)
+- [Session Commands](/docs/cli-reference/session-commands)
+- [Window and Workspace Commands](/docs/cli-reference/window-and-workspace-commands)
+- [Agent Commands](/docs/cli-reference/agent-commands)
+- [Plugin Commands](/docs/cli-reference/plugin-commands)
+- [Configuration and Appearance Commands](/docs/cli-reference/configuration-and-appearance-commands)
+- [Tape Commands](/docs/cli-reference/tape-commands)
+- [Commands for Other Machines](/docs/cli-reference/commands-for-other-machines)
+- [Scripting Examples](/docs/cli-reference/scripting-examples)
+- [tuios-web (Separate Binary)](/docs/cli-reference/tuios-web)
+
+This document provides a complete reference for TUIOS command-line interface.
+
+## Overview [#overview]
+
+TUIOS uses a modern command-line interface built with Cobra and Fang, providing:
+
+- Subcommand structure for better organization
+- Styled help output and error messages
+- Shell completion generation
+
+## Installation [#installation]
+
+### Homebrew (macOS/Linux) [#homebrew-macoslinux]
+
+```bash
+brew install tuios
+```
+
+The ghostty build (the [libghostty-vt emulator](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/ghostty-vt.md)) is a separate cask for Linux. It installs a binary with the same name as the `tuios` formula. Uninstall the formula first.
+
+```bash
+brew uninstall tuios
+brew install gaurav-gosain/tap/tuios-ghostty
+```
+
+### Arch Linux (AUR) [#arch-linux-aur]
+
+```bash
+# Using yay
+yay -S tuios-bin
+
+# Using paru
+paru -S tuios-bin
+```
+
+### Nix [#nix]
+
+```bash
+# Run a release (put the tag after the repo name)
+nix run github:Gaurav-Gosain/tuios/v0.8.0#tuios
+
+# Run the newest commit on main
+nix run github:Gaurav-Gosain/tuios#tuios
+
+# Or add to your configuration
+nix-shell -p tuios
+```
+
+### Quick Install Script (Linux/macOS) [#quick-install-script-linuxmacos]
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/tuios/main/install.sh | bash
+```
+
+### Go Install [#go-install]
+
+```bash
+go install github.com/Gaurav-Gosain/tuios/cmd/tuios@latest
+```
+
+### Pre-built Binaries [#pre-built-binaries]
+
+Download from [GitHub Releases](https://github.com/Gaurav-Gosain/tuios/releases)
+
+---
+
+## Usage [#usage]
+
+```bash
+tuios [command] [flags]
+```
+
+## Commands [#commands]
+
+### `tuios tutor` <Since command="tutor" /> [#tuios-tutor]
+
+Learn tuios in a few minutes, by doing it. `tuios learn` is the same
+command. The tutor runs a real tuios with a practice shell in this terminal.
+The shell, the files and the agents in it are pretend.
+
+```bash
+tuios tutor            # open the menu: start a track, or continue one
+tuios tutor basics     # open one track at once
+tuios tutor --list     # list the tracks
+tuios tutor --reset    # clear your progress
+```
+
+Nothing on your computer changes:
+
+- The tutor starts no program and does not connect to a running tuios.
+- It reads none of your config, and it uses the shipped keys and theme.
+- While it runs, the home, the XDG folders and TMPDIR point at a temp
+  folder. The tutor removes that folder when it ends, also on SIGTERM.
+- Clipboard writes stay inside the tutor.
+- It keeps your progress in `$XDG_STATE_HOME/tuios/tutor.json`. That is the
+  only file it writes.
+
+In a lesson, a card under the screen shows the step, its keys and a note.
+The keys light up as you press them. After 8 seconds the note turns into a
+hint.
+
+| Key                 | Does                                                                   |
+| ------------------- | ---------------------------------------------------------------------- |
+| `F2`                | Open the menu: continue, back one step, restart, choose a track, leave |
+| `F3`                | Show me: the tutor presses the rest of the keys                        |
+| `F4`                | Skip the step                                                          |
+| a quit key of tuios | Open the menu                                                          |
+
+A click works on every button. Below 80x24 the card is a 2-row strip.
+Below 60x16 the tutor asks for a bigger window and keeps your place.
+
+Run inside a tuios pane, the outer tuios takes `ctrl+b`. Press `ctrl+b`
+then `enter` to give every key to the tutor. `F12` gives the keys back.
+
+### Root Command [#root-command]
+
+Run TUIOS. A plain `tuios` attaches to a daemon-backed session, because
+`startup.daemon` ships on. Add `--standalone` for a local session that lives and
+dies with this process:
+
+```bash
+tuios
+tuios --standalone
+```
+
+With `startup.session` set, a plain `tuios` attaches to that session and makes
+it if it is gone. `startup.window` also focuses one pane in it. See
+[SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#start-session-and-start-pane).
+
+**Flags:**
+
+`tuios --help` is the authoritative list. These are the flags it shows today:
+
+- `--standalone`: Run a standalone session without the daemon, overriding `startup.daemon`. `TUIOS_NO_DAEMON=1` does the same for a whole shell
+
+- `--theme <name>`: Color theme to use, such as dracula, nord or tokyonight. Leave it empty (the default) to use the terminal's own colors without theming
+
+- `--list-themes`: List all available themes and exit
+
+- `--preview-theme <name>`: Preview a theme's 16 ANSI colors and exit
+
+- `--skill [topic]`: Print the embedded agent skill and exit: the core, one topic, or `all` (see [Agent Skill](#agent-skill))
+
+- `--ascii-only`: Use ASCII characters instead of Nerd Font icons
+
+- `--show-keys`: Enable showkeys overlay (screencaster-style key display)
+  A modifier pressed on its own is not shown: it is named in the chord it is
+  part of, such as `Cmd + k` (`Super + k` off macOS).
+
+- `--border-style <style>`: Window border style: rounded, normal, thick, double, hidden, block, ascii, outer-half-block, inner-half-block, glyphs (default: from config or rounded)
+
+  This flag and the appearance flags below it, up to `--shared-borders`
+  and except `--no-animations`, each set one `appearance` option for this run, such as
+  `appearance.border_style`. A flag takes the values its option takes, and a
+  value the option does not take stops tuios before it starts, with the
+  message `tuios set-config` gives. A switch flag also takes a value:
+  `--show-clock=false`. The config file is not changed.
+
+- `--dockbar-position <pos>`: Dockbar position: bottom, top, hidden (default: from config or top)
+
+- `--hide-window-buttons`: Hide window control buttons (minimize, maximize, close)
+
+- `--window-button-style <style>`: How the window controls are drawn: `dots` (default, macOS traffic lights) or `pill`. On the left, the pill puts close at the outer corner: close, zoom, minimize. On the right it is minimize, zoom, close
+
+- `--window-button-position <position>`: Which end of the title bar the window controls sit on: `left` (default, macOS) or `right`
+
+- `--window-title-position <pos>`: Window title position: bottom, top, hidden (default: from config or top)
+
+- `--scrollback-lines <num>`: Number of lines in scrollback buffer (default: from config or 10000, 100 to 1000000)
+
+- `--hide-scrollbar`: Hide the window scrollbar thumb on the border
+
+- `--zoom-max-width <cells>`: Max width in cells for zoom mode (0 is fullscreen)
+
+- `--confirm-quit`: Always show the quit confirmation dialog
+
+- `--hide-clock`: Hide the clock overlay (deprecated, the clock is hidden by default)
+
+- `--show-clock`: Show the clock overlay
+
+- `--show-cpu`: Show a CPU graph in the dock. It works on Linux, macOS, Windows, FreeBSD and OpenBSD. On another platform it shows `CPU: n/a`.
+
+- `--show-ram`: Show RAM usage in the dock
+
+- `--no-animations`: Disable UI animations for instant transitions (`appearance.motion = none` for this run)
+
+- `--shared-borders`: Share borders between adjacent tiled windows
+
+- `--debug`: Enable debug logging
+
+- `--server <name>`: Use the daemon named `<name>`. It has its own socket and saved sessions. See [Running a separate daemon](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#running-a-separate-daemon)
+
+- `--cpuprofile <file>`: Write a CPU profile to file. The profile is written by the interface (`tuios`, `attach`, `new`) and by the commands that keep running: `daemon`, `ssh`, `mcp`, `stdio-proxy`, `pair`, `agent-proto`, `tape play`, `mermaid --watch` and `--demo`, and `gui-bridge`. It is complete when the command ends, by its signal or the end of its input. `gui-bridge` writes one only when you run it by hand, as the renderer starts it with a fixed command line. `start-server` does not pass `--cpuprofile` to the daemon it starts. While a CPU profile is being written, `/debug/pprof/profile` answers 500
+
+- `--pprof <addr>`: Serve /debug/pprof profiles on this address for live profiling, such as `:6060`. With no host, the server listens on 127.0.0.1 only. The profiles have no password. Name `0.0.0.0` only on a network you trust. Delta profiles (`?seconds=` on heap and the like) are not served. Take two and compare them with `go tool pprof -diff_base`. With `start-server`, the daemon that the command starts serves the profiles. With `ssh`, the SSH server serves the profiles. The commands that keep running serve them too: `daemon`, `gui-bridge`, `mcp`, `stdio-proxy`, `pair`, `subscribe`, `agent-proto`, `tape play` and `mermaid --watch` and `--demo`
+
+- `-h, --help`: Show help for tuios
+
+- `-v, --version`: Show version information
+
+The interface flags, from `--theme` to `--shared-borders`, are also flags of
+`attach`, `new`, `ssh` and `tape play`, the commands that draw the interface.
+`--debug` and `--server` work on every command. `--cpuprofile` and `--pprof` are honoured by the commands that keep running (see the flags above).
+
+**Examples:**
+
+```bash
+tuios                          # Start TUIOS normally
+tuios --theme dracula          # Start with Dracula theme
+tuios --ascii-only             # Start without Nerd Font icons
+tuios --show-keys              # Start with showkeys overlay enabled
+tuios --list-themes            # List all available themes
+tuios --preview-theme nord     # Preview Nord theme colors
+tuios --skill                  # Print the agent skill and exit
+tuios --skill recipes          # Print one topic of it
+tuios --debug                  # Start with debug logging
+tuios --cpuprofile cpu.prof    # Start with CPU profiling
+
+# Combine multiple flags
+tuios --theme nord --show-keys # Use Nord theme with showkeys enabled
+
+# Interactive theme selection with fzf
+tuios --theme $(tuios --list-themes | fzf --preview 'tuios --preview-theme {}')
+```
+
+---
+
+## Theming [#theming]
+
+TUIOS includes 300+ built-in color themes from various sources including Gogh, iTerm2, and custom themes.
+
+### Available Themes [#available-themes]
+
+List all available themes:
+
+```bash
+tuios --list-themes
+```
+
+With no theme set, tuios uses the terminal's own colors.
+
+**Popular themes include:**
+
+- `charmtone`: Charm's CharmTone colours on a dark ground, with a Charple accent
+- `charmtone-light`: CharmTone on a light ground
+- `gilt`: Cool obsidian, warm parchment and a gold accent
+- `tokyonight`: A clean, dark theme with vibrant colors
+- `dracula`: Dark theme with purple accent
+- `nord`: An arctic, north-bluish color palette
+- `gruvbox_dark`: Retro groove color scheme
+- `catppuccin_mocha`: Soothing pastel theme
+- `monokai_pro`: Professional dark theme
+- `solarized_dark`: Precision colors for machines and people
+- `github`: GitHub's light theme
+- `one_dark`: Atom's iconic dark theme
+
+### Preview Themes [#preview-themes]
+
+Preview a theme's 16 ANSI colors before using it:
+
+```bash
+tuios --preview-theme dracula
+```
+
+The preview shows all 16 colors (8 standard + 8 bright variants) with their color codes.
+
+### Using Themes [#using-themes]
+
+Set a theme at startup:
+
+```bash
+tuios --theme nord
+```
+
+The theme affects:
+
+- Terminal text colors (ANSI 0-15)
+- Window borders
+- UI elements (status bar, dock, overlays)
+- Default foreground/background colors
+
+**Note:** The theme only affects the 16 base ANSI colors. Applications using 256-color or true color (RGB) will display those colors unchanged.
+
+### Interactive Theme Selection [#interactive-theme-selection]
+
+Use `fzf` for interactive theme selection with live preview:
+
+```bash
+tuios --theme $(tuios --list-themes | fzf --preview 'tuios --preview-theme {}')
+```
+
+This allows you to browse all themes with a live color preview before selecting one.
+
+### Theme Persistence [#theme-persistence]
+
+Themes are set via command-line flag and not currently stored in configuration. To always use a specific theme:
+
+**Shell alias:**
+
+```bash
+# Add to ~/.bashrc, ~/.zshrc, etc.
+alias tuios='tuios --theme nord'
+```
+
+**Script wrapper:**
+
+```bash
+#!/bin/bash
+exec tuios --theme dracula "$@"
+```
+
+### Looks: `tuios look` [#looks-tuios-look]
+
+A look is a small TOML file that sets how tuios looks: theme, glyph set,
+borders, gaps, dock and rail style. The [gallery](/gallery)
+shares looks. [docs/THEMES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/THEMES.md#looks) describes the file.
+
+```bash
+# Apply a look from the gallery. Each look there shows this command with its id.
+tuios look apply tuios.dev/r/<id>
+
+# Apply a look from an https URL or from a file
+tuios look apply https://example.com/my.look.toml
+tuios look apply ./my.look.toml
+
+# Choose a look from the gallery list, and apply it
+tuios look pick
+
+# List the gallery looks: id, name and author
+tuios look list
+tuios look list --json
+
+# Show the look in use
+tuios look show
+
+# Remove the look and the theme it installed
+tuios look remove
+
+# List the keys a look can set
+tuios look keys
+tuios look keys --json
+
+# Print your look as a look file, or write it to a file
+tuios look export
+tuios look export -o my.look.toml --name "Neon 84"
+
+# Share your look in the setups discussion on GitHub
+tuios look share
+tuios look share --print
+```
+
+`tuios look apply <source>`:
+
+- The source is a gallery id (`tuios.dev/r/ID` or `ID`), an https URL, or a
+  local file. tuios downloads only over https.
+- tuios shows the changes and asks before it writes. Use `--yes` to skip the
+  question. A run with no terminal needs `--yes`.
+- tuios writes the look to `config.d/look.toml`. Without a take-over, it
+  does not change `config.toml`.
+- A theme or glyph set in the look goes into the themes or glyphs folder. Its
+  name starts with `look-`.
+- A running tuios reloads the config. You do not restart.
+- A look can set only look keys. tuios leaves out every other key and names
+  it. A value that is not correct stops the look.
+- `config.toml` wins over `config.d`. tuios names each key that `config.toml`
+  or a later `config.d` file sets, because the look does not change that key.
+- tuios then asks: "Let the look set these keys?" A yes is a take-over. tuios
+  removes the keys from those files and saves your values in
+  `config.d/look.saved.json`. The comments and the order of the files stay.
+- `--take-over` answers yes. `--yes` alone answers no, so a script keeps its
+  config. Use `--yes --take-over` for both.
+- A file that tuios cannot write keeps its keys, and so does a file that
+  another file includes. tuios names the file and the keys.
+- A new look replaces the look in use.
+- A config folder that tuios cannot write stops the command.
+
+`tuios look pick` shows the looks of the gallery, each with its name, its
+author and the colours of its theme. `tuios look` with no command does the
+same in a terminal. The command palette has it as "Choose a look", which
+opens it in a new pane.
+
+- Up and down move. Enter applies the look. Esc closes the list.
+- Enter asks the same questions as `tuios look apply`, the take-over question
+  too. `--take-over` answers that question yes.
+- `tuios look list` prints the id, the name and the author of each look.
+  `--json` adds the colours of each theme.
+- The list comes from `tuios.dev/gallery/feed`. When tuios cannot get it, the
+  command says so and exits with an error.
+
+`tuios look remove` deletes `config.d/look.toml` and the theme and glyph set
+that the look installed. Use `--yes` to skip the question. After a take-over,
+it puts your saved values back:
+
+- A file that you did not change since the take-over goes back byte for byte.
+- In a file that you changed, tuios puts back each saved key that the file
+  does not set.
+- A key that you set again after the take-over keeps your newer value. tuios
+  names it.
+- A file that you deleted stays deleted. tuios names the keys it does not put
+  back.
+- When tuios cannot write a key back, the look stays and the key stays saved.
+  Fix the file, then run `tuios look remove` again.
+- When `config.d/look.saved.json` cannot be read, tuios asks before it removes
+  the look without the saved values. It moves the file aside and does not
+  delete it.
+- When `config.d/look.toml` is gone, `tuios look remove` still puts the saved
+  values back.
+
+A new look applied over a take-over puts back the saved keys that the new look
+does not set. tuios reads each file again before it writes it. If a file
+changed while tuios asked its questions, tuios stops and changes nothing.
+
+`tuios look export` prints the look in force as a look file.
+`tuios look apply` takes the file unchanged.
+
+- `-o FILE` or `--output FILE` writes the file instead of stdout.
+- `--name` sets the name. `--author` sets the author. The author is your
+  GitHub login when `gh` is signed in.
+- The file sets the keys that differ from the defaults. `--all` sets every
+  look key.
+- A theme or glyph set from your own folder goes into the file. A built-in
+  one goes in by name. tuios names on stderr each key or item it leaves out.
+
+`tuios look share` shares your look in
+[discussion #849](https://github.com/Gaurav-Gosain/tuios/discussions/849).
+The command palette has it as "Share my look". The Appearance page of the
+settings has it too. There the dock says "Look copied. Paste it in the browser
+page." Press prefix+N to read the full message with the path of the
+screenshot.
+
+- tuios exports the look and takes a screenshot of the screen. The running
+  tuios takes it, and the screenshot goes to Downloads or the cache folder.
+- tuios puts the comment on the clipboard through the terminal (OSC 52), also
+  over ssh. Where a clipboard tool is on this machine, tuios uses it too.
+- tuios opens the discussion in the browser: `appearance.link_opener`, then
+  `$BROWSER`, then the system opener. Over ssh, or with no browser, it prints
+  the address.
+- The command prints at most three lines: what is on the clipboard, where the
+  screenshot is, and the address when no browser opened.
+- `--print` writes the comment to stdout and opens nothing.
+- `--name` and `--author` work as they do for `tuios look export`.
+- With no tuios attached, the command writes the clipboard through its own
+  terminal. The daemon then captures the focused pane, if there is one.
+
+---
+
+## Agent Skill [#agent-skill]
+
+`tuios --skill` prints the agent skill embedded in the binary and exits. The
+skill teaches an agent to drive TUIOS from inside a pane. It is split so an
+agent loads only what it needs:
+
+- `tuios --skill` (or `--skill core`) prints the core (about 280 lines): how to tell it is in a
+  pane, what its pane may do, addressing, reading and writing panes, running
+  work and waiting for it, reporting its own state, talking to other agents and
+  the person safely, and a table of the topics.
+- `tuios --skill TOPIC` prints one topic: `panes`, `state`, `inbox`, `mail`,
+  `fleet`, `checkpoints`, `ship`, `hosts`, `events`, `clients`, `mcp`, `tmux`,
+  `herdr`, `notify`, `agents-off`, `grants`, `config`, `errors` or `recipes`. `recipes` has end-to-end recipes: a fleet of agents, answering
+  from the Inbox, approvals, agents on another machine, MCP setup, the tmux
+  shim, scoped grants, a conductor pane and a phone alert.
+- `tuios --skill all` prints the core and every topic.
+- An unknown topic is an error that lists the topics.
+
+```bash
+tuios --skill
+tuios --skill fleet
+tuios --skill all
+```
+
+The text ships inside the binary as `skills/tuios/SKILL.md` and the other
+files in `skills/tuios/`, so it always describes the TUIOS that printed it.
+Nothing is fetched and no daemon is needed. `tuios --skill=TOPIC` works too.
+
+To make an agent harness load the skill, run `tuios integration install`. It
+writes a short `SKILL.md` that tells the agent to run `tuios --skill`, so the
+text the agent reads always matches the TUIOS you have installed. Claude Code
+gets it in `~/.claude/skills/tuios/`. Codex, opencode and Pi get it in
+`~/.agents/skills/tuios/`. TUIOS leaves a `SKILL.md` alone when it did not write it, when you changed it, or when it is a symlink.
+
+**Examples:**
+
+```bash
+# Install the hooks and the skill for Claude Code
+tuios integration install claude-code
+
+# Do not copy the whole text into a skill file. The copy goes out of date
+# when you update TUIOS.
+```
+
+---
+
+## Global Flags [#global-flags]
+
+The root command's flags are listed under [Root Command](#root-command).
+`--debug` is accepted by every subcommand too. `--cpuprofile` and `--pprof` are accepted by every subcommand and honoured by the commands that keep running (see the flags under [Root Command](#root-command)).
+
+---
+
+## Common Usage Examples [#common-usage-examples]
+
+### Basic Usage [#basic-usage]
+
+Start TUIOS normally:
+
+```bash
+tuios
+
+# Start with showkeys overlay for screencasting
+tuios --show-keys
+```
+
+### Theming [#theming-1]
+
+```bash
+# Start with a specific theme
+tuios --theme dracula
+
+# List all available themes
+tuios --list-themes
+
+# Preview a theme before using it
+tuios --preview-theme nord
+
+# Interactive theme selection with fzf
+tuios --theme $(tuios --list-themes | fzf --preview 'tuios --preview-theme {}')
+
+# Use ASCII mode (no Nerd Font required)
+tuios --ascii-only
+
+# Combine theme with ASCII mode
+tuios --theme gruvbox_dark --ascii-only
+```
+
+### Configuration Management [#configuration-management]
+
+```bash
+# Find config file location
+tuios config path
+
+# Edit configuration
+tuios config edit
+
+# View all keybindings
+tuios keybinds list
+
+# View your customizations
+tuios keybinds list-custom
+
+# Reset to defaults
+tuios config reset
+```
+
+### Daemon Mode (Session Persistence) [#daemon-mode-session-persistence-1]
+
+```bash
+# Create a new persistent session
+tuios new mysession
+
+# List all sessions
+tuios ls
+
+# Attach to an existing session
+tuios attach mysession
+
+# Detach from session (inside TUIOS)
+# Press Ctrl+B d
+
+# Kill a session
+tuios kill-session mysession
+
+# Stop the daemon (kills all sessions)
+tuios kill-server
+```
+
+### SSH Server Setup [#ssh-server-setup]
+
+```bash
+# Add your public key first. The server does not start without keys,
+# on localhost too. Use your public key file.
+mkdir -p ~/.config/tuios
+cat ~/.ssh/id_ed25519.pub >> ~/.config/tuios/authorized_keys
+
+# Start SSH server on default port
+tuios ssh
+
+# Start on custom port with remote access
+tuios ssh --host 0.0.0.0 --port 8022
+
+# Connect from another machine, with the matching private key
+ssh -p 8022 your-server-hostname
+```
+
+### Web Terminal Setup (tuios-web) [#web-terminal-setup-tuios-web]
+
+```bash
+# Start web terminal on default port
+tuios-web
+
+# Start on custom port with remote access, over TLS with a password
+tuios-web --host 0.0.0.0 --port 8080 --auto-tls --random-password
+
+# Open in browser
+open http://localhost:7681
+
+# Start in read-only mode for demonstrations
+tuios-web --read-only
+
+# Start with theme and overlay
+tuios-web --theme dracula --show-keys
+
+# Limit connections for production use
+tuios-web --max-connections 50 --host 0.0.0.0 --auto-tls --password-file ~/.config/tuios/web-password
+```
+
+### Development & Debugging [#development--debugging]
+
+```bash
+# Run with debug logging
+tuios --debug
+# Then press Ctrl+L during runtime to view logs
+
+# CPU profiling
+tuios --cpuprofile cpu.prof
+# Use the application, then exit
+go tool pprof cpu.prof
+
+# Screencasting with showkeys overlay
+tuios --show-keys
+# Or toggle during runtime with: Ctrl+B D k
+```
+
+### Shell Completions [#shell-completions]
+
+```bash
+# Install bash completion
+tuios completion bash | sudo tee /etc/bash_completion.d/tuios
+
+# Install zsh completion
+tuios completion zsh > "${fpath[1]}/_tuios"
+
+# Install fish completion
+tuios completion fish > ~/.config/fish/completions/tuios.fish
+```
+
+---
+
+## Environment Variables [#environment-variables]
+
+### `$EDITOR` / `$VISUAL` [#editor--visual]
+
+Used by `tuios config edit` to determine which editor to open.
+
+**Example:**
+
+```bash
+export EDITOR=vim
+export VISUAL=code
+tuios config edit
+```
+
+**Fallback order:** `$EDITOR` → `$VISUAL` → vim → vi → nano → emacs
+
+### `XDG_RUNTIME_DIR`, and `TUIOS_SOCKET` [#xdg_runtime_dir-and-tuios_socket]
+
+`XDG_RUNTIME_DIR` chooses the daemon a command reaches: its socket is
+`$XDG_RUNTIME_DIR/tuios/tuios.sock` (`%LOCALAPPDATA%\tuios\tuios.sock` on
+Windows). When the variable is unset, the socket is
+`/run/user/<uid>/tuios/tuios.sock` on Linux if `/run/user/<uid>` is yours and
+has mode `0700`, and `/tmp/tuios-<uid>/tuios.sock` otherwise. So a command over
+ssh reaches the same daemon as your desktop. See
+[One daemon per user](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#one-daemon-per-user). Set it, with
+`XDG_STATE_HOME` for separate saved sessions, to run a separate daemon. See
+[Running a separate daemon](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#running-a-separate-daemon).
+
+`TUIOS_SOCKET` does not choose the daemon. It is set in every pane to the
+socket of the daemon that runs it. A command refuses when `TUIOS_SOCKET` names a
+different socket with no daemon listening, since that is an attempt to select a
+daemon that would otherwise reach the one `XDG_RUNTIME_DIR` names. `tuios mcp`
+is the one reader: it connects to `TUIOS_SOCKET` when it is set, see below.
+
+### `TUIOS_NO_DAEMON` [#tuios_no_daemon]
+
+Set to `1` to make a plain `tuios` run a standalone session without the daemon,
+the same as `--standalone`, for every run in that shell.
+
+```bash
+export TUIOS_NO_DAEMON=1
+tuios
+```
+
+### `TUIOS_AGENT` [#tuios_agent]
+
+Set on a wrapper that runs an agent tuios cannot see, such as one in a
+container or a VM, to name its harness. The daemon reads it from the pane's
+foreground process when nothing else identifies the process, and attributes
+the pane to that harness, so its screen and title rules run. `tuios agent-hook`
+ignores a hook from a different harness than the one it names, which may be any
+harness tuios recognises, one with no integration included. The plugins tuios
+installs report only when `TUIOS_ENV` or `TUIOS_AGENT` is set.
+
+```bash
+TUIOS_AGENT=claude-code docker run -it sandbox claude
+```
+
+### Variables tuios sets in a pane [#variables-tuios-sets-in-a-pane]
+
+`TUIOS_ENV`, `TUIOS_SOCKET`, `TUIOS_PANE_ID`, `TUIOS_WINDOW_ID`,
+`TUIOS_SESSION`, `TUIOS_HOST`, `TUIOS_PANE_TOKEN`, `TUIOS_PANE_GRANTS` and
+`TUIOS_PANE_TTY`. See
+[Environment](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#environment) for what each one means.
+
+### Agent detection [#agent-detection]
+
+`TUIOS_AGENT_AUTODETECT`, `TUIOS_AGENT_DETECT_SECONDS`,
+`TUIOS_AGENT_BINARIES` and `TUIOS_AGENT_STALL_SECONDS`, read by the daemon as
+it starts. Each but `TUIOS_AGENT_BINARIES` sets the `[daemon]` option of the
+same name and wins over the file. See
+[Turning detection off or widening it](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#turning-detection-off-or-widening-it)
+and [The stall heuristic](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#the-stall-heuristic).
+
+### `TUIOS_WORKTREE_DIR` [#tuios_worktree_dir]
+
+Where the daemon puts the worktrees `tuios worktree new` and `tuios fan`
+create, instead of `$XDG_DATA_HOME/tuios/worktrees`. Set it in the daemon's
+environment, before it starts. A `[worktree] path` in the config wins over it
+(see [Where worktrees go](/docs/configuration#where-worktrees-go)).
+
+### `TUIOS_LOG_LEVEL` [#tuios_log_level]
+
+The daemon's log level from the start: `off`, `errors`, `basic`, `messages`,
+`verbose` or `trace` (or `0` to `5`). It wins over `daemon.log_level`.
+`tuios logs` reads what it records.
+
+### `TUIOS_NO_SOUND` [#tuios_no_sound]
+
+Any value silences the agent alert sounds, whatever
+`notifications.agent.sound` says. For a CI job or a recording.
+
+### Debug logs [#debug-logs]
+
+These variables turn on a log for one bug report. Each one is off when it is
+unset. Set it before the process starts.
+
+- `TUIOS_PTY_LOG`: a folder. The daemon writes every byte that the program of a
+  pane writes, as it writes it, to one file for each pane in that folder.
+- `TUIOS_RENDER_TRACE`: `1` writes a trace of the pane renders to
+  `tuios-render-trace.PID.log` in `$XDG_STATE_HOME/tuios`. When
+  `XDG_STATE_HOME` is unset, the file goes in the temp folder. A file path
+  writes the trace to that file.
+- `TUIOS_DEBUG_CAPS`: `1` makes the client write what it found out about the
+  terminal to `$XDG_STATE_HOME/tuios/tuios-caps.PID.log`.
+
+### `TUIOS_EVENTS_LOG` [#tuios_events_log]
+
+A file path. A client that has it logs every key it reads, with its input mode
+at that moment, to that file, and turns on no other debug log.
+
+The file records every key typed in that client, passwords included. Use it
+for tests and debugging only, and delete the file after. tuios creates it with
+mode `0600`, does not follow a symbolic link there, and refuses a file another
+user owns. `--debug` and
+`TUIOS_DEBUG_INTERNAL=1` log the same lines to `/tmp/tuios-events.log` with
+the rest of the debug logs. The e2e harness gives each client a file of its
+own, so a test that waits on a key's effect can say whether the client read
+the key.
+
+### `TUIOS_SSH` [#tuios_ssh]
+
+The ssh program to run instead of `ssh` on `PATH`: for the daemon's links to
+the `[hosts]` machines (set it where the daemon starts), and for `--ssh`,
+`tuios hosts test` and `tuios hosts sync`.
+
+### `TUIOS_HOST_RECONNECT_BUDGET` [#tuios_host_reconnect_budget]
+
+How long a client attached to a session on another machine keeps dialing a
+dropped link before it gives up, as a Go duration (`10m`). Three minutes when
+unset. Read once, when the client starts.
+
+### `TUIOS_CELL_SIZE` [#tuios_cell_size]
+
+The terminal's cell size in pixels, as `WIDTHxHEIGHT` (`10x20`), for a terminal
+that does not answer the pixel geometry query. Images and captures drawn in
+cells are sized from it. The SSH server reads the same variable.
+
+### `TUIOS_KITTY_GRAPHICS`, `TUIOS_KITTY_PLACEHOLDERS`, `TUIOS_KITTY_ANIMATION`, `TUIOS_SIXEL_GRAPHICS` [#tuios_kitty_graphics-tuios_kitty_placeholders-tuios_kitty_animation-tuios_sixel_graphics]
+
+`1` or `0` overrides what tuios detected about the host terminal's kitty
+graphics, kitty Unicode placeholders, kitty animation and sixel support.
+
+tuios turns kitty graphics and sixel off on a terminal built on xterm.js, such
+as VS Code or Netcatty. That terminal cannot clear an image, so tuios draws
+images as block glyphs. Set `TUIOS_KITTY_GRAPHICS=1` or
+`TUIOS_SIXEL_GRAPHICS=1` to turn a protocol on again.
+
+### `$SHELL` [#shell]
+
+TUIOS uses your default shell from this variable. If not set, it attempts to detect the appropriate shell for your platform.
+
+### `COLORTERM` [#colorterm]
+
+For best color support, set this to `truecolor`:
+
+```bash
+export COLORTERM=truecolor
+```
+
+tuios draws its chrome for the colour depth it detects: truecolor, 256 or 16
+colours (see [THEMES.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/THEMES.md#colour-depth)).
+
+Without it, tuios falls back to 256 colours unless `TERM` names a terminal
+known to have 24-bit colour. **Mosh** is the common case: mosh 1.4 and
+later pass 24-bit colour through, but mosh-server sets `TERM=xterm-256color` and does not pass
+`COLORTERM` to the remote shell, so tuios sees a 256 colour terminal. If both
+ends of your mosh connection are 1.4 or later and your local terminal has
+truecolor, set it on the remote host, for example in your shell's startup file:
+
+```bash
+export COLORTERM=truecolor
+```
+
+tuios does not try to detect mosh. mosh-server sets no variable of its own
+that marks it, and the version of the mosh client on the other end, which
+decides whether 24-bit colour survives, is not visible from the server. Mosh
+also answers no colour queries, so with no theme tuios cannot learn the
+terminal's background there; see "Programs that ask" in CONFIGURATION.md.
+
+---
+
+## When Something Goes Wrong [#when-something-goes-wrong]
+
+Every failure `tuios` reports answers three questions in order: what failed, the
+most likely cause, and the exact command that fixes it. If you meet a message
+that does not, it is a bug worth reporting.
+
+### The daemon is not running [#the-daemon-is-not-running]
+
+There are three distinct versions of this, and they have different fixes:
+
+| Message says                         | What it means                                               | Fix                                                                     |
+| ------------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| "is not running"                     | No socket exists. The daemon has never run, or was stopped. | `tuios new`                                                             |
+| "a stale socket is left over at ..." | The daemon crashed without cleaning up.                     | `tuios kill-server`, which removes it                                   |
+| "Permission denied ... socket"       | The socket belongs to another user, or its mode changed.    | Check `ls -l` on the path; set `XDG_RUNTIME_DIR` to a directory you own |
+
+### Two daemons on one machine [#two-daemons-on-one-machine]
+
+A session you made on one machine does not show in `tuios ls` on that same
+machine, or a host link shows other sessions than your desktop. Two daemons
+run for your user, each with its own sessions. Two sessions with one name,
+such as `session-0`, can make them look like one.
+
+The cause is an older tuios. It put the socket in `/tmp/tuios-<uid>` when a
+command ran without `XDG_RUNTIME_DIR`, as a command over ssh often does. The
+desktop used `/run/user/<uid>/tuios`. tuios now uses `/run/user/<uid>/tuios`
+for both. See [One daemon per user](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#one-daemon-per-user).
+
+To find the daemons, look at both sockets:
+
+```bash
+ls -l /run/user/$(id -u)/tuios/tuios.sock /tmp/tuios-$(id -u)/tuios.sock
+```
+
+When both daemons run, tuios uses the one in `/run/user`. A command in a pane
+of the daemon in `/tmp` still reaches that daemon. A command at a
+terminal says once that the other one runs, and gives its process ID. To move
+the sessions of the daemon in `/tmp`:
+
+1. Stop it: `kill $(cat /tmp/tuios-$(id -u)/tuios.sock.pid)`. It saves every
+   session when it stops.
+2. List what it saved: `tuios resurrect`.
+3. Restore each session: `tuios resurrect NAME`.
+
+A session name that both daemons used has one saved file. Rename one of the
+two sessions before you stop that daemon if you need both.
+
+Upgrade tuios on every machine. A machine with the older tuios still starts a
+daemon in `/tmp` over ssh.
+
+### The daemon is older than the CLI [#the-daemon-is-older-than-the-cli]
+
+After upgrading TUIOS, the old daemon keeps running and serving the socket. It
+cannot speak the control protocol the new CLI uses, so commands fail:
+
+```
+The running TUIOS daemon does not speak this CLI's control protocol (daemon 0.9.0, CLI 1.4.0).
+Most likely cause: TUIOS was upgraded while the daemon kept running, so the old daemon is still serving the socket.
+Fix: run 'tuios kill-server', then run this command again.
+```
+
+Run `tuios restart-server`. It lists what stops and asks first. A restart ends every program running in your panes. Each
+session's layout, window names and working directories are saved before the
+daemon exits and come back when it next starts, each pane with a new shell;
+`tuios resurrect` lists what is restorable.
+
+### A session name is not found [#a-session-name-is-not-found]
+
+The message lists the sessions that do exist and suggests the closest name:
+
+```
+Session "wrok" was not found.
+Most likely cause: the name does not match any live session.
+Did you mean "work"?
+Sessions: notes, work.
+Fix: run 'tuios ls' to list sessions, or 'tuios new wrok' to create this one.
+```
+
+A session killed with `tuios kill-session` is gone for good: killing is a
+deliberate teardown, so its saved state is removed too. A session that merely
+outlived its daemon is still restorable with `tuios resurrect`.
+
+### A saved session will not restore [#a-saved-session-will-not-restore]
+
+`tuios resurrect <name>` distinguishes three cases: no saved state at all, state
+that is corrupt, and state written by a newer TUIOS. Unreadable state is moved
+into an archive directory rather than deleted, and the message names that
+directory so you can inspect or recover the file.
+
+### The terminal cannot host the interface [#the-terminal-cannot-host-the-interface]
+
+`tuios attach`, `tuios new`, and `tuios resurrect` check the terminal before
+taking over the screen, and refuse with an explanation when it is too small
+(minimum 40x12), when `TERM` is unset or `dumb`, or when stdout is not a
+terminal at all. For non-interactive use, drive a session with `tuios send-keys`
+and `tuios capture-pane` instead of attaching.
+
+### A session was killed while you were attached [#a-session-was-killed-while-you-were-attached]
+
+The client exits with a non-zero status and says so, rather than leaving you in a
+dead UI:
+
+```
+Session "work" was terminated while you were attached.
+```
+
+The same applies when the daemon itself goes away, which reports a lost
+connection instead.
+
+### Agent features are off [#agent-features-are-off]
+
+With `[agents] enabled = false` in `config.toml`, tuios keeps only the
+multiplexer. Every agent command (`list-agents`, `start-agent`, `fan`, mail,
+the Inbox, `respond`, `queue` and the agent conditions of `wait-for`) prints
+one line and exits `1`:
+
+```
+Agent features are off. Set agents.enabled = true in the config to use this command.
+```
+
+With `--json` the error carries `"code": "agents_disabled"`, so a script can
+tell it from a failure worth a retry. A call to another machine whose agent
+features are off names that machine. Turn the features on from the settings
+page or in `config.toml`. A process in a pane cannot set `agents.enabled`.
+
+### Discovering the control protocol [#discovering-the-control-protocol]
+
+`tuios list-verbs` prints every verb the daemon supports with its parameters,
+accepted values, and runnable examples, plus the stable error codes. It is the
+discovery entry point that the error hints point at, and `--json` makes it
+machine-readable for an agent or a script.
+
+```bash
+tuios list-verbs                 # everything
+tuios list-verbs capture-pane    # one verb
+tuios list-verbs --json          # for scripting
+```
+
+---
+
+## Exit Codes [#exit-codes]
+
+- `0`: Success
+- `1`: Error (configuration error, network error, file not found, etc.)
+- `2`: `tuios ask-human` returned before an answer, because of `--no-wait` or
+  because `--timeout` ran out. The question stays in the Inbox
+- `3`: The command needed a daemon and found none running. `tuios ls` lists the
+  sessions saved on disk instead, so a script can tell a stopped daemon from a
+  running one with no sessions, which exits `0`
+
+`tuios run` exits with the status of the command it ran, and `tuios popup --wait` with its command's status (`130` when the popup is closed).
+
+`tuios cp` and `tuios transfers wait` have their own exit codes: see
+[Exit codes of tuios cp](/docs/cli-reference/commands-for-other-machines#exit-codes-of-tuios-cp).
+
+A `tuios attach` that ends because its session was killed, or because the daemon
+was lost, exits `1`. A normal detach exits `0`.
+
+---
+
+## Version Information [#version-information]
+
+The `--version` flag shows detailed build information:
+
+```bash
+tuios --version
+```
+
+**Output:**
+
+```
+tuios version 0.8.0 [pure-Go backend]
+Commit: a1b2c3d
+Built: 2026-09-27T10:30:00Z
+By: goreleaser
+```
+
+The bracket names the terminal emulator backend the binary was built with.
+
+---
+
+## Command Migration Guide [#command-migration-guide]
+
+If you're upgrading from an older version of TUIOS, here's how the commands have changed:
+
+| Old Flag                  | New Command                    |
+| ------------------------- | ------------------------------ |
+| `--config-path`           | `tuios config path`            |
+| `--edit-config`           | `tuios config edit`            |
+| `--reset-config`          | `tuios config reset`           |
+| `--list-keybinds`         | `tuios keybinds list`          |
+| `--list-custom-keybinds`  | `tuios keybinds list-custom`   |
+| `--ssh`                   | `tuios ssh`                    |
+| `--ssh --host X --port Y` | `tuios ssh --host X --port Y`  |
+| `--version`               | `tuios --version`              |
+| `--help`                  | `tuios --help` or `tuios help` |
+
+---
+
+## Related Documentation [#related-documentation]
+
+- [Configuration Guide](/docs/configuration): How to customize TUIOS
+- [Keybindings Reference](/docs/keybindings): Complete keyboard shortcut reference
+- [Architecture Guide](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/ARCHITECTURE.md): Technical architecture details
+- [README](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/README.md): Project overview and quick start

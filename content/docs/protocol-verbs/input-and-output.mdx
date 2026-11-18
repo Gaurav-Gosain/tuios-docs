@@ -1,0 +1,183 @@
+---
+title: "Input and output"
+description: "Input and output: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `capture-pane` <Since verb="capture-pane" /> [#capture-pane]
+
+Capture a pane's content. On a window that shows a TML surface, the content is the surface drawn at the window's size, with its state and the open tab, and the result adds surface.
+
+| Param        | Type      | Required | Default          | Description                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------ | --------- | -------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`    | string    |          |                  | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                                                                                                                              |
+| `window`     | string    |          |                  | Window id or name. Omit to target the focused window.                                                                                                                                                                                                                                                                                                                                                                 |
+| `source`     | string    |          | `visible`        | Which buffer to capture. last-command-output is what the pane's last finished command printed, read between its shell's OSC 133 marks; it is plain text, adds cmdline, exit\_code, command\_seq and truncated to the result, and fails with no\_shell\_integration when no command has finished under the marks. One of `visible`, `recent` or `last-command-output`.                                                 |
+| `styled`     | bool      |          | `false`          | Include ANSI styling in the captured text.                                                                                                                                                                                                                                                                                                                                                                            |
+| `scrollback` | bool      |          | `false`          | Older spelling of source "recent".                                                                                                                                                                                                                                                                                                                                                                                    |
+| `ansi`       | bool      |          | `false`          | Older spelling of styled.                                                                                                                                                                                                                                                                                                                                                                                             |
+| `resolved`   | bool      |          | `false`          | Rewrite ANSI index colours (30-37, 90-97, 40-47, 100-107, 38;5;n\<16, 48;5;n\<16) to 24-bit RGB so the capture matches what a themed client paints. Indices above 15 and true colour pass through untouched.                                                                                                                                                                                                          |
+| `palette`    | \[]string |          | `xterm defaults` | The 16 hex colours (#rrggbb) the client's theme paints indices 0-15 with, used by resolved captures. Must be exactly 16 entries when present; absent means the xterm defaults.                                                                                                                                                                                                                                        |
+| `lines`      | int       |          |                  | Keep only the last N lines. Blank rows below the cursor do not count. Ignored when start or end is given. With commands, the most lines to keep in total (default 2000).                                                                                                                                                                                                                                              |
+| `commands`   | int       |          |                  | Capture the last N shell commands, found by the pane's OSC 133 marks, from the scrollback. Each command runs from its prompt to the next prompt. When the total is over lines, the longest outputs lose their middle, and one line says how many lines were left out. A pane with no marks, or on the alternate screen, gives the last lines lines instead, with command\_marks false. Takes no start, end or unwrap. |
+| `start`      | int       |          |                  | 1-based inclusive first line of the region to keep.                                                                                                                                                                                                                                                                                                                                                                   |
+| `end`        | int       |          |                  | 1-based inclusive last line of the region to keep.                                                                                                                                                                                                                                                                                                                                                                    |
+| `unwrap`     | bool      |          | `false`          | Join the rows the terminal wrapped because a line was longer than the pane, so each line is one line as the program wrote it. A row that ends with a newline stays a line of its own. lines, start and end then count the joined lines.                                                                                                                                                                               |
+| `trim`       | bool      |          | `false`          | Drop the blank lines at the end of the capture, which are the empty rows below the cursor. lines, start and end then count what is left.                                                                                                                                                                                                                                                                              |
+
+| Result field         | Type      | Description                                                                                                                                                                                                                                                  |
+| -------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `content`            | string    | The captured text, one line per row, or per line with unwrap.                                                                                                                                                                                                |
+| `unwrapped`          | bool      | True when unwrap joined the wrapped rows. Omitted otherwise.                                                                                                                                                                                                 |
+| `trimmed`            | bool      | True when trim dropped the blank lines at the end. Omitted otherwise.                                                                                                                                                                                        |
+| `lines_omitted`      | int       | With lines: how many older lines the capture left out, 0 when it kept them all. With commands: how many lines it cut from the middle of the outputs. Omitted without lines or commands, and with start or end.                                               |
+| `command_marks`      | bool      | With commands: true when the marks cut the capture into commands, false when it gave the last lines lines instead.                                                                                                                                           |
+| `commands`           | \[]object | With commands and command\_marks true: one entry per command captured, oldest first, with lines (kept), lines\_omitted, finished, and cmdline and exit\_code when the shell reported them.                                                                   |
+| `commands_available` | int       | With commands and command\_marks true: how many commands the scrollback holds under marks.                                                                                                                                                                   |
+| `source`             | string    | The buffer captured. One of `visible`, `recent` or `last-command-output`.                                                                                                                                                                                    |
+| `styled`             | bool      | Whether content carries ANSI styling.                                                                                                                                                                                                                        |
+| `resolved`           | bool      | Whether index colours were rewritten to 24-bit RGB.                                                                                                                                                                                                          |
+| `history_rows`       | int       | How many scrollback lines the pane holds above its screen. A recent capture of more lines than this plus the screen has nothing older to show. Not on a last-command-output capture.                                                                         |
+| `revision`           | int       | A number that grows each time the pane's content can change: output reaches it, or it is resized. Two captures of one source with one revision have the same content. It counts from 0 again when the daemon restarts. Not on a last-command-output capture. |
+| `boot_id`            | string    | The daemon start the revision belongs to, the boot\_id of subscribe and list-attention. Compare revisions only when boot\_id is the same.                                                                                                                    |
+
+```json
+{"id":1,"verb":"capture-pane","params":{"session":"work","source":"recent","lines":50}}
+```
+
+```json
+{"id":1,"verb":"capture-pane","params":{"session":"work","source":"recent","unwrap":true,"trim":true}}
+```
+
+## `list-keys` <Since verb="list-keys" /> [#list-keys]
+
+List the send-keys key grammar: every key name with its aliases, the modifiers and their spellings, and the other kinds of token. The list is closed: a key name or modifier missing from it is refused.
+
+No params.
+
+| Result field      | Type      | Description                                                                                                                                                                      |
+| ----------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keys`            | \[]object | Every named key, as \{name, aliases}. name is the canonical spelling. aliases are the other spellings, lower case, since names are matched without case, hyphens or underscores. |
+| `modifiers`       | \[]object | Every modifier, as \{name, spellings}. super reaches only an attached client's window manager, never a pane.                                                                     |
+| `ctrl_characters` | \[]string | The characters other than letters that ctrl combines with.                                                                                                                       |
+| `escape_prefixes` | \[]string | The prefixes that make a token an escape sequence, sent as it is.                                                                                                                |
+| `prefix_token`    | string    | The token for the leader key.                                                                                                                                                    |
+| `separators`      | \[]string | The characters keys are split on.                                                                                                                                                |
+| `max_repeat`      | int       | The largest repeat send-keys takes.                                                                                                                                              |
+
+```json
+{"id":1,"verb":"list-keys"}
+```
+
+## `paste-image` <Since verb="paste-image" /> [#paste-image]
+
+Write an image the person pasted to the machine where a pane's process runs, and answer with the path there. For a pane on another machine the image crosses the link and is written there. The client pastes the path into the pane as text. Only the person's attached client may call it: it needs that client's attach nonce and is refused from inside a pane. The file is readable by its owner only and is deleted after an hour, or when the daemon stops.
+
+| Param         | Type   | Required | Default | Description                                                                                                              |
+| ------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`     | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`      | string |          |         | The window to paste into. Omit for the focused window.                                                                   |
+| `content`     | string |          |         | The image, base64. PNG, JPEG, GIF, WebP, BMP or TIFF, at most 8 MB decoded. The type is read from the bytes.             |
+| `human_nonce` | string |          |         | The attach nonce of the person's client, attached to this session.                                                       |
+
+| Result field | Type   | Description                                                    |
+| ------------ | ------ | -------------------------------------------------------------- |
+| `path`       | string | The image's path on the machine where the pane's process runs. |
+| `host`       | string | The machine the image was written to, when it is not this one. |
+| `window`     | string | The window the path is for.                                    |
+| `bytes`      | int    | How many bytes were written.                                   |
+
+```json
+{"id":1,"verb":"paste-image","params":{"session":"work","window":"a1b2","content":"iVBORw0KGgo=","human_nonce":"<from the attach reply>"}}
+```
+
+## `run` <Since verb="run" /> [#run]
+
+Type one command line at a pane's shell prompt, wait for the shell to report it finished, and return its exit code and output. Needs a shell that marks its commands with OSC 133, and refuses with no\_shell\_integration one that marks only its prompts; refuses with not\_at\_prompt when a command, or another run, is already running there. From a pane, window is required.
+
+| Param     | Type   | Required | Default | Description                                                                                                                       |
+| --------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.          |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                             |
+| `command` | string |          |         | The command line, typed as a paste and submitted with Enter. One line, no control characters: join several commands with ; or &&. |
+| `timeout` | int    |          | `30000` | Milliseconds to wait for the command to finish before failing with the timeout code. The command keeps running after a timeout.   |
+| `lines`   | int    |          |         | Keep only the last N lines of the output.                                                                                         |
+
+| Result field  | Type   | Description                                                                                                      |
+| ------------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| `exit_code`   | int    | The status the shell reported. Omitted when the shell sent none, which a bash integration does on ctrl+c.        |
+| `output`      | string | What the command printed, as plain text, read from the pane between the shell's marks. At most the last 256 KiB. |
+| `truncated`   | bool   | True when the output was cut, or its start had already left the scrollback.                                      |
+| `cmdline`     | string | The command line as the shell showed it, cut to 512 bytes with likely secrets masked.                            |
+| `duration_ms` | int    | How long the command ran, from the shell's marks.                                                                |
+| `command_seq` | int    | How many commands the pane has finished, this one included.                                                      |
+| `window`      | string | Id of the pane the command ran in.                                                                               |
+| `session`     | string | The session the pane is in.                                                                                      |
+
+```json
+{"id":1,"verb":"run","params":{"session":"work","window":"build","command":"go test ./...","timeout":600000}}
+```
+
+```json
+{"id":1,"verb":"run","params":{"session":"work","window":"build","command":"make lint","lines":40}}
+```
+
+## `send-keys` <Since verb="send-keys" /> [#send-keys]
+
+Send keys to a window's program: Up, PageDown, ctrl+c. With a window they go to that window's terminal; without one, to an attached client (the window manager) or else the focused window. From a pane, window is required.
+
+| Param           | Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`       | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                                                                                                                                                                                                                                                                |
+| `window`        | string |          |         | Window id or name. Omit to target the focused window.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `keys`          | string |          |         | Keys split on spaces and commas, e.g. "Down Down PageDown" or "ctrl+c". A key is a name (Enter Tab BTab Space Comma Escape Backspace Up Down Right Left Home End PageUp PageDown Insert Delete F1-F12, case-insensitive, also as arrow-up, KEY\_UP, \<Up>, PgDn), one character, a name or character after ctrl+, alt+ or shift+ (or tmux C-, M-, S-), an escape sequence written \e\[A, or PREFIX for the leader key. list-keys returns the full list. |
+| `literal`       | bool   |          | `false` | Send the keys to the PTY without parsing them as key names.                                                                                                                                                                                                                                                                                                                                                                                             |
+| `raw`           | bool   |          | `false` | Treat every character as its own key instead of splitting on spaces and commas.                                                                                                                                                                                                                                                                                                                                                                         |
+| `repeat`        | int    |          | `1`     | Send the whole sequence this many times, 1 to 1000.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `allow_blocked` | bool   |          | `false` | From a pane, type into a pane on needs\_input instead of refusing with agent\_blocked. What is typed then answers its prompt, which also needs the respond grant. The person, outside every pane, is not held.                                                                                                                                                                                                                                          |
+
+| Result field | Type   | Description                                                                                                              |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `sent_to`    | string | window when the keys were written to a window's terminal, client when an attached client took them as the person's keys. |
+| `window_id`  | string | The window the keys were written to, when sent\_to is window.                                                            |
+| `window`     | string | That window's name, or its title when it has no name.                                                                    |
+| `keys`       | int    | How many keys were sent, counting repeats.                                                                               |
+
+```json
+{"id":1,"verb":"send-keys","params":{"session":"work","window":"review","keys":"Down","repeat":5}}
+```
+
+```json
+{"id":1,"verb":"send-keys","params":{"session":"work","window":"build","keys":"ctrl+c"}}
+```
+
+## `send-text` <Since verb="send-text" /> [#send-text]
+
+Send literal text to a window's PTY. From a pane, window is required.
+
+| Param           | Type   | Required | Default | Description                                                                                                                                                                                                           |
+| --------------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`       | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                              |
+| `window`        | string |          |         | Window id or name. Omit to target the focused window.                                                                                                                                                                 |
+| `text`          | string |          |         | Text written verbatim to the PTY.                                                                                                                                                                                     |
+| `paste`         | bool   |          | `false` | Send the text as a paste. Control characters other than tab, line feed and carriage return are removed. The text is wrapped in the bracketed paste delimiters when the program in the pane turned bracketed paste on. |
+| `submit`        | bool   |          | `false` | Paste the text and submit it with the Enter key of the harness in the pane, after a short wait for the paste to be taken in, as ask-agent does.                                                                       |
+| `allow_blocked` | bool   |          | `false` | From a pane, type into a pane on needs\_input instead of refusing with agent\_blocked. What is typed then answers its prompt, which also needs the respond grant. The person, outside every pane, is not held.        |
+
+```json
+{"id":1,"verb":"send-text","params":{"session":"work","text":"echo hi\n"}}
+```
+
+```json
+{"id":1,"verb":"send-text","params":{"session":"work","window":"build","text":"line one\nline two","paste":true}}
+```
+
+```json
+{"id":1,"verb":"send-text","params":{"session":"work","text":"Fix the test\nthen commit","submit":true}}
+```

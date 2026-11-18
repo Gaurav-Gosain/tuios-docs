@@ -1,0 +1,1543 @@
+---
+title: "Other verbs"
+description: "Other verbs: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `agent-message-receipts` <Since verb="agent-message-receipts" /> [#agent-message-receipts]
+
+The mail one window sent and its state, newest last: delivered, seen (the recipient looked at its inbox without reading) or read, with the times, and undeliverable when the recipient window is gone. Marks nothing. On this machine it reads every session's ring and asks each linked machine for the mail this window sent there; over a link it answers only for mail that arrived on that link from that window, with ids, recipients and times. A message a ring no longer holds is not listed.
+
+| Param    | Type   | Required | Default | Description                                                                                               |
+| -------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `window` | string | yes      |         | The sending window's id, normally $TUIOS\_PANE\_ID. A restricted connection may name only its own window. |
+| `limit`  | int    |          | `20`    | At most this many rows, newest last, at most 200.                                                         |
+
+| Result field  | Type      | Description                                                                                                                                                                                                                      |
+| ------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `receipts`    | \[]object | One per message: id, host (empty for this machine), session, to, to\_label, thread\_id, sent\_at, seen\_at, read\_at (Unix nanoseconds, 0 when not yet), undeliverable, and on this machine preview, the first line of the text. |
+| `waiting`     | \[]object | Mail this window sent to a machine whose link is down, kept here until it is back: queue\_id, host, session, to, queued\_at.                                                                                                     |
+| `unreachable` | \[]object | Linked machines that could not be asked now: host and reason. Mail sent there is not listed.                                                                                                                                     |
+
+```json
+{"id":1,"verb":"agent-message-receipts","params":{"window":"3f2a91c0-5b1e-4d7a-9c2f-0e8b6a4d1c3e"}}
+```
+
+## `agent-preset` <Since verb="agent-preset" /> [#agent-preset]
+
+Merge an \[agents.presets] entry of this daemon's config into start-agent params, as start-agent merges it, for a start-agent call on this machine or another one, so a preset of this machine works on every host. An unknown name is refused with the names there are.
+
+| Param    | Type   | Required | Default | Description                              |
+| -------- | ------ | -------- | ------- | ---------------------------------------- |
+| `preset` | string |          |         | The preset to merge.                     |
+| `params` | object |          |         | The start-agent params to merge it into. |
+
+| Result field | Type   | Description                                    |
+| ------------ | ------ | ---------------------------------------------- |
+| `params`     | object | The merged start-agent params, without preset. |
+
+```json
+{"id":1,"verb":"agent-preset","params":{"preset":"worker","params":{"name":"w3","session":"crew"}}}
+```
+
+## `agent-readiness` <Since verb="agent-readiness" /> [#agent-readiness]
+
+Say for each harness whether it can start an agent on this machine: its program on the PATH, and for a harness whose manifest names a check (\[launch] signed\_in\_args), whether it says it is signed in. The check runs the harness's own program, is bounded to 2 seconds, and its answer is kept for a minute; its output is matched and dropped.
+
+| Param           | Type      | Required | Default | Description                                                                                       |
+| --------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `harnesses`     | \[]string |          |         | Harness ids to answer for. Omit for every harness the registry knows.                             |
+| `env`           | object    |          |         | PATH in it is where the programs are looked up, as for start-agent. Refused from another machine. |
+| `repo_url`      | string    |          |         | Also say if this machine has a checkout of it.                                                    |
+| `repos_root`    | string    |          |         | Where to look, as for start-agent.                                                                |
+| `peer_instance` | string    |          |         | The caller's daemon instance, for back.                                                           |
+
+| Result field | Type      | Description                                                                                                                                   |
+| ------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents`     | \[]object | One per harness, by id: harness, name, command, installed, signed\_in (yes, no or unknown; absent for a harness with no check), usage\_limit. |
+| `repo`       | string    | found, none or many.                                                                                                                          |
+| `load`       | object    | cores, load1, load\_ok, mem\_pct, working, starting, started, instance.                                                                       |
+| `cap`        | int       | \[tasks] machine\_cap, 0 for none.                                                                                                            |
+| `back`       | string    | This machine's name for the caller, when that link is up.                                                                                     |
+
+```json
+{"id":1,"verb":"agent-readiness","params":{}}
+```
+
+```json
+{"id":1,"verb":"agent-readiness","params":{"harnesses":["claude-code","codex"]}}
+```
+
+## `clear-history` <Since verb="clear-history" /> [#clear-history]
+
+Clear a pane's scrollback for every client of the session.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                        |
+| --------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                           |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                                                                              |
+| `screen`  | bool   |          | `false` | Also remove the rows above the prompt, as cmd+k does in Ghostty and iTerm2. The prompt row moves to the top of the pane. Without it, the screen stays, as with tmux clear-history. |
+
+| Result field | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `window`     | string | The id of the pane that was cleared.                |
+| `screen`     | bool   | Whether the rows above the prompt were removed too. |
+
+```json
+{"id":1,"verb":"clear-history","params":{"session":"work","window":"build"}}
+```
+
+```json
+{"id":1,"verb":"clear-history","params":{"session":"work","screen":true}}
+```
+
+## `close-pane` <Since verb="close-pane" /> [#close-pane]
+
+End a pane this machine runs for another machine at once: its process is killed and its connection closed. The owning daemon sends it when the window is closed on purpose, so a resumable pane does not wait out its grace.
+
+| Param  | Type   | Required | Default | Description                     |
+| ------ | ------ | -------- | ------- | ------------------------------- |
+| `pane` | string |          |         | The pane id open-pane returned. |
+
+| Result field | Type   | Description              |
+| ------------ | ------ | ------------------------ |
+| `pane`       | string | The pane that was ended. |
+| `closed`     | bool   | Always true.             |
+
+```json
+{"id":1,"verb":"close-pane","params":{"pane":"f2c1"}}
+```
+
+## `daemon-upgrade` <Since verb="daemon-upgrade" /> [#daemon-upgrade]
+
+Upgrade the daemon live to another tuios binary. Every pane's process keeps running, with the same pid, terminal and screen, and the daemon keeps its pid. The binary is run once first and must say it reads this daemon's state; a refusal changes nothing. The call answers once every pane is stopped and written down. Then every client is told and dropped, and the daemon execs the binary in place. Call hello until instance changes: its upgrade field says what the handoff measured, and has fallback set when the new binary could not take the panes and the binary that was running took them back, and recovered too when the new image died first and the handoff's keeper started that binary under a new pid. Refused on Windows, while a pane runs on another machine or here for another machine, while a fan check, a capturing popup, a hook or a plugin command runs, and to a plugin or over a link, whatever its grants. From a caller inside a pane it first asks the person in a dialog on every attached client, naming the binary's full path, its version and the pane, and blocks for up to 60 s: only Yes, pressed at a client, lets it go on, and anything else is forbidden.
+
+| Param    | Type   | Required | Default | Description                                             |
+| -------- | ------ | -------- | ------- | ------------------------------------------------------- |
+| `binary` | string |          |         | Absolute path of the tuios binary to run the daemon as. |
+
+| Result field     | Type   | Description                                                                                            |
+| ---------------- | ------ | ------------------------------------------------------------------------------------------------------ |
+| `pid`            | int    | The daemon's pid, which the upgrade keeps.                                                             |
+| `instance`       | string | The running image's id. hello reports another one once the new image runs.                             |
+| `from`           | string | The version running now.                                                                               |
+| `to`             | string | The version the binary reports.                                                                        |
+| `binary`         | string | The binary, as an absolute path.                                                                       |
+| `handoff`        | int    | The version of the state handed over.                                                                  |
+| `panes`          | int    | How many panes are handed over.                                                                        |
+| `manifest_bytes` | int    | The size of the state handed over.                                                                     |
+| `clients`        | int    | The attached TUI clients the upgrade dropped. A tuios client on this machine attaches again by itself. |
+| `preflight_ms`   | int    | How long the binary took to answer the preflight.                                                      |
+
+```json
+{"id":1,"verb":"daemon-upgrade","params":{"binary":"/usr/local/bin/tuios"}}
+```
+
+## `delegate` <Since verb="delegate" /> [#delegate]
+
+Hand a task to a child agent: start it with start-agent, linked to its parent and never wider than it, and type the task as its first prompt. Without wait the call returns at once, and the child's answer comes to the parent as mail from the child once it finishes, which wakes the parent at rest. A question the child stops on comes as mail too, and an approval stays in the Inbox. With wait the call returns the outcome itself: done, a question or an approval, or the timeout, which does not stop the child. A call from outside every pane names the parent or waits.
+
+| Param           | Type      | Required | Default   | Description                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------- | --------- | -------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prompt`        | string    | yes      |           | The task, typed as the child's first prompt.                                                                                                                                                                                                                                                                                                                                                                        |
+| `agent`         | string    |          |           | The child agent, as start-agent takes it. Omit for the parent's own harness.                                                                                                                                                                                                                                                                                                                                        |
+| `args`          | \[]string |          |           | More arguments for the agent, as an argv.                                                                                                                                                                                                                                                                                                                                                                           |
+| `role`          | string    |          | `general` | The job. It names the child's window and shows in list-agents. research and review default grants to read. It adds no text to the prompt. One of `implementation`, `research`, `review`, `design`, `test` or `general`.                                                                                                                                                                                             |
+| `isolation`     | string    |          | `shared`  | shared: the child works in the parent's folder. worktree: in a new worktree, in a session of its own, made from the commit of the parent's checkout. A worktree does not have uncommitted changes. One of `shared` or `worktree`.                                                                                                                                                                                   |
+| `name`          | string    |          |           | The child's window name. Omit for the role.                                                                                                                                                                                                                                                                                                                                                                         |
+| `session`       | string    |          |           | Session to open the child in, for shared isolation. Omit for the parent's session.                                                                                                                                                                                                                                                                                                                                  |
+| `cwd`           | string    |          |           | The folder the child starts in, or, for worktree isolation, the checkout to make the worktree from. Omit for the parent's folder.                                                                                                                                                                                                                                                                                   |
+| `parent`        | string    |          |           | The agent pane the answer is mailed to, by window id. Omit it from an agent pane: that pane is the parent. Outside every pane, name it or pass wait.                                                                                                                                                                                                                                                                |
+| `wait`          | int       |          |           | Milliseconds to wait for the outcome, at most 600000. Omit to return at once and get the answer by mail.                                                                                                                                                                                                                                                                                                            |
+| `ready_timeout` | int       |          | `120000`  | Milliseconds to wait for the child to be ready for its prompt.                                                                                                                                                                                                                                                                                                                                                      |
+| `env`           | object    |          |           | Environment variables for the agent, as start-agent takes them.                                                                                                                                                                                                                                                                                                                                                     |
+| `grants`        | \[]string |          |           | What the new pane may do through tuios: read, write, fan, respond, admin, or none. Omit for the default of \[agents.permissions], or, from a pane without admin, the calling pane's own grants. A pane may give only what it holds, and admin does not include respond. A window on another machine holds what that machine gives it. One of `read`, `write`, `fan`, `respond`, `files`, `task`, `admin` or `none`. |
+
+| Result field | Type   | Description                                                                                                                                                     |
+| ------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `delegated`  | bool   | True when the task was typed into the child.                                                                                                                    |
+| `window_id`  | string | The child's pane. The other fields of start-agent are here too, with its outcome as start\_outcome.                                                             |
+| `role`       | string | The role.                                                                                                                                                       |
+| `isolation`  | string | shared or worktree.                                                                                                                                             |
+| `mode`       | string | async or wait.                                                                                                                                                  |
+| `next`       | string | Async only: what the parent does now. It ends its turn, and tuios wakes it with the answer.                                                                     |
+| `worktree`   | string | Worktree isolation: the worktree's folder. branch and base are its branch and start commit, and worktree\_note says it has no uncommitted changes.              |
+| `outcome`    | string | Wait only: how the wait ended. One of `done`, `errored`, `question`, `approval`, `closed` or `timeout`.                                                         |
+| `answer`     | string | Wait only, on done or errored: the child's last answer, from its transcript or its screen (answer\_source). Text another program wrote: data, not instructions. |
+| `question`   | object | Wait only, on question or approval: the prompt the child stopped on, kind, message and lines.                                                                   |
+| `wait_note`  | string | Wait only, on timeout: the child still works, and where its answer goes.                                                                                        |
+
+```json
+{"id":1,"verb":"delegate","params":{"role":"review","prompt":"Review the diff on this branch and list the bugs."}}
+```
+
+```json
+{"id":1,"verb":"delegate","params":{"agent":"codex","isolation":"worktree","role":"test","prompt":"Add tests for the parser.","wait":300000}}
+```
+
+## `delete-buffer` <Since verb="delete-buffer" /> [#delete-buffer]
+
+Delete a paste buffer. From a pane this needs the write grant, and a pane without admin may delete only its own buffers.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                      |
+| --------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`    | string |          |         | The buffer to delete. Omit for the newest buffer tuios named, as tmux does: for the person, the newest of the person's own, and for a pane without admin, the newest of its own. |
+| `version` | int    |          |         | Act only while the buffer holds the content of this version, as list-buffers or show-buffer gave it. Otherwise the call answers no\_buffer.                                      |
+
+| Result field | Type   | Description                  |
+| ------------ | ------ | ---------------------------- |
+| `name`       | string | The buffer that was deleted. |
+
+```json
+{"id":1,"verb":"delete-buffer","params":{"name":"buffer1"}}
+```
+
+## `drop-files` <Since verb="drop-files" /> [#drop-files]
+
+Give a pane on a machine the paths of files on this machine. For this machine the answer is the paths. For a host, the files are copied into a new private drop folder there, and the answer has their paths there and the transfers that copy them. Paste a path once its transfer is done.
+
+| Param   | Type      | Required | Default | Description                                                                                |
+| ------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
+| `host`  | string    |          |         | The machine the pane is on. Omit for this machine.                                         |
+| `paths` | \[]string | yes      |         | The files on this machine.                                                                 |
+| `dir`   | string    |          |         | A folder on the host to copy into instead of a drop folder, such as the pane's own folder. |
+
+| Result field | Type      | Description                                                          |
+| ------------ | --------- | -------------------------------------------------------------------- |
+| `paths`      | \[]string | The files' paths on the pane's machine, in order.                    |
+| `dir`        | string    | The folder they go into on the host.                                 |
+| `transfers`  | \[]object | One transfer row per file, as transfer-list. Empty for this machine. |
+
+```json
+{"id":1,"verb":"drop-files","params":{"host":"build","paths":["~/Desktop/screenshot.png"]}}
+```
+
+## `exec` <Since verb="exec" /> [#exec]
+
+Run one shell line on this machine and return its stdout, its stderr and how it ended. No window is opened. The line runs under sh -c (cmd /c on Windows) in a process group of its own, with no stdin and the daemon's environment less the pane, session and agent variables of the command that started the daemon, as a pane gets it. The group is stopped at the timeout, when the caller goes away, and when the daemon stops. Each stream keeps its last 1 MiB. At most 8 run at once. Over a link it needs open, as new-window does.
+
+| Param        | Type   | Required | Default | Description                                                                   |
+| ------------ | ------ | -------- | ------- | ----------------------------------------------------------------------------- |
+| `line`       | string | yes      |         | The command line, parsed by the shell, at most 16384 bytes.                   |
+| `cwd`        | string |          |         | Directory to run in. It must exist. Omit for the daemon's home directory.     |
+| `timeout_ms` | int    |          |         | How long the line may run, in milliseconds, at most one hour. Omit for 30000. |
+
+| Result field     | Type   | Description                                                                                       |
+| ---------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| `stdout`         | bytes  | What the line wrote to stdout, base64 in JSON.                                                    |
+| `stderr`         | bytes  | What the line wrote to stderr, base64 in JSON.                                                    |
+| `stdout_dropped` | int    | Bytes cut from the start of stdout to keep the last 1 MiB.                                        |
+| `stderr_dropped` | int    | Bytes cut from the start of stderr to keep the last 1 MiB.                                        |
+| `exit`           | int    | The exit status. Absent when the line was stopped by a signal, the timeout or the caller leaving. |
+| `signal`         | string | The signal that stopped the line, such as killed. Absent when it exited.                          |
+| `signal_number`  | int    | The number of that signal, such as 9.                                                             |
+| `timed_out`      | bool   | The timeout stopped the line.                                                                     |
+| `duration_ms`    | int    | How long the line ran.                                                                            |
+
+```json
+{"id":1,"verb":"exec","params":{"line":"uname -a"}}
+```
+
+```json
+{"id":1,"verb":"exec","params":{"line":"ls -la","cwd":"/tmp","timeout_ms":60000}}
+```
+
+## `file-abort` <Since verb="file-abort" /> [#file-abort]
+
+Remove the part a copy to a path left on this machine.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                     |
+| --------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`    | string | yes      |         | The file the copy was for. An absolute path, or one that starts with \~.                                                                        |
+| `part_id` | string |          |         | The copy's part id, up to 32 hex digits: the part is .NAME.tuios-part-ID, so two copies to one path write two parts. Omit for .NAME.tuios-part. |
+
+| Result field | Type   | Description |
+| ------------ | ------ | ----------- |
+| `path`       | string | The path.   |
+
+```json
+{"id":1,"verb":"file-abort","params":{"path":"~/big.iso"}}
+```
+
+## `file-check` <Since verb="file-check" /> [#file-check]
+
+Describe many files under a folder on this machine at once, for a copy that leaves out what is there already: whether each is there, its kind, size and time, and with hash its sha256. At most 2000 files, and 512 MiB hashed, in one call.
+
+| Param  | Type      | Required | Default | Description                                               |
+| ------ | --------- | -------- | ------- | --------------------------------------------------------- |
+| `root` | string    | yes      |         | The folder. An absolute path, or one that starts with \~. |
+| `rels` | \[]string | yes      |         | The files, as paths under the folder, slash separated.    |
+| `hash` | bool      |          |         | Hash each regular file.                                   |
+
+| Result field | Type      | Description                                                                                                       |
+| ------------ | --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `entries`    | \[]object | One per file, in order: rel, exists, kind (file, dir, symlink, other), size, mtime (Unix ms), sha256 when hashed. |
+
+```json
+{"id":1,"verb":"file-check","params":{"root":"~/src","rels":["a.go","b/c.go"],"hash":true}}
+```
+
+## `get-keep-awake` <Since verb="get-keep-awake" /> [#get-keep-awake]
+
+Report whether the daemon holds the machine awake: \[daemon] keep\_awake, the hold, the working agent panes on this machine, and the method the system uses.
+
+No params.
+
+| Result field | Type   | Description                                                                          |
+| ------------ | ------ | ------------------------------------------------------------------------------------ |
+| `mode`       | string | \[daemon] keep\_awake in force. One of `off`, `agents` or `on`.                      |
+| `held`       | bool   | True while the daemon holds the machine awake.                                       |
+| `working`    | int    | Agent panes that work now on this machine.                                           |
+| `method`     | string | How the hold is made: systemd-inhibit, caffeinate, SetThreadExecutionState, or none. |
+| `error`      | string | Why the machine could not be held awake. Absent when nothing failed.                 |
+
+```json
+{"id":1,"verb":"get-keep-awake"}
+```
+
+## `get-note` <Since verb="get-note" /> [#get-note]
+
+Read the return note of a session, or of one pane with window. See set-note.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name for a pane's note. Omit for the session's note.                                                        |
+
+| Result field | Type   | Description                                       |
+| ------------ | ------ | ------------------------------------------------- |
+| `type`       | string | Always note.                                      |
+| `session`    | string | The session's name.                               |
+| `window`     | string | The id of the pane, empty for the session's note. |
+| `note`       | string | The note, empty when there is none.               |
+
+```json
+{"id":1,"verb":"get-note","params":{"session":"work"}}
+```
+
+## `host-speed-test` <Since verb="host-speed-test" /> [#host-speed-test]
+
+Measure the link to a host the way a copy uses it: the round trip of a small call, then bytes up and down on bulk streams. The bytes are random, so compression does not help them.
+
+| Param   | Type   | Required | Default    | Description              |
+| ------- | ------ | -------- | ---------- | ------------------------ |
+| `host`  | string | yes      |            | A name from \[hosts].    |
+| `bytes` | int    |          | `67108864` | How many bytes each way. |
+
+| Result field | Type  | Description                                   |
+| ------------ | ----- | --------------------------------------------- |
+| `rtt_ms`     | float | The middle of five round trips, ms.           |
+| `up`         | float | Bytes a second from this machine to the host. |
+| `down`       | float | Bytes a second from the host to this machine. |
+| `up_ms`      | int   | How long the bytes up took.                   |
+| `down_ms`    | int   | How long the bytes down took.                 |
+
+```json
+{"id":1,"verb":"host-speed-test","params":{"host":"build","bytes":16777216}}
+```
+
+## `judge-fan` <Since verb="judge-fan" /> [#judge-fan]
+
+Start an agent that judges the attempts of a fan. It runs in a new session of its own, named after the fan with -judge, in the repository's main checkout, with the read grant alone. Once its pane exists, the attempts name that pane, and that pane alone reads them: it cannot type into them, run commands in their sessions or start agents there. Its first prompt, typed then, asks it to read the attempts and report its pick with set-fan-verdict. Only the person or a pane with admin starts a judge. The record is cleared when the judge's session ends. It answers once the agent is ready, as start-agent does.
+
+| Param           | Type   | Required | Default  | Description                                                                           |
+| --------------- | ------ | -------- | -------- | ------------------------------------------------------------------------------------- |
+| `session`       | string | yes      |          | Any session of the fan.                                                               |
+| `agent`         | string |          |          | The judge's agent, as start-agent takes it. Omit for the agent the first attempt ran. |
+| `env`           | object |          |          | Environment variables for the judge, as start-agent takes them.                       |
+| `ready_timeout` | int    |          | `120000` | Milliseconds to wait for the judge to be ready.                                       |
+
+| Result field    | Type   | Description                                                  |
+| --------------- | ------ | ------------------------------------------------------------ |
+| `judge_session` | string | The judge's session.                                         |
+| `group`         | string | The fan's group.                                             |
+| `window_id`     | string | The judge's pane, with the rest of what start-agent returns. |
+
+```json
+{"id":1,"verb":"judge-fan","params":{"session":"api-fan-retry"}}
+```
+
+## `link-peer` <Since verb="link-peer" /> [#link-peer]
+
+Name the machine a link connection came from. tuios stdio-proxy sends it as the first line of every connection it opens for a link, and the daemon resolves that machine's link policy from the name. Accepted once per connection, before anything else, and only on a link socket. After the reply the connection is read from scratch, JSON or binary.
+
+The connection stays open after the reply.
+
+| Param           | Type   | Required | Default | Description                                                                                                                                                                              |
+| --------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `peer`          | string |          |         | The machine's name: the one the hub gave for itself, or the one the proxy was pinned to with --as. Empty for none.                                                                       |
+| `pinned`        | bool   |          |         | The name came from stdio-proxy --as on this machine, not from the hub.                                                                                                                   |
+| `ssh_auth_sock` | string |          |         | The SSH\_AUTH\_SOCK stdio-proxy runs with: the agent the link's ssh forwards. A client attached through the link uses it for ssh\_agent = "follow".                                      |
+| `closes`        | string |          |         | The close\_token of another link connection. The far side closed that connection's stream on purpose, so a size lease it holds ends at once and does not wait for a viewer to come back. |
+
+| Result field  | Type   | Description                                                                                              |
+| ------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| `peer`        | string | The name the connection is held to.                                                                      |
+| `close_token` | string | The token stdio-proxy sends back as closes when the far side closes this connection's stream on purpose. |
+
+```json
+{"id":1,"verb":"link-peer","params":{"peer":"laptop"}}
+```
+
+## `list-buffers` <Since verb="list-buffers" /> [#list-buffers]
+
+List the paste buffers, newest first. A yank in copy mode adds one, and so does set-buffer. From a pane this needs the read grant, and a pane without admin sees only the buffers it set. Every total counts only the buffers listed.
+
+| Param          | Type | Required | Default | Description                                         |
+| -------------- | ---- | -------- | ------- | --------------------------------------------------- |
+| `sample_width` | int  |          | `60`    | How many characters each sample shows, at most 200. |
+
+| Result field | Type      | Description                                                                                 |
+| ------------ | --------- | ------------------------------------------------------------------------------------------- |
+| `buffers`    | \[]object | One entry per buffer, newest first: name, bytes, created, automatic, sample, session, pane. |
+| `total`      | int       | How many buffers there are.                                                                 |
+| `bytes`      | int       | How many bytes they hold together.                                                          |
+| `limit`      | int       | How many buffers the daemon keeps, from \[paste\_buffers] limit.                            |
+| `max_bytes`  | int       | How many bytes the buffers may hold together, from \[paste\_buffers] max\_kb.               |
+
+```json
+{"id":1,"verb":"list-buffers"}
+```
+
+## `list-push` <Since verb="list-push" /> [#list-push]
+
+List the phones registered with register-push, and the daemon's VAPID public key. A phone's endpoint is shown only as its origin. Only the person, by the rules of register-push.
+
+| Param         | Type   | Required | Default | Description                                                                                   |
+| ------------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------- |
+| `human_nonce` | string |          |         | The nonce of an attach, or of an attach-presence made with no session, from the same process. |
+
+| Result field       | Type      | Description                                                                                                             |
+| ------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `devices`          | object\[] | Each phone: device, kinds, service (the endpoint's origin), created, and last\_ok or last\_error when a push was tried. |
+| `vapid_public_key` | string    | The daemon's VAPID public key, base64url. A phone needs it before it subscribes.                                        |
+| `machine`          | string    | This machine's name.                                                                                                    |
+
+```json
+{"id":1,"verb":"list-push","params":{"human_nonce":"<from attach-presence>"}}
+```
+
+## `list-recordings` <Since verb="list-recordings" /> [#list-recordings]
+
+List the recordings that run now, across every session.
+
+No params.
+
+| Result field | Type      | Description                                         |
+| ------------ | --------- | --------------------------------------------------- |
+| `recordings` | \[]object | One entry per recording: path, window, started\_at. |
+
+```json
+{"id":1,"verb":"list-recordings","params":{}}
+```
+
+## `list-routes` <Since verb="list-routes" /> [#list-routes]
+
+List the addresses this machine has now, so a phone paired on one network can reach it from another.
+
+No params.
+
+| Result field | Type      | Description                                                                                       |
+| ------------ | --------- | ------------------------------------------------------------------------------------------------- |
+| `routes`     | \[]object | host (a name or an IP, without a port) and kind (tailnet, lan or public), the tailnet name first. |
+
+```json
+{"id":1,"verb":"list-routes"}
+```
+
+## `mark-recording` <Since verb="mark-recording" /> [#mark-recording]
+
+Write a marker (an m event) into a pane's recording at the current time, so a player can jump to the moment.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+| `label`   | string |          |         | The marker's label, one line of at most 200 bytes.                                                                       |
+
+| Result field | Type   | Description                  |
+| ------------ | ------ | ---------------------------- |
+| `path`       | string | The file being written.      |
+| `window`     | string | The id of the pane recorded. |
+| `label`      | string | The label written.           |
+
+```json
+{"id":1,"verb":"mark-recording","params":{"session":"work","window":"build","label":"tests start"}}
+```
+
+## `open-pane` <Since verb="open-pane" /> [#open-pane]
+
+Spawn a process on this machine and turn this connection into its pty. After the reply, every byte written here reaches the process and every byte it writes comes back. Send nothing until the reply has arrived. This is the far half of a global session: the pane belongs to the session on the daemon that asked, which draws it and sizes it; this machine supplies the process and nothing else.
+
+The connection stays open after the reply.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                                                                                                                               |
+| ------------- | --------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `width`       | int       |          |         | The pane's width in cells, decided by the layout that owns the window. Out of range falls back to 80.                                                                                                                                                                                                     |
+| `height`      | int       |          |         | The pane's height in cells. Out of range falls back to 80.                                                                                                                                                                                                                                                |
+| `cwd`         | string    |          |         | A directory on this machine to start in. Ignored when it does not exist here, since the asking machine's path need not mean anything on this one.                                                                                                                                                         |
+| `command`     | \[]string |          |         | An argv to run in place of the shell. Omit for a login shell.                                                                                                                                                                                                                                             |
+| `term`        | string    |          |         | TERM for the process. It comes from the asking session because that session's emulator is what the process is talking to.                                                                                                                                                                                 |
+| `color_term`  | string    |          |         | COLORTERM for the process, for the same reason.                                                                                                                                                                                                                                                           |
+| `shell`       | string    |          |         | The shell to run. Omit to use this machine's.                                                                                                                                                                                                                                                             |
+| `session`     | string    |          |         | The asking session's name, exported as TUIOS\_SESSION\_REMOTE.                                                                                                                                                                                                                                            |
+| `window`      | string    |          |         | The asking daemon's id for the window the pane is drawn in. Exported as TUIOS\_PANE\_ID, and a promise to open the pane's report channel with pane-calls: a report the process sends naming it is forwarded there.                                                                                        |
+| `resumable`   | bool      |          |         | Ask for the pane to outlive a dropped connection for the grace this machine's link policy gives the asking machine (hosted\_grace), so it can be reattached with resume. The reply carries resume\_token and grace when one was given.                                                                    |
+| `resume`      | object    |          |         | Reattach a pane instead of starting one: \{"pane": id, "token": resume\_token, "offset": bytes of output already received}. What was missed is written after the reply, from the pane's 64 KB ring, and the pane is live again from there.                                                                |
+| `kitty_media` | bool      |          |         | Read the files that kitty graphics commands in the pane name (t=f, t=t, t=s) on this machine. Each command is answered here when the file may not be read, and replaced by a marker for pane-kitty-medium when it may. The reply carries kitty\_media\_token when the asking machine may read files here. |
+
+| Result field        | Type   | Description                                                                                                                          |
+| ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `pane`              | string | The id that addresses this pane in resize-pane. It lives as long as the connection does, or with resumable until its grace runs out. |
+| `calls_token`       | string | The secret pane-calls takes. Present only when window was sent.                                                                      |
+| `resume_token`      | string | The secret a reattach takes. Present only when resumable was asked and a grace was given.                                            |
+| `grace`             | int    | How many seconds the pane waits to be reattached after its connection drops.                                                         |
+| `resumed`           | bool   | True on a reattach.                                                                                                                  |
+| `pixels`            | bool   | resize-pane takes xpixel and ypixel.                                                                                                 |
+| `kitty_media_token` | string | The secret pane-kitty-medium takes. Present only when kitty\_media was asked and the asking machine may read files here.             |
+| `gap`               | bool   | On a reattach, true when more output was missed than the ring holds: the whole ring is written, and the screen may need a redraw.    |
+
+```json
+{"id":1,"verb":"open-pane","params":{"width":120,"height":40}}
+```
+
+## `open-tree-stream` <Since verb="open-tree-stream" /> [#open-tree-stream]
+
+Turn this connection into a tree stream: many files of a folder in one stream. mode read: the caller writes one line \{rel, size, mtime} per file and \{end}, and gets one record per file and \{end}. mode write: the caller writes records, and gets one ack \{rel, path, sha256, skipped} or \{rel, code, error} per file and \{end}. A record is a header line \{rel, kind, size, perm, mtime, z, conflict, label}, the bytes (one flate stream when z), and a trailer line \{sha256}. docs/protocol.md has the whole format.
+
+The connection stays open after the reply.
+
+| Param      | Type   | Required | Default | Description                                                                   |
+| ---------- | ------ | -------- | ------- | ----------------------------------------------------------------------------- |
+| `root`     | string | yes      |         | The folder the paths are under. An absolute path, or one that starts with \~. |
+| `mode`     | string | yes      |         | read or write. One of `read` or `write`.                                      |
+| `part_id`  | string |          |         | write: the copy's part id, which names the parts.                             |
+| `compress` | bool   |          |         | read: send a file as flate when a sample of it compresses well.               |
+
+| Result field | Type   | Description                |
+| ------------ | ------ | -------------------------- |
+| `root`       | string | The folder, made absolute. |
+
+```json
+{"id":1,"verb":"open-tree-stream","params":{"root":"~/src","mode":"read","compress":true}}
+```
+
+## `pane-agent` <Since verb="pane-agent" /> [#pane-agent]
+
+What a pane this machine runs for another machine has running in it. The machine with the process is the only one that can look: the daemon that owns the window reads a pid that means nothing there, so without this a pane on another machine is invisible to agent detection. This side reads the process; the side that owns the window decides what it means.
+
+| Param  | Type   | Required | Default | Description                     |
+| ------ | ------ | -------- | ------- | ------------------------------- |
+| `pane` | string |          |         | The pane id open-pane returned. |
+
+| Result field | Type   | Description                                                                          |
+| ------------ | ------ | ------------------------------------------------------------------------------------ |
+| `pane`       | string | The pane asked about.                                                                |
+| `running`    | bool   | Whether a foreground process could be read at all.                                   |
+| `comm`       | string | The process name, as the kernel reports it.                                          |
+| `argv`       | array  | The full command line.                                                               |
+| `exe`        | string | The resolved binary, empty when it cannot be read.                                   |
+| `pid`        | int    | The foreground process, zero when none was resolved.                                 |
+| `shell_pid`  | int    | The pane's own shell, which is a fact about the pane rather than about what it runs. |
+
+```json
+{"id":1,"verb":"pane-agent","params":{"pane":"f2c1"}}
+```
+
+## `pane-calls` <Since verb="pane-calls" /> [#pane-calls]
+
+Open the report channel of a pane this machine runs for another machine. Only the daemon that owns the window holds the token. After the reply this machine writes one request line per report the pane's process sends naming its pane (\{"id","verb","params"}: set-agent-state, set-agent-meta, set-agent-session, read-agent-messages, send-agent-message, or wait-for agent-message), and the owner answers each with \{"id","result"} or \{"id","error"}. The owner runs every request as its own window, whatever it says.
+
+The connection stays open after the reply.
+
+| Param   | Type   | Required | Default | Description                          |
+| ------- | ------ | -------- | ------- | ------------------------------------ |
+| `pane`  | string |          |         | The pane id open-pane returned.      |
+| `token` | string |          |         | The calls\_token open-pane returned. |
+
+| Result field | Type   | Description                                    |
+| ------------ | ------ | ---------------------------------------------- |
+| `pane`       | string | The pane whose channel this connection now is. |
+
+```json
+{"id":1,"verb":"pane-calls","params":{"pane":"f2c1","token":"<from the open-pane reply>"}}
+```
+
+## `pane-cwd` <Since verb="pane-cwd" /> [#pane-cwd]
+
+Where a pane this machine runs for another machine has its process. The machine with the process is the only one that can say: the daemon that owns the window reads a pid that means nothing there, and a shell may never announce its directory.
+
+| Param  | Type   | Required | Default | Description                     |
+| ------ | ------ | -------- | ------- | ------------------------------- |
+| `pane` | string |          |         | The pane id open-pane returned. |
+
+| Result field | Type   | Description                                                    |
+| ------------ | ------ | -------------------------------------------------------------- |
+| `pane`       | string | The pane asked about.                                          |
+| `cwd`        | string | The directory the process is in, empty when it cannot be read. |
+
+```json
+{"id":1,"verb":"pane-cwd","params":{"pane":"f2c1"}}
+```
+
+## `pane-kitty-medium` <Since verb="pane-kitty-medium" /> [#pane-kitty-medium]
+
+Turn this connection into the bytes of an image that a pane this machine runs for another machine named by path in a kitty graphics command (t=f, t=t or t=s). The pane's output holds a marker with the id in the command's place. Only the daemon that owns the window holds the token. After the reply the connection carries size bytes, as one flate stream when compressed is set, then closes. A temporary file or a shared memory object is deleted after it is read.
+
+The connection stays open after the reply.
+
+| Param   | Type   | Required | Default | Description                                 |
+| ------- | ------ | -------- | ------- | ------------------------------------------- |
+| `pane`  | string |          |         | The pane id open-pane returned.             |
+| `token` | string |          |         | The kitty\_media\_token open-pane returned. |
+| `id`    | string |          |         | The id in the marker.                       |
+
+| Result field | Type   | Description                            |
+| ------------ | ------ | -------------------------------------- |
+| `pane`       | string | The pane the image is from.            |
+| `size`       | int    | The image's bytes, before compression. |
+| `compressed` | bool   | The bytes come as one flate stream.    |
+
+```json
+{"id":1,"verb":"pane-kitty-medium","params":{"pane":"f2c1","token":"<from the open-pane reply>","id":"<from the marker>"}}
+```
+
+## `paste-buffer` <Since verb="paste-buffer" /> [#paste-buffer]
+
+Type a paste buffer into a window's PTY as a paste. Each line feed becomes a carriage return unless raw, as in tmux. Control characters other than tab, line feed and carriage return are removed, and the text is wrapped in the bracketed paste delimiters when the program in the pane turned bracketed paste on. From a pane this needs the read and write grants.
+
+| Param           | Type   | Required | Default | Description                                                                                                                                                                                                    |
+| --------------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`       | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                                       |
+| `window`        | string |          |         | Window id or name. Omit to target the focused window.                                                                                                                                                          |
+| `name`          | string |          |         | The buffer to paste. Omit for the newest buffer tuios named, as tmux does: for the person, the newest of the person's own, and for a pane without admin, the newest of its own.                                |
+| `delete`        | bool   |          | `false` | Delete the buffer after the paste, unless its content was set again meanwhile.                                                                                                                                 |
+| `raw`           | bool   |          | `false` | Keep each line feed instead of turning it into a carriage return.                                                                                                                                              |
+| `version`       | int    |          |         | Act only while the buffer holds the content of this version, as list-buffers or show-buffer gave it. Otherwise the call answers no\_buffer.                                                                    |
+| `allow_blocked` | bool   |          | `false` | From a pane, type into a pane on needs\_input instead of refusing with agent\_blocked. What is typed then answers its prompt, which also needs the respond grant. The person, outside every pane, is not held. |
+
+| Result field | Type   | Description                                                 |
+| ------------ | ------ | ----------------------------------------------------------- |
+| `name`       | string | The buffer that was pasted.                                 |
+| `bytes`      | int    | How many bytes the buffer holds.                            |
+| `bracketed`  | bool   | True when the paste went in the bracketed paste delimiters. |
+| `deleted`    | bool   | True when the buffer was deleted after the paste.           |
+
+```json
+{"id":1,"verb":"paste-buffer","params":{"session":"work","window":"build"}}
+```
+
+```json
+{"id":1,"verb":"paste-buffer","params":{"session":"work","name":"deploy","delete":true}}
+```
+
+## `paste-pane-image` <Since verb="paste-pane-image" /> [#paste-pane-image]
+
+Write an image for a pane this machine runs for another machine, and answer with the path here. Only the daemon that owns the window holds the token it needs. That daemon sends it for a paste-image the person made.
+
+| Param     | Type   | Required | Default | Description                              |
+| --------- | ------ | -------- | ------- | ---------------------------------------- |
+| `pane`    | string |          |         | The pane id open-pane returned.          |
+| `token`   | string |          |         | The calls\_token open-pane returned.     |
+| `content` | string |          |         | The image, base64, at most 8 MB decoded. |
+
+| Result field | Type   | Description                       |
+| ------------ | ------ | --------------------------------- |
+| `pane`       | string | The pane the image is for.        |
+| `path`       | string | The image's path on this machine. |
+| `bytes`      | int    | How many bytes were written.      |
+
+```json
+{"id":1,"verb":"paste-pane-image","params":{"pane":"f2c1","token":"<from the open-pane reply>","content":"iVBORw0KGgo="}}
+```
+
+## `place-agent` <Since verb="place-agent" /> [#place-agent]
+
+Pick the machine for a new agent, this one or a linked one, and say why. A machine is left out when the agent is not installed, signed in or free of a usage limit there, it has no checkout of the repository, its memory is full, it is at its cap, or for a card it has no link back. Of the rest the most spare cores wins; a tie goes to the checkout, then this machine. Starts nothing. Refused over a link.
+
+| Param          | Type      | Required | Default | Description                                                             |
+| -------------- | --------- | -------- | ------- | ----------------------------------------------------------------------- |
+| `agent`        | string    |          |         | The harness, such as claude. Default: the card's.                       |
+| `repo_url`     | string    |          |         | The repository by origin URL. Default: the card's project.              |
+| `repos_root`   | string    |          |         | Where this machine looks for it.                                        |
+| `clone`        | bool      |          | `false` | A machine with no checkout may clone one.                               |
+| `local_origin` | string    |          |         | The origin of the caller's folder here: this machine has that checkout. |
+| `task`         | string    |          |         | A card of this daemon the agent takes.                                  |
+| `task_session` | string    |          |         | The card's session.                                                     |
+| `reserve`      | bool      |          | `true`  | Count the pick as busy there for 90 seconds.                            |
+| `exclude`      | \[]string |          |         | Machines to leave out; local is this one.                               |
+| `env`          | object    |          |         | PATH for this machine, as for start-agent.                              |
+
+| Result field | Type      | Description                                                   |
+| ------------ | --------- | ------------------------------------------------------------- |
+| `host`       | string    | The pick, empty for this machine.                             |
+| `name`       | string    | The pick as a person reads it.                                |
+| `why`        | string    | One line on why.                                              |
+| `task_host`  | string    | With task: the pick's name for this machine, for start-agent. |
+| `clone`      | bool      | The pick clones the repository.                               |
+| `machines`   | \[]object | Every machine, the pick first: host, name, ok, why, repo.     |
+
+```json
+{"id":1,"verb":"place-agent","params":{"agent":"claude"}}
+```
+
+```json
+{"id":1,"verb":"place-agent","params":{"agent":"codex","repo_url":"git@github.com:acme/api.git"}}
+```
+
+```json
+{"id":1,"verb":"place-agent","params":{"task":"t4","task_session":"api"}}
+```
+
+## `plugin-cell` <Since verb="plugin-cell" /> [#plugin-cell]
+
+Set or clear one dock cell of the calling plugin. Only a process of a native plugin that holds the ui grant may call it, and the manifest must name the cell in \[\[cell]]. The daemon keeps the text until the plugin changes it or stops. At most 8 changes a second for one plugin.
+
+| Param    | Type   | Required | Default | Description                                                                           |
+| -------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------- |
+| `id`     | string | yes      |         | The id of the \[\[cell]] in the manifest.                                             |
+| `text`   | string |          |         | One line of at most 512 bytes. SGR colour stays. Other control sequences are dropped. |
+| `action` | string |          |         | The id of an action of the plugin that a click runs.                                  |
+| `clear`  | bool   |          |         | Remove the cell.                                                                      |
+
+| Result field | Type   | Description |
+| ------------ | ------ | ----------- |
+| `id`         | string | The cell.   |
+
+```json
+{"id":1,"verb":"plugin-cell","params":{"id":"status","text":"CI ok","action":"open"}}
+```
+
+## `plugin-notify` <Since verb="plugin-notify" /> [#plugin-notify]
+
+Show the person a notification under the calling plugin's name. Only a process of a native plugin that holds the ui grant may call it. At most 8 changes a second for one plugin, shared with plugin-cell.
+
+| Param   | Type   | Required | Default | Description                                                                       |
+| ------- | ------ | -------- | ------- | --------------------------------------------------------------------------------- |
+| `text`  | string | yes      |         | The message. tuios keeps the first 200 characters on one line.                    |
+| `level` | string |          |         | info, warning or error. The default is info. One of `info`, `warning` or `error`. |
+
+| Result field | Type   | Description       |
+| ------------ | ------ | ----------------- |
+| `type`       | string | plugin\_notified. |
+
+```json
+{"id":1,"verb":"plugin-notify","params":{"text":"The build failed","level":"error"}}
+```
+
+## `rail-pane` <Since verb="rail-pane" /> [#rail-pane]
+
+Start, keep or close the session's rail pane: the pane an attached client draws in its rail's pane section. A session has at most one. It sits on a workspace no client shows, so it is in no layout and in no list a user reads. The daemon owns its process, so it survives a detach, and closes it when the process exits. The attached client calls this from its \[appearance.sidebar.pane] table.
+
+| Param     | Type      | Required | Default | Description                                                                                                                          |
+| --------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string    |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.             |
+| `key`     | string    |          |         | The command line the pane runs, as configured. A pane with the same key is kept, and a pane with another key is closed and replaced. |
+| `command` | string\[] |          |         | The argv the pane runs. Required unless off is set.                                                                                  |
+| `cwd`     | string    |          |         | Directory the program starts in. Omit to inherit the focused pane's.                                                                 |
+| `width`   | int       |          |         | Columns the program starts at.                                                                                                       |
+| `height`  | int       |          |         | Rows the program starts at.                                                                                                          |
+| `off`     | bool      |          | `false` | Close the rail pane, if there is one. Takes no command.                                                                              |
+
+| Result field | Type   | Description                           |
+| ------------ | ------ | ------------------------------------- |
+| `window_id`  | string | Id of the rail pane, empty after off. |
+| `created`    | bool   | Whether this call started it.         |
+
+```json
+{"id":1,"verb":"rail-pane","params":{"session":"work","key":"htop","command":["sh","-c","htop"],"width":27,"height":12}}
+```
+
+```json
+{"id":1,"verb":"rail-pane","params":{"session":"work","off":true}}
+```
+
+## `read-dir` <Since verb="read-dir" /> [#read-dir]
+
+List a directory on this machine, as the rail's file section reads it. The machine with the process is the machine with the files, so a pane running here is listed here.
+
+| Param | Type   | Required | Default | Description                                         |
+| ----- | ------ | -------- | ------- | --------------------------------------------------- |
+| `dir` | string |          |         | The directory to list.                              |
+| `max` | int    |          |         | At most this many names. Omit for the built-in cap. |
+
+| Result field | Type      | Description                                                                                                             |
+| ------------ | --------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `dir`        | string    | The directory listed.                                                                                                   |
+| `entries`    | \[]string | One entry per name, carrying the name and whether it is a directory. Directories first, then names, case insensitively. |
+| `capped`     | bool      | The directory holds more names than were sent.                                                                          |
+| `err`        | string    | Why there is no listing, in words a person can act on.                                                                  |
+
+```json
+{"id":1,"verb":"read-dir","params":{"dir":"/home/ubuntu"}}
+```
+
+## `record-pane` <Since verb="record-pane" /> [#record-pane]
+
+Record a pane to an asciicast v2 file (.cast) that asciinema, agg and reel play. The first event paints the screen the pane shows now, its history included; then every output chunk and resize is an event at its real time. Input is not recorded. The recording runs until stop-recording, duration\_ms, max\_bytes or the pane's end. The file holds everything the pane prints while it runs.
+
+| Param         | Type   | Required | Default    | Description                                                                                                                         |
+| ------------- | ------ | -------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `session`     | string |          |            | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.            |
+| `window`      | string |          |            | Window id or name. Omit to target the focused window.                                                                               |
+| `out`         | string | yes      |            | The path of the file to write, absolute or starting with \~, made with mode 0600. Over a link, held to the file verbs' write rules. |
+| `overwrite`   | bool   |          | `false`    | Replace out when it exists. Without it, an existing file is refused with file\_exists.                                              |
+| `duration_ms` | int    |          | `0`        | Stop after this long. 0 records until stopped.                                                                                      |
+| `max_bytes`   | int    |          | `67108864` | Stop when the file reaches this size, with a size limit marker. Between 4096 and 1073741824.                                        |
+| `title`       | string |          |            | The title the header carries, which players show.                                                                                   |
+
+| Result field | Type   | Description                                                        |
+| ------------ | ------ | ------------------------------------------------------------------ |
+| `path`       | string | The file being written.                                            |
+| `window`     | string | The id of the pane recorded.                                       |
+| `width`      | int    | The pane's width when the recording started, the header's width.   |
+| `height`     | int    | The pane's height when the recording started, the header's height. |
+| `started_at` | string | When the recording started, RFC 3339 in UTC.                       |
+
+```json
+{"id":1,"verb":"record-pane","params":{"session":"work","window":"build","out":"~/build.cast"}}
+```
+
+## `remove-push` <Since verb="remove-push" /> [#remove-push]
+
+Remove a phone registered with register-push. Only the person, by the rules of register-push.
+
+| Param         | Type   | Required | Default | Description                                                                                   |
+| ------------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------- |
+| `device`      | string |          |         | The phone's name.                                                                             |
+| `human_nonce` | string |          |         | The nonce of an attach, or of an attach-presence made with no session, from the same process. |
+
+| Result field | Type   | Description                                                   |
+| ------------ | ------ | ------------------------------------------------------------- |
+| `device`     | string | The phone removed.                                            |
+| `removed`    | bool   | Always true. An unknown name is refused with invalid\_params. |
+
+```json
+{"id":1,"verb":"remove-push","params":{"device":"pixel","human_nonce":"<from attach-presence>"}}
+```
+
+## `report-program-status` <Since verb="report-program-status" /> [#report-program-status]
+
+Apply one OSC 7501 report (the Program Status Protocol) to a pane, as if the pane's emulator read it from the pane's output. tuios status sends it when the process has no terminal, such as an agent's shell tool. The report gets the same checks, records and lifetime as one the pane writes. A pane may report only for itself, as with set-agent-state.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                             |
+| --------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                |
+| `window`  | string |          |         | Window id or name. Omit from a pane for the pane itself, and from outside every pane for the focused window.                                                                            |
+| `report`  | string | yes      |         | The body of the report: the text between ESC ] 7501; and the string terminator, such as state=working:app=build. A report a terminal would discard is refused, and nothing is recorded. |
+
+| Result field     | Type      | Description                                                           |
+| ---------------- | --------- | --------------------------------------------------------------------- |
+| `window_id`      | string    | The window the report was applied to.                                 |
+| `program_status` | \[]object | The pane's records after the report, as get-agent-state reports them. |
+
+```json
+{"id":1,"verb":"report-program-status","params":{"session":"work","report":"state=done:app=build:msg=QnVpbHQ="}}
+```
+
+## `resize-pane` <Since verb="resize-pane" /> [#resize-pane]
+
+Resize a pane this machine is running for another machine. It arrives on its own connection because the pane's connection carries raw bytes and has no room to say anything out of band.
+
+| Param    | Type   | Required | Default | Description                                                                                        |
+| -------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `pane`   | string |          |         | The pane id open-pane returned.                                                                    |
+| `width`  | int    |          |         | The new width in cells.                                                                            |
+| `height` | int    |          |         | The new height in cells.                                                                           |
+| `xpixel` | int    |          |         | The new width in pixels, for programs that scale images to it. Omit to use the fallback cell size. |
+| `ypixel` | int    |          |         | The new height in pixels.                                                                          |
+
+| Result field | Type   | Description                |
+| ------------ | ------ | -------------------------- |
+| `pane`       | string | The pane that was resized. |
+| `width`      | int    | The width it was set to.   |
+| `height`     | int    | The height it was set to.  |
+
+```json
+{"id":1,"verb":"resize-pane","params":{"pane":"f2c1","width":120,"height":40}}
+```
+
+## `resize-window` <Since verb="resize-window" /> [#resize-window]
+
+Move one border of a tiled pane. right and down move a border right or down, left and up move it left or up. The border is the one on that side of the pane, or the other one when the pane is at the edge there. Works with no client attached.
+
+| Param       | Type   | Required | Default | Description                                                                                                              |
+| ----------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`   | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`    | string |          |         | Pane to resize. Omit for the caller's own pane, or outside a pane the focused one.                                       |
+| `direction` | string | yes      |         | The way the border moves. One of `left`, `right`, `up` or `down`.                                                        |
+| `amount`    | int    |          | `5`     | How far the border moves, in percent of the layout's width or height, from 1 to 50.                                      |
+
+| Result field | Type   | Description                                                                                        |
+| ------------ | ------ | -------------------------------------------------------------------------------------------------- |
+| `window_id`  | string | Id of the pane.                                                                                    |
+| `changed`    | bool   | False when no border could move: the pane is alone, floating, or at the smallest or largest share. |
+
+```json
+{"id":1,"verb":"resize-window","params":{"session":"work","window":"build","direction":"right","amount":10}}
+```
+
+## `retry-host` <Since verb="retry-host" /> [#retry-host]
+
+Dial the link to one host again now. The backoff starts again from one second. If the link is up, the link pings the host instead. If the host does not answer in 5 seconds, the link dials again. If the host waits for a Tailscale SSH sign-in, the link dials every few seconds for two minutes. A dial in progress continues.
+
+| Param  | Type   | Required | Default | Description                                    |
+| ------ | ------ | -------- | ------- | ---------------------------------------------- |
+| `host` | string |          |         | A host by name from the \[hosts] config table. |
+
+| Result field       | Type   | Description                                                                                                                     |
+| ------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `host`             | string | The host.                                                                                                                       |
+| `status`           | string | The link state when the call was made.                                                                                          |
+| `approval_url`     | string | The Tailscale sign-in page, when the link waits for one and has it. Omitted otherwise.                                          |
+| `approval_refused` | bool   | True when the link waits for a sign-in and the banner named an address that is not a Tailscale login origin. Omitted otherwise. |
+
+```json
+{"id":1,"verb":"retry-host","params":{"host":"build"}}
+```
+
+## `run-task-verify` <Since verb="run-task-verify" /> [#run-task-verify]
+
+Run a board's verify command in the worktree of a pane here, for the card's owner. Only over a link.
+
+| Param        | Type   | Required | Default  | Description                   |
+| ------------ | ------ | -------- | -------- | ----------------------------- |
+| `window`     | string | yes      |          | The pane.                     |
+| `command`    | string |          |          | The shell line.               |
+| `probe`      | bool   |          | `false`  | Only say if the pane is here. |
+| `timeout_ms` | int    |          | `600000` | The limit.                    |
+
+| Result field | Type   | Description                   |
+| ------------ | ------ | ----------------------------- |
+| `here`       | bool   | With probe: the pane is here. |
+| `exit`       | int    | The exit status.              |
+| `note`       | string | Why it did not end.           |
+| `tail`       | string | The end of the output.        |
+
+```json
+{"id":1,"verb":"run-task-verify","params":{"window":"a1b2c3d4","command":"go test ./...","timeout_ms":600000}}
+```
+
+## `set-agent-quiet` <Since verb="set-agent-quiet" /> [#set-agent-quiet]
+
+Mark a window quiet, or clear the mark. A quiet window opens no finished, question or errored item in the Inbox, and its open items of those kinds close. A pane that calls this leaves an open question open. Its agent state and agent-state events do not change, and an approval or a login still reaches the person. The window must run an agent. Needs the admin grant.
+
+| Param     | Type   | Required | Default | Description                                                                                                                     |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.        |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                           |
+| `quiet`   | bool   |          | `true`  | True marks the window quiet, and false clears the mark. Clearing it opens no old item, except a question the pane waits on now. |
+
+| Result field | Type   | Description                                 |
+| ------------ | ------ | ------------------------------------------- |
+| `session`    | string | The session that holds the window.          |
+| `window_id`  | string | The window that was marked.                 |
+| `quiet`      | bool   | Whether the window is now quiet.            |
+| `closed`     | int    | How many open Inbox items this call closed. |
+
+```json
+{"id":1,"verb":"set-agent-quiet","params":{"session":"work","window":"build"}}
+```
+
+```json
+{"id":1,"verb":"set-agent-quiet","params":{"session":"work","window":"build","quiet":false}}
+```
+
+## `set-buffer` <Since verb="set-buffer" /> [#set-buffer]
+
+Store content in a paste buffer and put it on top. With no name a new buffer is made, append or not, as tmux does; a name makes the buffer a named one. Empty content stores nothing and is no error. When the buffers tuios named pass the limit, the oldest of them go; past the byte cap the oldest go whatever their name. A set from outside every pane, or from a pane with admin, makes the person's buffer; a set from a pane without admin makes that pane's own. From a pane this needs the write grant, and a pane without admin may set only its own buffers, or make a new one with no name.
+
+| Param      | Type   | Required | Default | Description                                                                                                                                |
+| ---------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `data`     | string |          |         | The content as text. Give data or data\_b64. It may not be empty or larger than the byte cap.                                              |
+| `data_b64` | string |          |         | The content as base64, for any bytes. It wins over data.                                                                                   |
+| `upload`   | string |          |         | An id that sends the content in parts, each in its own call on one connection. The buffer is set once, when the part without more arrives. |
+| `more`     | bool   |          | `false` | More parts of this upload follow.                                                                                                          |
+| `name`     | string |          |         | The buffer to set: 1 to 64 printable characters. Omit for a new buffer.                                                                    |
+| `append`   | bool   |          | `false` | Add the text to the end of the buffer instead of replacing it.                                                                             |
+
+| Result field | Type   | Description                                                                                                                                                |
+| ------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | string | The buffer's name: bufferN for one tuios named, or the name set-buffer gave it.                                                                            |
+| `bytes`      | int    | How many bytes the buffer holds.                                                                                                                           |
+| `created`    | int    | Unix-nano time the content was last set.                                                                                                                   |
+| `version`    | int    | A number that changes each time the content is set. Pass it back as version to act only on this content.                                                   |
+| `automatic`  | bool   | True when tuios named the buffer.                                                                                                                          |
+| `sample`     | string | The start of the content on one line, with control characters and bytes that are not UTF-8 shown as escapes. It never cuts a character. Print it as it is. |
+| `pane`       | string | The pane that owns the buffer, by its window name, or its short id once it is gone. Absent for the person's buffers.                                       |
+| `stored`     | bool   | False when the content was empty and nothing was stored. The other fields are then absent.                                                                 |
+
+```json
+{"id":1,"verb":"set-buffer","params":{"data":"make test"}}
+```
+
+```json
+{"id":1,"verb":"set-buffer","params":{"name":"deploy","data":"kubectl rollout restart deploy/api"}}
+```
+
+## `set-fan-verdict` <Since verb="set-fan-verdict" /> [#set-fan-verdict]
+
+Record a judge's pick among the attempts of a fan: the attempt it recommends, the verdict, its reasons and notes on each attempt. Only the judge pane judge-fan started for the fan, or a call from outside every pane, records one: a pane of an attempt is refused. The daemon records which of the two it was as by. It is written on every attempt, and compare-fan and the agents view show it. A later call replaces it. Nothing is kept or removed: keep-fan does that.
+
+| Param     | Type      | Required | Default | Description                                                             |
+| --------- | --------- | -------- | ------- | ----------------------------------------------------------------------- |
+| `session` | string    | yes      |         | Any session of the fan.                                                 |
+| `pick`    | string    | yes      |         | The session of the attempt the judge recommends.                        |
+| `summary` | string    | yes      |         | The verdict in a sentence or two, at most 400 bytes.                    |
+| `reasons` | \[]string |          |         | The reasons, one sentence each, at most 6.                              |
+| `notes`   | object    |          |         | Notes per attempt: session name to a list of sentences, at most 4 each. |
+
+| Result field | Type      | Description                                                         |
+| ------------ | --------- | ------------------------------------------------------------------- |
+| `group`      | string    | The fan's group.                                                    |
+| `pick`       | string    | The attempt picked.                                                 |
+| `by`         | string    | judge for the judge's pane, you for a call from outside every pane. |
+| `attempts`   | \[]string | Every attempt the verdict was written on.                           |
+
+```json
+{"id":1,"verb":"set-fan-verdict","params":{"session":"api-fan-retry","pick":"api-fan-retry-2","summary":"Keep B. It is the smallest change and passes the tests.","reasons":["A reads hits without the lock."],"notes":{"api-fan-retry":["Adds a test for eviction."]}}}
+```
+
+## `set-keep-awake` <Since verb="set-keep-awake" /> [#set-keep-awake]
+
+Set \[daemon] keep\_awake: off, on (while the daemon runs) or agents (while an agent pane on this machine works). It applies at once and is saved to config.toml, so the settings page, the file and every client show one value.
+
+| Param  | Type   | Required | Default | Description                                   |
+| ------ | ------ | -------- | ------- | --------------------------------------------- |
+| `mode` | string | yes      |         | The new mode. One of `off`, `agents` or `on`. |
+
+| Result field | Type   | Description                                                                    |
+| ------------ | ------ | ------------------------------------------------------------------------------ |
+| `mode`       | string | \[daemon] keep\_awake in force.                                                |
+| `held`       | bool   | True while the daemon holds the machine awake.                                 |
+| `working`    | int    | Agent panes that work now on this machine.                                     |
+| `method`     | string | How the hold is made.                                                          |
+| `error`      | string | Why the machine could not be held awake. Absent when nothing failed.           |
+| `saved`      | bool   | True when config.toml now holds the mode.                                      |
+| `save_error` | string | Why config.toml could not be written. The mode applies until the daemon stops. |
+
+```json
+{"id":1,"verb":"set-keep-awake","params":{"mode":"agents"}}
+```
+
+## `set-note` <Since verb="set-note" /> [#set-note]
+
+Set the return note of a session, or of one pane with window: one short line that says what it is for or what comes next. Every client shows it, the dock shows it when a person comes back to the session, and it survives a reattach and a daemon restart.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                            |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                               |
+| `window`  | string |          |         | Window id or name for a pane's note. Omit for the session's note.                                                                                      |
+| `note`    | string |          |         | The note. Newlines and tabs become spaces, other control characters are dropped, and it is cut to 200 bytes. Omit or pass an empty string to clear it. |
+
+| Result field | Type   | Description                                                      |
+| ------------ | ------ | ---------------------------------------------------------------- |
+| `type`       | string | Always note\_set.                                                |
+| `session`    | string | The session's name.                                              |
+| `window`     | string | The id of the pane the note is on, empty for the session's note. |
+| `note`       | string | The note as stored, empty when cleared.                          |
+
+```json
+{"id":1,"verb":"set-note","params":{"session":"work","note":"next: run the migration"}}
+```
+
+```json
+{"id":1,"verb":"set-note","params":{"session":"work","window":"build","note":""}}
+```
+
+## `set-session-order` <Since verb="set-session-order" /> [#set-session-order]
+
+Put the sessions in an order. Every client lists them in it: the rail, go-to, tuios ls. It survives a daemon restart. A session the list leaves out, and one made later, goes after the named ones in creation order.
+
+| Param          | Type      | Required | Default | Description                                                                                                   |
+| -------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `order`        | \[]string | yes      |         | Session names in their new order. Every name must be a live session, or nothing changes. Repeats are dropped. |
+| `skip_missing` | bool      |          |         | Leave out a name that is no live session, rather than refusing the order. The result lists them as missing.   |
+
+| Result field | Type      | Description                                                                            |
+| ------------ | --------- | -------------------------------------------------------------------------------------- |
+| `type`       | string    | Always session\_order\_set.                                                            |
+| `order`      | \[]string | Every session's name, in the order the daemon lists them now.                          |
+| `missing`    | \[]string | With skip\_missing, the names that were no live session. Omitted when there were none. |
+
+```json
+{"id":1,"verb":"set-session-order","params":{"order":["work"]}}
+```
+
+## `set-task-dispatch` <Since verb="set-task-dispatch" /> [#set-task-dispatch]
+
+Change task dispatch. mode sets a board to manual, pull or auto: in pull, an agent that finishes its card is given the board's next open card, as mail from tuios; in auto, the daemon starts the board's preset agent for each open card, in a new worktree, and mails it the card. preset sets that agent; auto needs one. cap bounds the agents at once. verify sets the command run in a card's worktree when its agent is done: a pass moves the card to review, a fail to todo. pause stops all dispatch at once, and any pane may pause. resume lifts the pause and every stop. quiet sets the hours when dispatch gives no card. A pane needs admin for every action but pause, and verify is refused from every pane. Refused over a link.
+
+| Param             | Type   | Required | Default | Description                                                                                                              |
+| ----------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`         | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `project`         | string |          |         | The project board, by origin URL. Omit for the session's own cards.                                                      |
+| `action`          | string | yes      |         | What to change. One of `mode`, `pause`, `resume`, `quiet`, `preset`, `cap` or `verify`.                                  |
+| `mode`            | string |          |         | With mode: the board's new mode. One of `manual`, `pull` or `auto`.                                                      |
+| `quiet`           | string |          |         | With quiet: a span of local time such as 22:00-07:00, or off.                                                            |
+| `agent`           | string |          |         | With preset or mode auto: the agent auto starts. A card's own agent comes first.                                         |
+| `model`           | string |          |         | With preset: as start-agent takes it.                                                                                    |
+| `effort`          | string |          |         | With preset: as start-agent takes it.                                                                                    |
+| `permission_mode` | string |          |         | With preset: as start-agent takes it. Omit for the agent's own default.                                                  |
+| `machine`         | string |          |         | With preset: here (the default), any, or a linked machine.                                                               |
+| `cap`             | int    |          |         | With cap: agents at once in total, 0 for 3.                                                                              |
+| `machine_cap`     | int    |          |         | With cap: on one machine, 0 for 2.                                                                                       |
+| `verify`          | string |          |         | With verify: a shell line, or off.                                                                                       |
+| `verify_timeout`  | int    |          |         | With verify: seconds, 0 for 600.                                                                                         |
+| `human_nonce`     | string |          |         | The attached client's nonce, to act as the person (by human). One that does not verify is refused with not\_human.       |
+
+| Result field  | Type      | Description                                                                                                                                                       |
+| ------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paused`      | bool      | True while dispatch is paused.                                                                                                                                    |
+| `paused_by`   | string    | Who paused it.                                                                                                                                                    |
+| `stopped`     | string    | Why all dispatch stopped on its own, such as usage limit. Empty when it did not.                                                                                  |
+| `quiet`       | string    | The quiet hours, local time, such as 22:00-07:00.                                                                                                                 |
+| `quiet_now`   | bool      | True inside the quiet hours.                                                                                                                                      |
+| `boards`      | \[]object | The boards with a mode or a stop: board, project or session, mode, failures (dispatched cards in a row that did not finish), stopped, verify and verify\_timeout. |
+| `cap`         | int       | Auto's agents at once, in total.                                                                                                                                  |
+| `machine_cap` | int       | Auto's agents at once on one machine.                                                                                                                             |
+| `running`     | int       | Auto's agents now.                                                                                                                                                |
+| `board`       | object    | The board the call named, also when it is manual. An auto board adds preset, running, waiting and note.                                                           |
+
+```json
+{"id":1,"verb":"set-task-dispatch","params":{"action":"mode","mode":"pull","project":"git@github.com:acme/api.git"}}
+```
+
+```json
+{"id":1,"verb":"set-task-dispatch","params":{"action":"pause"}}
+```
+
+## `show-buffer` <Since verb="show-buffer" /> [#show-buffer]
+
+Return the content of one paste buffer. A buffer can hold any bytes: data\_b64 carries them all, and data carries them as text. From a pane this needs the read grant, and reaches only the buffers of the sessions the pane may read.
+
+| Param      | Type   | Required | Default | Description                                                                                                                                                                    |
+| ---------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`     | string |          |         | The buffer to show. Omit for the newest buffer tuios named, as tmux does: for the person, the newest of the person's own, and for a pane without admin, the newest of its own. |
+| `version`  | int    |          |         | Act only while the buffer holds the content of this version, as list-buffers or show-buffer gave it. Otherwise the call answers no\_buffer.                                    |
+| `encoding` | string |          |         | base64 to get data\_b64 alone, without the text in data. One of `base64`.                                                                                                      |
+
+| Result field | Type   | Description                                                                                                                                                |
+| ------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | string | The buffer's name: bufferN for one tuios named, or the name set-buffer gave it.                                                                            |
+| `bytes`      | int    | How many bytes the buffer holds.                                                                                                                           |
+| `created`    | int    | Unix-nano time the content was last set.                                                                                                                   |
+| `version`    | int    | A number that changes each time the content is set. Pass it back as version to act only on this content.                                                   |
+| `automatic`  | bool   | True when tuios named the buffer.                                                                                                                          |
+| `sample`     | string | The start of the content on one line, with control characters and bytes that are not UTF-8 shown as escapes. It never cuts a character. Print it as it is. |
+| `pane`       | string | The pane that owns the buffer, by its window name, or its short id once it is gone. Absent for the person's buffers.                                       |
+| `data`       | string | The whole content as text. A byte that is not UTF-8 reads as U+FFFD here.                                                                                  |
+| `data_b64`   | string | The whole content, every byte, as base64.                                                                                                                  |
+
+```json
+{"id":1,"verb":"show-buffer"}
+```
+
+```json
+{"id":1,"verb":"show-buffer","params":{"name":"buffer3"}}
+```
+
+## `speed-test` <Since verb="speed-test" /> [#speed-test]
+
+The far end of a link speed test. ping answers at once. sink takes bytes after the reply and drops them, then answers one line \{bytes, ms}. source sends bytes of random data after the reply, then closes.
+
+The connection stays open after the reply when `mode` is `sink` or `source`.
+
+| Param   | Type   | Required | Default | Description                                               |
+| ------- | ------ | -------- | ------- | --------------------------------------------------------- |
+| `mode`  | string | yes      |         | ping, sink or source. One of `ping`, `sink` or `source`.  |
+| `bytes` | int    |          |         | How many bytes sink takes or source sends, at most 1 GiB. |
+
+| Result field | Type   | Description |
+| ------------ | ------ | ----------- |
+| `mode`       | string | The mode.   |
+
+```json
+{"id":1,"verb":"speed-test","params":{"mode":"ping"}}
+```
+
+## `stop-recording` <Since verb="stop-recording" /> [#stop-recording]
+
+Stop a pane's recording. Answers once the file is closed.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window id or name. Omit to target the focused window.                                                                    |
+
+| Result field | Type   | Description                                                    |
+| ------------ | ------ | -------------------------------------------------------------- |
+| `path`       | string | The file written.                                              |
+| `window`     | string | The id of the pane recorded.                                   |
+| `events`     | int    | How many events the file holds, the snapshot included.         |
+| `bytes`      | int    | The size of the file.                                          |
+| `seconds`    | float  | The time of the last event.                                    |
+| `reason`     | string | Why the recording ended: stopped here, or what ended it first. |
+| `started_at` | string | When the recording started, RFC 3339 in UTC.                   |
+
+```json
+{"id":1,"verb":"stop-recording","params":{"session":"work","window":"build"}}
+```
+
+## `swap-window` <Since verb="swap-window" /> [#swap-window]
+
+Swap two tiled panes of one workspace. Works with no client attached. The focus stays where it is.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | One pane. Omit for the caller's own pane, or outside a pane the focused one.                                             |
+| `with`    | string | yes      |         | The other pane.                                                                                                          |
+
+| Result field | Type   | Description           |
+| ------------ | ------ | --------------------- |
+| `window_id`  | string | Id of the first pane. |
+| `with`       | string | Id of the other pane. |
+
+```json
+{"id":1,"verb":"swap-window","params":{"session":"work","window":"build","with":"review"}}
+```
+
+## `tml-close` <Since verb="tml-close" /> [#tml-close]
+
+Close a TML surface and its window. A tml-open that waits on it answers with the value.
+
+| Param     | Type   | Required | Default | Description                                         |
+| --------- | ------ | -------- | ------- | --------------------------------------------------- |
+| `surface` | string |          |         | The surface id tml-open answered with.              |
+| `value`   | any    |          |         | A JSON value for the waiting caller. Omit for null. |
+
+| Result field | Type   | Description              |
+| ------------ | ------ | ------------------------ |
+| `surface`    | string | The surface that closed. |
+
+```json
+{"id":1,"verb":"tml-close","params":{"surface":"tml-4f1a9c02","value":"done"}}
+```
+
+## `tml-get` <Since verb="tml-get" /> [#tml-get]
+
+Read a TML surface: its tree as TML JSON, its state and its version.
+
+| Param     | Type   | Required | Default | Description     |
+| --------- | ------ | -------- | ------- | --------------- |
+| `surface` | string |          |         | The surface id. |
+
+| Result field | Type   | Description                                                   |
+| ------------ | ------ | ------------------------------------------------------------- |
+| `doc`        | object | The tree as TML JSON, with the state it was opened with.      |
+| `state`      | object | The state now.                                                |
+| `version`    | int    | The version: it counts every change of the tree or the state. |
+| `window_id`  | string | The window the surface is drawn in.                           |
+| `title`      | string | The surface's title.                                          |
+| `owner`      | string | Who opened it: a pane, or tuios tml show.                     |
+
+```json
+{"id":1,"verb":"tml-get","params":{"surface":"tml-4f1a9c02"}}
+```
+
+## `tml-input` <Since verb="tml-input" /> [#tml-input]
+
+Report what the person did on a TML surface: the state its local actions changed, and a close. The attached client sends it, with its attach nonce.
+
+| Param         | Type      | Required | Default | Description                                                                                                                                                                                 |
+| ------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `surface`     | string    |          |         | The surface id.                                                                                                                                                                             |
+| `human_nonce` | string    |          |         | The attach nonce of the person's client.                                                                                                                                                    |
+| `ops`         | \[]object |          |         | A JSON Patch (RFC 6902) on the surface's state.                                                                                                                                             |
+| `close`       | bool      |          | `false` | Close the surface.                                                                                                                                                                          |
+| `value`       | any       |          |         | With close: the value. Omit when the person dismissed the surface.                                                                                                                          |
+| `events`      | \[]object |          |         | The emit actions the person ran, each \{name, value}. Each becomes a tml-event for the owner.                                                                                               |
+| `actions`     | \[]object |          |         | The pane() actions the person ran, each \{verb, params}: focus, new-window or send-text. Each runs with the grants of the pane that opened the surface, never the person's.                 |
+| `view`        | object    |          |         | The client's view state, as loom keeps it: open tabs, cursor rows, scroll places, sorts, filters and folds, without typed text. capture-pane draws the surface with the last view reported. |
+
+| Result field | Type      | Description                                                                    |
+| ------------ | --------- | ------------------------------------------------------------------------------ |
+| `version`    | int       | The surface's version after the change.                                        |
+| `actions`    | \[]object | Each pane() action's result: verb, ok, and error and code when it was refused. |
+
+```json
+{"id":1,"verb":"tml-input","params":{"surface":"tml-4f1a9c02","human_nonce":"...","ops":[{"op":"replace","path":"/tab","value":"log"}]}}
+```
+
+## `tml-list` <Since verb="tml-list" /> [#tml-list]
+
+List the open TML surfaces of a session.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+
+| Result field | Type      | Description                                                  |
+| ------------ | --------- | ------------------------------------------------------------ |
+| `surfaces`   | \[]object | Each surface: surface, window\_id, title, owner and version. |
+
+```json
+{"id":1,"verb":"tml-list","params":{"session":"work"}}
+```
+
+## `tml-open` <Since verb="tml-open" /> [#tml-open]
+
+Show a TML document as a popup or a pane. Every attached client draws it, and the daemon keeps it while nobody is attached.
+
+The connection stays open after the reply when `events` is `true`.
+
+| Param       | Type   | Required | Default | Description                                                                                                                                                                                  |
+| ----------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`   | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                     |
+| `doc`       | string |          |         | The document: TML text or TML JSON as a string, or a TML JSON object. It is checked as tml-validate checks it, and a document with errors is refused with invalid\_tml and the problem list. |
+| `target`    | string |          | `popup` | Where to show it: popup, a floating box over the panes that needs an attached client, or pane, a tiled pane. One of `popup` or `pane`.                                                       |
+| `name`      | string |          |         | Name for the window. Omit to use the document's title.                                                                                                                                       |
+| `width`     | string |          | `80%`   | Popup width, in cells ("60") or as a share of the pane region ("60%"). Popup only.                                                                                                           |
+| `height`    | string |          | `60%`   | Popup height, in cells ("20") or as a share of the pane region ("50%"). Popup only.                                                                                                          |
+| `workspace` | int    |          |         | Workspace to open it on. Omit for the current one.                                                                                                                                           |
+| `wait`      | bool   |          | `false` | Keep the call open until the surface closes, and return the close value in a tml\_result.                                                                                                    |
+| `timeout`   | int    |          | `0`     | With wait: milliseconds to wait before failing with the timeout code. The surface stays open. 0 waits as long as it is open.                                                                 |
+| `events`    | bool   |          | `false` | Keep the connection and stream the surface's tml-event events on it after the answer, as subscribe does: each emit, and the close as the last one. Not with wait.                            |
+
+| Result field | Type   | Description                                                                                                                                                                       |
+| ------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `surface`    | string | Id of the surface. Use it to patch, replace, read or close the surface.                                                                                                           |
+| `seq`        | int    | With events: the last event number when the stream went live, as subscribe answers.                                                                                               |
+| `boot_id`    | string | With events: the daemon start that numbers the events.                                                                                                                            |
+| `window_id`  | string | Id of the window the surface is drawn in.                                                                                                                                         |
+| `target`     | string | popup or pane.                                                                                                                                                                    |
+| `workspace`  | int    | Workspace the surface was opened on.                                                                                                                                              |
+| `value`      | any    | With wait: the value the surface closed with. null when the person dismissed it.                                                                                                  |
+| `reason`     | string | With wait: closed when the person ran a close action, so the value is the person's answer; program when a tml-close gave the value; dismissed when the window closed without one. |
+
+```json
+{"id":1,"verb":"tml-open","params":{"session":"work","doc":"<tml version=\"1\" title=\"Hi\"><text>Hello</text></tml>"}}
+```
+
+```json
+{"id":1,"verb":"tml-open","params":{"doc":{"type":"tml","version":1,"title":"Build","children":[{"type":"progress","value":0.4}]},"target":"pane"}}
+```
+
+```json
+{"id":1,"verb":"tml-open","params":{"doc":"<tml version=\"1\"><button key=\"y\" on-press=\"close('yes')\">Yes</button></tml>","wait":true}}
+```
+
+## `tml-patch` <Since verb="tml-patch" /> [#tml-patch]
+
+Change a TML surface's state with a JSON Patch (RFC 6902). Only the parts of the surface that read the changed paths are drawn again.
+
+| Param     | Type      | Required | Default | Description                                                                                                                                                                  |
+| --------- | --------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `surface` | string    |          |         | The surface id tml-open answered with.                                                                                                                                       |
+| `ops`     | \[]object | yes      |         | The JSON Patch: add, remove, replace, move, copy and test operations on the state. A test that does not match refuses the whole patch, so read the state again with tml-get. |
+
+| Result field | Type      | Description                            |
+| ------------ | --------- | -------------------------------------- |
+| `version`    | int       | The surface's version after the patch. |
+| `changed`    | \[]string | The JSON Pointers the patch changed.   |
+
+```json
+{"id":1,"verb":"tml-patch","params":{"surface":"tml-4f1a9c02","ops":[{"op":"replace","path":"/failed","value":0}]}}
+```
+
+## `tml-place` <Since verb="tml-place" /> [#tml-place]
+
+Move a TML surface between a popup and a tiled pane, as the person chose. The surface keeps its state, so a form keeps what the person typed. Needs the attach nonce of a client.
+
+| Param         | Type   | Required | Default | Description                                     |
+| ------------- | ------ | -------- | ------- | ----------------------------------------------- |
+| `surface`     | string |          |         | The surface id.                                 |
+| `target`      | string |          |         | popup or pane. One of `popup` or `pane`.        |
+| `human_nonce` | string |          |         | The attach nonce of the client the person uses. |
+
+| Result field | Type   | Description               |
+| ------------ | ------ | ------------------------- |
+| `window_id`  | string | The surface's window.     |
+| `target`     | string | Where the surface is now. |
+
+```json
+{"id":1,"verb":"tml-place","params":{"surface":"tml-4f1a9c02","target":"pane","human_nonce":"..."}}
+```
+
+## `tml-replace` <Since verb="tml-replace" /> [#tml-replace]
+
+Swap a TML surface's tree. Each client keeps its view state (the open tab, the cursor row) for the nodes whose ids stay.
+
+| Param        | Type   | Required | Default | Description                                                             |
+| ------------ | ------ | -------- | ------- | ----------------------------------------------------------------------- |
+| `surface`    | string |          |         | The surface id.                                                         |
+| `doc`        | string |          |         | The new document, as tml-open takes it.                                 |
+| `keep_state` | bool   |          | `false` | Keep the state the surface has now instead of the new document's state. |
+
+| Result field | Type | Description                           |
+| ------------ | ---- | ------------------------------------- |
+| `version`    | int  | The surface's version after the swap. |
+
+```json
+{"id":1,"verb":"tml-replace","params":{"surface":"tml-4f1a9c02","doc":"<tml version=\"1\"><text>Done</text></tml>"}}
+```
+
+## `tml-validate` <Since verb="tml-validate" /> [#tml-validate]
+
+Check a TML document as tml-open would. Needs no session.
+
+| Param | Type   | Required | Default | Description                                                           |
+| ----- | ------ | -------- | ------- | --------------------------------------------------------------------- |
+| `doc` | string |          |         | The document: TML text or TML JSON as a string, or a TML JSON object. |
+
+| Result field | Type      | Description                                                                                           |
+| ------------ | --------- | ----------------------------------------------------------------------------------------------------- |
+| `warnings`   | \[]object | The warnings, each with at, code and message. A document with errors fails with invalid\_tml instead. |
+
+```json
+{"id":1,"verb":"tml-validate","params":{"doc":"<tml version=\"1\"><text>Hello</text></tml>"}}
+```
+
+## `transfer-answer` <Since verb="transfer-answer" /> [#transfer-answer]
+
+Answer a copy in state conflict: what to do with files that are there and differ. Answer one file, several, or every file with all. The copy goes on when every file it waits on has an answer.
+
+| Param    | Type      | Required | Default | Description                                                                                                              |
+| -------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `id`     | string    | yes      |         | The transfer's id.                                                                                                       |
+| `choice` | string    | yes      |         | replace the file there, keep both (the copy gets a new name), or skip the file. One of `replace`, `keep-both` or `skip`. |
+| `rel`    | string    |          |         | The file, as the row's conflicts name it.                                                                                |
+| `rels`   | \[]string |          |         | Several files.                                                                                                           |
+| `all`    | bool      |          |         | This answer for every file of the copy, now and later.                                                                   |
+
+| Result field        | Type      | Description                                                                                                                                                                                                                                             |
+| ------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string    | The transfer's id.                                                                                                                                                                                                                                      |
+| `state`             | string    | queued, running, verifying, waiting (for a machine that went away), paused, conflict (waits for transfer-answer), done, failed or cancelled. One of `queued`, `running`, `verifying`, `waiting`, `paused`, `conflict`, `done`, `failed` or `cancelled`. |
+| `size`              | int       | Bytes to copy in all.                                                                                                                                                                                                                                   |
+| `done`              | int       | Bytes copied, or found to be there already.                                                                                                                                                                                                             |
+| `wire`              | int       | Bytes that crossed a link, fewer than done when they were compressed.                                                                                                                                                                                   |
+| `rate`              | float     | Bytes per second over the last five seconds.                                                                                                                                                                                                            |
+| `eta_ms`            | int       | Time left, once two seconds of data came.                                                                                                                                                                                                               |
+| `resumed_from`      | int       | Where the copy went on from after a machine came back. Absent when it never had to.                                                                                                                                                                     |
+| `verified`          | bool      | The copy's sha256 matched the original's.                                                                                                                                                                                                               |
+| `final`             | string    | Where the file is now, which keep-both can change.                                                                                                                                                                                                      |
+| `same`              | int       | Files that were there with the same bytes, which were not copied again.                                                                                                                                                                                 |
+| `conflicts_skipped` | int       | Files that were there and differed, left as they were.                                                                                                                                                                                                  |
+| `conflicts`         | \[]object | In state conflict: the files that wait for an answer, rel, path, src\_size, src\_mtime, dst\_size, dst\_mtime.                                                                                                                                          |
+| `error`             | string    | What happened and what to do, for failed and waiting.                                                                                                                                                                                                   |
+
+```json
+{"id":1,"verb":"transfer-answer","params":{"id":"3f9a1c2b7d00","choice":"keep-both","all":true}}
+```
+
+## `transfer-cancel` <Since verb="transfer-cancel" /> [#transfer-cancel]
+
+Stop a transfer and remove what it copied so far of the file in flight.
+
+| Param | Type   | Required | Default | Description        |
+| ----- | ------ | -------- | ------- | ------------------ |
+| `id`  | string | yes      |         | The transfer's id. |
+
+| Result field        | Type      | Description                                                                                                                                                                                                                                             |
+| ------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string    | The transfer's id.                                                                                                                                                                                                                                      |
+| `state`             | string    | queued, running, verifying, waiting (for a machine that went away), paused, conflict (waits for transfer-answer), done, failed or cancelled. One of `queued`, `running`, `verifying`, `waiting`, `paused`, `conflict`, `done`, `failed` or `cancelled`. |
+| `size`              | int       | Bytes to copy in all.                                                                                                                                                                                                                                   |
+| `done`              | int       | Bytes copied, or found to be there already.                                                                                                                                                                                                             |
+| `wire`              | int       | Bytes that crossed a link, fewer than done when they were compressed.                                                                                                                                                                                   |
+| `rate`              | float     | Bytes per second over the last five seconds.                                                                                                                                                                                                            |
+| `eta_ms`            | int       | Time left, once two seconds of data came.                                                                                                                                                                                                               |
+| `resumed_from`      | int       | Where the copy went on from after a machine came back. Absent when it never had to.                                                                                                                                                                     |
+| `verified`          | bool      | The copy's sha256 matched the original's.                                                                                                                                                                                                               |
+| `final`             | string    | Where the file is now, which keep-both can change.                                                                                                                                                                                                      |
+| `same`              | int       | Files that were there with the same bytes, which were not copied again.                                                                                                                                                                                 |
+| `conflicts_skipped` | int       | Files that were there and differed, left as they were.                                                                                                                                                                                                  |
+| `conflicts`         | \[]object | In state conflict: the files that wait for an answer, rel, path, src\_size, src\_mtime, dst\_size, dst\_mtime.                                                                                                                                          |
+| `error`             | string    | What happened and what to do, for failed and waiting.                                                                                                                                                                                                   |
+
+```json
+{"id":1,"verb":"transfer-cancel","params":{"id":"3f9a1c2b7d00"}}
+```
+
+## `transfer-clear` <Since verb="transfer-clear" /> [#transfer-clear]
+
+Remove the transfers that ended (done, failed, cancelled) from the list. A failed one takes its parts with it.
+
+| Param | Type      | Required | Default | Description                                          |
+| ----- | --------- | -------- | ------- | ---------------------------------------------------- |
+| `ids` | \[]string |          |         | Only these transfers. Omit for every one that ended. |
+
+| Result field | Type | Description             |
+| ------------ | ---- | ----------------------- |
+| `cleared`    | int  | How many left the list. |
+
+```json
+{"id":1,"verb":"transfer-clear"}
+```
+
+## `transfer-resume` <Since verb="transfer-resume" /> [#transfer-resume]
+
+Go on with a paused transfer, try a waiting one now, or try a failed one again from where it stopped.
+
+| Param | Type   | Required | Default | Description        |
+| ----- | ------ | -------- | ------- | ------------------ |
+| `id`  | string | yes      |         | The transfer's id. |
+
+| Result field        | Type      | Description                                                                                                                                                                                                                                             |
+| ------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string    | The transfer's id.                                                                                                                                                                                                                                      |
+| `state`             | string    | queued, running, verifying, waiting (for a machine that went away), paused, conflict (waits for transfer-answer), done, failed or cancelled. One of `queued`, `running`, `verifying`, `waiting`, `paused`, `conflict`, `done`, `failed` or `cancelled`. |
+| `size`              | int       | Bytes to copy in all.                                                                                                                                                                                                                                   |
+| `done`              | int       | Bytes copied, or found to be there already.                                                                                                                                                                                                             |
+| `wire`              | int       | Bytes that crossed a link, fewer than done when they were compressed.                                                                                                                                                                                   |
+| `rate`              | float     | Bytes per second over the last five seconds.                                                                                                                                                                                                            |
+| `eta_ms`            | int       | Time left, once two seconds of data came.                                                                                                                                                                                                               |
+| `resumed_from`      | int       | Where the copy went on from after a machine came back. Absent when it never had to.                                                                                                                                                                     |
+| `verified`          | bool      | The copy's sha256 matched the original's.                                                                                                                                                                                                               |
+| `final`             | string    | Where the file is now, which keep-both can change.                                                                                                                                                                                                      |
+| `same`              | int       | Files that were there with the same bytes, which were not copied again.                                                                                                                                                                                 |
+| `conflicts_skipped` | int       | Files that were there and differed, left as they were.                                                                                                                                                                                                  |
+| `conflicts`         | \[]object | In state conflict: the files that wait for an answer, rel, path, src\_size, src\_mtime, dst\_size, dst\_mtime.                                                                                                                                          |
+| `error`             | string    | What happened and what to do, for failed and waiting.                                                                                                                                                                                                   |
+
+```json
+{"id":1,"verb":"transfer-resume","params":{"id":"3f9a1c2b7d00"}}
+```
+
+## `wait-dir` <Since verb="wait-dir" /> [#wait-dir]
+
+Wait until the names in a directory on this machine change: a file added, removed or renamed. The daemon that owns a window on another machine asks it, so the rail's file section can follow that machine's disk. It answers changed false when the timeout ends first.
+
+| Param     | Type   | Required | Default | Description                                                                                                    |
+| --------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `dir`     | string |          |         | The directory to watch.                                                                                        |
+| `timeout` | int    |          |         | Milliseconds to wait. Omit for 30 seconds.                                                                     |
+| `after`   | string |          |         | The names value of the last answer. When the names differ from it, the wait answers at once with changed true. |
+
+| Result field | Type   | Description                                                                                              |
+| ------------ | ------ | -------------------------------------------------------------------------------------------------------- |
+| `dir`        | string | The directory watched.                                                                                   |
+| `changed`    | bool   | The names changed before the timeout ended.                                                              |
+| `names`      | string | A short sum of the names in the directory, empty when they cannot be read or there are more than 100000. |
+
+```json
+{"id":1,"verb":"wait-dir","params":{"dir":"/tmp","timeout":1}}
+```
+
+## `zoom-window` <Since verb="zoom-window" /> [#zoom-window]
+
+Zoom a pane to fill its workspace, or end the zoom. Works with no client attached. Zooming a pane on the workspace the session shows focuses it.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `window`  | string |          |         | Window to zoom. Omit for the caller's own pane, or outside a pane the focused one.                                       |
+| `zoom`    | bool   |          |         | True to zoom, false to end the zoom on the window's workspace. Omit to toggle.                                           |
+
+| Result field | Type   | Description                               |
+| ------------ | ------ | ----------------------------------------- |
+| `window_id`  | string | Id of the window.                         |
+| `zoomed`     | bool   | Whether the window is zoomed now.         |
+| `changed`    | bool   | False when the zoom was already as asked. |
+
+```json
+{"id":1,"verb":"zoom-window","params":{"session":"work","window":"build","zoom":true}}
+```

@@ -1,0 +1,1142 @@
+---
+title: "Remote Control Commands (part 1 of 2)"
+description: "Remote Control Commands (part 1 of 2): part of the CLI Reference of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CLI_REFERENCE.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CLI_REFERENCE.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CLI_REFERENCE.md). The [CLI Reference](/docs/cli-reference) page lists every part.
+
+## Remote Control Commands [#remote-control-commands]
+
+TUIOS provides commands to control a running session from external scripts and tools. These commands communicate with the TUIOS daemon to send keystrokes, execute commands, and query state. This enables powerful scripting, automation, and integration with external tools.
+
+> **Note:** When sending TUIOS commands via `send-keys`, `Ctrl+B` refers to the default leader key. This is configurable via the `leader_key` option in your config file.
+
+### `tuios send-keys` <Since command="send-keys" /> [#tuios-send-keys]
+
+Send keys to the program in a window: arrows, page keys, Enter, `ctrl+c`.
+
+With `-w` the keys go to that window's terminal, whether or not a client is
+attached and whichever window has the focus. Without `-w` they go to the
+attached client as if the person pressed them, which drives the window manager
+or the focused window; with no client attached they go to the focused window.
+
+From inside a pane, `-w` is required. A pane does not send keys into a pane
+that waits on a prompt (`needs_input`). To answer that prompt, pass
+`--allow-blocked`. It also needs the `respond` grant. You, outside every pane,
+are held to neither rule.
+
+**Usage:**
+
+```bash
+tuios send-keys <keys> [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <target>`: Target window: full id, the index `list-windows` prints, the exact name, or a unique id prefix (default: the attached client, else the focused window)
+- `-N, --repeat <n>`: Send the whole sequence n times, 1 to 1000 (default 1)
+- `-l, --literal`: Write the argument to the window's terminal unchanged, with no key names
+- `-r, --raw`: Treat each character as a separate key (no splitting on space/comma)
+- `--allow-blocked`: From a pane, send keys into a pane that waits on a prompt. Read the prompt first
+- `--json`: Output the result as JSON
+
+**Output:**
+Where the keys went:
+
+```
+sent 5 keys to window docs (3a42ab8f)
+```
+
+or `sent 2 keys to the attached client (...)` without `-w`. `--json` gives
+`sent_to` (`window` or `client`), `keys`, and for a window `window_id` and
+`window`.
+
+**Keys:** the argument is split on spaces and commas. Names are
+case-insensitive.
+
+| Key            | Name                                               | Other spellings that work                                       |
+| -------------- | -------------------------------------------------- | --------------------------------------------------------------- |
+| Arrows         | `Up` `Down` `Left` `Right`                         | `up`, `UP`, `arrow-up`, `ArrowUp`, `up-arrow`, `KEY_UP`, `<Up>` |
+| Page keys      | `PageUp` `PageDown`                                | `PgUp`, `PgDn`, `Page_Down`, `NPage`, `PPage`, `KEY_NPAGE`      |
+| Line ends      | `Home` `End`                                       | `KEY_HOME`, `<End>`                                             |
+| Enter          | `Enter`                                            | `Return`, `CR`, `KEY_ENTER`                                     |
+| Escape         | `Escape`                                           | `Esc`                                                           |
+| Editing        | `Tab` `BTab` `Space` `Backspace` `Delete` `Insert` | `shift+Tab`, `BSpace`, `BS`, `Del`, `DC`, `Ins`, `IC`           |
+| Function keys  | `F1` to `F12`                                      | `f5`, `KEY_F5`                                                  |
+| A character    | `q` `j` `G` `/`                                    | any single character                                            |
+| With modifiers | `ctrl+c` `alt+b` `shift+Up` `ctrl+Right`           | `C-c`, `M-b`, `S-Up`, `^C`, `Ctrl+C`                            |
+| A raw sequence | `\e[A`                                             | `\x1b[A`, `\033[A`, `^[[A`                                      |
+| The leader key | `PREFIX`                                           | `$PREFIX`; only without `-w`, with a client attached            |
+
+Arrows, `Home` and `End` are sent in the form the program asked for
+(application cursor keys). A named key or a key with modifiers is encoded
+the way the client encodes it for a person: a program that asked for the
+kitty keyboard protocol or modifyOtherKeys gets that encoding. Text stays
+text. A word that looks like a key but is not one (`Dwon`,
+`KEY_FOO`, `F13`) is refused with the key names and the closest one, and
+nothing is sent. A plain lower-case word such as `ls` is typed as its letters.
+
+**send-keys is not for text.** `send-keys 'echo hello'` types `echohello`. Use
+[`tuios send-text`](#tuios-send-text).
+
+**Examples:**
+
+```bash
+# Scroll the pager in the window named docs
+tuios send-keys -w docs Down
+tuios send-keys -w docs Down --repeat 10
+tuios send-keys -w docs 'PageDown PageDown'
+
+# Interrupt what runs in the window named build
+tuios send-keys -w build ctrl+c
+
+# A window by the id new-window printed
+id=$(tuios new-window logs --print-id)
+tuios send-keys -w "$id" End
+
+# Keys for the window manager: the leader key and then q, no -w
+tuios send-keys "ctrl+b q"
+tuios send-keys "\$PREFIX q"
+
+# Enter terminal mode in the attached client (press 'i')
+tuios send-keys i
+```
+
+### `tuios send-text` <Since command="send-text" /> [#tuios-send-text]
+
+Write text verbatim to a pane's PTY, with no key parsing at all.
+
+Nothing in the argument is interpreted, so spaces, quotes and punctuation
+arrive as typed. A trailing newline is the Enter that runs the line, which
+makes this one call where `send-keys` needs two.
+
+From inside a pane, `-w` is required, and a pane does not type into a pane on
+`needs_input` without `--allow-blocked`, as for `send-keys`.
+
+**Usage:**
+
+```bash
+tuios send-text <text> [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused)
+- `--allow-blocked`: From a pane, type into a pane that waits on a prompt. Read the prompt first
+- `--json`: Output the result as JSON. Without it the command prints nothing, and a failure exits `1`
+
+**Examples:**
+
+```bash
+# Run a command in the focused pane (the trailing newline submits it)
+tuios send-text 'go build ./...
+'
+
+# Type without submitting
+tuios send-text -w build 'partial input'
+
+# Text with spaces, quotes and commas needs no flags
+tuios send-text -w build 'git commit -m "fix: cache, retries"'
+```
+
+### `tuios list-buffers`, `show-buffer`, `set-buffer`, `delete-buffer`, `paste-buffer` <Since command="list-buffers" /> [#tuios-list-buffers-show-buffer-set-buffer-delete-buffer-paste-buffer]
+
+Read and change the paste buffers, as the tmux commands of the same names do.
+A yank in copy mode adds a buffer. The daemon keeps the buffers, so every
+client and session on this machine shares them. `[paste_buffers]` sets how
+many to keep.
+
+**Usage:**
+
+```bash
+tuios list-buffers [--json]
+tuios show-buffer [-b <name>] [--json]
+tuios set-buffer [-b <name>] [-a] [<text> | -] [--json]
+tuios delete-buffer [-b <name>] [--json]
+tuios paste-buffer [-b <name>] [-s <session>] [-w <window>] [-d] [-r] [--allow-blocked] [--json]
+```
+
+**Flags:**
+
+- `-b, --buffer <name>`: The buffer (default: the newest buffer that tuios named, as in tmux). For `set-buffer`, the default is a new buffer named `bufferN`
+- `-a, --append`: `set-buffer` adds the text to the end of the named buffer. With no `-b`, it makes a new buffer, as in tmux
+- `-s, --session`, `-w, --window`: The pane `paste-buffer` pastes into (default: the focused pane)
+- `-d, --delete`: `paste-buffer` deletes the buffer after the paste, unless it was set again meanwhile
+- `-r, --raw`: `paste-buffer` keeps each line feed. Without it, each line feed becomes a carriage return, as in tmux
+- `--allow-blocked`: From a pane, `paste-buffer` pastes into a pane that waits on a prompt
+- `--json`: Output the result as JSON
+
+A buffer can hold any bytes, a binary file included. `show-buffer` prints the
+content with no line feed added. `set-buffer -` reads the standard input. With
+no text on a terminal, `set-buffer` stops and says how to give it. `paste-buffer` removes control
+characters and uses the bracketed paste marks when the program in the pane
+turned them on. With a session on another machine, `paste-buffer` sends the
+text of a buffer from this machine.
+
+From inside a pane, reading the buffers needs the `read` grant, changing them
+needs `write`, and `paste-buffer` needs both. A buffer a pane without `admin`
+sets is that pane's own, and such a pane reaches only its own buffers. It
+cannot make a named buffer. With no `-b`, your own commands take the newest
+of your own buffers, never one a pane set. `set-buffer` with
+empty text stores nothing and exits 0, as tmux does. Input longer than 64 MiB
+is refused, and nothing is stored.
+
+**Examples:**
+
+```bash
+# What can be pasted again
+tuios list-buffers
+
+# Keep a command, and paste it into the ops pane later
+tuios set-buffer -b deploy 'kubectl rollout restart deploy/api'
+tuios paste-buffer -b deploy -w ops
+
+# Store the output of a command
+git log -1 --format=%H | tuios set-buffer
+```
+
+### `tuios new-window` <Since command="new-window" /> [#tuios-new-window]
+
+Open a new window in a session and print its id.
+
+The window is created by the daemon whether or not a client is attached, so
+this works on a detached session. Give it a name to address it later without
+holding on to the id.
+
+**Usage:**
+
+```bash
+tuios new-window [name] [command...] [--kind view|web|app --uri <uri>] [flags]
+```
+
+`--uri` is what a `--kind` window shows, such as `tuios://review/<pane>`.
+
+Words after the name are the argv the window runs instead of a shell, with no
+shell in between: `tuios new-window htop /usr/bin/htop`. Put `--` before a
+command that has flags of its own, or tuios reads them as its own flags:
+`tuios new-window log -- git log --oneline -20`.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--workspace <n>`: Workspace to open the window on (default: the calling pane's workspace, else the one the session shows)
+- `--cwd <dir>`: Directory to start the shell in (default: your directory when you run it in a pane, else the focused pane's)
+- `--no-focus`: Leave the focus where it is
+- `--host <name>`: Run the window's process on this machine from the `[hosts]` table (default: this machine)
+- `--grants <grant>[,<grant>...]`: What the window's process may do through tuios: `read`, `write`, `fan`, `respond`, `admin`, or `none` (default: `[agents.permissions]`). See [`tuios pane-grants`](/docs/cli-reference/agent-commands#tuios-pane-grants)
+- `--json`: Output result as JSON
+- `--print-id`: Print only the new window's full id
+- `--keep-open`: Keep the window after its program exits. The window shows a line with the exit status under the last output
+- `--wait`: Wait for the program to exit, print nothing, and exit with its status. A program that a signal stopped gives 128 plus the signal number
+- `--timeout <ms>`: With `--wait`: milliseconds to wait before failing (default: no limit)
+- `--shell-integration <auto|off>`: Prompt marks in this pane's bash or zsh (default: `[shell] integration`). No effect on a window that runs a command. See [Shell integration](/docs/configuration#shell-integration)
+
+**Output:**
+The 8-character window id and the window's name, separated by two spaces:
+
+```
+a1b2c3d4  build
+```
+
+That id prefix, and the name, are what `-w` accepts everywhere else. With
+`--print-id` the output is the full id alone, for `id=$(tuios new-window build --print-id)`.
+
+**Examples:**
+
+```bash
+# Open an unnamed window
+tuios new-window
+
+# Open a named window and run something in it
+tuios new-window build
+tuios send-text -w build 'go build ./...
+'
+
+# Run the tests beside you, and read the output if they fail
+tuios new-window tests --no-focus --keep-open --wait -- go test ./... ||
+  tuios capture-pane -w tests --scrollback
+
+# Capture the new window's id for scripting
+id=$(tuios new-window build --print-id)
+tuios new-window --json | jq -r .window_id
+
+# JSON output carries the full id and the name
+tuios new-window --json build
+# Output: {"focused":true,"host":"","message":"command executed","name":"build","pty_id":"8fe359af-0f9e-4efe-9595-7b1d3467dc50","success":true,"unplaced":true,"window_id":"a6e55709-071e-4345-9363-ff4ef0a63c02","workspace":1}
+
+# Target a specific session
+tuios new-window -s mysession dev
+```
+
+### `tuios popup` <Since command="popup" /> [#tuios-popup]
+
+Run a command in a floating pane centred over the layout, and print its id.
+
+The pane closes when the command exits. Nothing re-parses the arguments after
+`--`, so nothing needs quoting. This is how a picker becomes an overlay: run
+fzf, gum or any other full-screen program in it.
+
+It needs an attached client, because a popup is a thing on a screen. The pane is
+not tiled, it is not in the window cycle, and it cannot be minimized.
+
+The popup writes to its own screen, not to this command's output. With
+`--wait` this command stays open until the popup's command exits and exits
+with its status (130 when the popup was closed by hand). With
+`--capture-stdout`, which implies `--wait`, the command's standard output
+comes here instead of into the popup: a picker such as fzf or gum draws on the
+terminal and prints only the choice, so the choice is what this command
+prints. Capture is not supported on Windows. Without either, redirect inside
+the popup or send the selection to another pane.
+
+**Usage:**
+
+```bash
+tuios popup [flags] -- <command> [args...]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--width <size>`: Width in cells (`60`) or percent (`60%`). Default `80%`
+- `--height <size>`: Height in cells (`20`) or percent (`50%`). Default `60%`
+- `--dim <percent>`: Dim the screen behind this popup by `0` to `90` percent. Omit to inherit `appearance.popup_dim` (default `0`); explicit `--dim 0` turns it off
+
+Neither size flag has a short form: `-w` selects a window everywhere else, and
+`-h` is help.
+
+- `--name <name>`: Name for the popup
+- `--cwd <dir>`: Directory to run the command in
+- `--workspace <n>`: Workspace to open the popup on
+- `--wait`: Stay open until the command exits, and exit with its status
+- `--capture-stdout`: Print the command's standard output here instead of in the popup (implies `--wait`)
+- `--timeout <ms>`: With `--wait`, milliseconds to wait before failing with `timeout`; the popup stays open (default: as long as it is open)
+- `--json`: Output result as JSON
+
+A size larger than the pane region is cut down to the region.
+
+Dimming applies only while the popup has focus and leaves the popup lit.
+A TML popup inherits `appearance.modal_dim` unless overridden.
+
+**Lifetime:**
+
+A popup lives as long as its command. Detaching leaves it running, and it is
+still there on the next attach. A daemon restart does not bring it back: the
+restore respawns a shell rather than the command, which is not the popup. Press
+esc in window mode to close one by hand, or close it like any other pane.
+
+To keep shells in a box between shows, use the scratch terminal
+(`Ctrl+B g`), a small layout of panes. It comes back hidden after a daemon
+restart. See
+[SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#the-scratch-terminal). To put a command in a popup
+on a key of its own, use a `[[keybindings.command]]` entry. See
+[KEYBINDINGS.md](/docs/keybindings#command-keys).
+
+**Examples:**
+
+```bash
+# Pick a file in a centred popup and use the answer
+file=$(tuios popup --capture-stdout -- fzf)
+
+# Wait for a confirmation and branch on it
+tuios popup --wait -- gum confirm "Deploy?" && ./deploy.sh
+
+# Keep the answer in a file instead
+tuios popup -- sh -c 'ls | fzf > /tmp/pick'
+
+# Send the selection straight to the pane you came from
+tuios popup -- sh -c 'tuios send-text -w main "$(ls | fzf)"'
+
+# A small popup, in cells
+tuios popup --width 60 --height 20 -- gum choose one two three
+
+# Watch something, then press q to close it
+tuios popup --width 90% --height 80% -- htop
+
+# Dim the background while choosing
+tuios popup --dim 30 -- gum choose one two three
+
+# Capture the popup's id for scripting
+tuios popup --json -- fzf | jq -r .window_id
+```
+
+### `tuios xpanes` <Since command="xpanes" /> [#tuios-xpanes]
+
+Open one pane per item in a new tiled workspace, and turn multifocus on for
+all of them. Then the keys you type go to every pane. This is like
+[tmux-xpanes](https://github.com/greymd/tmux-xpanes).
+
+**Usage:**
+
+```bash
+tuios xpanes [flags] [items...]
+command | tuios xpanes [flags]
+```
+
+The items are the arguments. With no arguments, tuios reads one item from each
+line of stdin, when stdin is not a terminal. tuios ignores empty lines.
+
+**Flags:**
+
+- `-c, --command <cmd>`: Command for each pane. tuios replaces `{}` with the item, in shell quotes
+- `-s, --speedy`: Speedy mode. The pane runs the command with `sh -c`, with no interactive shell, and stays until you press Enter
+- `-ss` (`--speedy` twice): Speedy mode. The pane closes when the command stops
+- `--interval <seconds>`: Time to wait between the panes, for example `0.5`
+- `-I, --replace <text>`: Text that tuios replaces with the item (default: `{}`)
+- `--ssh`: Run `ssh` with the item in each pane. This is the same as `-s -c 'ssh -- {}'`. The `--` makes sure that ssh does not read an item that starts with `-` as an option. Add `-ss` to close each pane when its ssh stops
+- `-l, --layout <name>`: `tiled`, `even-horizontal` or `even-vertical`, or `t`, `eh` and `ev` (default: `tiled`)
+- `-n, --items-per-pane <n>`: Number of items for each pane. tuios joins them with spaces (default: 1)
+- `--no-sync`: Do not turn multifocus on
+- `--workspace <n>`: Workspace for the panes. It must be empty (default: the first empty workspace)
+- `--session <name>`: Session for the panes (default: the session of this pane, else the most recently active). It has no short form, because `-s` is speedy mode, as in tmux-xpanes
+- `--force`: Open more than 64 panes
+- `--json`: Output the result as JSON
+
+**Panes:**
+
+- Each pane starts a shell. With `-c`, tuios types the command into the shell
+  of that pane and presses Enter. tuios waits until the shell shows its
+  prompt, for at most 10 seconds. The shell stays when the command stops.
+  tmux-xpanes does the same. This works with and without a client attached.
+- With `-s`, the pane runs the command with no shell. When the command stops,
+  the pane shows "The command stopped. Press Enter to close the pane." Press
+  Enter to close it. With `-ss`, the pane closes when the command stops.
+- With `--interval`, tuios waits between the panes. With `-s` or `-ss`, it
+  waits between opening the panes, because each command starts with its pane.
+  Without them, it opens all the panes and waits between typing the commands.
+- Without `-c`, each pane is a shell. In a session on another machine, the
+  daemon there chooses the shell, and the pane does not get
+  `TUIOS_XPANES_ITEM` or `TUIOS_XPANES_INDEX`.
+- Each pane gets the item in `TUIOS_XPANES_ITEM` and its number, from 1, in
+  `TUIOS_XPANES_INDEX`.
+- The item is the name of the pane.
+- The panes start in the folder where you run `tuios xpanes`.
+
+**Layout and multifocus:**
+
+tuios shows the new workspace and lays out the panes in item order. `tiled` is
+a grid. `even-horizontal` puts the panes side by side. `even-vertical` puts
+them one above the other.
+
+The layout and multifocus need a client attached to the session. The layout
+also needs tiling on and the `bsp` layout. When tuios cannot do one of them,
+it opens the panes and tells you what it did not do.
+
+**When the panes close:**
+
+tuios remembers the workspace where you ran `tuios xpanes`. From inside a
+pane, it is the workspace of that pane. From outside, it is the workspace on
+screen. When the last pane of the xpanes workspace closes, tuios shows that
+workspace again, if it still has panes. Set `workspaces.return_when_empty` to
+`false` to stay on the empty workspace. See
+[CONFIGURATION.md](/docs/configuration#when-a-workspace-becomes-empty).
+
+`tuios xpanes` uses the verbs `list-workspaces`, `select-workspace`,
+`new-window`, `send-text` and `run-command`. The two client commands `ArrangePanes` and
+`SetMultifocus` also work alone with
+[`tuios run-command`](#tuios-run-command).
+
+**Examples:**
+
+```bash
+# Three ssh sessions, and type into all of them at the same time
+tuios xpanes --ssh host1 host2 host3
+
+# Items from stdin, one command for each
+printf 'a\nb\nc\n' | tuios xpanes -c 'echo {}'
+
+# No shell, one second apart, and each pane closes when curl stops
+tuios xpanes -ss --interval 1 -c 'curl -s https://{}/health' web1 web2 web3
+
+# Close all the panes when you are done
+tuios close-workspace 2
+
+# Follow logs side by side, without multifocus
+ls /var/log/*.log | tuios xpanes -l even-horizontal --no-sync -c 'tail -f {}'
+
+# Two items for each pane
+tuios xpanes -n 2 -c 'diff {}' a.txt b.txt c.txt d.txt
+```
+
+### `tuios close-window` <Since command="close-window" /> [#tuios-close-window]
+
+Close one pane and stop its program. Name the pane by its name, its id or the
+number `list-windows` prints. It works with no client attached.
+
+**Usage:**
+
+```bash
+tuios close-window [flags] <window>
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: the session of this pane, else the most recently active)
+- `--json`: Output the result as JSON
+
+**Examples:**
+
+```bash
+# Close the pane named build
+tuios close-window build
+
+# Close a pane by id in the session work
+tuios close-window -s work 86e5e19f
+```
+
+### `tuios clear-history` <Since command="clear-history" /> [#tuios-clear-history]
+
+Clear the scrollback of a pane, as tmux `clear-history` does. The screen
+stays. With `--screen`, tuios also removes the rows above the prompt, as
+`cmd+k` does in Ghostty and iTerm2. The prompt row then moves to the top of
+the pane.
+
+The daemon clears the pane for every client of the session. An attach later
+does not bring the old rows back. tuios clears nothing while a full-screen
+program, such as an editor, uses the pane. The `clear_scrollback` key does the
+same as `--screen`. See [KEYBINDINGS.md](/docs/keybindings#clear-the-scrollback).
+
+**Usage:**
+
+```bash
+tuios clear-history [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: the session of this pane, else the most recently active)
+- `-w, --window <window>`: Target window by name or ID (default: the focused pane)
+- `--screen`: Also remove the rows above the prompt
+- `--json`: Output the result as JSON
+
+**Examples:**
+
+```bash
+# Clear the scrollback of the focused pane
+tuios clear-history
+
+# Clear the scrollback and the screen of the pane named build
+tuios clear-history -w build --screen
+```
+
+### `tuios record-pane` <Since command="record-pane" /> [#tuios-record-pane]
+
+Record a pane to an asciicast v2 file (`.cast`) that `asciinema play`, `agg`,
+`reel` and the inspector at inspector.getsteep.dev open. The recording starts
+with the screen the pane shows, its history included, then holds every output
+and every resize at its real time. It runs in the daemon until `stop`, the
+`--for` duration, the `--max-size` cap or the end of the pane.
+
+A recording holds everything the pane prints while it runs. Nothing is
+recorded unless you ask, the file is made readable by you only, and the keys
+typed into the pane are not recorded. See [PANE\_RECORDING.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/PANE_RECORDING.md).
+
+**Usage:**
+
+```bash
+tuios record-pane start -o FILE [flags]
+tuios record-pane stop [flags]
+tuios record-pane mark <label> [flags]
+tuios record-pane list [--json]
+```
+
+**Flags of start:**
+
+- `-s, --session <name>`: Target session (default: the session of this pane, else the most recently active)
+- `-w, --window <window>`: Target window by name or ID (default: the focused pane)
+- `-o, --output <file>`: The .cast file to write (required). A relative path is taken from the current folder
+- `--for <duration>`: Stop after this long (default: until stopped)
+- `--max-size <size>`: Stop when the file reaches this size, such as `8MiB` (default 64MiB, at most 1GiB)
+- `--title <text>`: The title players show
+- `--overwrite`: Replace the file when it exists. Without it an existing file is refused
+- `--json`: Output the result as JSON
+
+`stop` and `mark` take `-s`, `-w` and `--json`. `stop` returns when the file
+is complete and says how many events it holds and why the recording ended.
+
+While a pane records, its row on the rail says `rec`, and `list-windows --json` gives the pane `"recording": true`.
+
+**Examples:**
+
+```bash
+# Record the pane named build for a minute
+tuios record-pane start -w build -o build.cast --for 1m
+
+# Label a moment, then stop
+tuios record-pane mark -w build "tests start"
+tuios record-pane stop -w build
+
+# Play it
+asciinema play build.cast
+```
+
+### `tuios close-workspace` <Since command="close-workspace" /> [#tuios-close-workspace]
+
+Close every pane on a workspace, like tmux `kill-window`. Without a number,
+tuios closes the panes of the current workspace.
+
+**Usage:**
+
+```bash
+tuios close-workspace [flags] [workspace]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: the session of this pane, else the most recently active)
+- `--json`: Output the result as JSON
+
+Scratch panes stay open. To close a scratch group, name its scratch workspace.
+When the workspace goes, the workspaces above it move down one. See
+[CONFIGURATION.md](/docs/configuration#workspace-numbers). A pane that runs this
+command needs the `admin` grant. The
+`close_workspace` action does the same from the keyboard, and the `Close` row of
+a workspace tab's right-click menu in the dock does it for that tab's workspace.
+See [KEYBINDINGS.md](/docs/keybindings#close-every-pane-on-a-workspace).
+
+**Examples:**
+
+```bash
+# Close the panes that tuios xpanes opened on workspace 2
+tuios close-workspace 2
+
+# Close the panes of the current workspace
+tuios close-workspace
+```
+
+### `tuios ask-human` <Since command="ask-human" /> [#tuios-ask-human]
+
+Ask the person a question with a fixed set of answers, wait for them to pick
+one, and print it.
+
+**Usage:**
+
+```bash
+tuios ask-human [flags] <question> -o <answer> [-o <answer>...]
+tuios ask-human --request-id <id>
+```
+
+The question goes in the Inbox as a row under Questions. A client that shows the
+asking pane opens the Inbox on it at once, unless the person is typing into
+the pane or has an overlay open, and the digits 1 to 9 pick an answer once it
+has been on screen for a moment; from any other pane it waits there with the usual alert, and with
+nobody attached it waits for the next attach. Only the person at an attached
+client can answer; an agent cannot.
+
+When `--timeout` runs out first, the command exits `2` and the question stays.
+The answer is then mailed to the asking pane from `human`, marked
+`verified_human`, so `tuios wait-for agent-message` picks it up; or come back
+with `--request-id`. From inside a pane the question is asked as that pane,
+and naming another is refused. An answer to a call that was killed while it
+waited is mailed the same way. A caller whose tool stops commands after a
+while (two minutes for many agent harnesses) keeps `--timeout` below that, or
+asks with `--no-wait` and waits with `tuios wait-for agent-message`.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: The pane asking, where a late answer is mailed (default: your own pane; none from outside every pane)
+- `-o, --option <answer>`: An answer the person can pick; give 1 to 9, each one line of at most 60 bytes
+- `--timeout <ms>`: Milliseconds to wait for the answer (default: 120000, at most one hour)
+- `--no-wait`: Ask and return at once, exit `2`; the answer arrives as mail
+- `--request-id <id>`: Come back for a question already asked
+- `--json`: Output the result as JSON: `request_id`, `status`, `answer`, `answer_index`, `answered_by`, `verified_human`
+
+The question is one line of printable text, at most 160 bytes. For a longer
+question, send the details to the person with `tuios send-agent-message -w human`,
+then ask a short question.
+
+While a call from inside a pane waits, that pane shows `needs_input` with the
+question as its note. When the call returns, the pane shows its earlier state
+again, or the state the pane reported while the call waited. A pane already on
+`needs_input` keeps its own prompt. A question from outside every pane changes
+no pane's state.
+
+**Exit status:** `0` with the answer alone on stdout; `2` when there is no
+answer yet; `1` when the question ended without one (dismissed, superseded by
+a newer question from the same pane, or its pane closed).
+
+**Examples:**
+
+```bash
+# Ask, and branch on the answer
+if [ "$(tuios ask-human 'Deploy to staging?' -o yes -o no)" = yes ]; then ./deploy.sh; fi
+
+# Ask and move on; the answer arrives as mail
+tuios ask-human 'Which region?' -o us -o eu --no-wait
+
+# Come back for an answer
+tuios ask-human --request-id 9f86d081884c7d65
+```
+
+### `tuios run-command` <Since command="run-command" /> [#tuios-run-command]
+
+Execute a TUIOS command (same commands available via tape scripts).
+
+**Usage:**
+
+```bash
+tuios run-command <command> [args...] [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--json`: Output result as JSON (useful for scripting)
+- `--list`: List all available commands
+
+`run-command` sends a client protocol message, so from inside a pane it needs
+the `admin` grant (see [`tuios pane-grants`](/docs/cli-reference/agent-commands#tuios-pane-grants)). Under the
+default `mode = "open"` every pane holds `admin`. Prefer a verb where one
+exists: `tuios get-window` and `tuios list-windows` read windows with `read`.
+
+**Available Commands:**
+
+`tuios run-command --list` prints this list from the binary.
+
+| Command                                                     | Arguments                                                 | Description                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NewWindow`                                                 | `[name]`                                                  | Create a new terminal window                                                                                                                                                                                                                                |
+| `CloseWindow`                                               | `[name]`                                                  | Close the focused window, or every window with that name                                                                                                                                                                                                    |
+| `NextWindow`                                                |                                                           | Focus the next window                                                                                                                                                                                                                                       |
+| `PrevWindow`                                                |                                                           | Focus the previous window                                                                                                                                                                                                                                   |
+| `FocusWindow`                                               | `<name>`                                                  | Focus a window by name                                                                                                                                                                                                                                      |
+| `RenameWindow`                                              | `<name>` or `<old> <new>`                                 | Rename the focused or a named window                                                                                                                                                                                                                        |
+| `MinimizeWindow`                                            | `[name]`                                                  | Minimize the focused or a named window                                                                                                                                                                                                                      |
+| `RestoreWindow`                                             | `[name]`                                                  | Restore the focused or a named window                                                                                                                                                                                                                       |
+| `TerminalMode`                                              |                                                           | Switch to terminal mode                                                                                                                                                                                                                                     |
+| `WindowManagementMode`                                      |                                                           | Switch to window management mode                                                                                                                                                                                                                            |
+| `ToggleTiling`, `EnableTiling`, `DisableTiling`             |                                                           | Turn tiling mode on or off                                                                                                                                                                                                                                  |
+| `SnapLeft`, `SnapRight`, `SnapFullscreen`                   |                                                           | Snap the focused window                                                                                                                                                                                                                                     |
+| `Split`                                                     | `horizontal`, `vertical`, `left`, `right`, `up` or `down` | Split the focused window. A side names where the new window goes                                                                                                                                                                                            |
+| `RotateSplit`                                               |                                                           | Rotate the split direction                                                                                                                                                                                                                                  |
+| `EqualizeSplits`                                            |                                                           | Equalize all split ratios                                                                                                                                                                                                                                   |
+| `SetMasterPosition`                                         | `left`, `right`, `top`, `bottom` or `center`              | Put the master panes of the current workspace on that side. With `center`, the stack is on both sides                                                                                                                                                       |
+| `SetMasterCount`                                            | `1`-`9`                                                   | Set how many panes of the current workspace are master panes                                                                                                                                                                                                |
+| `CycleMasterPosition`                                       |                                                           | Move the master panes to the next side                                                                                                                                                                                                                      |
+| `AddMaster`, `RemoveMaster`                                 |                                                           | Make one more pane, or one pane fewer, a master pane                                                                                                                                                                                                        |
+| `SwapWithMaster`                                            |                                                           | Swap the focused pane with the master pane. Needs the master-stack layout                                                                                                                                                                                   |
+| `FocusMaster`                                               |                                                           | Focus the master pane. Needs the master-stack layout                                                                                                                                                                                                        |
+| `ArrangePanes`                                              | `<layout> [workspace [window...]]`                        | Lay out the panes of the workspace again as `tiled`, `even-horizontal` or `even-vertical`. The named windows come first, then the other panes in window order. With a workspace, the command fails when that workspace is not showing. Needs the bsp layout |
+| `SetMultifocus`                                             | `[window...]`                                             | Put exactly these windows in multifocus. Each window must be on the showing workspace and not minimized. From a pane, each window must be one that the pane can type into. With no window, clear multifocus                                                 |
+| `Screenshot`                                                |                                                           | Save the focused window as an image                                                                                                                                                                                                                         |
+| `SwitchWorkspace`                                           | `<1-9>`                                                   | Switch to workspace                                                                                                                                                                                                                                         |
+| `MoveToWorkspace`                                           | `<1-9>`                                                   | Move focused window to workspace                                                                                                                                                                                                                            |
+| `EnableAnimations`, `DisableAnimations`, `ToggleAnimations` |                                                           | Turn UI animations on or off                                                                                                                                                                                                                                |
+| `SetDockbarPosition`                                        | `<position>`                                              | Set dockbar position (top/bottom/hidden)                                                                                                                                                                                                                    |
+| `SetBorderStyle`                                            | `<style>`                                                 | Change window border style                                                                                                                                                                                                                                  |
+| `SetTheme`                                                  | `<theme>`                                                 | Change the color theme                                                                                                                                                                                                                                      |
+| `ShowNotification`                                          | `<message> [type]`                                        | Show a notification                                                                                                                                                                                                                                         |
+| `ListWindows`, `GetWindow [id-or-name]`, `GetSessionInfo`   |                                                           | The older spellings of `list-windows`, `get-window` and `session-info`, which are the ones to use                                                                                                                                                           |
+
+**Examples:**
+
+```bash
+# List all available commands
+tuios run-command --list
+
+# Create a new window
+tuios run-command NewWindow "my-terminal"
+
+# Create window and get JSON output with window ID
+tuios run-command --json NewWindow "my-terminal"
+# Output: {"message":"command executed","name":"my-terminal","success":true,"window_id":"75684348-98ba-4e60-a9c4-0b1e1920b25e"}
+
+# Switch workspace
+tuios run-command SwitchWorkspace 2
+
+# Toggle tiling
+tuios run-command ToggleTiling
+
+# Close focused window
+tuios run-command CloseWindow
+
+# Target a specific session
+tuios run-command -s mysession NewWindow "dev"
+```
+
+### `tuios set-config` <Since command="set-config" /> [#tuios-set-config]
+
+Change TUIOS configuration at runtime.
+
+**Usage:**
+
+```bash
+tuios set-config <path> <value> [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--json`: Output the result as JSON: `key`, `value`, `applied`, `no_save`, and `reason` when `applied` is false
+- `--no-save`: Apply the value and do not write it to a config file
+
+With a client attached, the client applies the value and writes it to
+`config.toml`. With no client attached, the daemon keeps the value for the
+session. The next client that attaches applies it and writes it to
+`config.toml`. The command still prints `Set PATH = VALUE` on stdout, and says on
+stderr that the value is not applied yet. `agents.enabled` is the person's
+switch: a process in a pane cannot set it.
+
+With `--no-save`, the client applies the value and does not write it to any
+config file. Later saves of other settings do not write it either. The value
+stays until the client exits, or until you set the same option again without
+`--no-save`. A change to the option on the settings page also saves it. Use
+`--no-save` in a hook that changes the display for a moment, such as a hook
+that hides the sidebar on one workspace. `agents.enabled` does not take
+`--no-save`, because the daemon reads it from the config file.
+
+**Paths:** every option `tuios list-options` prints can be set, by its full
+path (`appearance.dockbar_position`) or, for an `[appearance]` option, by its
+name alone. Some of them:
+
+| Path                                                                | Values                                                                                                               | Description                                                                                                                                                                                      |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dockbar_position`                                                  | `bottom`, `top`, `hidden`                                                                                            | Dockbar position (default `top`)                                                                                                                                                                 |
+| `dock_compact`                                                      | `true`, `false`                                                                                                      | Draw the dock as one row with no rule (default `false`)                                                                                                                                          |
+| `dock_mode_icon_window`                                             | text, `""` or `default`                                                                                              | Icon in the mode pill in window mode. An empty value shows no icon. `default` uses the icon of the glyph set                                                                                     |
+| `dock_mode_icon_terminal`                                           | text, `""` or `default`                                                                                              | Icon in the mode pill in terminal mode                                                                                                                                                           |
+| `dock_mode_icon_tiling`                                             | text, `""` or `default`                                                                                              | Icon in the mode pill while tiling is on                                                                                                                                                         |
+| `dock_mode_pill`                                                    | `tiling`, `input`                                                                                                    | What the mode pill shows while tiling is on: the tiling icon, or the terminal or window icon (default `tiling`)                                                                                  |
+| `dock_prefix_indicator`                                             | `pill`, `badge`                                                                                                      | Where the dock shows an armed leader key (default `pill`)                                                                                                                                        |
+| `theme_light`                                                       | a theme id, or empty                                                                                                 | The theme while the terminal is light. `theme` is then the dark theme (default empty)                                                                                                            |
+| `border_focused_gradient`                                           | two or more colours, or empty                                                                                        | Colours the focused pane's border blends through (default empty)                                                                                                                                 |
+| `border_gradient_angle`                                             | `0` to `359`                                                                                                         | Direction of the gradient in degrees (default `45`)                                                                                                                                              |
+| `window_title_style`                                                | `pill`, `tab`, `plain`                                                                                               | Shape of a pane's title (default `pill`)                                                                                                                                                         |
+| `window_title_align`                                                | `auto`, `left`, `center`, `right`                                                                                    | Place of a pane's title on its row (default `auto`)                                                                                                                                              |
+| `sidebar.row_style`                                                 | `bar`, `marker`, `underline`, `pill`                                                                                 | How the rail marks the row you are on (default `bar`)                                                                                                                                            |
+| `sidebar.header_style`                                              | `auto`, `plain`, `rule`, `pill`, `icon`                                                                              | How a rail section header is drawn (default `auto`)                                                                                                                                              |
+| `sidebar.density`                                                   | `normal`, `roomy`                                                                                                    | Space between the rail's sections (default `normal`)                                                                                                                                             |
+| `border_style`                                                      | `rounded`, `normal`, `thick`, `double`, `block`, `outer-half-block`, `inner-half-block`, `ascii`, `hidden`, `glyphs` | Border style                                                                                                                                                                                     |
+| `motion`                                                            | `none`, `basic`, `full`                                                                                              | How much moves: `basic` keeps window slides, workspace slides and the copy sweep, `full` (the default) adds the overlay fade-in and the working-agent shimmer                                    |
+| `theme_transition`                                                  | `none`, `circle`, `fade`                                                                                             | How a theme change shows: `circle` grows the new theme from the middle of the screen, `fade` changes all cells at the same time (default `none`)                                                 |
+| `workspace_transition`, `workspace_transition_ms`, `zoom_animation` |                                                                                                                      | Old names of `motion.workspace`, `motion.workspace_ms` and `motion.zoom`. See `[motion]`                                                                                                         |
+| `theme_transition_duration`                                         | `100` to `2000`                                                                                                      | Milliseconds a theme transition takes (default `450`)                                                                                                                                            |
+| `dim_unfocused`                                                     | `0` to `90`                                                                                                          | Percent the content of a pane you are not in is dimmed (default `0`, off)                                                                                                                        |
+| `dim_foreground`                                                    | `true`, `false`                                                                                                      | Let `dim_unfocused` dim the text of a pane you are not in as well as its background (default `true`). `false` keeps the text at full strength and dims only the background                       |
+| `dim_multifocus`                                                    | `true`, `false`                                                                                                      | Dim the panes in the multifocus set like other panes you are not in (default `false`)                                                                                                            |
+| `modal_dim`                                                         | `0` to `90`                                                                                                          | Percent the screen behind a modal panel is dimmed (default `30`, `0` is off). On a light ground the screen fades toward its own background instead of darkening                                  |
+| `popup_dim`                                                         | `0` to `90`                                                                                                          | Percent the screen behind a focused plain popup is dimmed (default `0`, off). `popup --dim` overrides it                                                                                         |
+| `animations_enabled`                                                | `true`, `false`                                                                                                      | Deprecated on/off switch: `false` sets `motion` to `none`, `true` to `full`                                                                                                                      |
+| `hide_window_buttons`                                               | `true`, `false`                                                                                                      | Hide window buttons                                                                                                                                                                              |
+| `window_button_style`                                               | `pill`, `dots`                                                                                                       | How the window controls are drawn. On the left, the pill order is close, zoom, minimize, so close sits at the outer corner                                                                       |
+| `window_button_position`                                            | `right`, `left`                                                                                                      | Which end of the title bar they sit on                                                                                                                                                           |
+| `background`                                                        | `off`, `theme`, a colour                                                                                             | Background painted on every surface not set on its own: panes, desktop, window chrome, dock and rail (default `off`)                                                                             |
+| `pane_background`                                                   | `off`, `theme`, a colour, or empty                                                                                   | Background behind pane content where the program left the default; empty follows `background`                                                                                                    |
+| `desktop_background`                                                | `off`, `theme`, a colour, or empty                                                                                   | Background behind and between panes; empty follows `background`                                                                                                                                  |
+| `window_chrome_background`                                          | `off`, `theme`, a colour, or empty                                                                                   | Background under pane borders and title bars, which keep their own ink; empty follows `background`                                                                                               |
+| `dock_background`                                                   | `off`, `theme`, a colour, or empty                                                                                   | Background under the dock; empty follows `background`                                                                                                                                            |
+| `appearance.sidebar.background`                                     | `off`, `theme`, a colour, or empty                                                                                   | Background under the rail; empty follows `background`                                                                                                                                            |
+| `hints.all_panes`                                                   | `true`, `false`                                                                                                      | The hints key puts labels on all panes on the workspace, not only on the focused pane (default `false`)                                                                                          |
+| `scratch.width`                                                     | cells (`100`) or percent (`80%`)                                                                                     | Width of the scratch terminal that `Ctrl+B g` shows (default `80%`)                                                                                                                              |
+| `scratch.height`                                                    | cells (`30`) or percent (`80%`)                                                                                      | Height of the scratch terminal (default `80%`)                                                                                                                                                   |
+| `daemon.window_size`                                                | `latest`, `smallest`, `largest`                                                                                      | The client whose size the session uses: the client that last had input (default), the smallest, or the largest. The daemon applies it to the session at once. It is not saved to the config file |
+
+**Examples:**
+
+```bash
+# Change dockbar position
+tuios set-config dockbar_position bottom
+
+# Change border style
+tuios set-config border_style rounded
+
+# Turn animations off
+tuios set-config motion none
+
+# Hide window buttons
+tuios set-config hide_window_buttons true
+tuios set-config window_button_style dots
+tuios set-config window_button_position left
+
+# Paint the theme's background behind pane content, or a colour of your own
+tuios set-config pane_background theme
+tuios set-config pane_background '#1e1e2e'
+
+# Paint every surface at once, then give the dock its own colour and leave
+# the rail on the terminal's background. A surface's own value wins, and
+# empty puts it back to following background.
+tuios set-config background theme
+tuios set-config dock_background '#11111b'
+tuios set-config appearance.sidebar.background off
+tuios set-config appearance.sidebar.background ''
+
+# Target a specific session
+tuios set-config -s mysession dockbar_position hidden
+
+# Give the session the size of the client that last had input
+tuios set-config -s mysession daemon.window_size latest
+
+# Hide the sidebar and keep the config files as they are
+tuios set-config --no-save appearance.sidebar.enabled false
+```
+
+A hook that hides the sidebar on workspace 9 and shows it on the others:
+
+```toml
+[hooks]
+after-workspace-switch = ['if [ "$TUIOS_WORKSPACE" = 9 ]; then v=false; else v=true; fi; tuios set-config --no-save -s "$TUIOS_SESSION_ID" appearance.sidebar.enabled $v']
+```
+
+### `tuios wait-for` <Since command="wait-for" /> [#tuios-wait-for]
+
+Block until the daemon reports that a condition matched.
+
+The daemon watches its own events, so a script stops polling a pane and
+sleeping between captures. The command exits `0` when the condition matches,
+and non-zero with the `timeout` error when it does not match before
+`--timeout`.
+
+**Usage:**
+
+```bash
+tuios wait-for <condition> [flags]
+```
+
+**Conditions:**
+
+| Condition          | Matches when                                                                                                                                                                                                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session-exists`   | The named session is present                                                                                                                                                                                                                                                                    |
+| `window-output`    | The window's content matches `--pattern`                                                                                                                                                                                                                                                        |
+| `window-exit`      | The window's shell exited                                                                                                                                                                                                                                                                       |
+| `window-idle`      | The window printed nothing for `--idle` milliseconds                                                                                                                                                                                                                                            |
+| `agent-state`      | An agent reached one of the `--until` states; without `--window`, any agent pane in the session matches; with `--any-session`, any agent pane in any session; with `--select`, any agent pane the selector matches, or with `--every` all of them                                               |
+| `agent-message`    | A message arrived. With `--window`, the first unread message in that inbox; without it, any message left in the session after the wait began                                                                                                                                                    |
+| `command-finished` | A shell that marks its commands with OSC 133 finished one. With `--window`, that pane's next command, or with `--command-seq N` the first once the pane has finished more than N (already true if it happened before the wait). Without a window, any pane in the session. Prints the exit code |
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused; `agent-state`: any window)
+- `--pattern <regexp>`: Go regular expression (RE2), required by `window-output`
+- `--new`: For `window-output`: match only output written after the wait starts. Text already on the screen or in the scrollback does not match. A program that redraws its screen writes its text again, and that text matches
+- `--until <states>`: Agent state(s) to wait for, comma-separated, required by `agent-state`
+- `--thread <id>`: Only match a message in this thread, for `agent-message`. Pass any message id in it
+- `--idle <ms>`: Milliseconds of silence that count as idle (default: 500)
+- `--timeout <ms>`: Milliseconds to wait before giving up (default: 30000)
+- `--any-session`: For `agent-state`: watch every session on the daemon, including ones created during the wait. Takes no `--session` or `--window`, and the result names the session that matched
+- `--command-seq <N>`: For `command-finished` with `--window`: match once the pane has finished more than N commands. Read N from `list-windows --json` before starting the command
+- `--select <selector>`: For `agent-state`: watch the agent panes a [selector](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#selectors) matches, in every session, including panes that open during the wait. Takes no `--session`, `--window` or `--any-session`
+- `--every`: With `--select`: wait until at least one pane matches and every matched pane is in one of the `--until` states
+- `--json`: Output result as JSON
+
+The `window-output` pattern is matched against the window's scrollback, so
+output that has already scrolled off the visible screen still matches, and
+output printed before the wait started matches immediately.
+
+That last part has a sharp edge. A pane echoes the command it was sent, so a
+marker written literally in the command matches its own echo and the wait
+returns before the work has run. A marker left in the scrollback by an earlier
+run matches the same way. Assemble the marker so the literal appears only in the
+output (`printf "BUILD_%s\n" OK`), or use `window-exit` in a window opened for
+the one command.
+
+`--new` removes the old output from the match. The wait then reads only the
+output the pane writes after the daemon starts the wait. Output written before
+that point does not count, so a command that finishes before the wait starts does not
+match. A daemon older than this flag refuses it, and the command tells you to
+run `tuios restart-server`.
+
+**Examples:**
+
+```bash
+# Wait for a build to print its marker
+tuios wait-for window-output -w build --pattern 'BUILD OK'
+
+# Ignore the marker of the last build that is still on the screen
+tuios wait-for window-output -w build --pattern 'BUILD OK' --new
+
+# Wait for a pane to go quiet for two seconds
+tuios wait-for window-idle -w build --idle 2000
+
+# Wait for a command's shell to exit, allowing ten minutes
+tuios wait-for window-exit -w build --timeout 600000
+
+# Wait for a session to appear
+tuios wait-for session-exists -s work
+
+# Wait until any agent in the session is waiting on a human
+tuios wait-for agent-state -s work --until needs_input
+
+# Wait until an agent in any session is waiting on a human
+tuios wait-for agent-state --any-session --until needs_input
+
+# Wait until every agent of a fan-out has finished its turn
+tuios wait-for agent-state --select 'group:fan/add-retry' --until idle,done --every --timeout 3600000
+
+# Wait for mail in your own inbox
+tuios wait-for agent-message -s work -w "$TUIOS_PANE_ID" --timeout 600000
+
+# Branch on the result
+if tuios wait-for window-output -w build --pattern 'BUILD OK' --timeout 60000; then
+    echo "build finished"
+else
+    echo "build timed out"
+fi
+
+# Wait for the command after the 4th in the build pane, with its exit code
+tuios wait-for command-finished -w build --command-seq 4 --timeout 600000
+```
+
+### `tuios run` <Since command="run" /> [#tuios-run]
+
+Type one command line at a pane's shell prompt, wait for it to finish, print
+what it printed, and exit with its exit status.
+
+It reads where the command starts and ends from the shell's own OSC 133 marks,
+so it needs a shell with prompt integration. tuios turns the marks on in the
+bash and zsh panes it starts (see [Shell integration](/docs/configuration#shell-integration)),
+and fish 4 and nushell send them themselves. It never types into a running
+program.
+
+**Usage:**
+
+```bash
+tuios run [flags] -- <command line>
+```
+
+The words after `--` are joined with spaces into one line that the shell
+parses, so quote for the shell as you would when typing it.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused)
+- `--timeout <ms>`: Milliseconds to wait for the command (default: 30000). A timeout does not stop the command
+- `--lines <N>`: Keep only the last N lines of the output (0 keeps all)
+- `--json`: Output the whole result as JSON: `exit_code`, `output`, `cmdline`, `duration_ms`, `command_seq`, `truncated`
+- `--host <name>`: Run on this linked machine, with no pane (see below)
+- `--cwd <dir>`: With `--host`, the folder to run in on that machine
+
+**Exit status:** the command's own. When the shell sent no status, run says so
+on stderr and exits `0`. A refusal exits `1`: `not_at_prompt` when a command is
+already running in the pane or another `run` there has not ended,
+`no_shell_integration` when its shell sends no marks. Nothing is typed in
+either case. A shell that marks its prompts and not its commands (bash before
+4.4 with the `tuios doctor shell` lines, which ignores their PS0) is found out by the first `run` in the
+pane: the line is typed, and when the shell draws a new prompt with no command
+mark, `run` fails at once with `no_shell_integration`. Every later `run` there
+is refused before typing.
+
+**Examples:**
+
+```bash
+# Run the tests in the build pane and branch on the status
+tuios run -w build --timeout 600000 -- go test ./... && echo passed
+
+# Only the last 40 lines of a long build
+tuios run -w build --lines 40 -- make
+
+# The whole result
+tuios run -w build --json -- make lint
+
+# One command on the linked machine build, with no pane
+tuios run --host build -- uname -a
+```
+
+**On another machine:** `--host <name>` runs the line on that linked machine
+instead, with no pane. Its daemon runs it under `sh -c` (`cmd /c` on Windows),
+with no input and the daemon's environment, in a process group of its own.
+The environment does not hold the pane, session and agent variables of the
+command that started the daemon. tuios prints what it wrote to stdout and stderr on its own stdout and stderr,
+and exits with its status. `--timeout` stops the command and everything it
+started, and tuios exits `124`. A command stopped by a signal exits 128 plus
+the signal's number. Each stream keeps its last 1 MiB, and a note on stderr
+says when the start was left out. Stopping tuios stops the command there too.
+`--cwd <dir>` sets the folder on that machine (default: its home). The link
+needs `open` in the host's policy, as `new-window --host` does. `--host` takes
+no `-s` or `-w`. With `--json`, the result carries `host`, `stdout`, `stderr`,
+`exit`, `signal`, `timed_out` and `duration_ms`.
+
+### `tuios subscribe` <Since command="subscribe" /> [#tuios-subscribe]
+
+Print the daemon's event stream, one JSON object per line. `--format text`
+prints one readable line per event instead.
+
+The first line is the subscribe ack. It carries `seq`, the last event number
+assigned when the stream went live, and `boot_id`, a random id for this daemon
+start. Every event after it carries its own `seq` and `boot_id`. The event
+types and their fields are listed in [protocol.md](/docs/control-protocol/event-stream#event-stream).
+
+Without `--session` the stream covers every session on the daemon. Most
+commands read an omitted session as the most recently active one; this one
+does not.
+
+**Usage:**
+
+```bash
+tuios subscribe [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Only events from this session (default: every session)
+- `-w, --window <id>`: Only events about this window id
+- `--types <list>`: Only these event types, comma-separated (default: all)
+- `--after-seq <n>`: Replay the retained events after this seq before streaming live
+- `--boot-id <id>`: The `boot_id` the `--after-seq` came with, so a daemon restart shows as a gap. Needs `--after-seq`
+- `--format <json|text>`: Output format (default: `json`). `text` prints one readable line per event and sends the ack to standard error
+- `--state <list>`: Only `agent-state` events with these new states, comma-separated: `none`, `working`, `needs_input`, `idle`, `done`, `errored` or `unknown`. Without `--types`, it sets `--types agent-state`. Other event types and gap lines pass
+- `--count <n>`: Exit after printing this many events (default: run until the stream ends). It counts the lines that pass the filters, gap lines included
+- `--once`: Exit after printing the first event that passes the filters. It is the same as `--count 1`
+- `--timeout <ms>`: Stop after this many milliseconds (default: no limit). With `--once` or `--count`, exit 1 if the limit is not met by then
+- `--hosts`: Also print the `agent-state`, `session-created` and `session-closed` events of every linked host, each with `host` set. Without it, the only events about other machines are `attention` for their Inbox items and `host-changed`, and only when no `--session` or `--window` is given
+
+To resume after a disconnect, pass the `seq` of the last event you printed and
+its `boot_id`. The daemon keeps the last 4096 events, apart from `output`
+events, and replays the ones after that seq before carrying on live. When it
+cannot replay everything you missed, a `gap` line comes first with a `reason`:
+`evicted` (the oldest events you missed are gone), `boot_changed` (the daemon
+restarted), `not_retained` (your filter includes `output`, which is never
+replayed) or, on a live stream, `overflow` (you read too slowly). After a gap,
+read current state again with `tuios list-agents` or `tuios list-windows`.
+
+A text line has the local time, the session and pane, and what happened. An
+`agent-state` line shows the previous state, the new state and the message
+the agent gave. A pane shows by its name when tuios knows it, else by a short
+id. Control characters in the text are removed.
+
+```
+12:04:31  work api  working -> needs_input  Allow Bash?
+12:04:40  work api  window closed
+12:04:41  -  gap: 12 events missed (overflow). Read the current state again
+```
+
+The command reads `list-agents` once at the start for the pane names and
+states. It reads it again for each `agent-state` line it prints, for the
+message. Without these reads, a line shows only the new state.
+
+**Examples:**
+
+```bash
+# Every agent state change on the daemon
+tuios subscribe --types agent-state
+
+# The same, as readable lines
+tuios subscribe --format text --types agent-state
+
+# Wait up to a minute for an agent that needs you, then exit
+tuios subscribe --format text --state needs_input,errored --once --timeout 60000
+
+# One session's window lifecycle
+tuios subscribe -s work --types window-created,window-closed
+
+# Resume where a previous run stopped
+tuios subscribe --types agent-state --after-seq 118 --boot-id 9f2c41d07a3e8b65
+
+# Wait for the next bell anywhere, then exit
+tuios subscribe --types bell --count 1
+
+# Follow the Inbox: every item that opens, changes or closes
+tuios subscribe --types attention
+
+# Every agent on every machine, and every host coming or going
+tuios subscribe --hosts --types agent-state,host-changed
+```

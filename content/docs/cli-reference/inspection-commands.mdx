@@ -1,0 +1,892 @@
+---
+title: "Inspection Commands"
+description: "Inspection Commands: part of the CLI Reference of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CLI_REFERENCE.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CLI_REFERENCE.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CLI_REFERENCE.md). The [CLI Reference](/docs/cli-reference) page lists every part.
+
+## Inspection Commands [#inspection-commands]
+
+Query the state of a running TUIOS session. These commands are designed for scripting and return structured data about windows and session state.
+
+**Note:** These commands query the daemon's stored state directly and work even when no TUI client is attached to the session. This makes them ideal for background scripting and monitoring.
+
+### `tuios list-verbs` <Since command="list-verbs" /> [#tuios-list-verbs]
+
+Print the control protocol's verb catalog: every verb with its parameter schema,
+accepted values, and example requests, plus the protocol version and the stable
+error codes.
+
+```bash
+tuios list-verbs [verb] [--json]
+```
+
+This is the discovery entry point for scripting and for agents driving TUIOS. It
+needs no documentation to interpret: the schema, the value sets, and the error
+vocabulary are all in the output.
+
+**Examples:**
+
+```bash
+# Every verb with its parameters
+tuios list-verbs
+
+# Just one verb
+tuios list-verbs capture-pane
+
+# Machine-readable
+tuios list-verbs --json | jq '.verbs[].verb'
+```
+
+### `tuios list-hooks` <Since command="list-hooks" /> [#tuios-list-hooks]
+
+List the hooks and what each one last did.
+
+**Usage:**
+
+```bash
+tuios list-hooks [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--event <name>`: Only the hooks on this event
+- `--json`: Output as JSON (default is human-readable table)
+
+**Example output:**
+
+```
+╭────────────────────┬─────────┬──────────────────────────┬──────┬────────┬───────────────────────────╮
+│ EVENT              │ SIDE    │ COMMAND                  │ RUNS │ STATE  │ LAST                      │
+├────────────────────┼─────────┼──────────────────────────┼──────┼────────┼───────────────────────────┤
+│ after-new-window   │ session │ ~/.config/tuios/new.sh   │ 2    │ ran    │ 2026-08-31T21:16:32+04:00 │
+│ after-agent-state  │ session │ notify-send "$TUIOS_AG…  │ 0    │ waiting│                           │
+│ after-attach       │ client  │ tmux-style-banner        │ 1    │ failed │ exit 127: command not fo… │
+╰────────────────────┴─────────┴──────────────────────────┴──────┴────────┴───────────────────────────╯
+```
+
+A hook runs its command for the side effect, so a command that was never found
+used to look exactly like one that worked. This is where the difference is
+visible. `RUNS` of 0 means the command is fine and the event never happened. A
+row that is missing altogether means the event name is misspelled and the hook
+was never loaded.
+
+`SIDE` says which process runs it. The daemon runs the hooks for the facts it
+owns, so those fire on a detached session and fire once however many clients are
+attached. The client runs the ones that need its terminal, so they are only
+listed while a client is attached.
+
+**JSON Output Structure:**
+
+```json
+{
+  "success": true,
+  "hooks": [
+    {
+      "event": "after-new-window",
+      "side": "session",
+      "command": "~/.config/tuios/new.sh",
+      "runs": 2,
+      "last_exit": 0,
+      "last_run": "2026-08-31T21:16:32+04:00",
+      "last_error": "",
+      "last_ms": 16
+    }
+  ],
+  "total": 1,
+  "events": ["after-new-window", "..."],
+  "client_attached": false
+}
+```
+
+`events` lists every name a hook can be written on. `client_attached` says
+whether a client answered for its half of the table: false means the client rows
+are missing because nobody is attached, not that no client hooks exist.
+
+### `tuios list-dock-components` <Since command="list-dock-components" /> [#tuios-list-dock-components]
+
+List the dock's components: what the bar is made of, what each cell reads, and
+what each component's command last did.
+
+**Usage:**
+
+```bash
+tuios list-dock-components [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--json`: Output as JSON (default is human-readable table)
+
+**Example output:**
+
+```
+╭───────────────┬───────┬─────────┬──────────────────────────┬────────┬──────────────────────╮
+│ COMPONENT     │ SIDE  │ SOURCE  │ REFRESH                  │ STATE  │ READS                │
+├───────────────┼───────┼─────────┼──────────────────────────┼────────┼──────────────────────┤
+│ mode          │ left  │ builtin │ render                   │ drawn  │                      │
+│ workspaces    │ left  │ builtin │ render                   │ drawn  │                      │
+│ custom/branch │ left  │ custom  │ event:after-focus-change │ drawn  │ feat/dock-components │
+│ windows       │ center│ builtin │ render                   │ drawn  │                      │
+│ custom/k8s    │ right │ custom  │ interval 30s             │ failed │ exit 127: ...        │
+╰───────────────┴───────┴─────────┴──────────────────────────┴────────┴──────────────────────╯
+```
+
+A component whose command fails is hidden from the bar rather than left showing
+a stale value, so this is where the failure is visible. `STATE` is `drawn`,
+`hidden`, `failed`, or `gave up`; `READS` carries the cell text, or the exit
+code and error when there is one.
+
+The dock is composed by the attached client, so this needs a client attached.
+
+**JSON Output Structure:**
+
+```json
+{
+  "success": true,
+  "components": [
+    {
+      "name": "custom/branch",
+      "side": "left",
+      "source": "custom",
+      "refresh": "event",
+      "events": "after-focus-change",
+      "command": "~/.config/tuios/dock/git-branch.sh",
+      "on_click": "",
+      "max_width": 24,
+      "text": "\u001b[35m\uf418\u001b[0m main",
+      "visible": true,
+      "last_exit": 0,
+      "last_run": "2026-08-23T07:02:11Z",
+      "last_error": "",
+      "stopped": false
+    }
+  ]
+}
+```
+
+`source` is `builtin` or `custom`. `refresh` is `render` (drawn from model state
+on frames that were happening anyway), `once`, `interval` (with `interval`),
+`push`, or `event` (with `events`). `text` is the cell as drawn, escapes
+included. `last_error` and `last_exit` describe the component's last run, and
+`stopped` says it has failed enough times to be left alone until a
+`refresh-dock`.
+
+### `tuios refresh-dock` <Since command="refresh-dock" /> [#tuios-refresh-dock]
+
+Re-run a dock component now, whatever its `refresh` mode says.
+
+**Usage:**
+
+```bash
+tuios refresh-dock [component] [flags]
+```
+
+With no argument every component is re-run. Refreshing also clears a give-up, so
+a component that failed five times in a row starts working again once its script
+is fixed, without restarting the session.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--json`: Output as JSON
+
+**Examples:**
+
+```bash
+# After editing the script it runs
+tuios refresh-dock agents
+
+# From a hook, so the cell updates the moment the thing it reports changes
+#   [hooks]
+#   after-agent-state = "tuios refresh-dock agents"
+```
+
+See `examples/dock/` for working components and the config that wires them up.
+
+### `tuios pip` <Since command="pip" /> [#tuios-pip]
+
+Pin a pane as the picture-in-picture view, or unpin it.
+
+**Usage:**
+
+```bash
+tuios pip [window] [flags]
+```
+
+The view is a small live copy of the pane in a corner of the screen. It shows
+while another pane has the focus. The pane stays where it is in the layout. A
+click on the view goes to the pane.
+
+Name the pane by ID or name. Omit it to pin the focused pane. Name the pinned
+pane again to unpin it. The view belongs to the attached client, so the command
+needs one. Set the size and the corner in `[pip]`.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--off`: Unpin whatever is pinned
+- `--json`: Output as JSON
+
+**Examples:**
+
+```bash
+# Watch the agent pane while you work in another pane
+tuios pip agent
+
+# Take the view away
+tuios pip --off
+```
+
+### `tuios call` <Since command="call" /> [#tuios-call]
+
+Send one verb to the daemon and print its reply as JSON.
+
+**Usage:**
+
+```bash
+tuios call <verb> [params]
+```
+
+`params` is a JSON object, or `-` to read it from standard input. Omit it for
+a verb that takes none. The reply is the daemon's result object as it is.
+
+Use it from a program that can start a process but cannot write to the
+socket, such as a Tern plugin. The daemon checks the call as it checks any
+other, so a pane is held to its grants, and the verbs only the person may
+call stay refused from a pane. `tuios list-verbs` lists every verb.
+
+`call` refuses the verbs that hold the connection open after their reply:
+`subscribe` (use `tuios subscribe`), `stream-pane`, `open-file-stream`,
+`open-pane`, `pane-calls`, `link-peer` and `open-host-connection`.
+
+The call waits 30 seconds, or for the verb's own `timeout` param (in
+milliseconds) and 10 seconds more. `--timeout` sets the wait.
+
+Exit status:
+
+- 1: the daemon answered with an error, printed as `{"error": {"code", "message", "hint"}}`
+- 2: the arguments or params are wrong
+- 3: the daemon could not be reached, or did not answer in time
+
+**Flags:**
+
+- `--pretty`: Indent the JSON
+- `--json`: Print bad input and transport errors as JSON too, with the code `invalid_input` or `transport`
+- `--timeout <duration>`: How long to wait for the reply
+
+**Examples:**
+
+```bash
+# Every session, as the daemon reports it
+tuios call list-sessions
+
+# A verb with params
+tuios call list-windows '{"session":"work"}'
+```
+
+### `tuios pane-view` <Since command="pane-view" /> [#tuios-pane-view]
+
+Show one pane in this terminal, with no tuios around it.
+
+**Usage:**
+
+```bash
+tuios pane-view -w <window> [flags]
+```
+
+The pane's output goes to this terminal as it is. What you type goes to the
+pane, Ctrl-C included. A terminal that draws its own panes, such as Tern, runs
+one `pane-view` for each tuios pane. Each pane then gets the terminal's own
+scrollback, selection and search.
+
+`pane-view` does not attach. It reads the pane through `stream-pane`, so the
+session's clients do not change. The daemon answers the requests a program
+sends to its terminal, so `pane-view` keeps them from the outer terminal,
+which would answer them a second time.
+
+With `--size follow` (the default), the pane takes this terminal's size while
+no tuios client shows the session. With several viewers, the largest decides.
+When the last viewer leaves, the pane goes back to its own size. While a
+client shows the session, the pane only gets smaller to fit this terminal.
+With `--size pane`, the pane keeps its size and only gets smaller. The daemon
+makes these decisions, so a client that attaches or detaches, or a rename,
+changes the size at once.
+
+At start, `pane-view` asks this terminal for its colours and graphics, and
+tells the daemon. While no tuios client shows the session, a program in the
+pane that asks (OSC 10, 11 and 4, DA1, the kitty graphics query) gets this
+terminal's answers.
+
+When this terminal reads OSC 7501, the Program Status Protocol (Rex does),
+`pane-view` reports the pane's agent state there as one record: working,
+needs input with its kind, done, errored or idle, with the agent's harness as
+`app`, the pane's title and the agent's message. A state that a harness hook
+reports, which the pane's output does not hold, reaches the terminal too.
+The pane's own OSC 7501 is not passed through then: the daemon reads it into
+the agent state, and the record is `pane-view`'s own. When the state is gone,
+and when `pane-view` ends, it clears the record.
+
+Close the terminal to stop viewing. The pane and its session keep running.
+After a daemon restart, `pane-view` resumes on the new daemon.
+
+Exit status:
+
+- the status of the pane's program when it exits
+- 128 plus the signal that ended the pane's program, or ended `pane-view`
+- 3 when the pane's window closes while its program runs
+- 1 for an error, such as a pane or session that does not exist
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <window>`: The pane to show, by ID or name
+- `--size follow|pane`: Whether the pane takes this terminal's size (default: follow)
+
+**Examples:**
+
+```bash
+# Show the pane named build of the session work
+tuios pane-view -s work -w build
+
+# Keep the pane at the size the session gives it
+tuios pane-view -s work -w build --size pane
+```
+
+### `tuios list-windows` <Since command="list-windows" /> [#tuios-list-windows]
+
+List all windows in a TUIOS session.
+
+**Usage:**
+
+```bash
+tuios list-windows [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--json`: Output as JSON (default is human-readable table)
+- `--all`: List the panes of every session on this machine, one row each
+- `--rail`: Also list the pane the rail draws in its pane section
+- `--all-hosts`: Also list the panes of every session on each host in `[hosts]`
+- `--text <N>`: Add the last N lines of each pane's screen, up to 200
+
+With `--all`, `--all-hosts` or `--text`, each row has `session`, `host` (for a
+pane on another machine, with `untrusted`), `workspace`, `workspace_name`,
+`window_id`, `name`, `title`, `command`, `cwd`, `focused` and `agent_state`.
+`--text` adds `text`, or `text_error` when the pane's text cannot be read. The
+command reads text with `capture-pane`, so the same grants apply. A pane that
+holds `read` alone lists only its own session, and the JSON has an `errors`
+entry for the listing it may not make. These are the rows that the pane
+navigator (`Ctrl+B /`) shows.
+
+**Examples:**
+
+```bash
+# List windows in table format
+tuios list-windows
+
+# Every pane of every session, with the last 20 lines of each screen
+tuios list-windows --all --text 20 --json
+
+# Output as JSON for scripting
+tuios list-windows --json
+
+# Query a specific session
+tuios list-windows -s mysession --json
+```
+
+**Example output:**
+
+```
+╭─────┬──────────┬───────┬────┬───────┬───────╮
+│ IDX │ ID       │ NAME  │ WS │ SIZE  │ AGENT │
+├─────┼──────────┼───────┼────┼───────┼───────┤
+│ *0  │ 0ceb415a │ dev   │ 1  │ 60x38 │ none  │
+│ 1   │ ce9ae44c │ build │ 1  │ 60x38 │ none  │
+╰─────┴──────────┴───────┴────┴───────┴───────╯
+
+2 windows. * marks the focused one.
+```
+
+The `ID` column is the 8-character prefix that `-w` accepts. With no windows
+the command says so and points at `tuios new-window`.
+
+**JSON Output Structure:**
+
+```json
+{
+  "current_workspace": 1,
+  "focused_index": 0,
+  "focused_window_id": "0ceb415a-9f5c-44d8-a57c-60c132f54572",
+  "message": "command executed",
+  "success": true,
+  "total": 2,
+  "windows": [
+    {
+      "agent_state": "none",
+      "custom_name": "dev",
+      "cwd": "/home/me/src/api",
+      "display_name": "dev",
+      "focused": true,
+      "height": 38,
+      "index": 0,
+      "minimized": false,
+      "minimized_at": 0,
+      "pty_id": "fd022e1f-7d42-4c45-8ddf-5ecaf8bee488",
+      "title": "Terminal 0ceb415a",
+      "width": 60,
+      "window_id": "0ceb415a-9f5c-44d8-a57c-60c132f54572",
+      "workspace": 1,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "agent_state": "none",
+      "custom_name": "build",
+      "cwd": "/home/me/src/api",
+      "display_name": "build",
+      "focused": false,
+      "height": 38,
+      "index": 1,
+      "minimized": false,
+      "minimized_at": 0,
+      "pty_id": "23ed3d8a-b6f4-4047-b01a-3d2f1dd83515",
+      "title": "build",
+      "width": 60,
+      "window_id": "ce9ae44c-7e64-424c-acd9-48cb21ac55c5",
+      "workspace": 1,
+      "x": 60,
+      "y": 0
+    }
+  ],
+  "workspace_windows": [2, 0, 0, 0, 0, 0, 0, 0, 0]
+}
+```
+
+`minimized_at` is when the window was minimized, in Unix nanoseconds, and 0
+while it is not: the dock lists minimized windows oldest first, and the restore
+digits count in that order. `custom_name` is present only on a window that was
+given a name, `cwd` only
+when the shell has reported its directory, and `host` only when the window's
+process runs on another machine. `agent_message` and `agent_state_at` appear
+once a pane has reported an agent state. `agent_resumable` names the harness
+of a pane whose agent conversation a daemon restart would offer back, and is
+absent on every other pane. `tuios restart-server` reads it. The daemon answers
+this from its own state, so the shape is the same whether or not a client is
+attached.
+
+### `tuios get-window` <Since command="get-window" /> [#tuios-get-window]
+
+Get detailed information about a specific window.
+
+**Usage:**
+
+```bash
+tuios get-window [id-or-name] [flags]
+```
+
+**Arguments:**
+
+- `id-or-name`: Window ID or custom name. If omitted, returns the focused window.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active).
+  `host:session` reads a session on another machine.
+- `--json`: Output as JSON (default is human-readable)
+
+It reads with the `get-window` verb, so from inside a pane it needs only the
+`read` grant, on the pane's own session and its fan group. Against a daemon
+from before that verb it sends the client protocol's `GetWindow` command, as
+it used to.
+
+**Examples:**
+
+```bash
+# Get focused window info
+tuios get-window
+
+# Get focused window as JSON
+tuios get-window --json
+
+# Get specific window by name
+tuios get-window dev --json
+
+# Get window by ID
+tuios get-window a1b2c3d4 --json
+
+# Query a specific session
+tuios get-window -s mysession dev --json
+```
+
+**Example output:**
+
+```
+name           build
+id             e5f6a7b8-1c2d-4e3f-9a8b-7c6d5e4f3a2b
+index          2
+title          Terminal e5f6a7b8
+workspace      1
+size           120x40
+focused        false
+minimized      false
+agent          working
+agent message  awaiting approval
+```
+
+The `agent message` line appears only when the pane reported one.
+
+**JSON Output Structure:**
+
+With a client attached, the client answers:
+
+```json
+{
+  "cursor_visible": true,
+  "cursor_x": 40,
+  "cursor_y": 0,
+  "custom_name": "build",
+  "display_name": "build",
+  "focused": false,
+  "fullscreen": false,
+  "has_foreground_process": false,
+  "height": 38,
+  "id": "ce9ae44c-7e64-424c-acd9-48cb21ac55c5",
+  "message": "command executed",
+  "minimized": false,
+  "pty_id": "23ed3d8a-b6f4-4047-b01a-3d2f1dd83515",
+  "scrollback_lines": 0,
+  "shell_pgid": 46889,
+  "success": true,
+  "title": "build",
+  "width": 60,
+  "workspace": 1,
+  "x": 60,
+  "y": 0
+}
+```
+
+With no client attached, the daemon answers with one entry of the
+`list-windows` shape above: `window_id` rather than `id`, plus `index`, `cwd`
+and `agent_state`, and no cursor or process fields.
+
+### `tuios session-info` <Since command="session-info" /> [#tuios-session-info]
+
+Get information about the TUIOS session state.
+
+**Usage:**
+
+```bash
+tuios session-info [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--json`: Output as JSON (default is human-readable)
+
+**Examples:**
+
+```bash
+# Get session info in human-readable format
+tuios session-info
+
+# Get session info as JSON
+tuios session-info --json
+
+# Query a specific session
+tuios session-info -s mysession --json
+```
+
+**Example output:**
+
+```
+session        work
+display name   Payments API
+accent         cyan
+windows        3
+workspace      1 of 9
+tiling         tiling
+size           120x40
+attached       true
+window size    latest
+named          2=review
+```
+
+The `display name`, `accent` and `named` lines appear only when those are set,
+and `host focus` only while a client is attached.
+
+**JSON Output Structure:**
+
+```json
+{
+  "accent": "",
+  "current_workspace": 1,
+  "display_name": "",
+  "height": 40,
+  "host_focus": "focused",
+  "layout_mode": "bsp",
+  "master_ratio": 0.5,
+  "message": "command executed",
+  "mode": "unknown",
+  "num_workspaces": 9,
+  "session_id": "2e131c6c-4555-4d08-8c4e-7abb25f5522f",
+  "session_height": 40,
+  "session_name": "work",
+  "session_width": 120,
+  "success": true,
+  "tiling_mode": "tiling",
+  "tui_attached": true,
+  "width": 120,
+  "window_count": 2,
+  "window_size": "latest",
+  "workspace_names": {},
+  "workspace_order": null
+}
+```
+
+**Fields:**
+
+| Field                             | Description                                                                                                                                                                                                                                                                                    |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session_name`                    | The session's name, the one `-s` takes                                                                                                                                                                                                                                                         |
+| `session_id`                      | The session's id                                                                                                                                                                                                                                                                               |
+| `display_name`                    | The session's display name, empty when none is set                                                                                                                                                                                                                                             |
+| `accent`                          | The session's accent, empty when none is set                                                                                                                                                                                                                                                   |
+| `current_workspace`               | Active workspace number                                                                                                                                                                                                                                                                        |
+| `num_workspaces`                  | Number of workspaces the session has                                                                                                                                                                                                                                                           |
+| `workspace_names`                 | Named workspaces, keyed by number. A workspace with no name is left out                                                                                                                                                                                                                        |
+| `workspace_order`                 | Always `null`. A workspace's number is its position, so moving one renumbers it. Kept for scripts that read it                                                                                                                                                                                 |
+| `window_count`                    | Number of windows across all workspaces                                                                                                                                                                                                                                                        |
+| `tiling_mode`                     | `tiling` or `floating`                                                                                                                                                                                                                                                                         |
+| `layout_mode`                     | The tiling layout in use: `bsp`, `master-stack` or `scrolling`, or `unknown` before a client has reported one                                                                                                                                                                                  |
+| `master_ratio`                    | The master pane's share of the width in the `master-stack` layout                                                                                                                                                                                                                              |
+| `mode`                            | Always `unknown`. The input mode belongs to the attached client, which the daemon does not ask                                                                                                                                                                                                 |
+| `width`, `height`                 | The session's size in cells, as the last client sent it with its state                                                                                                                                                                                                                         |
+| `session_width`, `session_height` | The size the daemon gave the session from its clients                                                                                                                                                                                                                                          |
+| `window_size`                     | The size policy in use: `smallest`, `largest` or `latest`. It is `smallest` while a client from before the option is attached. See [SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#session-size-with-more-than-one-client) |
+| `tui_attached`                    | Whether a client is attached                                                                                                                                                                                                                                                                   |
+| `host_focus`                      | Whether the person can be looking at the session, from the focus events of the attached clients' terminals: `focused` when any client's terminal has focus, `unfocused` when every one reported losing it, `unknown` when none is attached or a terminal never reports focus                   |
+
+The theme is not listed here. It is a session option: read it with
+`tuios get-config appearance.theme`.
+
+### `tuios capture-pane` <Since command="capture-pane" /> [#tuios-capture-pane]
+
+Capture the content of a terminal pane and write it to stdout.
+
+**Usage:**
+
+```bash
+tuios capture-pane [window] [flags]
+```
+
+The window can be the argument or `-w`: `tuios capture-pane build` is
+`tuios capture-pane -w build`. Two different windows fail.
+
+A command that reads no argument refuses one rather than dropping it. For
+example, `tuios screenshot build` fails and says to use `-w build`.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused)
+- `-S, --scrollback`: Include the scrollback history. Without `--lines`, the capture keeps the last 3 commands in at most 2000 lines
+- `--commands <N>`: Keep the last N commands of the scrollback in at most 2000 lines. It needs the shell's OSC 133 marks. Takes no `--lines`, `--last-command` or `--unwrap`
+- `--lines <N>`: Keep only the last N lines. `0` keeps all
+- `--ansi`: Preserve ANSI escape codes (colors, styles)
+- `--resolved`: Rewrite ANSI index colours (31, 91, 38;5;n, ...) to 24-bit
+  RGB, so a capture matches what a themed client paints. Indices below 16 come
+  from the palette; the rest of the standard 256-colour cube and grey ramp use
+  their fixed values. Implies `--ansi`. Without a palette this uses the xterm
+  defaults.
+- `--palette <#rrggbb,...>`: The 16 hex colours a client's theme paints ANSI
+  indices 0-15 with, used by `--resolved`. Must have exactly 16 entries.
+- `--json`: Output the result as JSON. A capture from another machine carries `host` and `"untrusted": true`
+- `--last-command`: Capture only what the last finished command printed, as
+  plain text, read between the shell's OSC 133 marks. Fails with
+  `no_shell_integration` when no command has finished under them.
+- `--unwrap`: Join the rows that the pane wrapped because a line was longer
+  than the pane. Each line then comes back as the program wrote it, so a
+  search finds a long path or URL. A row that ends with a newline stays a line.
+- `--trim`: Drop the blank lines at the end of the capture.
+
+A daemon older than this tuios refuses `--unwrap` and `--trim`. The command
+then says to run `tuios restart-server`.
+
+A `--ansi` capture without `--resolved` keeps the guest's SGR indices (e.g.
+`\x1b[31m`); the consumer resolves them against its own palette. `--resolved`
+is for consumers that render the capture verbatim, and implies `--ansi`.
+
+`--lines` counts from the last line that has content, so the blank rows below
+the cursor do not count. This is how you read the tail of a long scrollback
+without pulling all of it.
+
+A history holds 10,000 lines or more, which is too much for an agent to read.
+So `--scrollback` without `--lines` keeps the last 3 commands. It finds them
+by the shell's OSC 133 marks. Each command runs from its prompt to the next
+prompt. The capture keeps at most 2000 lines. A command whose output is too
+long keeps its command line, the start of its output and its end. One line
+replaces the middle, for example `… 48,213 lines omitted …`. `--commands N`
+keeps the last N commands under the same limit.
+
+A shell that sends no marks gives the last 2000 lines. So does `--unwrap`,
+because joined lines do not match the marks. `tuios doctor shell` says which
+panes send marks.
+
+When the capture leaves something out, a note on stderr says what. With
+`--json`, `lines_omitted` gives the count, `command_marks` says whether the
+marks cut the capture, and `commands` gives each command's kept and omitted
+lines. Use `--lines 0` to get the whole history. The `capture-pane` verb
+itself has no cap, so the tmux shim and the MCP server get the whole history
+as before. A daemon older than `--commands` refuses it, and the command tells
+you to run `tuios restart-server`.
+
+**Examples:**
+
+```bash
+# Capture the focused window's visible screen
+tuios capture-pane
+
+# Capture the last 3 commands of a window
+tuios capture-pane -w build --scrollback
+
+# Capture the last 10 commands
+tuios capture-pane -w build --commands 10
+
+# Capture the whole scrollback
+tuios capture-pane -w build --scrollback --lines 0
+
+# Read the last 40 lines a build printed
+tuios capture-pane -w build --scrollback --lines 40
+
+# Capture with ANSI colors preserved
+tuios capture-pane --ansi
+
+# Capture with colours resolved to RGB against the current theme palette
+tuios capture-pane --ansi --resolved --palette "#45475a,#f38ba8,#a6e3a1,#f9e2af,#89b4fa,#f5c2e7,#94e2d5,#bac2de,#585b70,#f38ba8,#a6e3a1,#f9e2af,#89b4fa,#f5c2e7,#94e2d5,#a6adc8"
+
+# Pipe to a file
+tuios capture-pane -w editor --scrollback > pane.txt
+
+# What the last command in the build pane printed, and nothing else
+tuios capture-pane -w build --last-command
+```
+
+---
+
+### `tuios screenshot` <Since command="screenshot" /> [#tuios-screenshot]
+
+Render a window to a styled image and save it.
+
+**Usage:**
+
+```bash
+tuios screenshot [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused)
+- `-f, --format <fmt>`: `png` (default), `svg`, `ansi`, `html` or `txt`
+- `--frame <style>`: `window` (default), `plain` or `none`
+- `--theme <name>`: Render in this palette instead of the session's
+- `-o, --out <path>`: Write here instead of a generated name
+- `-S, --scrollback`: Put the pane's history above the screen
+- `--lines <N>`: Bound the history to the last N rows
+- `--cursor`: Draw the cursor cell
+- `--copy`: Try to copy the image to the clipboard (the default)
+- `--no-copy`: Do not try to copy the image to the clipboard
+- `--json`: Output the result as JSON
+
+The daemon renders and writes the file, so this works on a detached session
+with nobody attached. It prints the path it wrote.
+
+Everything about the frame comes from the `screenshot.*` options: padding, a
+wash derived from your theme, corner radius, shadow, title bar and window
+control marks. `png` and `svg` carry the frame; `ansi` and `txt` are the bare
+stream.
+
+With no theme set, basic and indexed colors fall back to the xterm reference
+defaults. Only your terminal knows its own palette, so that is a guess and the
+result says so on stderr. `--theme` renders in a named palette instead.
+
+A capture is drawn in your terminal's own font where the terminal will say
+which font that is. kitty answers that question, so a capture from a kitty
+client comes out with your Nerd Font icons in it and no setting to make.
+
+Where the terminal does not answer, `screenshot.font_family` names the font to
+draw with, and `screenshot.font_file` points straight at a file and wins over
+everything else. The daemon renders with those two as well, because it has no
+terminal to ask. With none of them the capture is drawn in a built in font that
+has no icons, and a missing glyph draws as a dotted outline box rather than a
+silent blank.
+
+To find a font by its family name, the first capture on a machine reads the name
+of every font file and keeps what it found in `tuios/fonts-index.gob` in the
+cache folder (`$XDG_CACHE_HOME`, else `~/.cache`, or `~/Library/Caches` on
+macOS), which is read again only after a font file is added, removed or changes
+size or modification time; delete the file to scan again, as a font replaced in
+place with the same size and time is not noticed.
+
+`screenshot.font_file` also embeds that font in SVG and HTML output so those
+files stand alone, which makes them megabytes rather than kilobytes. Only that
+setting does: a font tuios found by asking your terminal is used to draw the
+picture and is not copied into an export you did not ask to be standalone.
+
+**Examples:**
+
+```bash
+# The focused window, as a PNG under screenshot.directory
+tuios screenshot
+
+# A named window on a named session, detached is fine
+tuios screenshot -s work -w build
+
+# With history above the screen
+tuios screenshot --scrollback --lines 200
+
+# An SVG for a README
+tuios screenshot --format svg --out demo.svg
+
+# Re-render in another palette
+tuios screenshot --theme catppuccin_mocha
+
+# For a script
+tuios screenshot --json
+```
+
+`tuios screenshot` draws no images. The daemon does not keep the pictures
+that programs show with the kitty graphics protocol or with sixel, so the
+image cells are blank. To include the images, take the capture in the TUI:
+press the leader then `C`, or run the `Screenshot` command.
+
+A capture in the TUI draws the images that the client shows:
+
+- A kitty image, a kitty image in Unicode placeholder cells, and a sixel image
+  are drawn at their cells.
+- A pane scrolled into its history shows the images on its screen.
+- `png`, `svg` and `html` draw images. `ansi` and `txt` do not.
+- One capture decodes at most about 25 megapixels of images. An image past
+  that limit is not drawn.
+- A kitty image that a program streams as a temporary file or as shared
+  memory is drawn only if it is not a stream of frames.
+- A client keeps at most 8 MiB of kitty images for captures. When it needs
+  more, it drops the images that are not on the screen first, then the
+  oldest. A dropped image is not drawn.
+
+Region and full screen captures are not CLI commands. They need a viewport and
+composed chrome, which only an attached client has: press the leader then `C`
+in the TUI and drag, or press `f`.
+
+---

@@ -1,0 +1,340 @@
+---
+title: "File transfers"
+description: "File transfers: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `file-commit` <Since verb="file-commit" /> [#file-commit]
+
+Finish a copy written with open-file-stream: check the part's sha256 against the sender's, then rename it into place. A part that does not match is removed.
+
+| Param      | Type   | Required | Default | Description                                                                                                                                                                            |
+| ---------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`     | string | yes      |         | The file the copy is for. An absolute path, or one that starts with \~.                                                                                                                |
+| `sha256`   | string |          |         | The sender's hash, hex. Omit to skip the check.                                                                                                                                        |
+| `conflict` | string |          | `fail`  | When the path exists: replace it, keep both (the copy gets a new name), skip (the part is removed and the file there stays), or fail. One of `replace`, `keep-both`, `skip` or `fail`. |
+| `label`    | string |          |         | keep-both names the copy "name (LABEL).ext", such as "report (from build).pdf". Omit to name it "name 2.ext".                                                                          |
+| `perm`     | int    |          |         | The original's permission bits, which the finished file gets. Omit to keep it owner only.                                                                                              |
+| `mtime`    | int    |          |         | The original's modification time, Unix ms, which the finished file gets. Omit to keep the time of the copy.                                                                            |
+| `part_id`  | string |          |         | The copy's part id, up to 32 hex digits: the part is .NAME.tuios-part-ID, so two copies to one path write two parts. Omit for .NAME.tuios-part.                                        |
+
+| Result field | Type   | Description                                                                           |
+| ------------ | ------ | ------------------------------------------------------------------------------------- |
+| `path`       | string | Where the file is now.                                                                |
+| `sha256`     | string | The part's hash.                                                                      |
+| `skipped`    | bool   | conflict skip found a file at path, so the copy was removed and the file there stays. |
+
+```json
+{"id":1,"verb":"file-commit","params":{"path":"~/big.iso","sha256":"9f86d0...","conflict":"keep-both"}}
+```
+
+## `file-drop-dir` <Since verb="file-drop-dir" /> [#file-drop-dir]
+
+Make a private folder on this machine for files dropped on a pane, and answer its path. Drops are kept for 24 hours and 256 MiB together, oldest removed first.
+
+| Param   | Type | Required | Default | Description                                            |
+| ------- | ---- | -------- | ------- | ------------------------------------------------------ |
+| `bytes` | int  |          |         | The size of the drop, so older drops make room for it. |
+
+| Result field | Type   | Description                                 |
+| ------------ | ------ | ------------------------------------------- |
+| `dir`        | string | The new folder, owner only.                 |
+| `keep_bytes` | int    | How many bytes the drops together may hold. |
+| `keep_hours` | int    | How long a drop is kept.                    |
+
+```json
+{"id":1,"verb":"file-drop-dir","params":{"bytes":1048576}}
+```
+
+## `file-hash` <Since verb="file-hash" /> [#file-hash]
+
+The sha256 of a file on this machine, of a range of it, or of the part a copy to it is writing.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                     |
+| --------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`    | string | yes      |         | The file. An absolute path, or one that starts with \~.                                                                                         |
+| `offset`  | int    |          | `0`     | Where the range starts.                                                                                                                         |
+| `length`  | int    |          |         | How many bytes. Omit for the rest of the file.                                                                                                  |
+| `part`    | bool   |          |         | Hash the part file of a copy to this path.                                                                                                      |
+| `part_id` | string |          |         | The copy's part id, up to 32 hex digits: the part is .NAME.tuios-part-ID, so two copies to one path write two parts. Omit for .NAME.tuios-part. |
+
+| Result field | Type   | Description                 |
+| ------------ | ------ | --------------------------- |
+| `sha256`     | string | The hash, hex.              |
+| `bytes`      | int    | How many bytes were hashed. |
+
+```json
+{"id":1,"verb":"file-hash","params":{"path":"~/big.iso"}}
+```
+
+## `file-list` <Since verb="file-list" /> [#file-list]
+
+List a folder on this machine a page at a time, folders first, then names in natural order (file2 before file10), with size, time and mode.
+
+| Param    | Type   | Required | Default | Description                           |
+| -------- | ------ | -------- | ------- | ------------------------------------- |
+| `dir`    | string |          |         | The folder. Omit for the home folder. |
+| `offset` | int    |          | `0`     | The first entry of the page.          |
+| `limit`  | int    |          | `500`   | Entries in the page, at most 5000.    |
+| `hidden` | bool   |          | `true`  | Include names that start with a dot.  |
+
+| Result field | Type      | Description                                                       |
+| ------------ | --------- | ----------------------------------------------------------------- |
+| `dir`        | string    | The folder, made absolute.                                        |
+| `entries`    | \[]object | One info object per entry, as file-stat's info.                   |
+| `total`      | int       | Entries in the folder.                                            |
+| `next`       | int       | The offset of the next page. Absent on the last page.             |
+| `parent`     | string    | The folder above. Absent at the root.                             |
+| `home`       | string    | This machine's home folder.                                       |
+| `capped`     | bool      | The folder holds more than 50000 names, and only those were read. |
+
+```json
+{"id":1,"verb":"file-list","params":{"dir":"~/src","limit":200}}
+```
+
+## `file-mkdir` <Since verb="file-mkdir" /> [#file-mkdir]
+
+Make a folder on this machine, with its parents.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                                             |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`    | string | yes      |         | The folder. An absolute path, or one that starts with \~.                                                                                                                                               |
+| `receive` | bool   |          |         | Make the receive folder instead, and ignore path: where a copy from the caller lands when it names no folder. For a linked machine it is the first folder of its files\_roots, else \~/Downloads/tuios. |
+
+| Result field | Type   | Description                |
+| ------------ | ------ | -------------------------- |
+| `path`       | string | The folder, made absolute. |
+
+```json
+{"id":1,"verb":"file-mkdir","params":{"path":"~/new"}}
+```
+
+```json
+{"id":2,"verb":"file-mkdir","params":{"path":"~","receive":true}}
+```
+
+## `file-read` <Since verb="file-read" /> [#file-read]
+
+Read up to 4 MiB of a file on this machine, base64.
+
+| Param    | Type   | Required | Default   | Description                                             |
+| -------- | ------ | -------- | --------- | ------------------------------------------------------- |
+| `path`   | string | yes      |           | The file. An absolute path, or one that starts with \~. |
+| `offset` | int    |          | `0`       | Where to start.                                         |
+| `length` | int    |          | `4194304` | How many bytes, at most 4 MiB.                          |
+
+| Result field | Type   | Description                           |
+| ------------ | ------ | ------------------------------------- |
+| `content`    | string | The bytes, base64.                    |
+| `size`       | int    | The file's size.                      |
+| `eof`        | bool   | The read reached the end of the file. |
+
+```json
+{"id":1,"verb":"file-read","params":{"path":"~/notes.md","length":65536}}
+```
+
+## `file-remove` <Since verb="file-remove" /> [#file-remove]
+
+Delete a path on this machine. A folder that holds files needs recursive. The home folder and / are refused.
+
+| Param       | Type   | Required | Default | Description                                             |
+| ----------- | ------ | -------- | ------- | ------------------------------------------------------- |
+| `path`      | string | yes      |         | The path. An absolute path, or one that starts with \~. |
+| `recursive` | bool   |          |         | Delete a folder and all it holds.                       |
+
+| Result field | Type   | Description       |
+| ------------ | ------ | ----------------- |
+| `path`       | string | The path deleted. |
+
+```json
+{"id":1,"verb":"file-remove","params":{"path":"~/old","recursive":true}}
+```
+
+## `file-rename` <Since verb="file-rename" /> [#file-rename]
+
+Move or rename a path on this machine. It does not replace a path that is there unless replace is set. A move to another disk answers cross\_device: copy it with transfer-start and move set.
+
+| Param     | Type   | Required | Default | Description            |
+| --------- | ------ | -------- | ------- | ---------------------- |
+| `from`    | string | yes      |         | The path to move.      |
+| `to`      | string | yes      |         | The new path.          |
+| `replace` | bool   |          |         | Replace what is at to. |
+
+| Result field | Type   | Description   |
+| ------------ | ------ | ------------- |
+| `from`       | string | The old path. |
+| `to`         | string | The new path. |
+
+```json
+{"id":1,"verb":"file-rename","params":{"from":"~/a.txt","to":"~/b.txt"}}
+```
+
+## `file-stat` <Since verb="file-stat" /> [#file-stat]
+
+Describe one path on this machine. With part, describe the part file a copy to the path is writing.
+
+| Param         | Type   | Required | Default | Description                                                                                                                                     |
+| ------------- | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`        | string | yes      |         | The path. An absolute path, or one that starts with \~.                                                                                         |
+| `part`        | bool   |          |         | Describe the part file of a copy to this path instead.                                                                                          |
+| `part_id`     | string |          |         | The copy's part id, up to 32 hex digits: the part is .NAME.tuios-part-ID, so two copies to one path write two parts. Omit for .NAME.tuios-part. |
+| `relation_to` | string |          |         | Another path on this machine. The reply says how path stands to it, with links followed.                                                        |
+
+| Result field | Type   | Description                                                                                                                                                             |
+| ------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`       | string | The path, made absolute.                                                                                                                                                |
+| `exists`     | bool   | False when nothing is there.                                                                                                                                            |
+| `size`       | int    | The size in bytes. 0 for a part that is not there.                                                                                                                      |
+| `info`       | object | name, path, kind (file, dir, symlink, other), link\_kind and link for a link, size, mtime (Unix ms), mode (drwxr-xr-x), perm (the permission bits as a number), hidden. |
+| `relation`   | string | With relation\_to: same when the two paths are one file, inside when path is in the folder relation\_to, apart otherwise.                                               |
+
+```json
+{"id":1,"verb":"file-stat","params":{"path":"~/notes.md"}}
+```
+
+## `file-walk` <Since verb="file-walk" /> [#file-walk]
+
+List every file and folder under a folder on this machine, for a folder copy. At most 20000 entries in one reply; with stream, up to 1000000 entries, one JSON line each after the reply, and a last line \{end, bytes, skipped, skipped\_count, denied} or \{end, code, error}. Links are not followed: a link, a named pipe, a socket and a device are not copied, and skipped names them. Over a link, an entry in the read deny list is left out and not named, and denied counts it.
+
+The connection stays open after the reply when `stream` is `true`.
+
+| Param    | Type   | Required | Default | Description                                                                                    |
+| -------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------- |
+| `path`   | string | yes      |         | The folder. An absolute path, or one that starts with \~.                                      |
+| `stream` | bool   |          |         | Send the entries after the reply, one JSON line each, for a folder of more than 20000 entries. |
+
+| Result field    | Type      | Description                                                                                                                       |
+| --------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `entries`       | \[]object | rel (the path under the folder, slash separated), size, dir, perm, mtime (Unix ms). A folder comes before what it holds.          |
+| `bytes`         | int       | The bytes of every file together.                                                                                                 |
+| `skipped`       | \[]object | The first 200 items a copy does not carry: rel and kind (symlink, pipe, socket, device).                                          |
+| `skipped_count` | int       | How many items a copy does not carry, all of them.                                                                                |
+| `denied`        | int       | Over a link, how many entries were left out because a linked machine may not read them. A folder counts once. They are not named. |
+
+```json
+{"id":1,"verb":"file-walk","params":{"path":"~/photos"}}
+```
+
+## `open-file-stream` <Since verb="open-file-stream" /> [#open-file-stream]
+
+Turn this connection into the bytes of one file. mode read: after the reply the connection carries the file from offset to size, then closes. mode write: the part file beside path is cut to offset, then the connection takes length bytes into it, answers one line \{part\_size, written, error} and closes. file-commit puts the part in place.
+
+The connection stays open after the reply.
+
+| Param      | Type   | Required | Default | Description                                                                                                                                                                                             |
+| ---------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`     | string | yes      |         | The file to read, or the file a write is for. An absolute path, or one that starts with \~.                                                                                                             |
+| `mode`     | string |          | `read`  | read or write. One of `read` or `write`.                                                                                                                                                                |
+| `offset`   | int    |          | `0`     | Where the bytes start. A write's offset cannot be past the part's end.                                                                                                                                  |
+| `length`   | int    |          |         | write only: how many bytes the caller sends.                                                                                                                                                            |
+| `part_id`  | string |          |         | The copy's part id, up to 32 hex digits: the part is .NAME.tuios-part-ID, so two copies to one path write two parts. Omit for .NAME.tuios-part.                                                         |
+| `sum`      | bool   |          |         | read: after the last byte, one line \{sha256} with the hash of the bytes sent, or \{error} when the file changed while it was read.                                                                     |
+| `progress` | bool   |          |         | write: while the bytes land, one line \{written} at most every 250 ms with the bytes written so far, before the last line.                                                                              |
+| `compress` | any    |          |         | read: "auto" lets this machine compress the bytes with flate when a sample of the file compresses well, and the reply says compressed. write: true when the caller sends the bytes as one flate stream. |
+
+| Result field | Type | Description                                                            |
+| ------------ | ---- | ---------------------------------------------------------------------- |
+| `size`       | int  | read: the file's size. The connection carries size minus offset bytes. |
+| `mtime`      | int  | read: the file's modification time, Unix ms.                           |
+| `compressed` | bool | read: the bytes come as one flate stream.                              |
+| `sum`        | bool | read: a \{sha256} line follows the bytes.                              |
+| `part_size`  | int  | write: the part's size before it was cut to offset.                    |
+
+```json
+{"id":1,"verb":"open-file-stream","params":{"path":"~/big.iso","mode":"read","offset":0}}
+```
+
+```json
+{"id":1,"verb":"open-file-stream","params":{"path":"~/big.iso","mode":"write","offset":1048576,"length":2097152}}
+```
+
+## `transfer-list` <Since verb="transfer-list" /> [#transfer-list]
+
+List the transfers, newest first, with byte progress, rate and time left. Finished ones stay for 30 minutes. A pane with the files grant sees only the copies it started.
+
+| Param | Type   | Required | Default | Description         |
+| ----- | ------ | -------- | ------- | ------------------- |
+| `id`  | string |          |         | Only this transfer. |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `transfers`  | \[]object | One row per transfer: id, name, src, dst, target, kind, move, state, size, done, wire, rate, eta\_ms, files, files\_done, current, current\_done, current\_size, error, code, resumed\_from, resumes, sha256, verified, created, started, ended, retry\_in\_ms, skipped, skipped\_items, same, conflicts\_skipped, conflicts\_left, conflicts, conflict\_count, failed\_files, pane, pane\_session. |
+| `active`     | int       | Transfers that are not finished.                                                                                                                                                                                                                                                                                                                                                                    |
+
+```json
+{"id":1,"verb":"transfer-list"}
+```
+
+## `transfer-pause` <Since verb="transfer-pause" /> [#transfer-pause]
+
+Pause a transfer. What it copied stays, and transfer-resume goes on from there.
+
+| Param | Type   | Required | Default | Description        |
+| ----- | ------ | -------- | ------- | ------------------ |
+| `id`  | string | yes      |         | The transfer's id. |
+
+| Result field        | Type      | Description                                                                                                                                                                                                                                             |
+| ------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string    | The transfer's id.                                                                                                                                                                                                                                      |
+| `state`             | string    | queued, running, verifying, waiting (for a machine that went away), paused, conflict (waits for transfer-answer), done, failed or cancelled. One of `queued`, `running`, `verifying`, `waiting`, `paused`, `conflict`, `done`, `failed` or `cancelled`. |
+| `size`              | int       | Bytes to copy in all.                                                                                                                                                                                                                                   |
+| `done`              | int       | Bytes copied, or found to be there already.                                                                                                                                                                                                             |
+| `wire`              | int       | Bytes that crossed a link, fewer than done when they were compressed.                                                                                                                                                                                   |
+| `rate`              | float     | Bytes per second over the last five seconds.                                                                                                                                                                                                            |
+| `eta_ms`            | int       | Time left, once two seconds of data came.                                                                                                                                                                                                               |
+| `resumed_from`      | int       | Where the copy went on from after a machine came back. Absent when it never had to.                                                                                                                                                                     |
+| `verified`          | bool      | The copy's sha256 matched the original's.                                                                                                                                                                                                               |
+| `final`             | string    | Where the file is now, which keep-both can change.                                                                                                                                                                                                      |
+| `same`              | int       | Files that were there with the same bytes, which were not copied again.                                                                                                                                                                                 |
+| `conflicts_skipped` | int       | Files that were there and differed, left as they were.                                                                                                                                                                                                  |
+| `conflicts`         | \[]object | In state conflict: the files that wait for an answer, rel, path, src\_size, src\_mtime, dst\_size, dst\_mtime.                                                                                                                                          |
+| `error`             | string    | What happened and what to do, for failed and waiting.                                                                                                                                                                                                   |
+
+```json
+{"id":1,"verb":"transfer-pause","params":{"id":"3f9a1c2b7d00"}}
+```
+
+## `transfer-start` <Since verb="transfer-start" /> [#transfer-start]
+
+Copy a file or a folder between this machine and a host, or between two hosts. The daemon runs the copy, so a client may quit, and a daemon restart goes on with it. A machine that goes away pauses it, and it goes on from where it stopped when the machine is back. Every file's sha256 is checked before it is put in place, and it keeps the original's permission bits and modification time. A file that arrives over a link gets the receiving machine's umask and never group or world write. A file that is there with the same sha256 is not copied again. A destination that exists answers file\_exists unless conflict says what to do. A destination another copy writes now answers busy. Each change is a transfer event on the event stream.
+
+| Param        | Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                    |
+| ------------ | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src`        | object | yes      |         | What to copy: \{host, path}. host is a name from \[hosts], or empty for this machine. path is absolute or starts with \~.                                                                                                                                                                                      |
+| `dst`        | object | yes      |         | Where it goes: the full path of the copy, or with place a folder: \{host, path}. host is a name from \[hosts], or empty for this machine. path is absolute or starts with \~.                                                                                                                                  |
+| `move`       | bool   |          |         | Remove the original once the copy is checked.                                                                                                                                                                                                                                                                  |
+| `conflict`   | string |          | `fail`  | When dst exists: replace it, keep both (the copy gets a new name), merge a folder into the folder there, skip a file that differs, ask (the copy waits in state conflict for transfer-answer), or fail. One of `replace`, `keep-both`, `merge`, `skip`, `ask` or `fail`.                                       |
+| `each`       | string |          |         | In a folder copy into a folder that is there: what to do with each file that is there and differs. Omit to follow conflict, which for merge and replace is replace. One of `replace`, `keep-both`, `skip` or `ask`.                                                                                            |
+| `place`      | string |          |         | auto reads dst as cp does: a folder that is there gets the copy inside it, and anything else is the new name. into needs dst to be a folder that is there. A dst that ends in / with auto is into. contents copies what a folder holds into dst, and a file as auto does. One of `auto`, `into` or `contents`. |
+| `perms`      | bool   |          | `true`  | Give each file the original's permission bits.                                                                                                                                                                                                                                                                 |
+| `times`      | bool   |          | `true`  | Give each file the original's modification time.                                                                                                                                                                                                                                                               |
+| `compress`   | bool   |          | `true`  | Compress the bytes on a link when they compress well.                                                                                                                                                                                                                                                          |
+| `rate_limit` | int    |          | `0`     | At most this many bytes a second. 0 for no limit.                                                                                                                                                                                                                                                              |
+| `keep_from`  | bool   |          | `true`  | keep-both names a copy from another machine "name (from HOST).ext". false numbers it, "name 2.ext".                                                                                                                                                                                                            |
+
+| Result field        | Type      | Description                                                                                                                                                                                                                                             |
+| ------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string    | The transfer's id.                                                                                                                                                                                                                                      |
+| `state`             | string    | queued, running, verifying, waiting (for a machine that went away), paused, conflict (waits for transfer-answer), done, failed or cancelled. One of `queued`, `running`, `verifying`, `waiting`, `paused`, `conflict`, `done`, `failed` or `cancelled`. |
+| `size`              | int       | Bytes to copy in all.                                                                                                                                                                                                                                   |
+| `done`              | int       | Bytes copied, or found to be there already.                                                                                                                                                                                                             |
+| `wire`              | int       | Bytes that crossed a link, fewer than done when they were compressed.                                                                                                                                                                                   |
+| `rate`              | float     | Bytes per second over the last five seconds.                                                                                                                                                                                                            |
+| `eta_ms`            | int       | Time left, once two seconds of data came.                                                                                                                                                                                                               |
+| `resumed_from`      | int       | Where the copy went on from after a machine came back. Absent when it never had to.                                                                                                                                                                     |
+| `verified`          | bool      | The copy's sha256 matched the original's.                                                                                                                                                                                                               |
+| `final`             | string    | Where the file is now, which keep-both can change.                                                                                                                                                                                                      |
+| `same`              | int       | Files that were there with the same bytes, which were not copied again.                                                                                                                                                                                 |
+| `conflicts_skipped` | int       | Files that were there and differed, left as they were.                                                                                                                                                                                                  |
+| `conflicts`         | \[]object | In state conflict: the files that wait for an answer, rel, path, src\_size, src\_mtime, dst\_size, dst\_mtime.                                                                                                                                          |
+| `error`             | string    | What happened and what to do, for failed and waiting.                                                                                                                                                                                                   |
+
+```json
+{"id":1,"verb":"transfer-start","params":{"src":{"host":"build","path":"~/out/image.iso"},"dst":{"path":"~/Downloads/image.iso"}}}
+```

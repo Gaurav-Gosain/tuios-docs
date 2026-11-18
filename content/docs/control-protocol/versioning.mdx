@@ -1,0 +1,1720 @@
+---
+title: "Versioning and introspection"
+description: "Versioning and introspection: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## Versioning and introspection [#versioning-and-introspection]
+
+The protocol carries a version integer. Bump it only on an incompatible change
+to the envelope or to an existing verb; adding a new verb is backward compatible
+and does not bump it.
+
+### Support window [#support-window]
+
+A client and a daemon one minor release apart work together, in both
+directions. A live upgrade works from the previous minor release too. Code
+that serves only an older peer is removed. The CI job `mixed-versions` pairs
+this build with the previous minor release (`scripts/e2e-mixed-versions.sh`).
+
+### The hello handshake [#the-hello-handshake]
+
+`hello` is the first call a client should make. It reports the protocol range the
+daemon serves and identifies the daemon, so a version mismatch is reported as a
+`protocol_mismatch` error rather than surfacing later as a decode failure or a
+dropped connection.
+
+Request:
+
+```json
+{"id": 1, "verb": "hello", "params": {"client": "tuios", "version": "1.4.0", "protocol": 1}}
+```
+
+Result:
+
+```json
+{"id": 1, "result": {
+  "type": "hello",
+  "protocol": 1,
+  "min_protocol": 1,
+  "daemon_version": "1.4.0",
+  "pid": 4242,
+  "instance": "5b0e9c1f2a7d4e83",
+  "sessions": 2,
+  "link_policy": true,
+  "pane_grants": true,
+  "load": {"cores": 8, "load1": 0.84, "mem_pct": 41.5, "agents_working": 3},
+  "os": "linux"
+}}
+```
+
+`link_policy` says the daemon holds calls from other machines to a link
+policy (see [What a linked machine may do here](/docs/control-protocol/verbs-other-verbs#what-a-linked-machine-may-do-here)).
+`tuios stdio-proxy` reads it before it would reach the daemon on its own socket
+for a link, and refuses when it is set. It is absent from an older daemon.
+
+`pane_grants` says the daemon holds calls from panes to their grants (see
+[pane-grants](/docs/control-protocol/verbs-agents-and-messages#pane-grants)) and takes a pane's token with `pane-grants`. On a
+platform where the daemon cannot read the peer's pid, the `tuios` CLI reads it
+and then presents `$TUIOS_PANE_ID` and `$TUIOS_PANE_TOKEN` on every
+connection it opens from a pane. It is absent from an older daemon.
+
+`load` is the machine's load: `cores`, `load1` (the one-minute load
+average), `mem_pct` (memory in use, Linux only), `agents_working` and
+`load_ok`. `load_ok` is false when the daemon could not read the load, as on
+Windows and FreeBSD: `load1` is then 0 and means nothing. It is absent from a
+daemon from before the field, whose `load1` was read. The daemon reads the
+system at most every 5 seconds. A linked daemon reads it off
+the hello its heartbeat sends, so `list-hosts` can report each host's load
+with no call of its own. It is absent from an older daemon.
+
+`instance` is an id for the running daemon image. It changes when a live upgrade execs another binary, while `pid` stays the same.
+
+`upgrade` is present only on an image that took its panes over in a live upgrade (see [daemon-upgrade](/docs/control-protocol/verbs-other-verbs#daemon-upgrade)), and says what the handoff measured: `from` (the build the panes came from), `panes`, `manifest_bytes`, `preflight_ms`, `quiesce_ms`, `capture_ms`, `pending_max`, `pending_total` (bytes the programs wrote while their panes were stopped), `stopped_at` (Unix nanoseconds), `apply_ms`, `apply_heap_start`, `apply_peak_heap_inuse`, `apply_heap_end`, `paused_ms`, `fallback`, set when the new binary could not take the panes over and the binary that was running took them back, and `recovered`, set with `fallback` when the new image died before it was up and the handoff's keeper started the binary that was running in its place, under the keeper's pid.
+
+`os` is the operating system the daemon runs on, as Go names it: `linux`,
+`darwin`, `windows`. A client attached from another machine reads it to start
+a command entry with `sh -c` or `cmd /C`. It is absent from an older daemon.
+
+A client may also send `term` and `color_term`, its `TERM` and `COLORTERM`. A session the connection later creates, with `new-session`, `switch-session`'s `create` or `start-agent`, gives its panes that terminal, as a session made by attaching or by `tuios new` gets the client's. A caller with no terminal of its own (a script, CI, an agent) sends them empty or leaves them out, and its sessions get the daemon's fallback, `xterm-256color` and `truecolor`. The `tuios` CLI sends both.
+
+The handshake is optional, not a gate: a daemon serves every other verb whether
+or not `hello` was called. A daemon that answers `hello` with `unknown_verb`,
+or closes the connection with no response line, is older than the support
+window. The `tuios` CLI reports it as a version mismatch, with the
+`tuios kill-server` command that resolves it.
+
+### Changes to existing verbs [#changes-to-existing-verbs]
+
+Changes that alter what an existing verb does, for a caller that relied on the
+old behaviour. None of them bumps the protocol integer: every field keeps its
+name and type, and a caller that sends nothing new keeps working. What changes
+is an answer, and each entry says which.
+
+**A pane's OSC 1 name labels an unnamed workspace.** The name a pane's program
+gives with OSC 1 is the label of its workspace while the workspace has no name
+of its own and the pane is its active one. OSC 0 sets the icon name too, but
+it does not count: shells and agents send it with every prompt. What changes
+for a caller:
+
+- A `list-windows` entry, and `get-window` with no client attached, carry
+  `icon_name` when the pane gave one. The synced session state carries
+  `icon_names`, a map from window ID to the name, filled from the daemon's
+  emulators into every snapshot and never stored, so a value a client sends
+  back is ignored.
+- The daemon pushes the session's state when a pane's OSC 1 name changes, so
+  a client labels a workspace whose panes it does not stream. Pushes for OSC 1
+  and OSC 7 changes start at least 100 ms apart.
+- In the attached session's own views an unnamed workspace reads as the
+  name instead of its number: the dock, the rail's workspace tags, the go-to
+  picker, the tab menu and `{workspace}` in `appearance.host_title`. A name
+  set with `set-workspace-name` still wins. `list-workspaces`, the session
+  navigator's rows for other sessions, herdr's tab label and the tmux shim
+  are unchanged.
+- The pane snapshot carries `explicit_icon_name`, and each title stack entry
+  `explicit_icon`. An older peer leaves them out and reads as no name.
+
+**A usage limit is a state of its own.** An agent that stopped on its
+harness's usage or rate limit reads `limit_reached`. What changes for a caller:
+
+- The agent state can be `limit_reached` in `get-agent-state`, `list-agents`,
+  the synced window state, `agent-state` events and `wait-for agent-state`.
+  `needs_you` is false for it and `ready` true. An older client draws it as a
+  state it does not know.
+- `set-agent-state errored` with `kind` `usage_limit` now lands as
+  `limit_reached`, where it stayed `errored`. A reader that looked for
+  `errored` with `blocked_by` `usage_limit` reads `limit_reached` instead.
+- Claude Code's `StopFailure` hook with `error` `rate_limit` or
+  `billing_error` reports `limit_reached`. Any other error reports `errored`
+  with the error named (`stopped on overloaded`), where it said `stopped on an
+  error`.
+- Every `list-agents` entry gains `limit_resets` (the reset the harness named,
+  in its words, empty otherwise) and `context` (`tokens`, `window`, `percent`,
+  `near`, or null). See [Context size](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#context-size).
+- The metadata keys `context_tokens` and `context_window` are written by the
+  status line feed, the transcript (tokens only, under the source
+  `transcript`) and protocol panes.
+
+**Task cards carry attachments.** `get-task` gains `attachments`, a card's row
+gains `attachment_count`, a card's history and `task-changed` gain the actions
+`attached` and `detached`, and `attach-task`, `detach-task` and
+`get-task-attachment` are new ([Task verbs](/docs/control-protocol/verbs-agents-and-messages#task-verbs)). A daemon from
+before this answers the new verbs with `unknown_verb`.
+
+**`agent-transcript` over a link needs `transcripts`, which the default
+grants.** The person's own client attached through a host reads the
+conversation of an agent on that host. Before, the call over a link needed
+`respond`, which the default does not grant. `respond` still includes
+`transcripts`, so a table that allows `respond` reads as before. A table that
+sets `allow` without either now refuses with `forbidden` naming
+`transcripts`. The call still needs the nonce of a person's attach: a
+process in a pane, a link stream the hub did not vouch for and a caller with
+no nonce still get `not_human`.
+
+**herdr's `pane.focus` and `agent.focus` show the pane's session.** A
+focused pane in a session that no client shows now moves the attached client
+to that session, as `workspace.focus` does, so the pane is on screen. Before,
+the pane was focused in its session and the client stayed where it was.
+The herdr stream also sends `workspace_focused`, `tab_focused` and
+`pane_focused` when a client moves to another session, once each and in that
+order, as herdr does when its active workspace changes. A window focused in a
+session no client shows sends no `pane_focused`.
+
+**`set-session-name` raises the new event `session-labelled`.** Before, a
+display name changed with no event, so a subscriber, and herdr's
+`workspace.renamed` through it, never heard of it. A subscriber that names no
+types gets it.
+
+**The herdr socket sends `workspace_renamed` for a rename.** `rename-session`
+sent `workspace_created` for the new name, for a workspace the herdr client
+already had, and `workspace.rename` sent nothing. Each now sends one
+`workspace_renamed` with the label `session.snapshot` then shows, as herdr's
+`workspace.rename` does. See
+[AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#herdr-compatibility).
+
+**The new event `agent-seen`** says a finished pane was looked at, or marked
+unread again. A subscriber that names no types gets it.
+
+**The herdr socket reports a seen `done` pane as `idle`.** herdr's `done` is an
+idle agent nobody has looked at yet, and tuios's mapping did not read the
+seen bit. See [AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#herdr-compatibility). What
+changes for a herdr client:
+
+- `agent_status` is `done` only while the pane has a finished turn nobody has
+  looked at, and `idle` after. `errored` stays `done`.
+- `pane.agent_status_changed` fires when a pane is looked at or marked unread.
+- `pane.focus` and `agent.focus` mark the pane seen, with or without a client.
+- `agent.wait`, `events.wait` and `agent.prompt` with `wait` match that status.
+
+**The new verb [report-program-status](/docs/control-protocol/verbs-other-verbs#report-program-status)** applies an
+OSC 7501 report to a pane. `tuios status` sends it when it has no terminal.
+
+**The herdr socket sends `tab_renamed` when a workspace is named.** A herdr
+tab is a tuios workspace, and naming one with `set-workspace-name` or herdr's
+`tab.rename` sent nothing to a `tab.renamed` subscriber. See
+[AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#herdr-compatibility). What changes for a herdr
+client:
+
+- `tab_renamed` carries the tab's `tab_id`, its `workspace_id` and the new
+  `label`, the label `tab.get` reads next.
+- Clearing a name sends the label the tab falls back to, its workspace number.
+- An empty workspace in the background sends nothing when named: its name
+  comes with the `tab_created` of its first pane.
+
+**The new verb [list-routes](/docs/control-protocol/verbs-other-verbs#list-routes)** lists this machine's addresses.
+
+**queue-prompt takes `client_id`.** A second call from the same sender with the
+same `client_id` for the same pane queues nothing and answers `duplicate: true`. A call without it
+works as before.
+
+**A hooked agent that stops reporting shows as silent.** A pane whose claim
+is a report, and whose state is `working`, may go without a report for
+`[agents] silent_after` (default `10m`). After that, what changes for a
+caller:
+
+- `get-agent-state` and every `list-agents` entry report `state` as `unknown`
+  and gain `reason`: `silent`. `reason` is empty for every other pane.
+  `activity` is `unknown`. `source`, `agent_state_at` and `evidence_age_ms`
+  still describe the last report. `ready` stays false.
+- The `agent-state` event reports `state` `unknown` with `reason` `silent`
+  when the pane goes silent, and the reported state with no reason when the
+  next report comes.
+- A selector's `state:` term matches the shown state, `unknown`.
+- The synced window state keeps `agent_state` `working` and gains
+  `agent_reason`. A session's window summary reports `agent_state` `unknown`
+  and gains `agent_reason`. Both are omitted when empty.
+- `ask-agent`, `fan`, the queue and agent mail still read the pane as
+  `working`, so nothing is typed into it.
+
+The next report from the pane's agent clears it, a report that its
+`if_state` refuses included. The herdr socket API still reports the pane as
+working.
+
+**An agent can be settled.** `mark-attention` takes the actions `settle` and
+`unsettle`, which name a pane with `session` and `window` (see
+[mark-attention](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#mark-attention)). What changes for an existing caller:
+
+- `get-agent-state` and every `list-agents` entry gain `settled`. The synced
+  window state and the session listing's window rows gain `agent_settled`,
+  omitted when false and taken from the daemon's own state on every client
+  push. A row of another machine's agents (`list-hosts` with agents) carries
+  that host's `settled`, display only.
+- The daemon clears the settle in the change that makes the agent need the
+  person: it goes to `needs_input`, `errored` or `none`, it finishes a turn
+  (`completion_seq` goes up), or it sends the person mail.
+- A `settle` closes the pane's open `finished` item with the reason
+  `dismissed`, as `dismiss-attention` does, and marks the turn seen.
+- The hook event `after-settle` exists (see [HOOKS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/HOOKS.md)).
+
+**Asks of one agent take turns.** An `ask-agent` that comes while another
+ask of the same target runs no longer types over it, and no longer fails with
+`not_ready` once `ready_timeout` passes. It waits for its turn, first come
+first served, for up to `timeout`, and then goes on as before. A turn that
+does not come in time is `not_ready`, and nothing is typed. An ask whose
+caller closes its connection while it waits leaves the line and types
+nothing. The reply gains
+`queued_behind` and `waited_turn_ms`. A queued prompt (`queue-prompt`) is not
+typed while an ask holds the target's turn.
+
+**list-tasks takes all\_sessions.** It lists every session's cards, and the
+answer has `all_sessions: true` in place of `session`. The agents view's
+board reads it. A daemon from before this ignores the parameter and answers
+for one session, without `all_sessions`; a daemon with no task verbs answers
+`unknown_verb`. In both cases the board says the daemon is too old. A selector
+takes `stage:`.
+
+**Cards move on their own, and fan and start-agent take task.** The daemon
+moves a task card when it records a fact about the card's work, and sends the
+`task-changed` `staged` event with `reason` naming the fact (see
+[Task verbs](/docs/control-protocol/verbs-agents-and-messages#task-verbs)). `fan` takes `task` and `task_session` and stamps
+the card with the fan it makes. `start-agent` takes `task` and claims the card
+for the pane it opens. Both answer with the card's row in `task`, and take
+`human_nonce` for the stamp or the claim. A daemon from before this refuses
+`task` by name with `invalid_params`, so a client can start the agent without
+it and claim after. `claim-task` with `next` skips a card a fan of another
+session works on.
+
+**list-host-sessions rows carry agents.** A remote session row gains
+`agents`, one entry per agent pane: `id`, `title`, `state`, `state_at`,
+`harness`, `message`, `kind`, `meta` and `subagents`, at most 32 a session.
+The agents view draws them as rows.
+
+**list-hosts names the ssh failure of a host it cannot reach.** A row with
+status `unreachable` gains `failure`, `fix` and, for some, `fix_command`,
+when ssh's own words name the failure. `failure` is one of `host_key_new`,
+`host_key_changed`, `auth`, `dns`, `refused` and `timeout`. `fix` is one
+plain sentence. `fix_command` is the command that fixes it, as a person types
+it: `ssh ADDR true` for `host_key_new` and `ssh-copy-id ADDR` for `auth`. The
+`reason` of such a row is the sentence of its class, in place of "The host
+did not answer." The status value is unchanged. A row whose words match no
+class has none of the three fields.
+
+**list-hosts reports each host's load.** A host row gains `cores`, `load1`,
+`mem_pct`, `agents_working`, `load_ok`, `load_at` and `rtt_ms`, from the last hello on the
+link: the handshake, then the heartbeat. A link that carries traffic is not
+pinged, so its heartbeat now pings once the load is older than a minute. The
+fields are absent until a hello from the host carried a load.
+
+**send-agent-message takes a message in parts.** `text` is no longer
+required when `parts` is given. `parts` is the form `queue-prompt` takes. A
+message that fits 8 KiB and holds no image has its blocks put in place. Any
+other has each paste and image written to the paste folder, attached, and
+named in the body. A daemon from before this answers `text is required` for a
+message sent in parts alone.
+
+**queue-prompt takes host.** A message for a pane on a linked machine is
+passed there over the link. See [The delivery queue](/docs/control-protocol/verbs-agents-and-messages#the-delivery-queue).
+
+**queue-prompt takes images.** A part may be `{"kind":"image","data":…}`. A
+daemon from before this answers `invalid_params` for the kind. See
+[The delivery queue](/docs/control-protocol/verbs-agents-and-messages#the-delivery-queue).
+
+**queue-prompt takes a message in parts.** `text` is no longer required when
+`parts` is given, and the result gains `parts`, the count read. A message
+with a long paste can now put a file in the paste folder when it is typed. The
+queues are also bounded in bytes, 32 MiB a pane and 128 MiB in all, and
+`queue_full` covers both bounds. See [The delivery queue](/docs/control-protocol/verbs-agents-and-messages#the-delivery-queue).
+A caller that sends only `text` sees no change.
+
+**A link checks that its host still answers.** A link that carried no frame
+for 15 seconds sends `hello`, with no params, on a stream of its own. A reply
+of any kind, an error included, counts as an answer. Two pings in a row with
+no answer in 5 seconds end the link, and it is dialed again. After this
+machine wakes from sleep, or after `retry-host`, one ping with no answer is
+enough. `retry-host` on a host that is up now sends that ping at once, and on
+a host that is not up it starts the backoff again from 1 second. The next
+dial after a ping ends a link, after a wake from sleep, or after a dial that
+timed out runs ssh with `-o ControlPath=none`, so a master connection that did
+not survive the sleep is not used. The drop reason is
+"The host stopped answering." An older far daemon answers the ping as it
+answers any `hello`.
+
+**list-worktrees reports a merged branch.** With `changes`, each row gains
+`merged`, and `merged_into` when `merged` is true. See
+[list-worktrees](/docs/control-protocol/verbs-files-and-worktrees#list-worktrees). A worktree record gains `start_commit`, the
+commit its branch was at when `new-worktree` made it. An older peer ignores
+all three.
+
+**The default window\_size is latest.** A daemon with no `[daemon]
+window_size` now uses `latest`, so `session-info` reports `window_size:
+"latest"` where it reported `smallest`. Under `latest` the session's agreed
+chrome reserve counts only the clients of the session's size along each axis,
+and every client whose hello does not offer `ViewChrome`. On the client
+protocol, a hello can carry `Machine` (the client's short host name, kept only
+when it is a valid machine name), `ClientKind` (`ssh` or `web`) and
+`ViewChrome`. `MsgAttached` can carry `ClientID`, `ClientCount`, `SizedBy`,
+`SizedByClient` and `SizedByKind`, and `MsgSessionResize` the three `SizedBy`
+fields. They name the client that set the size for the hint a larger client
+shows, and tell a client whether it is that client. An older peer ignores all
+of them.
+
+**A client that is not tuios can stream a pane and answer the Inbox.** Three
+additions serve a native phone app on `ssh host tuios stdio-proxy`:
+
+- The new verb [stream-pane](/docs/control-protocol/verbs-other-machines#stream-pane) streams one pane as bytes, with a
+  sequence number on every frame, so a client resumes after a dropped network
+  instead of taking a new screen.
+- The new verb [attach-presence](/docs/control-protocol/verbs-other-machines#attach-presence) gives a connection the
+  person's `human_nonce` without an attach.
+- A pane can now be smaller than its clients asked for, while a stream holds a
+  size lease on it. A client that compares the pane's size with its own
+  layout sees the difference. The pane goes back when the lease ends.
+
+`respond`, `reply-approval`, `answer-ask`, `dismiss-attention` and every other
+verb that takes `human_nonce` now also accept the nonce of a presence. A
+presence made for one session acts only in that session. See
+[Nonce scope](#nonce-scope).
+
+**A phone can get the Inbox by Web Push.** The new verbs
+[register-push, list-push and remove-push](/docs/control-protocol/verbs-other-machines#register-push) keep the person's
+phones. When an Inbox item of a kind a phone asked for opens or closes, the
+daemon sends an encrypted push to the phone's push service. The verbs take
+the person's `human_nonce`, from an attach or a presence with no session, and
+over a link the `respond` capability. Each registration opens an Inbox item.
+
+**A pane records the pane that started it.** When a process in a pane calls
+`new-window`, `split-window`, `start-agent`, `fan` or `new-worktree`, the pane
+it makes records the caller's pane. What changes for a caller:
+
+- `list-windows`, `get-window` and every `list-agents` entry gain
+  `started_by`, `{"session", "window"}`. It is omitted when no pane started
+  the window: the call came from outside every pane, or over a link.
+- The synced window state gains `started_by`, taken from the daemon's own
+  state on every client push, and saved with the session. An older peer drops
+  it. The gui-bridge `state` window rows gain it too.
+- The new verbs `search-panes`, `command-history` and `list-ports` read pane
+  text, the shell commands a pane ran, and the TCP ports a pane's processes
+  listen on (see [search-panes](/docs/control-protocol/verbs-search#search-panes)).
+
+**A pane's OSC 7501 reports are part of its state.** A program in a pane can
+report what it does with the Program Status Protocol (see
+[PROGRAM\_STATUS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/PROGRAM_STATUS.md)). What changes for a caller:
+
+- `get-agent-state` and every `list-agents` entry gain `program_status`, the
+  pane's records, the root first: `id` (absent for the root), `state`, `kind`,
+  `progress` (always present, -1 for none), `app` (the record's own or its
+  nearest parent's), `title`, `msg` and `at`. It is an empty list for none.
+- `source` can be `program`. `set-agent-state` does not accept it.
+- `blocked_by` and the `kind` param of `set-agent-state` can be `auth`.
+- The synced window state and a session's window summary gain
+  `program_status`, omitted when empty and taken from the daemon's own state on
+  every client push. An older peer drops it.
+
+**The daemon keeps paste buffers.** The new verbs `list-buffers`,
+`show-buffer`, `set-buffer`, `delete-buffer` and `paste-buffer` read and
+change one list of buffers that every client and session shares (see
+[list-buffers](/docs/control-protocol/verbs-other-verbs#list-buffers-show-buffer-set-buffer-delete-buffer-paste-buffer)).
+A client now calls `set-buffer` for each yank. The tmux shim's buffer
+commands use these verbs when the daemon has them, so a buffer the shim set
+before is no longer read from its file. The error code `no_buffer` is in the
+catalog.
+
+**A host that waits for a Tailscale sign-in can be dialed again on request.**
+The new verb `retry-host` takes `host` and makes that link dial again now
+instead of after its backoff. While the host is in `tailscale_check`, the link
+then dials again every 5 seconds at most, for two minutes. A dial in progress
+is not stopped, and a call within 2 seconds of the start of the last dial wakes
+nothing. The result has `host`, `status` and, when the link has one,
+`approval_url`. A restricted connection and a linked machine may not call it.
+`approval_url` is only an https address on `login.tailscale.com`,
+`controlplane.tailscale.com` or the host's `tailscale_login`, matched exactly.
+For any other address the banner named, the row has no `approval_url` and has
+`approval_refused: true`. A caller over a link gets neither field, and the
+`reason` of such a host without the address.
+`host-changed`, and the push to attached clients, now also fire when a link in
+`tailscale_check` gets a new `approval_url`, so a client sees the new sign-in
+page at once. The `reason` of such a host is reworded to "Tailscale SSH needs
+you to sign in before tuios can reach this machine." and goes on to name the
+page. The status value is unchanged.
+
+**remove-worktree removes the worktree's checkpoints.** The daemon saves a
+pane's work tree under `refs/tuios/checkpoints/` when its agent finishes a turn
+(see [list-checkpoints](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#list-checkpoints)). Those refs belong to the whole
+repository, so `remove-worktree`, and `keep-fan` through it, now delete the
+ones taken in the removed worktree. The checkpoints of panes in other
+checkouts stay. The result is unchanged. The error code `no_checkpoint` is in
+the catalog.
+
+**keep-fan can merge the kept attempt, and confirm\_required has a second
+use.** `keep-fan` takes `merge`, `merge_mode` and `into`. With `merge`, the
+kept attempt's branch is first merged into its base, as `ship-merge` does, and
+the result carries it as `merge`. A merge that is refused stops the call
+before any sibling is removed. Without `merge` the verb is unchanged.
+`ship-push` and `ship-pr` answer `confirm_required` with what they would send
+and a token, as a write by `select` does. A `worktree` record, in
+`list-worktrees`, `list-sessions` and the session state, may carry `pr`. The
+new error codes `nothing_to_commit`, `merge_conflict`, `checkout_dirty`,
+`no_remote` and `gh_unavailable` are in the catalog. See
+[ship-commit](/docs/control-protocol/verbs-files-and-worktrees#ship-commit).
+
+**A pane lists its subagents.** The daemon keeps each subagent a pane's
+agent runs, not only the count (see
+[Each subagent](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#each-subagent)). What changes for a caller:
+
+- `get-agent-state` and every `list-agents` entry gain `subagent_list`: id,
+  type, description, state (`running`, `done`, `failed`, `stopped`),
+  started\_at, ended\_at, now, last, tools and result. `subagents` keeps its
+  meaning, the running ones. The synced window state and a session's window
+  summary gain `agent_subagent_list`, taken from the daemon's own state on
+  every client push and omitted when empty, which an older peer drops.
+- `report-agent-activity` takes the event `subagent_update`, and its
+  activity takes `call_id`, `spawn`, `outcome` and `tools`. A
+  `subagent_stop` no longer forgets the subagent at once: it stays on the
+  list as ended for a minute.
+- `set-agent-state`'s activity takes `spawn`, `agent_type` and `call_id` on a
+  `tool` event. An older daemon ignores them.
+- `agent-activity` entries of kind `subagent_start` and `subagent_stop` name
+  the subagent in `text` by its description and type, "Research tmux
+  (general-purpose)", or its type alone, and a `subagent_stop` carries
+  `outcome`, `duration_ms` and `tools`.
+- The Claude Code hook sends the subagents' own tool calls, which it dropped
+  before, as `subagent_update`, and reads `background_tasks` from `Stop` and
+  `SubagentStop`. The integration's version is unchanged: the events it
+  hooks are the same.
+
+**A pane counts the subagents its agent is running.** An agent that hands work
+to subagents and ends its turn reports `done` while they work, so the daemon
+keeps, per pane, the subagents its hooks reported starting and not yet
+stopping (see [Agent metadata](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#agent-metadata)). The reports
+come with the new verb [report-agent-activity](/docs/control-protocol/verbs-agents-and-messages#report-agent-activity), and
+`set-agent-state` is unchanged: `state` is still required, and its `activity`
+still takes the five events it did. What changes for a caller of the older
+verbs:
+
+- `subagents` is a reserved metadata key, written by tuios: `1 subagent`,
+  `3 subagents`, absent at none. `set-agent-meta` refuses it like `now` and
+  `prompt`, and its `clear` leaves it.
+- `get-agent-state` and every `list-agents` entry gain `subagents`, the count
+  as a number, 0 while none run. The synced window state gains
+  `agent_subagents`, omitted when zero and taken from the daemon's own state
+  on every client push, and so does a session's window summary.
+- `agent-activity` entries have three more kinds: `subagent_start` and
+  `subagent_stop`, with the subagent's type as `text`, and `session_start`,
+  with how the conversation started.
+- The Claude Code integration is version 3: it adds `SubagentStart` and
+  `SubagentStop` entries, so `integration status` reads a version 2 install as
+  out of date until it is installed again. Its `SessionStart` sends the same
+  `set-agent-state` as before and then a `report-agent-activity`
+  `session_start`.
+
+**A session's size follows its window\_size policy.** The daemon reads
+`[daemon] window_size` and a session's own `daemon.window_size` (see
+[SESSIONS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/SESSIONS.md#session-size-with-more-than-one-client)). With the
+default of that release, `smallest`, nothing changes. What changes for a caller:
+
+- `session-info` gains `window_size`, `session_width` and `session_height`.
+- `set-option` of `daemon.window_size` is applied by the daemon, not by a
+  client, and `get-option` of it can answer with `source: "config"`.
+- On the client protocol, a hello and a welcome can carry `WindowSize`. A
+  client that offers it reports input with the new binary message
+  `MsgClientActivity`, and draws a session larger than itself as a view. A
+  daemon uses a policy other than `smallest` only while every attached client
+  offered it. `MsgSessionResize` gains `Policy`. Each side sends nothing new to
+  a peer that did not offer `WindowSize`. The daemon refuses a
+  `MsgClientActivity` frame over 16 bytes unread, as it does any frame over
+  its type's limit.
+- An attach can carry `ViewOnly`, for a client that sends no input. Under
+  `largest` and `latest` such a client does not count toward the size.
+  `tuios-web --read-only` sets it. An older daemon ignores it.
+
+**A call from another machine is held to a link policy.** Every verb and
+every binary message that arrives over a link is checked against what the
+`[hosts]` table on the receiving machine lets the calling machine do, before
+it runs (see [What a linked machine may do here](/docs/control-protocol/verbs-other-verbs#what-a-linked-machine-may-do-here)).
+A refused call does nothing and fails with `forbidden`, and a hint naming the
+capability and the table that grants it. The default lets a link do what it
+could before, with these exceptions:
+
+- `respond`, `reply-approval`, `dismiss-attention` and the new
+  `release-agent-message` need the `respond` capability, which the default
+  does not grant. Over a link they used to be refused only for want of a
+  verified nonce (`not_human`); with the default policy they are now
+  `forbidden` first. `tuios respond -w HOST:SESSION:WINDOW` needs
+  `allow = [..., "respond"]` on that host for this machine.
+- `open-host-connection` over a link, which relays on to the far machine's own
+  hosts, needs every capability, so the default refuses it.
+- A binary message a policy refuses is answered with `MsgError` code 10
+  (`ErrCodeForbidden`), and the connection stays open.
+- Calls on the daemon's own socket are unchanged.
+
+**Mail from another machine can be held for the person.** With
+`hold_mail = true` for the sending machine, `send-agent-message` over a link
+to anyone but `human` stores the message addressed to `human`, with `held`,
+`held_for` and `held_for_label` naming the window it was for. The reply
+carries `held: true` and `held_for`, and `to` is `human`. The agent does not
+see it until the person passes it on with `release-agent-message`. The Inbox
+mail item carries `held_id` and `held_for`. Without `hold_mail` nothing
+changes.
+
+**A pane on another machine can outlive a dropped link.** `open-pane` takes
+`resumable`, and the far daemon then keeps the process for its
+`hosted_grace` for the asking machine after the connection drops, returning
+`resume_token` and `grace` (seconds). `open-pane` with `resume` reattaches it.
+The asking daemon now always sends `resumable`; a far daemon that does not
+know it refuses it with `invalid_params`, and the asking daemon sends the
+request again without it, as it does for `window`. What changes:
+
+- A window on another machine no longer closes when the link drops, for up to
+  the far grace. `list-windows`, `session-info` and the state pushed to clients
+  carry `host_link: "reconnecting"` and `host_link_until` (unix seconds) while
+  it is being reattached. A caller that waited for `window-exit` on a link drop
+  now waits for the grace, or for the process to exit.
+- Keystrokes to such a window while it is reconnecting are refused, not queued.
+- Closing such a window sends `close-pane` to the far daemon, which ends the
+  process at once.
+- On the far machine, a pane opened with `resumable` is still read while no
+  connection is attached, so its process no longer blocks on a full pty while
+  the link is down. A pane opened without it behaves as before.
+
+**Mail for a machine whose link is down can wait for it.** `send-agent-message`
+takes `host`, a machine in the `[hosts]` table: the daemon delivers the message
+to `session` there over its link and returns that machine's answer with `host`
+and `queued: false`. When the link is down it keeps the message instead, on
+disk, and answers `{"type": "agent_message_queued", "queued": true,
+"queue_id": 3, "waiting": 1, ...}`; the messages go in order when the link is
+back. At most 64 wait per machine and 256 in all; past that the send is
+`rate_limited`. A send is also queued when the call fails without an answer
+from the far machine while the link stays up (a timeout, no room for another
+stream), and when earlier mail for that machine still waits or is being
+delivered, so it cannot arrive ahead of it. With the link up the queue is
+tried again at once, then after 1 second, doubling to 30 seconds. An error
+the far machine answers is returned as before and is not queued. What changes
+for existing callers:
+
+- `list-attention` has a seventh kind, `outbox`, one item per machine with
+  mail waiting or refused. A consumer that switched on the six kinds sees a
+  kind it does not know.
+- `dismiss-attention` on an `outbox` item discards the mail still waiting for
+  that machine, and answers `for_host` and `discarded`.
+- `list-hosts` rows carry `queued`.
+- `tuios send-agent-message -s HOST:SESSION` falls back to this when the host
+  is unreachable, instead of failing with `host_unreachable`.
+- A message queued from `human` arrives on the far machine as `claimed_human`:
+  no nonce the far daemon would honour survives the wait. `host` is refused
+  over a link and dropped from a hosted pane's report channel.
+
+**A result from another machine is marked untrusted.** The CLI reaches a
+session on another machine with a host-qualified target (`-s HOST:SESSION`,
+`-w HOST:SESSION:WINDOW`) through `open-host-connection`, and speaks that
+machine's own verbs. The daemon relays the bytes and decodes none of them, so
+the rules below are the CLI's. The verbs on the wire do not change.
+
+- Every `--json` result from another machine carries `host` and
+  `"untrusted": true`. It used to carry `host` only. This covers
+  `list-windows`, `capture-pane`, `wait-for`, `list-agents`,
+  `send-agent-message`, `ask-agent`, `stash get` and every other verb that
+  prints its result with `--json`. A `--json` error another machine answered
+  carries them too.
+- In `tuios ls --all-hosts --json` and `tuios list-agents --all-hosts --json`,
+  each other machine's entry in `hosts` carries `"untrusted": true`. The
+  `local` entry does not.
+- `tuios capture-pane` takes `--json`. Its plain output from another machine
+  is fenced as untrusted content, as mail is, with `│ ` before every line.
+  Control characters, bidi controls and zero-width characters are removed.
+  With `--ansi` or `--resolved`, SGR sequences (`CSI ... m`) are kept and
+  every other escape (OSC, DCS, cursor moves, modes) is removed. A local
+  capture prints as before.
+- `tuios send-agent-message --attach PATH` to another machine first asks that
+  machine for its session's stash root with `stash-list`. A path under that
+  root passes through as written. Every other path must be a regular file on
+  this machine: it is put in the far stash with `stash-put`, the stored path
+  is attached, and one line on stderr says so ("Sent notes.txt to build's
+  stash."). A file over 8 MB is refused before it is sent. The far daemon
+  checks its link policy (`mail`) on `stash-list` and each `stash-put`, so a
+  link without it refuses the message before it is sent. A message queued for
+  a host whose link is down keeps its paths as written.
+
+**An agent on `needs_input` or `unknown` is not ready to be asked.** The
+states that count as ready are now `idle`, `done`, `errored` and `none`. They
+used to include `needs_input` and `unknown` as well. `fan` types its first
+prompt only on `idle` or `done`, and used to accept `unknown` too.
+
+An agent on `needs_input` is most often sitting on a permission menu, and text
+typed there is read as the answer: the question approved or denied whatever
+the agent had asked for. `unknown` is what the silence timer writes when a pane
+went quiet and nothing on its screen said the agent is at its prompt, and an
+agent in the middle of a long tool call looks the same.
+
+- `list-agents` returns `ready: false` for a pane on `needs_input` or
+  `unknown`. It used to return `true`. `ready` still means what it always
+  meant, that `ask-agent` would type at the pane without waiting, and it is
+  that answer that changed. A script that polls `ready` before asking now waits
+  for the prompt to be answered, or for the agent to reach its prompt.
+- `ask-agent` waits on a pane on `unknown` like one that is `working`, and
+  fails with `not_ready` when `ready_timeout` runs out, with a message that
+  says the state was unknown. `force` sends anyway.
+- `fan` does not type into an agent on `unknown` when its harness can show
+  that it is at its prompt, which is a harness whose manifest has an idle rule
+  on the screen or the title (see below for the list); such an agent reaches
+  `idle` from its prompt box or title. For another agent `unknown` counts as
+  ready, since nothing could ever show more.
+- `ask-agent` against a pane on `needs_input` fails with the new code
+  `agent_blocked` and writes nothing. It used to type the question. It also
+  stops waiting with `agent_blocked` when a pane it is waiting on reaches
+  `needs_input`, instead of running out `ready_timeout`.
+- `force` on `ask-agent` still skips the wait for a working agent. It no longer
+  types at a pane on `needs_input`; the new param `allow_blocked` does, for a
+  caller that has read the prompt and knows it takes free text. `force` and
+  `allow_blocked` together are what `force` alone used to be.
+- `list-agents` and `get-agent-state` gain `blocked_by`: `approval` or
+  `question` for a pane on `needs_input`, empty when the source did not say and
+  for every other state. A screen, title or notify rule supplies it from its
+  `kind`, a report supplies it with the `kind` param of `set-agent-state`, and
+  a report without one is guessed from its message the way a rule without a
+  kind is. `get-agent-state` also gains `ready`, with the same
+  meaning as in `list-agents`.
+
+**`agent_session_id` can change without a state report.** The new
+`set-agent-session` verb writes the window's `agent_session_id`, which
+`get-agent-state` and `list-agents` return, without touching the state, its
+source or `harness_id`. Before it, the field changed only with a
+`set-agent-state` report. A consumer that read a new id as a sign of a new
+state report should read the state fields instead. The ten session-only
+integrations (see [Agent state](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#harness-integrations)) send it,
+so a pane running one of them now carries an id while its state comes from
+screen rules. Separately, the daemon forgets the harness pid a window's id was
+reported with when the detector sees the agent leave the pane. `set-agent-state`
+reads that pid only while a report holds the pane mid-turn, which the agent
+leaving has already ended, so its answers are unchanged.
+
+**A restore keeps each pane's `agent_session_id`, and the Inbox has a
+`resume` kind.** A daemon restart used to bring every window back with its
+`agent_session_id` empty, although the state file held it: the restore's state
+push took daemon-owned fields from the empty session it had just made. The id
+now comes back on every restored window that ran on this machine (a window that
+ran on another machine drops it, since the conversation is over there), so
+`get-agent-state` and `list-agents` return it after a restart. With it, the
+restore offers to resume each conversation whose harness has a `[resume]`
+command and whose pane had an agent running when the state was saved (a saved
+`agent_state` other than none, or an `agent_harness`; a pane whose agent had
+exited keeps its id and gets no offer), as `daemon.resume_agents` says. A
+restored window also comes back with no agent state: `agent_state`,
+`agent_message`, `agent_kind`, `agent_state_at`, `agent_harness`, `agent_meta`
+and `foreground_cmd` are cleared, since its shell is new. They used to come
+back as saved, so a restored pane at a fresh prompt reported the old agent as
+`working` until it closed. Clearing them is also what keeps an offer from
+coming back on every later restart. In the default `ask` mode,
+`list-attention` gains one item of the new kind `resume` per such pane, with
+the command as its summary, and subscribers see an `attention` event opening
+it. `AttentionKindNames`, the order `list-attention` groups by and the
+`counts` object gain `resume`, between `errored` and `finished`. A client that
+groups by kind and does not know `resume` should treat it like any unknown
+kind. Windows also carry a new field, `agent_session_harness`, the harness
+the id belongs to; `set-agent-state` with `agent_session_id` and
+`set-agent-session` write it with the id, and a `set-agent-session` report that
+names the stored id under a different harness is now applied (it updates the
+harness) rather than answered as unchanged.
+
+**A prompt is pasted and submitted with a carriage return.** `ask-agent` and
+`fan` used to write the text followed by a line feed. Claude Code and Codex
+submit on a carriage return, which is what the Enter key sends, and several
+agent TUIs bind a line feed to "insert a newline", so a prompt could sit in the
+input box unsent, and a prompt of several lines was a sequence of Enters. Both
+verbs now write the text with its trailing line breaks dropped, wrapped in
+`ESC[200~` and `ESC[201~` when the pane has bracketed paste (DECSET 2004) on,
+then wait about 300 ms, or less once the pane has drawn the paste and gone
+quiet, then write one carriage return. Line endings inside the text become line
+feeds, and the paste delimiters are removed from it so the text cannot end the
+paste early. A pane without bracketed paste still reads each line feed in the
+text as the application decides, which for a shell is one command per line.
+
+**The submit key and paste come from the harness's manifest.** `ask-agent` and
+`fan` read the `[input]` block of the target pane's harness (see
+[AGENT\_STATE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#typing-a-prompt)). Every bundled harness keeps
+the carriage return and the bracketed paste described above, so for them
+nothing changes on the wire, with one exception: for GitHub Copilot, a pane
+with focus reporting (DECSET 1004) on is sent a focus-in report (`ESC[I`)
+before the paste, because Copilot ignores a synthetic Enter after it lost focus.
+A user manifest can set `submit = "lf"` or `bracketed_paste = false` for its
+harness.
+
+**More harnesses read their screen and title for `working` and `idle`.** The
+bundled manifests now carry herdr's working rules for every harness that has
+them, and idle rules for Cline, Devin, Grok, Kiro, Maki and Qwen Code on the
+screen and Amp, Grok and Hermes in the title, beside the four that had them.
+What a caller sees:
+
+- `list-agents` and `get-agent-state` report `working` and `idle` from
+  `source: screen` or `source: osc` for these harnesses where they used to
+  report nothing from those tiers.
+- `ready` is `false`, and `ask-agent` and `fan` wait, for a pane of Amp,
+  Cline, Devin, Grok, Hermes, Kiro, Maki or Qwen Code on `unknown`. It used to
+  be `true`, because these harnesses had no rule that could show they were at
+  their prompt. `force` on `ask-agent` still types at once, and a user manifest
+  without the idle rules gives the old answer back.
+- Codex reports `needs_input` from its screen for an approval form, the
+  directory trust prompt and the update offer. It used to report it only from
+  its title and notifications.
+- Claude Code reports `needs_input` for a live form under the last rule, a
+  dynamic workflow question and an MCP elicitation dialog, and `working` for
+  the `/btw` overlay and for background agents and MCP tasks still running.
+  Its screen rules now match substrings case-folded.
+- Gemini CLI's title rules key on the glyph Gemini CLI writes. A title whose
+  text starts with "Action required" after the working glyph `✦` reads as
+  `working`, where it used to read as `needs_input`.
+- Grok's footer-hint rules read the last two lines only, as herdr's do.
+
+**`explain-agent-screen` says more.** The result gains `manifest_source`
+(`bundled` or the path of the user file in force), `replaces_bundled`, and
+`progress`, the pane's last OSC 9;4 report. Each entry of `rules` and
+`title_rules` may carry `groups`, naming each nested group that refused, and
+`text`, what a rule reading a region narrower than the tail read there. The
+title rules are explained against the progress report too.
+
+**An OSC 9;4 report can be read by the harness's own rules.** A report from a
+pane whose manifest has a title rule with `region = "osc_progress"` that
+matches the report is read by those rules instead of mapped by the sequence's
+published meaning. No bundled manifest has such a rule, so nothing changes for
+a bundled harness.
+
+**A submitted prompt has to be taken.** After Enter, `ask-agent` and `fan` give
+the pane five seconds to show that it took the prompt, the check herdr calls
+`agent_prompt_stalled`. The pane shows it by turning `working`, by turning
+`needs_input` when it was not on `needs_input` before, by turning `done` or
+finishing a turn (`completion_seq` goes up), by its screen showing a turn
+running with its input box empty, for a harness with rules for both (Claude
+Code), or by printing something after Enter. The screen counts because a
+harness that reports its state from hooks can take a prompt and have the
+report come late or never, when the harness kills a slow hook. Output counts only for a pane whose harness has no screen or title rule
+that reports `working`, which today leaves out Claude Code, Codex, Gemini CLI,
+opencode and every other harness with such a rule: a TUI that read Enter as a
+newline redraws its input box, so output from it proves nothing.
+
+- `ask-agent` fails with the new code `prompt_stalled` when the pane showed none
+  of that. It used to wait out `settle` and return an empty reply with
+  `settled_by: idle`. The question was typed either way, and the ask is still
+  recorded in the ring. The new param `stall_timeout` (milliseconds, default
+  5000\) sets the window.
+- The `settle` clock of `ask-agent` starts when the pane took the question,
+  not when Enter was sent, so a pane that is quiet before it reacts is not
+  counted as having answered.
+- `fan` records the new `prompt_status` value `stalled`, with a `prompt_note`,
+  where it used to record `sent`. A prompt stays `pending` for the few seconds
+  the check takes. A client that does not know `stalled` should treat it like
+  `not_sent`, which is what `tuios fan --wait` from an older build prints.
+
+**A message from `human` says whether it is verified.** Any caller can send
+`send-agent-message` with `from: "human"`, and such a message used to be stored
+exactly like the person's reply from the mail overlay. Now:
+
+- The attach reply (`AttachedPayload`) carries `human_nonce`, a fresh random
+  secret per attach. It is an additive field, empty from an older daemon.
+- `send-agent-message` takes a new param `human_nonce`. The tuios client sends
+  it with a reply from the mail overlay, and only when it has one, since an
+  older daemon refuses the param.
+- A message from `human` is stored with `verified_human: true` when
+  `human_nonce` matches a client attached to the same session now, over the
+  same kind of connection: a nonce issued to an attach on the link socket
+  verifies only a send on the link socket, and a local one only a local send.
+  Otherwise it is stored with `claimed_human: true`. The send result and
+  `read-agent-messages` both report the two fields, and the mail overlay and
+  `tuios read-agent-messages` show a claimed one as unverified.
+- Over a link, the hub relays the stream without reading it, so no flag in the
+  request can stand for a check the hub made. A client attached through the
+  link got its nonce from this daemon, and its reply verifies against that
+  attach; every other `from: "human"` over the link is claimed.
+
+The nonce alone is not an identity, since an agent can attach too. The next
+entry closes that.
+
+<a id="nonce-scope"></a>
+**Nonce scope.** Every verb that takes `human_nonce` applies one rule, in the
+daemon's `humanNonceFor` (`internal/session/human_sender.go`). The verbs are
+`respond`, `reply-approval`, `answer-ask`, `dismiss-attention`,
+`mark-attention`, `send-agent-message` from `human`, `release-agent-message`,
+`queue-prompt`, `cancel-queued`, `review-note`, `paste-image`,
+`register-push`, `list-push` and `remove-push`.
+
+- A session is a boundary. A presence made with
+  [attach-presence](/docs/control-protocol/verbs-other-machines#attach-presence) and `{"session": X}` proves the person
+  only for an act in session X. Anywhere else the verb fails with
+  `not_human`, and nothing is done.
+- A presence made with no session proves the person for every act that its
+  connection can reach. A connection that calls `restrict-connection` loses
+  its presence.
+- The nonce of an attach proves the person for an act in any session, because
+  the Inbox of one client answers for every session. `send-agent-message` and
+  `paste-image` also need the attach to be to the session of the act.
+- An act that is in no single session, such as an Inbox item of another
+  machine, takes the nonce of an attach or of a presence with no session. A
+  phone for Web Push gets the Inbox of every session, so `register-push`,
+  `list-push` and `remove-push` are such acts.
+- The sender rules apply to both kinds: the caller is outside every pane,
+  comes over the same kind of connection, and is the process that holds the
+  nonce when the kernel gives the process ids.
+
+**A process inside a pane cannot act as the person.** The daemon reads the
+pid of every caller from its socket (`SO_PEERCRED` on Linux, `LOCAL_PEERPID`
+on macOS) and counts the caller as inside a pane when the daemon is one of its
+ancestors, when its controlling terminal is one of the daemon's pane
+terminals, or when its environment names one of the daemon's windows in
+`TUIOS_PANE_ID` or `TUIOS_WINDOW_ID`, or the daemon's socket in
+`TUIOS_SOCKET`. The last two also place the client's hook commands and dock
+components, which are automation and not the person. A process whose
+record cannot be read counts as inside a pane. docs/AGENT\_STATE.md, "Who can
+act as the person", has the threat model.
+
+- `send-agent-message` and `ask-agent` with `from: "human"` from such a caller
+  fail with the new code `forbidden` and store nothing. `send-agent-message`
+  used to store the message as `claimed_human`, and `ask-agent` used to record
+  the ask as from human. A caller outside every pane is served as before.
+- The attach reply to such a caller carries no `human_nonce`, so nothing it
+  sends verifies.
+- `verified_human` also needs the sender to be allowed to act as the person,
+  and, where the kernel gave both pids, to be the process that holds the
+  attach. The tuios client sends its reply from the process that attached, so
+  its replies still verify. A nonce copied to another process does not.
+- `read-agent-messages` with `to: "human"` from such a caller is served as a
+  peek: it marks nothing read, and the result carries the new field
+  `peek_forced: true`. It used to mark the person's mail read.
+- A state push from an attached client inside a pane no longer marks the
+  focused window's finished turn seen, so `finished_unread` stays true until
+  the person looks.
+- Over a link, only a stream the hub vouched for can verify. The hub puts
+  `{"human":true}` in the stream's open frame when the process that called
+  `open-host-connection` may act as the person on the hub; the open frame's
+  payload used to be empty, and an empty payload still means not vouched. The
+  proxy on the far machine dials the new link-human socket
+  (`<socket>.link-human`) for a vouched stream and the plain link socket for
+  any other. An attach through the plain link socket gets no nonce, and a
+  `from: "human"` send over it is `claimed_human`. A far daemon from before
+  this change has no link-human socket, so the proxy falls back to the plain
+  one; a hub from before it vouches for nothing, so no attach through it
+  verifies on a far daemon that has the change.
+- Windows and the BSDs do not give this build the peer's pid. There every
+  caller is treated as before, and the nonce is the only proof.
+
+**A reply the person did not type is not signed as theirs.** The tuios client
+sends a reply from its mail overlay without the attach nonce when any key that
+`send-keys`, `run-command` or a tape script routed to the client opened,
+edited or sent the reply line, so the daemon stores it as `claimed_human`. The
+reply line reads `automated reply:` while that is so. Such a reply used to be
+signed like one typed at the keyboard.
+
+**The Inbox.** The daemon keeps one attention queue over every session, read
+with the new verbs `list-attention` and `dismiss-attention` and followed with
+the new event type `attention` (see [list-attention](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#list-attention)). What
+changes for an existing caller:
+
+- `subscribe` with no `types` filter now also delivers `attention` events. A
+  consumer that switches on `type` and ignores the ones it does not know is
+  unaffected; one that treats every unknown type as an error should filter.
+- The replay ring holds `attention` events like any other retained event, so a
+  resume with `after_seq` replays them.
+- `EventTypeNames`, and so the accepted set of `subscribe`'s `types` param in
+  `list-verbs`, gains `attention`.
+- The error catalog gains `not_human`, raised by `dismiss-attention` (and,
+  since peek and respond, by `respond`). Its
+  nonce is checked the way a reply from `human` is, so a caller inside a pane
+  is refused even with a live nonce.
+- Dismissing a `finished` item marks the pane's turns seen, so its
+  `finished_unread` in `list-agents` goes false, the same as focusing the pane
+  in a client. Dismissing a `mail` item marks the person's mail in that thread
+  read, the same as reading it in the mail overlay, and the attached clients get
+  the usual read receipt.
+- The daemon writes the queue to `attention/items.json` under the session state
+  directory, mode 0600, and reads it back on start. Only `finished` and
+  `errored` items are kept across a restart; see
+  [list-attention](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#list-attention).
+- A pane that stays on `needs_input` or `errored` and reports a new kind,
+  message or name updates its Inbox item. No `agent-state` event is sent for
+  it and no hook fires, the same as before: the state did not change.
+
+**Peek and respond.** Two new verbs, [peek-prompt](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#peek-prompt) and
+[respond](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#respond), read the prompt an agent is blocked on and answer it
+without attaching. What changes for an existing caller:
+
+- The error catalog gains `prompt_changed`, raised only by `respond`.
+- `not_human` is now raised by `respond` as well as `dismiss-attention`.
+- The harness manifest schema gains an optional `[answers]` block under a
+  `needs_input` screen or title rule (see
+  [the answers block](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#the-answers-block)). `schema_version`
+  stays 1: an older build ignores the block, and a manifest without one loads
+  as before. A block this build rejects fails the manifest's load.
+- The config file gains `[daemon] respond_from_shell`, false by default. It is
+  not an option `set-option` can change.
+- The bundled Claude Code and Codex manifests declare answers. Their rules
+  match exactly what they matched before; only the block is new.
+- Later, a `needs_input` screen rule gains the optional keys `show`,
+  `tool_field`, `what_fields` and `hint_fields` (see
+  [a prompt drawn as a dialog](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#a-prompt-drawn-as-a-dialog)).
+  An older build ignores them. The bundled Crush manifest uses them and
+  declares answers for its permission dialog.
+
+**Approvals answered from the Inbox.** The new verbs `request-approval` and
+`reply-approval` let a harness hook hold a permission prompt until the person
+answers it in the Inbox (see [request-approval](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#request-approval)). It is off
+unless `[agents.approvals]` in the config names the harness. What changes for
+an existing caller:
+
+- An `approval` item gains `request_id` and `expires` while a hook holds it,
+  and `options` is now filled then: the decisions `reply-approval` takes for
+  it, with `always_scope` (the rules always adds) when `options` holds
+  `always`. All four are absent when nothing holds the item, which is every
+  item when approvals are off.
+- While a hook holds an `approval` item, its `summary` is the held call's
+  line, the one `request-approval` was given, and a new message the pane
+  reports meanwhile does not replace it. When the hold ends the item shows the
+  newest message reported during it. With nothing held, a new message updates
+  `summary` as before.
+- The `attention` event's `closed` gains the reason `answered`. The closing
+  item then carries `answer` (`once`, `always` or `deny`) and `answered_by`
+  (the id of the client that answered).
+- A decision from `reply-approval` moves the pane from `needs_input` to
+  `working` straight away, with an ordinary `agent-state` event, instead of
+  waiting for the harness's next report.
+- When an attached client of the person moves the session's focus to a pane
+  whose approval is held, the hold ends with no decision and the harness asks
+  in its pane. Nothing else about focusing a pane changed.
+- The error catalog's `not_human` is also raised by `reply-approval`.
+- The Claude Code integration is now version 2: its `PermissionRequest` hook
+  entry gets a 310 second timeout instead of 5, so a hold can run. With
+  approvals off the hook still returns within 500 ms. `tuios integration
+  status` reports a version 1 install as out of date until it is installed
+  again. The opencode and Kilo plugins are version 2 as well: a
+  `permission.asked` event runs the hook and waits for what it prints, and
+  sends a reply to opencode only when the hook printed one. The plugin names
+  the tool call a request is about, from `tool.execute.before`, so the Inbox
+  line is `approve bash: <command>` rather than opencode's permission name.
+- Only a call the Inbox can show whole on one line is held; every other
+  prompt is reported as before and answered in the pane. See
+  [request-approval](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#request-approval).
+- In the Inbox, `space` on a held approval does not open the peek of
+  [respond](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#respond): the hook keeps the prompt off the pane, so there is
+  nothing to read. The TUI says to answer with `1`, `2` or `3` instead.
+
+**The Inbox and the host listings cover every machine.** A daemon with a
+`[hosts]` table now keeps one stream per linked host over the link: it lists
+the host's Inbox, then subscribes to the host's `attention`, `agent-state`,
+`agent-message`, session and window events from the position the listing was
+current to, resuming with `after_seq` after a redial and listing again after a
+`gap` (see [Following linked hosts](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#following-linked-hosts)). What changes for
+an existing caller:
+
+- `list-attention` also lists the items of every linked host, with `host` set
+  and an id of the form `host:id`, and `counts` counts them. It used to list
+  this machine's items only. A caller that wants the old answer passes the new
+  param `host: "local"`. `session` without `host` still names a session on this
+  machine, so a far session of the same name is not in it.
+- Items gain `stale` and `seen_at`: while a host's link is down its items stay,
+  with `stale: true` and when the host was last heard from, and the item is
+  updated (an `attention` event with action `update`) each time the mark
+  changes.
+- A host item never carries `request_id`, `expires` or `always_scope`, and
+  `options` is display only: a held approval is answered on the machine that
+  holds it, so `reply-approval` never sees a host item's id.
+- `dismiss-attention` accepts a host item's id. It hides the item on this
+  daemon only, until the host changes it, and marks nothing on the host; the
+  result carries `host`. A dismiss is the person's fact, and a second hub or a
+  client on the host still sees the item.
+- `attention` events of a host item carry `host`. A subscriber that names a
+  `session`, `window` or `pane` does not get them, because it reads those
+  names as this machine's; one that names none does.
+- `subscribe` takes the new param `hosts`. With it, the `agent-state`,
+  `session-created` and `session-closed` events of linked hosts are delivered
+  too, each with `host` set and only its identifying fields, and `session` and
+  `window` match events of other machines. Without it nothing relayed from a
+  host is delivered, so an existing subscriber sees what it saw.
+- The new event type `host-changed` (in `EventTypeNames` and the accepted set
+  of `types`) says a host's link changed state or what the host holds changed.
+  It carries `host` and `status` and nothing else. `subscribe` with no `types`
+  filter delivers it.
+- `list-hosts` gains `events_push: true` at the top and, per host, `events`
+  (`live`, `polling`, or empty while the link is not up) and `events_note`,
+  which says why a host is polled: its tuios is too old to have an Inbox or to
+  resume its stream, and the note names the update.
+- `list-host-agents` lists every session on each host, where it used to list
+  only the host's most recently active one. Each row gains `session`, and the
+  rows gain `agent_state_at`, `cwd`, `blocked_by`, `completion_seq` and
+  `finished_unread`. The entry's `session` is set only when every row is in the
+  same session. Hosts are asked at once rather than one after another. A host
+  that predates `all_sessions` on `list-agents` is asked session by session.
+- `list-host-sessions` and `list-host-agents` answer for a host that did not
+  answer with the rows it last gave, with `stale: true` and `fetched_at` (unix
+  seconds), beside the `error` it always had. Both gain `events`.
+- `list-agents` takes the new param `all_sessions`, and every row gains
+  `session`.
+- The `MsgHostsChanged` push to attached clients gains `Changed`, the hosts
+  whose link, sessions or agents changed. The daemon now sends it on such a
+  change too, not only when the `[hosts]` table changes. An older client reads
+  it as it always did, as a reason to list the hosts once.
+
+**A pane on another machine reports to the daemon that holds its window.**
+`open-pane` takes the new param `window`, the asking daemon's id for the
+window, and then returns `calls_token`; the asking daemon opens the new verb
+`pane-calls` with it (see [Reports from a pane on another
+machine](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#reports-from-a-pane-on-another-machine)). What changes:
+
+- A hosted pane's process gets `TUIOS_PANE_ID`, the owner's window id. It used
+  to get none.
+- On the machine running the process, `set-agent-state`, `set-agent-meta`,
+  `set-agent-session` and `wait-for` (condition `agent-message`) with `window`
+  set to a hosted pane's id or window id, `read-agent-messages` with `to` set
+  to it, and `send-agent-message` with `from` set to it are no longer answered
+  there. They are sent to the owner and its answer is returned. A caller that
+  is not in that pane gets `forbidden`, and when the owner is too old to take
+  the call, `protocol_mismatch`. Such a call used to fail there with
+  `window_not_found` or `session_not_found`. A forwarded
+  `send-agent-message` may attach only paths in the owner session's stash,
+  like a message from the link, and a forwarded `wait-for` is capped at one
+  hour on the owner and ends if the report channel drops.
+- The asking daemon may send `open-pane` twice on one connection. A far
+  daemon from before this refuses `window` with `invalid_params`, and the
+  asking daemon then asks again without it, so a window still opens on that
+  machine, with no reports from the pane.
+- The `session` param of `open-pane` was documented as exported as
+  `TUIOS_SESSION`. It is exported as `TUIOS_SESSION_REMOTE`, as it has been
+  since hosted panes stopped exporting `TUIOS_SESSION`; the description now
+  says so.
+
+**A connection can restrict itself.** The new verb `restrict-connection` (see
+[restrict-connection](/docs/control-protocol/verbs-agents-and-messages#restrict-connection)) narrows what one connection may
+do for as long as it is open, and `tuios mcp` restricts every connection it
+opens. A connection that never calls it is served exactly as before. What
+changes for everyone:
+
+- Every pane is started with `TUIOS_PANE_TOKEN` beside `TUIOS_PANE_ID`. It is
+  new, and nothing reads it but `restrict-connection`.
+- `fan` records on each session it starts the session of the pane that ran
+  it, when a pane of this daemon ran it, and `list-worktrees` rows gain
+  `launched_from` for such a session. Rows of any other session are unchanged.
+  The field is additive on the saved session record, so an older daemon reads
+  a newer record and drops it.
+  The record also holds that session's ID, and reach is checked by the ID, so
+  a later session that takes the name reaches nothing. When that session ends,
+  the sessions it started stop naming it. A record written before the ID names
+  its lead by name alone. That name reaches nothing, and a restore drops it,
+  so such a lead reaches its attempts again only by `fan --join` or as the
+  person.
+- On a restricted connection, every verb outside the table in
+  `internal/session/conn_scope.go` answers `forbidden` with a hint naming
+  `restrict-connection`, and under scope `own` a verb that names no session
+  gets the caller's own session, not the most recently active one.
+
+**A shell's commands are facts the daemon reports.** The daemon's emulator
+always recorded a shell's OSC 133 marks for the scrollback browser; it now
+turns them into events and facts (see [run](/docs/control-protocol/verbs-input-and-output#run)). A pane whose shell sends
+no marks is unaffected by all of this. What changes for everyone else:
+
+- A subscriber with no `types` filter now also receives the new event types
+  `prompt`, `command-started` and `command-finished`, from every pane whose
+  shell marks its commands. They carry the new fields `cmdline`, `exit_code`,
+  `duration_ms` and `command_seq`. A consumer that switches on `type` and
+  ignores what it does not know is unaffected; one that treats every type it
+  does not know as an error has three more to ignore.
+- `list-windows` entries gain `at_prompt`, `command_seq`, `running_cmdline`,
+  `last_cmdline`, `last_exit_code` and `last_duration_ms`, only for a window
+  whose shell has sent a mark. Other entries keep their shape exactly. Such an
+  entry also carries `marks_commands`, true once the shell has sent the C mark
+  that starts a command, and `prompt_marks_only: true` once a line `run` typed
+  came back to a new prompt with no C: the shell marks its prompts only (bash
+  before 4.4 with the bash recipe, which ignores PS0, or a prompt theme that
+  sends only A). `at_prompt` is then false, since the daemon cannot tell a
+  prompt from a running command there, and `run` refuses the pane with
+  `no_shell_integration`. A subscriber sees one more `prompt` event in that
+  case: the new prompt that shows it.
+- `capture-pane` accepts the new source `last-command-output`, so its
+  documented `accepted` set in `list-verbs` has three values. `wait-for`'s
+  `source` was documented with the same list and never took the new value; it
+  is now documented as `visible` and `recent`, which is what it always used.
+- `wait-for` takes the new condition `command-finished` and the new param
+  `command_seq`.
+- The new hook event `after-command-finished` runs on the daemon with
+  `TUIOS_COMMAND`, `TUIOS_EXIT_CODE` and `TUIOS_DURATION_MS`. Every hook now
+  gets those three variables, empty for the other events.
+- The new error codes `no_shell_integration` and `not_at_prompt` come only from
+  the new verb `run` and the new capture source.
+
+**The Inbox has a seventh kind, `ask`.** The new verb `ask-human` puts a
+question to the person as an Inbox item, and the new verb `answer-ask` is how
+the person's client answers it (see [ask-human](/docs/control-protocol/verbs-agents-and-messages#ask-human)). What changes for
+existing callers:
+
+- `list-attention` can return items of kind `ask`, and its `counts` object has
+  an `ask` key. The kinds sort approval, ask, question, mail, errored, resume,
+  finished; `ask` is new between the first two. `kinds` accepts `ask`.
+- `attention` events carry `ask` items, and the close reason `superseded` is
+  new: the pane asked a newer question.
+- An `ask` item from a pane closes when the pane closes (`window_closed`), like
+  a blocking item.
+- `popup` takes `wait`, `capture_stdout` and `timeout`. Without them it answers
+  exactly as before; with `wait` it answers `popup_result` instead of
+  `popup_opened`, when the command exits.
+- In the TUI's Inbox, the digit keys 1 to 9 pick an answer on an `ask` item.
+  On everything else, 1, 2 and 3 do what they did, and 4 to 9 do nothing, as
+  before.
+
+**Selectors address many panes.** A new param `select` takes a selector (see
+[Selectors](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#selectors)) on `list-agents`, `list-host-agents`,
+`list-attention`, `wait-for`, `send-agent-message` and `ask-agent`. A call that
+sends none of the new params is answered as before. What changes:
+
+- Every `list-agents` row gains `group`, the fan-out group of the pane's
+  session, empty outside one. `list-host-agents` rows carry it from a host that
+  sends it.
+- `list-agents` with `select` and no `session` lists every session, as
+  `all_sessions` does, and answers with `select` and, without `all`, `confirm`.
+  With `session` it narrows that session and carries no `confirm`, since a
+  write by the same selector reaches every session.
+- `send-agent-message` and `ask-agent` with `select` answer with a new result
+  shape, `agent_messages_sent` with `results`, or `agent_replies` with
+  `replies`. Without `confirm`, or with a `confirm` for a different set of
+  panes, they send nothing and fail with the new code `confirm_required`, whose
+  hint carries the new field `confirm`. `ask-agent` no longer marks `window` as
+  required in `list-verbs`, since `select` replaces it; a call with neither is
+  still `invalid_params`.
+- `wait-for` takes `select` and `every` for `agent-state`. With `every` the
+  result carries `panes` and `total` instead of one `window`.
+- A pane on another machine that sends its calls through its owner is refused
+  with `forbidden` when a call names `select`.
+
+**fan starts any program, several at once, from the caller's PATH.** `fan`
+takes the new params `agents`, `prompts` and `env`, and the new verb
+`start-agent` starts one agent beside the caller. What changes for a caller of
+`fan`:
+
+- `agent` is an argv string, split the way a shell splits words. `agent`
+  `"claude"` means what it meant. A name no manifest recognises used to be
+  refused with `invalid_params`; it is now started if it is on the `PATH`, and
+  refused as not installed otherwise, with the harness ids in `available`
+  instead of `accepted`, since they are no longer the only values.
+- `count` and `agent` are no longer marked required in `list-verbs`, since
+  `prompts` and `agents` stand in for them. A call with neither is still
+  `invalid_params`.
+- `prompt_status` has the new value `held`, which a caller that waits for
+  `pending` to end should treat the same way. The `tuios fan --wait` of this
+  build does. A CLI from before it stops waiting at `held` and reports the
+  prompt as not sent.
+- A held prompt opens a `question` item in the Inbox for the pane, with the
+  summary "waiting at a screen tuios does not recognise: look at the pane and
+  answer it". It closes when the prompt is typed or given up on, or when the
+  pane's state changes.
+- The harness the daemon started stands in for detection while the wait runs,
+  so `unknown` is not ready for an agent of a harness that can show idle even
+  before the detector has named the pane. It used to be ready until detection
+  ran.
+- `list-worktrees` rows gain `agent`, the agent as it was named, and
+  `prompt_ready_by`. Sessions of `fan_started` gain `agent` and `command`, and
+  the top-level `command` is an absolute path when the caller sent a `PATH`.
+- The `tuios fan` CLI sends its `PATH` in `env`. Against a daemon from before
+  `env` it retries without it, unless `--env` was passed. `tuios fan --host`
+  sends no `env`, since a call over a link may not carry any, and refuses an
+  explicit `--env`.
+
+**A repository can be named by its origin URL.** `new-worktree`, `fan` and
+`start-agent` take the new params `repo_url`, `repos_root` and `clone` (see
+[new-worktree](/docs/control-protocol/verbs-files-and-worktrees#new-worktree)), so a caller on another machine can name a
+repository without a path. What changes:
+
+- `repo` is no longer required when `repo_url` is passed. Passing both is
+  `invalid_params`, and so is `repos_root` or `clone` without `repo_url`. A
+  call with `repo` alone is answered as before.
+- A `repo_url` that matches no checkout is the new code `repo_not_found`.
+- `fan`'s result gains `repo_root`, and both results gain `cloned: true` when
+  the call cloned the repository.
+- With `clone`, `fan` checks its agents before cloning, so a clone is not made
+  for a call that fails on an agent. Without `clone` the order is as it was:
+  the repository first.
+- `start-agent` also takes `repo` and `args`, creates a named session that
+  does not exist, and answers with `session_id`, `created_session`,
+  `workspace` and `cwd`.
+
+The new verb `bundle-worktree` changes no old one. A daemon from before it,
+or from before `start-agent`, answers `unknown_verb`, and one from before
+`repo_url` answers `invalid_params` naming it; the CLI turns both into "tuios
+on HOST is too old".
+
+**start-agent can run an agent headless over a protocol.** `start-agent`
+takes the new param `protocol`, `acp` or `codex` (see
+[start-agent](/docs/control-protocol/verbs-agents-and-messages#start-agent)). Without it nothing changes. What changes for an
+existing caller:
+
+- `request-approval` holds a permission for a pane `start-agent --protocol`
+  opened even when `[agents.approvals]` does not name the harness: choosing
+  the protocol is the opt in. Every other rule of the verb applies to it
+  unchanged, and every other pane is refused with `disabled` as before.
+- `list-agents` rows gain `protocol`: `acp` or `codex` for such a pane, empty
+  for every other.
+- A pane a protocol names is ready only on a state it reports. `unknown` is
+  never ready for it, whatever its harness, since its screen is a transcript
+  no manifest rule reads. Without `protocol` the wait is as before.
+- A daemon from before `protocol` refuses it with `invalid_params` naming it,
+  so an old daemon never starts the agent in its TUI instead.
+- The mark is the daemon's own, by window id, and nothing a caller sends sets
+  it. It is not saved: after a daemon restart a restored pane's approvals
+  follow `[agents.approvals]` like any other pane's.
+
+**Calls from a pane are held to the pane's grants.** Every pane holds grants
+(`read`, `write`, `fan`, `respond`, `admin`; see [pane-grants](/docs/control-protocol/verbs-agents-and-messages#pane-grants)),
+and the daemon checks every JSON verb and every client protocol message from
+a connection placed in a pane against them before the handler runs. With no
+`[agents.permissions]` in the config and no pane given grants of its own,
+every pane holds `admin`, which is everything a pane could do before, and
+every call is answered exactly as before. What changes:
+
+- Every pane is started with `TUIOS_PANE_GRANTS`, the grants it holds as it
+  starts, comma separated, or `none`.
+- `hello` answers with `pane_grants: true`.
+- `new-window`, `start-agent` and `fan` take the new param `grants`. A call
+  that sends none is answered as before, except from a pane that does not
+  hold `admin`: the new pane then holds the caller's own grants rather than
+  the default. A `grants` the calling pane does not hold is `forbidden`.
+- `respond` may now be answered for a pane that holds `respond`, without a
+  `human_nonce`, on a pane in its reach. Its result then carries the new field
+  `by_pane`. A pane without `respond` gets `not_human` as before, whose hint
+  now says the grant exists. `admin` does not include `respond`, so no pane
+  can answer a prompt unless the person gave it the grant.
+- `list-windows` entries gain `grants` for a pane given grants of its own. The
+  entries of every other pane keep their shape.
+- The session record's windows gain a daemon-owned `grants` field. It is
+  additive in JSON and gob, a client sync can neither set nor clear it, and an
+  older daemon reads a newer record and drops it, so a pane restored by an
+  older daemon holds that daemon's (unchecked) rights.
+- For a pane without `admin`: a verb its grants do not cover answers
+  `forbidden` with a hint naming `pane-grants`, the pane's grants and the
+  config key; a verb that names no session gets the pane's own session, not
+  the most recently active one; a subscription carries only the sessions the
+  pane may read; and every client protocol message except the hello answers
+  an error, so such a pane cannot attach or use `run-command`. The error for
+  the command message names `run-command` and points at `get-window`.
+- For a pane without `admin`, `send-text`, `send-keys`, `run` and
+  `ask-agent` on another pane answer `forbidden` when the target holds a
+  grant the caller does not, or when the target is on `needs_input` and the
+  caller does not hold `respond` (see [pane-grants](/docs/control-protocol/verbs-agents-and-messages#pane-grants)). A call
+  with no window is pinned to the pane focused when it is checked.
+  `send-keys` from such a pane is written to the target's terminal even when
+  a client is attached, so its keys never reach the window manager. Calls
+  from outside every pane, and from a pane holding `admin`, are answered as
+  before.
+- `tuios get-window` reads with the new verb `get-window` instead of the
+  client protocol's `GetWindow` command, so a pane holding `read` may run it
+  on its own session. The verb answers as `GetWindow` did, from the attached
+  client when there is one, so the `--json` output keeps its shape; with no
+  client attached it gains the shell fields `list-windows` gives a window. A
+  window that matches nothing is now reported the way `list-windows` reports
+  it, with the available windows. Against a daemon from before the verb the
+  command falls back to `GetWindow`.
+- `restrict-connection` and pane grants share the code that fills in and
+  checks a caller's session and window. A restricted connection is answered
+  as it was; a refusal of a parameter that reaches every session now reads
+  "and the connection is restricted to its own", the words it used before.
+
+The new verbs `pane-grants`, `set-pane-grants` and `get-window` change no
+old one.
+
+**send-keys with a window goes to that window.** With a client attached,
+`send-keys` used to hand every parsed key to the client, which read them as
+the person's keys and ignored `window`: in window-management mode an arrow
+moved the selection, in terminal mode it went to the focused window, and the
+call answered ok either way. Now:
+
+- With `window`, the keys are written to that window's terminal whether or
+  not a client is attached. `PREFIX` with `window` and a client attached is
+  `invalid_params`, because the window manager acts on the focused window and
+  not the one named. A caller that sent the leader chord with a window leaves
+  the window out.
+- Without `window`, keys go to the attached client as before, or to the
+  focused window's terminal when none is attached. `literal` always writes to
+  a terminal: routed to the client it waited out the 10 second timeout and
+  answered `command_failed` on a send that had worked.
+- Every key is parsed before anything is sent, on both routes. Names are
+  case-insensitive and take the spellings of tmux, curses, vim and the DOM:
+  `up`, `arrow-up`, `ArrowUp`, `KEY_UP`, `<Up>`, `PgDn`, `BSpace`, `C-c`,
+  `M-x`, `^C`. New names: `BTab` (shift+Tab) and `shift+` on named keys.
+  A token written as an escape sequence (`\e[A`, `\x1b[A`, `\033[A`, `^[[A`)
+  is sent as those bytes. A word that looks like a key name and is not one
+  (`Dwon`, `KEY_FOO`, `F13`, `a+b`) used to be typed as its letters; it is now
+  `invalid_params` with `param: keys`, the key names in `accepted` and the
+  closest name in `did_you_mean`, and nothing is sent. A plain lower-case
+  word such as `ls` is still typed.
+- Arrows, `Home` and `End` written to a terminal follow the pane's
+  application cursor keys mode (DECCKM): `ESC O A` when the program turned it
+  on, as `less` and `vim` do, `ESC [ A` otherwise. Modified named keys use
+  xterm's form (`ctrl+Up` is `ESC [ 1 ; 5 A`), where `alt+Up` used to be
+  `ESC ESC [ A`.
+- The new param `repeat` (1 to 1000, default 1) sends the sequence that many
+  times.
+- The result gains `sent_to` (`window` or `client`), `keys` (how many were
+  sent), and for `window` the `window_id` and `window` name it went to.
+  `tuios send-keys` prints that as `sent 3 keys to window docs (3a42ab8f)`
+  and takes `--repeat` (`-N`) and `--json`.
+
+**A window's name wins over another window's title.** A window target that
+is not an id, index or prefix used to match a name or a title alike, so a
+program that set its title to another window's name made both ambiguous. A
+name given with `new-window` or `set-window --name` is now matched first, and
+titles only when no name matches. An ambiguous prefix or name still answers
+`window_not_found`; the message now lists the index, short id and name of
+each window it matched, and the hint says it matched more than one.
+
+**new-window can print the id alone.** `tuios new-window --print-id` prints
+the full window id and nothing else, for `id=$(tuios new-window --print-id)`.
+
+**new-window waits for an attached client to place the window.** With a
+client attached, `new-window` now answers once the client has placed the
+window and sized its terminal, up to one second, so `unplaced` is `false` in
+the usual case. It used to answer at once with the nominal geometry, and a
+program started in the pane straight after the call got a resize while it
+drew: glow's pager then showed a blank screen and ignored keys. With no client
+attached nothing changes. A client that does not place the window within the
+second leaves the answer as it was, `unplaced: true`.
+
+**The agent review, triage, queue and approval verbs.** Twelve verbs are
+new: `review-diff`, `review-note`, `send-review`, `compare-fan`,
+`verify-fan`, `keep-fan`, `mark-attention`, `agent-activity`,
+`queue-prompt`, `list-queued`, `cancel-queued` and `get-approval` (see
+[Agent review, triage and queue verbs](/docs/control-protocol/verbs-agents-and-messages#agent-review-triage-and-queue-verbs)).
+Every one is built; none answers `internal` with "not built yet" any more.
+The older verbs change as follows, and a
+caller that sends nothing new is answered as before:
+
+- `request-approval` takes `kind` (`approval` or `plan`), `plan`, `tool`,
+  `target`, `cwd` and `deny_message` (see [Risky approvals and
+  plans](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#risky-approvals-and-plans)). An unknown `kind` is `invalid_params`.
+- `reply-approval` takes `risk_ack` and `plan_sha`, and `respond` takes
+  `risk_ack`. What changes for a caller that sends neither is under [Risky
+  approvals and plans](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#risky-approvals-and-plans).
+- `set-agent-state` takes `activity`, one hook event for the pane's activity
+  ring. Its `event` must be one of `prompt`, `tool`, `tool_done`,
+  `tool_failed` or `turn_end`, or the call is `invalid_params` and nothing is
+  applied. A valid one is not recorded yet, and the state part of the report
+  applies exactly as without it.
+- `list-attention` takes `include_snoozed`. Nothing can be snoozed yet, so it
+  lists what the plain call lists. `kinds` accepts the new kind `plan`, which
+  sorts right after `approval`.
+- Attention items gain `snoozed_until`, `marked_unread`, `risk`,
+  `deny_message`, `plan_lines` and `plan_sha`, each omitted when unset, and a
+  close may carry the new reason `snoozed`. An item mirrored from a linked
+  host keeps that host's `risk` and `plan_lines`, display only.
+- `get-agent-state` and every `list-agents` entry gain `queued`, the length of
+  the pane's delivery queue, 0 until the queue is built. The synced window
+  state gains `agent_queued`, omitted when zero and taken from the daemon's
+  own state on every client push. A row of another machine's agents
+  (`list-hosts` with agents) keeps that host's `queued`, held to 0 through
+  `[agents.queue]`'s ceiling of 64, display only.
+- A worktree's record gains `verify`, the last `verify-fan` check in it,
+  omitted when none has run.
+- The event type `agent-activity` exists and is opt-in: a subscription
+  receives it only when its `types` names it, so a subscriber that names no
+  types never sees it. Nothing publishes it yet.
+- The error codes `not_repo`, `no_notes`, `queue_full` and
+  `risk_unacknowledged` are in the catalog.
+- An `approval` item's `risk` can name `cut short`: the line nobody holds was
+  clipped, so the rules could not read all of it. An allow acknowledges it in
+  `risk_ack` like any rule. A daemon started with no config file at all marks
+  approvals with the shipped rules, where it used to mark nothing.
+
+**The activity ring is built.** `agent-activity` answers (see
+[agent-activity](/docs/control-protocol/verbs-agents-and-messages#agent-activity)) instead of `internal`, and these older
+verbs change:
+
+- `set-agent-state` records `activity` in the pane's activity ring when the
+  report passes the identity guard (the nested-session guard behind
+  `foreign_session` and `foreign_harness`), whether the state part applies or
+  not: a `PostToolUse` refused by `if_state` still records its tool result. A
+  report the guard refuses records nothing, even when `if_state` refused it
+  first. The answer gains `activity_recorded` (bool), present only when the
+  call sent `activity`. The state part is handled exactly as before.
+- `set-agent-state` with `activity` also moves the pane's metadata: a `tool`
+  sets `now` to `<tool>: <target>`, a `prompt` sets `prompt` to its first line
+  and clears `now`, and a `tool_failed` or `turn_end` clears `now`.
+- The daemon clears `now` whenever a pane's agent state moves to one other
+  than `working` or `needs_input`, however it moved: a report with or without
+  `activity`, a screen rule, an OSC sequence, the foreground detector or the
+  silence timer. A pane at rest never keeps a stale `now`. A `model` in the activity sets `model` (source `hook`) when
+  the pane does not already show that model from any source. These keys ride
+  the window state's `agent_meta` like any other, so `get-agent-state`,
+  `list-agents` and older clients see them as ordinary metadata.
+- `set-agent-meta` refuses the keys `now` and `prompt`, set or removed, with
+  `invalid_params`: they are written by tuios from hook activity. `clear`
+  leaves them in place, whatever `source` it names.
+- `set-agent-meta` no longer pushes state for a call that changes nothing. A
+  key set to the value it holds, by the source that wrote it, keeps its
+  expiry unless less than half of the TTL is left, and a call where every key
+  is like that leaves the session version alone and sends clients nothing. A
+  status line that writes the same values several times a second used to push
+  state each time. The answer is the same either way.
+- The event type `agent-activity` is published, one event per entry, carrying
+  the entry as `entry`. It is not kept in the replay ring, like `output`: a
+  resume whose `types` names it gets a `not_retained` gap when one was
+  published after `after_seq`. Read the ring with `agent-activity` instead.
+
+**tuios now feeds `set-agent-meta` itself.** No verb changes; what changes is
+who calls two of them, and a client that draws metadata now has some to draw:
+
+- A protocol pane (`tuios agent-proto`, what `start-agent --protocol` runs)
+  calls `set-agent-meta` for its own pane with the source `protocol` and the
+  keys `model`, `context`, `cost` and `plan`, each only when its value
+  changes, and all of them again at the start of each turn, so values a
+  restarted daemon or a clear to `none` lost come back. It also calls
+  `set-agent-state` with `activity` for each prompt, tool call and finished
+  turn. `state` is the state the pane last reported (`working` during a
+  turn, the turn's end state for `turn_end`) and `if_state` is `none`: the
+  daemon records the activity and refuses the state part on every pane that
+  has a state, so the call restamps no `agent_state_at`, rewrites no
+  message and pushes no state. Only a pane whose state was lost mid-turn
+  (`none`, after a restart or a clear) gets its state back from it. These
+  calls and the metadata go on a connection of their own, off the pane's
+  input loop. It sends activity only to a daemon whose `list-verbs` lists
+  `activity` for `set-agent-state`, and nothing extra to an older one.
+- An ACP protocol pane whose agent names its model in `session/new`
+  `models` now says so in the transcript's first line: `connected to
+  opencode 1.2 (Claude Sonnet 4)` where it said `connected to opencode 1.2`.
+  A Codex pane said it before, and still does.
+- `tuios agent-statusline` (Claude Code's status line, opt in, and the
+  opencode and Kilo plugin) calls `set-agent-meta` for its own pane with the
+  source `statusline` and the keys `model`, `context` and `cost`, at most once
+  every 15 seconds per pane while they change, and never with a TTL. What
+  the interval held back is sent at the end of the turn: by Claude Code's
+  `Stop` hook (`tuios agent-hook claude-code`, which then calls
+  `set-agent-meta` for its own pane as well as `set-agent-state`), and by
+  the opencode plugin's `--turn-end`.
+- The opencode and Kilo plugin is version 3, so `integration status` reads a
+  version 2 install as out of date until it is installed again.
+
+**The delivery queue is built.** `queue-prompt`, `list-queued` and
+`cancel-queued` now work (see
+[The delivery queue](/docs/control-protocol/verbs-agents-and-messages#the-delivery-queue)), and no longer answer "not built
+yet". What changes for a caller that uses none of them: nothing, since a pane
+has no queue until something is queued. For one that does:
+
+- `queue-prompt` for a pane that runs no agent tuios knows of is
+  `invalid_params`, and for `human` it is `no_keyboard`. A `human_nonce` that
+  does not verify is `not_human`, not a quiet fall back to the caller's own
+  name.
+- `list-queued` with no window lists every pane of the session, not the
+  focused one, and its entries gain `session`, `window`, `name` and `from`.
+  Its result has `type` `queued_prompts` and `session`.
+- `cancel-queued` with an `id` and no window finds the entry in any pane of
+  the session. `id` together with `all` is `invalid_params`. An entry being
+  typed, or one the caller may not drop, is `forbidden`; an id that is not
+  queued is `invalid_params`. Its result has `type` `queue_cancelled`.
+- `get-agent-state` and `list-agents` report `queued` as the pane's queue
+  length, and the synced window state carries a non-zero `agent_queued` while
+  something waits. A client that does not know the field drops it.
+- An Inbox question may carry the summary "your queued message was typed but
+  NAME did not take it: look at the pane", on the pane's blocking key, for a
+  queued message the agent showed no sign of taking. It is an ordinary
+  `question` item and closes like one. It also closes, and the stalled
+  message leaves the queue, when the pane shows within ten minutes that it
+  took the message after all: it turns `working`, or its screen shows a turn
+  running with its input box empty. A finished turn or a `needs_input` does
+  not drop the message, since it may still be in the box.
+- `[agents.queue] max` is read at start and again when the config file
+  changes.
+- One message per rest holds across an emptied queue: a message queued just
+  after the last one was typed waits for a rest the agent reaches after that
+  typing, and `delivering` is false until then. The typing time is the moment
+  the Enter went out, so a turn that ends while the daemon is still watching
+  for the agent to take the message counts as that rest.
+- For a pane whose harness cannot show working (the daemon counts its output
+  as taking a message), a rest after a typed message is also output followed
+  by 5 seconds of silence, since such a pane may never change state.
+- `cancel-queued` of a stalled message closes its question, and the messages
+  behind it are typed at the pane's next rest, not in the rest the stalled one
+  was typed into: its text may still sit in the agent's input box.
+- A linked machine that gave no name drops, with `cancel-queued`, only what it
+  queued on the same connection. `queue-prompt` and `cancel-queued` from a pane
+  on another machine, forwarded through its report channel, are `forbidden`.
+
+**The tuios client replies, and reads the recap.** No verb changed; the
+client now calls three it did not:
+
+- `queue-prompt` with `human_nonce` when the person sends a reply from the
+  Inbox (`r` on a finished or errored item, or on a rail agent row). A reply
+  that any key from `send-keys`, `run-command` or a tape touched is not sent
+  at all, so every `human` entry the client queues was typed at its keyboard.
+- `list-queued` and then `cancel-queued` with `human_nonce` for `x` on a rail
+  agent row with messages queued, dropping the newest entry not being typed.
+  An undo is a new `queue-prompt` with the same text. Neither is sent for a
+  key from `send-keys`, `run-command` or a tape, so every `human` drop and
+  undo the client sends was pressed at its keyboard too.
+- `agent-activity` with `recap` and `since` (when the person last had the
+  pane in front of them) for the Inbox's Finished detail and for the dock
+  line when the person comes back to a pane. Nothing polls it.
+
+Against a daemon without `queue-prompt`, the first reply answers
+`unknown_verb` and the client stops offering reply; against one without
+`agent-activity` the recap falls back to what the client counted itself.
+
+**Fan compare, verify and keep are built.** `compare-fan`, `verify-fan` and
+`keep-fan` answer instead of `internal` (see [compare-fan](/docs/control-protocol/verbs-files-and-worktrees#compare-fan),
+[verify-fan](/docs/control-protocol/verbs-files-and-worktrees#verify-fan) and [keep-fan](/docs/control-protocol/verbs-files-and-worktrees#keep-fan)). What changes for an
+existing caller:
+
+- `verify-fan` takes `env`, with the rules of `fan`'s `env`: a call over a
+  link that passes it is refused with `forbidden`.
+- A worktree's `verify` record gains `note`, omitted when empty, saying why a
+  failed check has no exit status: it timed out, or the daemon restarted
+  while it ran. A record saved as `running` by a daemon that has since
+  restarted is reported by `compare-fan` as `failed` with that note; the
+  saved record itself is not rewritten.
+- `verify-fan` opens a window named `verify` in each fan session it reaches.
+  An attached client shows it like any other new window, without focusing
+  it. It closes when the check passes and stays open when it fails, until
+  someone presses enter in it.
+- The daemon's shell facts gain the time the last command finished, which
+  `compare-fan` reports as `last_command.at`. No other verb reports it.
+- `tuios fan keep` calls `keep-fan`, and falls back to the loop over
+  `remove-worktree` it ran before when the daemon answers `unknown_verb`.
+  Its output and `--json` shape are unchanged, except that a sibling left
+  dirty is described by the daemon's refusal plus a sentence naming
+  `--stash` and `--force`, and siblings are now matched by the repository's
+  main checkout rather than its directory name, so two checkouts that share
+  a name no longer count as one fan.
+
+**The Inbox's lifecycle is built** ([mark-attention](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#mark-attention)). The
+person can snooze an item, wake it, mark a finished pane unread, and restore
+an item they dismissed or snoozed in the last 10 seconds. What changes for a
+caller of the older verbs and for a subscriber:
+
+- `list-attention` with `include_snoozed` lists the snoozed items after the
+  open ones, each with `snoozed_until`. They are not in `counts`, which say
+  what is waiting. Without the parameter the listing is as before and leaves
+  them out.
+- A snooze publishes a `close` with the reason `snoozed`, the closing item
+  carrying `snoozed_until`. When the item wakes (its time comes, its fact
+  changes, the person wakes or restores it) an `open` follows with the same
+  `id` and `since`, so a subscriber that knows nothing of snoozing sees the
+  item close and open again.
+- When the fact behind a snoozed item ends (the pane leaves `needs_input`, a
+  client focuses a finished pane, the pane or session closes, the thread is
+  read), a `close` is published for it with that reason. A subscriber that
+  took the `snoozed` close as final gets a `close` for an id it no longer
+  holds, which changes nothing for it.
+- `dismiss-attention` accepts the id of a snoozed item. A dismiss of
+  anything but an `outbox` item or an `ask` can be undone for 10 seconds with
+  `mark-attention` `restore`, which reopens it with its id and `since`. A
+  held approval or plan comes back without `request_id`, since the dismiss
+  ended its hold, and a plan comes back as kind `approval`, without
+  `plan_sha`, `plan_lines` or `deny_message`.
+- A hold that `request-approval` starts on a pane whose approval the person
+  snoozed wakes the approval first, so the Inbox can answer it.
+- The saved queue holds snoozed `finished` and `errored` items with
+  `snoozed_until`, and they come back asleep after a restart; one whose time
+  passed while the daemon was down wakes on start. An older daemon reading
+  the file lists them as open.
+- `not_human` is raised by `mark-attention` as by `dismiss-attention`.
+
+**Reviewing is built.** `review-diff`, `review-note` and `send-review` answer
+instead of `internal` (see [review-diff](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#review-diff),
+[review-note](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#review-note) and [send-review](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#send-review)). What changes for
+an existing caller:
+
+- `remove-worktree`, and so `keep-fan` and `tuios worktree rm`, drop the
+  review notes kept on the worktree they remove, whether or not the directory
+  was still there. Their answers are unchanged.
+- A window closing drops the review notes kept for that pane. Nothing is
+  published for it.
+- The daemon keeps a new file, `review/notes.json` under the state directory
+  (mode 0600), beside `attention/items.json`. An older daemon ignores it.
+- `send-review`'s result, as `list-verbs` described it before it was built,
+  named `delivered`. It carries `delivering` instead, with `queue-prompt`'s
+  meaning, and gains `ids` and `queued`: the message is typed by the delivery
+  queue, so the answer can only say whether it is next and the agent at rest.
+- `review-diff`'s result gains `session`, `window`, `uncommitted`,
+  `against_tree` and `notes` beyond what `list-verbs` listed before it was
+  built, and `review-note`'s gains `session`, `window`, `worktree`, `id`,
+  `removed`, and on `clear` `kept`, the count of notes left because the
+  caller may not change them.
+- A pane without `admin` may `add` or `edit` a note only on a pane it could
+  type into itself (one that holds nothing it does not), since a note is typed
+  into its pane when it is sent. Elsewhere it is `forbidden`.
+- `send-review` labels every note written by someone other than the sender
+  with its author ("(written by pane NAME, not by the person)"), and withholds
+  a note whose author may not type into the pane now, or whose pane is gone:
+  it is not typed and not marked sent, and the result lists it in `withheld`
+  with `withheld_reason`. When every note picked is withheld it is
+  `forbidden` and nothing is queued. Before this, a pane's note sent by the
+  person was typed under the header "from the person" with nothing to tell it
+  apart.
+- A pane whose process runs on another machine is `not_repo`, and its hint
+  now points at `tuios worktree pull` instead of a `HOST:SESSION` review:
+  reviewing a session on a linked machine is not supported yet, and
+  `tuios review` refuses a `HOST:` target before it dials.
+- A message has a state between unread and read: seen. `read-agent-messages`
+  with `to` set to a window and `peek: true` stamps `seen_at` (unix
+  nanoseconds) on the unread directed messages it returns, and leaves
+  `read_at` at zero, but only when the caller is that inbox's reader: the
+  caller runs in the pane `to` names. A peek of a pane's inbox from another
+  pane, from outside every pane, or over a link stamps nothing, because
+  nobody looked as the recipient. For `to: "human"` the reader is a caller
+  that may act as the person (the CLI outside every pane, an attached
+  client). A peek that gets `peek_forced`, and a read with no `to`, stamp
+  nothing. A marking read sets `read_at` and keeps `seen_at`. Messages
+  gain `seen_at` and `was_seen` (true when the message was seen, and not read,
+  before this call), each omitted when unset. The answer gains `seen` (how
+  many of the `unread` messages were already seen), `marked_read` and
+  `marked_seen` (how many messages this call changed). `unread` keeps its
+  meaning: the returned messages not read before this call, seen ones
+  included, and `unread: true` still returns the seen ones. `list-agents`
+  entries gain `seen`, the part of `unread` that was seen. Attention items of
+  kind `mail` gain `seen`, the part of `count` that was seen. The
+  `MsgAgentMail` push gains `seen_ids` and `seen_at`, a receipt for a peek.
+  Compatibility: a peer that does not know these fields sees a seen message
+  with `read_at` zero, so it counts it as unread, which it still is. A client
+  that gets a receipt with only `seen_ids` ignores it. Nothing is required of
+  an older peer.
+
+### list-verbs [#list-verbs]
+
+`list-verbs` is the discovery entry point. It returns every verb with its full
+parameter schema and runnable examples, the protocol range, the error-code
+catalog, and the envelope shapes, which together are enough to drive the control
+plane without reading this document.
+
+Request:
+
+```json
+{"id": 1, "verb": "list-verbs"}
+```
+
+Response (abridged):
+
+```json
+{"id": 1, "result": {
+  "type": "verb_list",
+  "version": 1,
+  "min_version": 1,
+  "daemon_version": "1.4.0",
+  "verbs": [
+    {
+      "verb": "capture-pane",
+      "description": "Capture a pane's content.",
+      "params": [
+        {"name": "session", "type": "string", "description": "Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one."},
+        {"name": "source", "type": "string", "description": "Which buffer to capture.",
+         "accepted": ["visible", "recent"], "default": "visible"}
+      ],
+      "examples": ["{\"id\":1,\"verb\":\"capture-pane\",\"params\":{\"session\":\"work\",\"source\":\"recent\"}}"]
+    }
+  ],
+  "error_codes": [{"code": "session_not_found", "description": "The named session does not exist. ..."}],
+  "envelope": {"request": "{\"id\":<any>,\"verb\":\"<name>\",\"params\":{...}}", "...": "..."}
+}}
+```
+
+Pass a `verb` param to describe only that verb. Each parameter carries its
+`name`, `type` (`string`, `int`, `bool`, `[]string`, `[]int`, or `object` for
+a JSON object such as `set-agent-meta`'s `tokens`), `description`, and
+optionally `required`, `accepted`, and `default`. The `accepted` lists are the
+same lists the handlers enforce, so they cannot drift from the implementation.
+A verb's `returns` use the same shape. A returned field that can be `null` as
+well as its type carries `"nullable": true`, as `evidence_age_ms` does.
+
+A verb that keeps the connection after its reply, as an event stream, a byte
+stream or a connection to something else, carries `stream`. `"stream": {}`
+means it always does, as `subscribe` and `stream-pane` do. With `param` it
+does only when that param is one of `values`, a bool param as `"true"`:
+`speed-test` has `{"param": "mode", "values": ["sink", "source"]}`. A caller
+that sends one request and reads one reply, such as `tuios call`, cannot make
+such a call.
+
+From the shell, `tuios list-verbs` and `tuios list-verbs --json` render the same
+catalog.

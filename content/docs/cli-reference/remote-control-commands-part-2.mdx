@@ -1,0 +1,1199 @@
+---
+title: "Remote Control Commands (part 2 of 2)"
+description: "Remote Control Commands (part 2 of 2): part of the CLI Reference of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/CLI_REFERENCE.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/CLI_REFERENCE.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/CLI_REFERENCE.md). The [CLI Reference](/docs/cli-reference) page lists every part.
+
+### `tuios list-attention` <Since command="list-attention" /> [#tuios-list-attention]
+
+List the Inbox: every approval and question an agent is blocked on, mail to
+you, errored agents, conversations a daemon restart left to resume, and
+finished turns nobody has looked at, in every session on the daemon and on
+every linked host it streams. Rows are grouped Approvals, Questions (an
+agent's own and those put with `ask-human`), Mail, Errored, Resume, Done,
+oldest first, with how long each has waited, its
+id, its session and pane, and what it said. The TUI's Inbox (prefix `i`) is
+the same list. A row of another machine names it,
+`build:api/claude`, and a row of a machine whose link is down ends in
+`[unreachable, seen 5m ago]`: it is what that machine said last.
+
+An item closes by itself when what opened it stops being true. Dismissing one
+is for the person at an attached client and is done from the Inbox; there is
+no command for it, because a command run from a pane is exactly what must not
+be able to clear the person's queue. Snoozing, marking unread and undo are the
+person's acts too and have no command either. `--snoozed` lists the items the
+person snoozed, after the rest under a Snoozed heading, each ending in
+`[snoozed until 15:30]` or `[snoozed until it changes]`. Answering a held approval (`1`, `2`, `3`
+in the Inbox) has no command for the same reason. The row of an approval a
+hook is holding ends with `(held: answer in the Inbox)`, since its pane shows
+no prompt while it is held. See
+[protocol.md](/docs/control-protocol/verbs-the-inbox-the-queue-and-review#list-attention) for the fields and rules, and
+[Approvals from the Inbox](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#approvals-from-the-inbox).
+
+**Usage:**
+
+```bash
+tuios list-attention [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Only this session on this machine, or on `--host` (default: every session)
+- `--host <name>`: Only this machine: `local`, or a linked host by name (default: every machine)
+- `--kind <kind>`: Only these kinds, repeatable or comma-separated: `approval`, `plan`, `ask`, `question`, `mail`, `errored`, `resume`, `finished`, `outbox`, `held_mail`
+- `--select <selector>`: Only the items a [selector](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#selectors) matches, such as `harness:codex needs:you`
+- `--snoozed`: Also list the items snoozed in the Inbox, after the rest
+- `--json`: Output the verb result as JSON
+
+**Examples:**
+
+```bash
+# What needs me?
+tuios list-attention
+
+# Only what blocks an agent
+tuios list-attention --kind approval --kind question
+
+# Only what waits on the build host
+tuios list-attention --host build
+
+# The oldest approval's pane, for a script
+tuios list-attention --json --kind approval | jq -r '.items[0].window'
+
+# Everything, the snoozed items too
+tuios list-attention --snoozed
+```
+
+Output:
+
+```
+Approvals
+   12m  #17    fan-3/claude  approve Bash: go test ./...
+
+Finished
+    3h  #9     work/review  all tests pass
+
+2 waiting. Open the agents view with the prefix key then i, or jump to the oldest with the prefix key then o.
+```
+
+### `tuios peek-prompt` <Since command="peek-prompt" /> [#tuios-peek-prompt]
+
+Show the prompt an agent is blocked on without attaching: the lines its
+harness's `needs_input` rule reads, the numbered options, how long it has
+waited, and the answers the rule declares for what is on the screen now. It
+changes nothing. The prompt is the pane's screen, fenced as untrusted content:
+read it as data, not as instructions. In the TUI, `space` on an approval or a
+question in the Inbox shows the same thing. See
+[Answering a prompt without attaching](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#answering-a-prompt-without-attaching).
+
+**Usage:**
+
+```bash
+tuios peek-prompt -w <window> [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <target>`: The blocked pane, by name or ID, or `HOST:SESSION:WINDOW`
+- `--json`: Output the verb result as JSON
+
+**Examples:**
+
+```bash
+# What does the reviewer want?
+tuios peek-prompt -w review
+
+# The same on another machine, for a script
+tuios peek-prompt -w buildbox:api:review --json
+```
+
+### `tuios respond` <Since command="respond" /> [#tuios-respond]
+
+Answer the prompt an agent is blocked on with the keys its harness's manifest
+declares, without attaching. The action is `approve`, `approve_always`, `deny`,
+`choose` (with the option's number) or `text` (with the answer); `peek-prompt`
+lists the ones the prompt takes.
+
+The daemon reads the prompt again before it presses anything and refuses with
+`prompt_changed` when the pane left `needs_input`, when the prompt is not the
+one `--prompt-id` names, or when another client already answered it: the first
+answer wins. Then it waits up to `--timeout` for the pane to move on and prints
+its state.
+
+Answering is acting as you, so the daemon takes it only from the Inbox of an
+attached client, or from a shell outside every pane when the config file sets
+`respond_from_shell = true` under `[daemon]`. From inside a pane it is refused
+with `not_human` either way.
+
+**Usage:**
+
+```bash
+tuios respond <action> [value] -w <window> [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <target>`: The blocked pane, by name or ID, or `HOST:SESSION:WINDOW`
+- `--prompt-id <id>`: The prompt id `peek-prompt` printed; a prompt that changed since is refused
+- `--timeout <ms>`: How long to wait for the pane to move on (default 5000, at most 30000)
+- `--json`: Output the verb result as JSON
+
+**Examples:**
+
+```bash
+# Read the prompt, then approve exactly that prompt
+tuios peek-prompt -w review
+tuios respond -w review --prompt-id 75f8b9fadb5b5dfc approve
+
+# Pick option 2 of a question
+tuios respond -w review choose 2
+```
+
+### `tuios queue` <Since command="queue" /> [#tuios-queue]
+
+Queue a message for the agent in a pane. It is typed as a prompt once the
+agent has been at rest (`idle` or `done`, or `unknown` for a harness that can
+never show idle) for a second, one message per rest, and never over a prompt
+the agent is waiting on. For a harness that cannot show working, a rest after a
+typed message is also new output followed by 5 seconds of silence. If the agent is at rest now,
+it is typed right away. The daemon then waits for the agent to show it took
+the message, the way `fan` waits for its first prompt. A message the agent
+shows no sign of taking is marked `stalled`, is never typed again, and opens a
+question in the Inbox; it holds the messages behind it until the agent next
+works, shows on its screen that it took it, or you drop it, and the next message is then typed at the next rest.
+A message also waits while you type into the pane, and while the agent's
+input box holds your draft. See
+[Queued messages](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#queued-messages).
+
+A pane holds at most `[agents.queue] max` messages (8 by default) of at most
+16 KiB each. A reply from the Inbox with a long paste can carry more, as a
+file the daemon writes when it types the reply (see `queue-prompt` in
+[protocol.md](/docs/control-protocol/verbs-agents-and-messages#the-delivery-queue)). The queue lives in the daemon's memory, so a daemon restart drops
+it, and so do the pane closing and the agent leaving the pane. From inside a
+pane the message is checked like `send-text` when it is queued, and against
+the pane's grants again when it is typed. See
+[Queued messages](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#queued-messages).
+
+**Usage:**
+
+```bash
+tuios queue [flags] TEXT...
+tuios queue ls [-w <window>] [flags]
+tuios queue rm ID | --all -w <window> [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <target>`: The agent's pane, by name or ID, or `HOST:SESSION:WINDOW` (default: the focused pane; for `ls`, every pane of the session)
+- `--all` (`rm`): Drop every message queued for the pane that you may drop
+- `--json`: Output the verb result as JSON
+
+The words of `TEXT` are joined with spaces. To queue a message that reads
+`ls` or `rm`, put `--` before it. `ls` prints one line per message: its id,
+state (`waiting`, `delivering` or `stalled`), who queued it (`human` from the
+Inbox, `shell` from outside every pane, a pane's id, or `link:HOST`), its age,
+the pane, and the message's first line. `rm` from inside a pane drops only
+what that pane queued, and from a shell every message but the ones you queued
+from the Inbox, which only the attached client can drop.
+
+**Examples:**
+
+```bash
+# Reply to the agent in the build pane once it finishes its turn
+tuios queue -w build 'make the backoff jitter configurable'
+
+# What waits, and drop one message
+tuios queue ls
+tuios queue rm q3
+
+# Everything queued for one pane
+tuios queue rm --all -w build
+```
+
+### `tuios task` <Since command="task" /> [#tuios-task]
+
+Hand out a session's work as task cards. A card is one unit of work: a title,
+the prompt for the pane that takes it, a stage, and the pane that holds it. The
+daemon keeps the cards with the session, so they outlive the pane that added
+them. After a daemon restart they come back with every holder let go. A card is
+also let go when its pane closes or its agent leaves the pane. See
+[Task verbs](/docs/control-protocol/verbs-agents-and-messages#task-verbs).
+
+The stages are `todo`, `plan`, `doing`, `verify`, `review`, `shipped` and
+`done`. `claim` moves a card in `todo` or `plan` to `doing`, and `done` moves
+it to `done` and lets it go.
+
+tuios also moves a card when it records a fact about the card's work, unless
+`[tasks] auto_stage = false` ([CONFIGURATION.md](/docs/configuration#the-task-board)):
+
+| Fact                                                                                      | From                                | To        |
+| ----------------------------------------------------------------------------------------- | ----------------------------------- | --------- |
+| A plan held for approval on the pane that holds the card                                  | `todo`, `doing`                     | `plan`    |
+| The plan approved from the Inbox                                                          | `plan`                              | `doing`   |
+| `tuios fan verify` starting in the card's fan (`fan --task`)                              | `doing`                             | `verify`  |
+| Every attempt's check ended and none passed                                               | `verify`                            | `doing`   |
+| A pull request on the branch opened (cards held in the worktree's session, or in its fan) | `plan`, `doing`, `verify`           | `review`  |
+| The pull request merged                                                                   | `plan`, `doing`, `verify`, `review` | `shipped` |
+| The pull request closed without a merge                                                   | `review`                            | `doing`   |
+
+A move fires only from its stages, so a card put in another stage by hand
+stays there. A blocked card and a done card never move on their own, and done
+is always set by hand. The history entry is by `tuios` and names the fact.
+
+A plan is held only when `[agents.approvals]` holds plans for the harness and
+the pane is not in front of you, so a plan you answer in the pane moves no
+card. A plan kept planning, or a hold that times out, leaves the card in
+`plan` until its pull request opens: the pull request is proof enough that the
+plan went through. A pull request moves every card held in the worktree's session, so a
+second pane there holding an unrelated card moves with the branch. With a fan,
+each attempt's pull request reaches the card: one closing without a merge
+moves it back to `doing` while another may still be open.
+
+**Usage:**
+
+```bash
+tuios task add [-p PROMPT] [--stage STAGE] [--project URL] [--machine any|HOST] TITLE... [flags]
+tuios task ls [--stage STAGE] [--open] [--all-sessions | --project URL [--hosts]] [flags]
+tuios task get ID [flags]
+tuios task claim ID | --next [-w <window>] [flags]
+tuios task done ID [flags]
+tuios task stage ID STAGE [flags]
+tuios task block ID REASON... | --clear [flags]
+tuios task release ID [flags]
+tuios task rm ID [flags]
+tuios task attach ID FILE... [--name N] [--note TEXT] [--replace] [flags]
+tuios task attach ID --link URL [--name N] [--note TEXT] [flags]
+tuios task attach ID --screenshot -w PANE | --capture -w PANE [--scrollback] [--lines N] [flags]
+tuios task attachments ID [flags]
+tuios task detach ID NAME [flags]
+tuios task attachment get ID NAME -o FILE|- [flags]
+tuios task dispatch [status | pause | resume | mode manual|pull|auto | preset | cap N | quiet SPAN|off | verify COMMAND|off] [--project URL] [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Session of the cards (default: this pane's session, else the most recently active)
+- `-p, --prompt <text>` (`add`): What the pane that takes the card is to do, at most 16 KiB; `-` reads it from standard input
+- `--stage <stage>` (`add`, `ls`): The stage it starts in; for `ls`, only the cards in it
+- `--open` (`ls`): Leave out the cards that are done
+- `--all-sessions` (`ls`): List the cards of every session on this machine, with a SESSION column first. Takes no `--session`
+- `--project <url>` (`add`, `ls`): The repository the card is for, by its origin URL, or `.` for the repository of the current folder. For `ls`, list that repository's cards from every session, with HOST and SESSION columns. Takes no `--session`. Two spellings of one URL (`git@host:a/b.git`, `https://host/a/b`) name one project; a local path is refused
+- `--machine <m>` (`add`): Where the card's agent starts: `any` for the machine with the most room, this one or a linked one ([Any machine](/docs/cli-reference/daemon-mode#any-machine)), or one linked machine's name. Omit it for this machine. The capture sheet's Machine pill sets it
+- `--hosts` (`ls`): With `--project`, also list the project's cards on each linked machine. A machine that does not answer is named under the table
+- `--next` (`claim`): Take the oldest card no pane holds that is not blocked or done, and that no fan of another session works on
+- `-w, --window <target>` (`claim`): The pane that takes the card (default: this pane; required outside a pane)
+- `--clear` (`block`): Lift the block
+- `--name <name>` (`attach`): The name the card shows (default: the file's name; `PR #N` for a pull request link, else the link's host and path). One file only
+- `--note <text>` (`attach`): A line about the attachment. One file only
+- `--link <url>` (`attach`): Attach an http or https address instead of a file. A GitHub pull request's address is kind `pr`
+- `--replace` (`attach`): Put it in the place of the attachment with the same name. Without it a name in use with other content is refused; the same file again is left as it is, so a retry succeeds
+- `--screenshot`, `--capture` (`attach`): Have the daemon take a PNG, or the text, of the pane `-w` names in the card's session, and attach it as `screenshot NAME.png` or `capture NAME.txt`. From a pane this needs the read grant
+- `--scrollback`, `--lines <n>` (`attach`): With `--screenshot` or `--capture`, take the history above the screen too, at most n lines (`--capture` keeps 2000 by default)
+- `-o, --output <file>` (`attachment get`): Where to save it, or `-` for standard output. An existing file is not written over
+- `--verify-timeout <seconds>` (`dispatch verify`): The verify command's time limit, at most 3600 (default 600)
+- `--json`: Output the verb result as JSON
+
+The words of `TITLE` and `REASON` are joined with spaces. `ls` prints one line
+per card: its id, stage (with `!` when it is blocked), the pane that holds it,
+its age, and its title. `claim` prints the card's id and title on its first
+line, so a script can read the id with `cut -d' ' -f1`; with nothing to take it
+fails with `no_task`, and a card another pane holds fails with `task_held`.
+
+`attach` puts files or a link on a card, so the board shows them beside it.
+Several files go in one change, one entry in the card's history: a
+screenshot, a log, a diff, a Markdown note, a Mermaid diagram, the pull
+request. The command reads each file and sends its bytes; the daemon stores
+them once by their sha256 under its state folder and keeps them until the card
+is removed or they are detached, also after a restart. The kind (`image`,
+`markdown`, `mermaid`, `diff`, `text`, `link`, `pr`, `file`) is read from the
+content, then the name. `task get` lists them under Attachments, and `attachment
+get --json` on a pull request link adds its state, title and checks, read
+through your `gh` at most once a minute. On a project card another machine
+owns, `-s HOST:SESSION` from the pane that holds it passes the attach on, at
+most 3 MiB. A pane
+attaches to the card it holds, and to the card it finished while that card
+waits in `verify` or `review`. The limits are `[tasks] attachment_max_mib`,
+`attachments_per_card` and `attachment_session_mib`
+([CONFIGURATION.md](/docs/configuration#the-task-board)).
+
+A card with a project shows on that repository's board in every session and on
+every linked machine. The machine where it was added owns it. A pane on
+another machine claims, releases and finishes it with `-s HOST:SESSION`: its
+own daemon passes the call over the link, and the owner records the holder as
+that pane on the link's peer. The card is let go on the owner when the pane
+closes or its agent leaves. If the link is down then, the card stays held
+until `tuios task release` frees it on either machine. A retried claim by the
+pane that holds the card succeeds, so a claim whose answer was lost to a
+dropped link can be run again. A card without a project stays on its machine.
+
+From inside a pane, changing a card needs the `task` grant. A pane claims
+only for itself and finishes, stages, blocks or releases only the card it
+holds, unless it holds `admin`. `rm` from a pane needs `admin`.
+
+`add` also takes `--harness ID`, the agent the card is for, and `--ask-first`,
+which keeps the card for a person to start.
+
+`done` from the pane that holds the card is its agent saying the work is
+done: the card is let go and goes on to `review`, or to `verify` when the
+board has a verify command. tuios runs that command (`dispatch verify`) in the
+pane's worktree, on the pane's machine, as `sh -c COMMAND`, never in a pane,
+with a time limit (`--verify-timeout`, default 600 seconds) that ends the
+command and every process it started, and keeps only the end of its output.
+A pass moves the card to `review`. A fail (an exit other than 0, the time
+limit, a worktree that is gone) sends it back to `todo` with its `attempts`
+one higher and the last line of the output as its note; `get` shows the end
+of the output. A verify that cannot reach the pane's machine leaves the card
+in `verify` and says why; `stage ID verify` runs it again, and lets go of
+a pane that holds the card, since the card now waits on the command. A card moved out of
+`verify` by hand stops its run. An agent that errors while it holds a card
+dispatch gave it keeps the card, blocked, with its `attempts` one higher and
+its last message as the note, since the agent may go on; no second agent is
+started for it. The block lifts when the agent works again, and the card
+goes back to `todo` once it is let go (the agent leaves, its pane closes, or
+`release`). A merged pull request moves the card to `shipped`; `done`
+from you, a shell outside the panes, or a pane that holds `admin` closes it.
+With `[tasks] auto_stage = false`, or `[tasks] stages` without `review`, an
+agent's `done` closes the card as before. The verify command is refused from
+every pane, and so is a move to `review` or `shipped` by a pane while the
+board has one.
+
+`dispatch` shows and changes how cards go to agents. A board is a project's
+cards (`--project`) or a session's own cards. In `manual` mode, the default,
+a person starts each card. In `pull` mode, an agent that finishes its card
+with `tuios task done` is given the board's next open card: the oldest card in todo, plan
+or doing that no pane holds, that is not blocked, not `--ask-first`, and names
+no harness or the agent's own. The claim is made in one state change of the
+session, so two agents that finish at once take two cards. The agent hears of
+it as mail from tuios, which names the card, its prompt and the command that
+finishes it. An agent that only ends its turn (its agent state goes to done,
+as each Claude Code `Stop` does) keeps its card and gets no new one: a turn
+can end on a question or part way. A card leaves
+`doing` only by `tuios task done`, a stage move, a release, or its verify.
+Dispatch types nothing into a pane, and gives no card to a pane
+that waits for the person. In v1 the agent and the card are on one machine
+and in one session.
+
+In `auto` mode tuios starts an agent for each open card in todo or plan that
+no pane holds, is not blocked and is not `--ask-first`, oldest first. Each
+gets a new worktree on a branch named from its title (`task/fix-the-retry`;
+`-2` and on when that branch, its folder or its session exists, so your own
+branch is never checked out), on the machine `--machine` names: `here` (the
+default), `any` (picked as [Any machine](/docs/cli-reference/daemon-mode#any-machine) picks), or a linked
+machine. A card's own `--machine` and `--harness` come first. The agent holds
+the card from the start and gets it as mail from tuios; nothing is typed into
+its pane. At most `cap` agents run at once (default 3), and `--machine-cap` on
+one machine (default 2); each machine's `[tasks] machine_cap` still holds.
+Cards over a cap wait, and the status says how many. A card in doing is never
+started by auto: one let go mid-work (its pane closed, a restart) waits for
+you, so a restart never starts a second agent. Auto needs a preset: `mode
+auto --agent claude [--model M] [--effort E] [--permission-mode P]`, or
+`preset` with the same flags. With no `--permission-mode` the agent runs in
+its own default mode; auto never turns approvals off unless you name such a
+mode. A start that fails counts toward the 3 failures in a row, and auto
+closes what it opened for it: the agent's pane, its session and its
+worktree (one with changes or commits is kept; the branch is kept). A preset
+whose agent no machine has stops the board at once. If a far machine goes
+down, its card stays held until `tuios task release` frees it.
+
+The safety switches: `pause` stops all dispatch at once, and any pane may
+pause. `quiet 22:00-07:00` gives no card in those hours, local time (`off`
+clears it). A board stops after 3 dispatched cards in a row end without being
+finished (let go or blocked; a card blocked on its errored agent counts
+when it is let go). All
+dispatch stops when an agent reports a usage limit (the state
+`limit_reached`, which `tuios set-agent-state errored --kind usage_limit` also
+reports, or an errored message that says "usage limit").
+`resume` lifts the pause and every stop. On a pull board an offer that a
+switch held is made when the switch lifts: on `resume`, when quiet hours end
+or change, and when a board is set to `pull`, each agent at rest (idle or
+done) that holds no card is offered the next one. So is a card that comes
+free: added, let go, moved back to todo or plan, or unblocked. Such an
+offer never gives a pane the card it let go itself. From inside a pane, every action but
+`pause` needs `admin`, and `verify` is refused. A dispatched card counts as
+finished when its verify passes (or when it reaches `review` with no verify
+command), and as a failure when its verify fails. The settings are saved, so
+they survive a restart.
+
+**Examples:**
+
+```bash
+# A conductor adds the work
+tuios task add -p 'Read api/retry.go and add a jitter option, with a test.' make the backoff jitter configurable
+
+# A worker pane takes the next card, and finishes it
+tuios task claim --next
+tuios task done t1
+
+# Stuck on something, then free again
+tuios task block t1 waiting on the staging key
+tuios task block t1 --clear
+
+# What is open
+tuios task ls --open
+
+# A card for the repository, and every machine's cards of it
+tuios task add --project . add retries to the client
+tuios task ls --project . --hosts
+
+# A worker on this machine takes a card that build owns
+tuios task claim t3 -s build:api
+tuios task done t3 -s build:api
+
+# Agents that finish take the next card of this repository; stop it all at once
+tuios task dispatch mode pull --project .
+tuios task dispatch pause
+
+# An agent for each open card, at most 4 at once and 2 on one machine
+tuios task dispatch mode auto --agent claude --effort high --project .
+tuios task dispatch cap 4 --machine-cap 2
+
+# Run the tests on each card its agent is done with
+tuios task dispatch verify "go test ./..." --verify-timeout 900 --project .
+```
+
+### `tuios review` <Since command="review" /> [#tuios-review]
+
+Show what the agent in a pane changed, leave notes on its lines, and send the
+notes to the agent. The diff is the pane's worktree against the base it was
+made from, or for a plain repository against the merge base with its upstream
+branch, else only what is not committed. Committed and uncommitted work show
+together, untracked files included and ignored files left out. An untracked
+file larger than `[agents.checkpoints] max_untracked_mb` (50 by default) is
+listed as not read, with no counts. It is read by the daemon through a temporary git index, so the repository, its index and its
+files are not changed. See
+[Reviewing an agent's changes](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#reviewing-an-agents-changes).
+
+**Usage:**
+
+```bash
+tuios review [SESSION] [-w <window>] [--base <ref> | --against <session> | --uncommitted] [--stat] [--path <path>]... [--context <n>] [--json]
+tuios review note [-w <window>] FILE:LINE TEXT... [--side old]
+tuios review note [-w <window>] --hunk '<header>' FILE TEXT...
+tuios review note --edit ID TEXT... | --remove ID
+tuios review notes [-w <window>] [--clear] [--json]
+tuios review send [-w <window>] [--id ID]... [--now] [--json]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session, also accepted as the argument (default: this pane's, else the most recently active)
+- `-w, --window <target>`: The pane, by name or ID (default: the focused pane)
+- `--base <ref>`: Diff against this branch, tag or commit, through its merge base with `HEAD`
+- `--against <session>`: Diff against another attempt of the same fan
+- `--uncommitted`: Only what is not committed yet
+- `--stat`: The list of changed files with their counts, without the diff
+- `--path <path>`: Only this path, relative to the repository root. Repeatable
+- `--context <n>`: Lines of context around each change, 0 to 20 (default 3)
+- `--side old` (`note`): `LINE` is a removed line, numbered as in the base
+- `--hunk <header>` (`note`): The note is on the whole hunk with this header
+- `--edit <id>`, `--remove <id>` (`note`): Change or drop a note
+- `--clear` (`notes`): Remove every note you may remove
+- `--id <id>` (`send`): Send only this note, sent before or not. Repeatable
+- `--now` (`send`): Send only if the agent is at rest with nothing queued; never queue
+- `--json`: Output the verb result as JSON
+
+`tuios review` prints a heading, one line per changed file (its status `A`,
+`M`, `D`, `R`, or `U` for untracked, and its counts), then each file's hunks
+with both line numbers and the notes under the lines they are on. A diff stops
+at 400 files, 2 MiB of text or 5000 lines in one file; files past that show
+their counts only.
+
+A note keeps its line's text and follows it when the file changes; one whose
+line is gone is marked outdated. `review notes` lists each note's id, place,
+author (`human`, `shell`, a pane, or `link:HOST`), state and text. From inside
+a pane only the notes that pane wrote can be edited or removed; from a shell,
+any but the ones left from the attached client.
+
+`review send` sends the unsent notes as one message through the delivery
+queue ([`tuios queue`](#tuios-queue)): typed when the agent is at rest, never
+over a prompt. The message says who sent it: "a script" from a shell, the pane
+from inside one, and "the person" only from the attached client. A note
+written by someone else says who wrote it. A note whose author may not type
+into the pane now, or whose pane is gone, is withheld and listed after the
+summary. From inside a pane, notes can be added only on a pane you could type
+into.
+
+The review commands work on this machine's sessions. A `HOST:SESSION` or
+`HOST:SESSION:WINDOW` target is refused: attach to that machine and review
+there, or bring the work here with
+[`tuios worktree pull`](/docs/cli-reference/daemon-mode#tuios-worktree) and review that.
+
+**Examples:**
+
+```bash
+# What the agent in the focused pane changed
+tuios review
+
+# A fan attempt against its base, or against another attempt
+tuios review api-fan-retry-2
+tuios review api-fan-retry-2 --against api-fan-retry
+
+# Leave two notes and send them
+tuios review note -s api-fan-retry-2 api/retry.go:42 'log the attempt number here too'
+tuios review note -s api-fan-retry-2 --hunk '@@ -88,4 +100,6 @@' api/retry.go 'wrap with context'
+tuios review send -s api-fan-retry-2
+```
+
+### `tuios checkpoint` <Since command="checkpoint" /> [#tuios-checkpoint]
+
+List, read and restore the checkpoints of an agent's turns. The daemon saves
+a pane's git work tree each time its agent finishes a turn that changed a
+file. The index, `HEAD`, the branch and the stash do not change. See
+[Turn checkpoints](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#turn-checkpoints).
+
+**Usage:**
+
+```bash
+tuios checkpoint list [-s <session>] [-w <window>] [--json]
+tuios checkpoint diff [N] [-s <session>] [-w <window>] [--stat] [--path <path>]... [--context <n>] [--json]
+tuios checkpoint restore N [-s <session>] [-w <window>] [--force] [--json]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <target>`: The pane, by name or ID (default: the focused pane)
+- `--stat` (`diff`): The list of changed files with their counts, without the diff
+- `--path <path>` (`diff`): Only this path, relative to the repository root. Repeatable
+- `--context <n>` (`diff`): Lines of context around each change, 0 to 20 (default 3)
+- `--force` (`restore`): Restore while the agent is working or waiting on a prompt
+- `--json`: Output the verb result as JSON
+
+`checkpoint list` prints one row per checkpoint: its number, the turn, the
+agent state, the time, the commit and the label. `checkpoint diff N` shows
+what turn N changed, against the checkpoint before it. Without N it shows the
+newest. `checkpoint restore N` saves the work tree as a safety checkpoint, then
+puts the files back as checkpoint N holds them. It prints the number of the
+safety checkpoint. Restore that number to undo the restore.
+
+### `tuios ship` <Since command="ship" /> [#tuios-ship]
+
+Take an agent's work from its worktree to a merged change: commit it, merge
+the branch into its base, push the branch, and open a pull request. See
+[Shipping a worktree](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#shipping-a-worktree).
+
+**Usage:**
+
+```bash
+tuios ship commit [-s <session>] [-w <window>] [-m <message>] [--force] [--json]
+tuios ship merge [-s <session>] [-w <window>] [--into <branch>] [--squash | --ff-only] [-m <message>] [--json]
+tuios ship push [-s <session>] [-w <window>] [--remote <name>] [--yes] [--wait <duration>] [--request <id>] [--json]
+tuios ship pr [-s <session>] [-w <window>] [--base <branch>] [--title <text> [--body <text>]] [--draft] [--remote <name>] [--yes] [--wait <duration>] [--request <id>] [--json]
+tuios ship status [-s <session>] [-w <window>] [--refresh] [--json]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <target>`: The pane, by name or ID (default: the pane this runs in, else the focused pane)
+- `-m, --message <text>` (`commit`): The commit message. The default is the pane's last prompt, or the line its last turn ended with
+- `--force` (`commit`): Commit while the agent is working or waiting on a prompt
+- `--into <branch>` (`merge`): The branch to merge into. The default is the base the worktree was made from
+- `--squash`, `--ff-only` (`merge`): Make one commit, or only fast-forward
+- `-m, --message <text>` (`merge`): The message of the merge or squash commit
+- `--remote <name>` (`push`, `pr`): The remote. The default is the one the branch follows, else the only one, else `origin`
+- `-y, --yes` (`push`, `pr`): Do not ask before sending
+- `--wait <duration>` (`push`, `pr`): How long to wait for your answer in the Inbox, when one is needed (default 2m)
+- `--request <id>` (`push`, `pr`): Wait again for the answer to a question an earlier call put in the Inbox
+- `--base <branch>` (`pr`): The branch the pull request merges into
+- `--title <text>`, `--body <text>`, `--draft` (`pr`): The pull request's title, body and draft state. Without `--title`, gh fills the title and body from the commits
+- `--refresh` (`status`): Ask gh now
+- `--json`: Output the verb result as JSON. A failure prints `success`, `error`, `code` and, for a conflict or a dirty checkout, `files`
+
+**Examples:**
+
+```bash
+tuios ship commit -s api-feat-retry -m 'Add a retry to the client'
+tuios ship merge -s api-feat-retry
+tuios ship merge -s api-feat-retry --squash -m 'Add a retry to the client'
+tuios ship pr -s api-feat-retry --draft
+tuios ship status -s api-feat-retry --refresh
+```
+
+git runs in the daemon with your own environment: your name, email, signing
+setup and hooks. tuios sets no identity and adds no trailer. `ship commit`
+stages every change, untracked files included and ignored files not. When a
+hook or the signing program refuses the commit, the index goes back to what
+it was. A call from inside a pane runs git with no hooks, and with no program
+that only the repository's own config names.
+
+`ship merge` merges into the main checkout. That checkout must have the
+target branch checked out and no uncommitted change to a tracked file. When
+the merge conflicts, it is undone with `git reset --merge`, and the command
+lists the files that conflict (code `merge_conflict`). Uncommitted changes in
+the worktree are not merged, and the command says how many there are.
+
+`ship push` and `ship pr` send work off this machine. The first call shows
+what would be sent: the branch, its commit, the remote, the commits and the
+pull request. The command asks `[y/N]` at a terminal. Elsewhere it needs
+`--yes`. When the command runs inside a tuios pane, the person must also allow
+it in the Inbox. The question pops up on the client that shows the pane, and
+the command waits for the answer. A push is never forced. `ship pr` needs the
+gh CLI, installed and logged in (`gh auth login`). tuios holds no GitHub token.
+
+The pull request and its checks show on the agent's row in the rail (`PR #12
+open pass`), in `tuios worktree ls`, and in the `pr` field of `ls --json` and
+`worktree ls --json`. While a client is attached, the daemon reads each open
+pull request again every minute with `gh pr view`. With no open pull request,
+or no client, nothing is read.
+
+`fan keep <session> --merge` merges the kept attempt the same way before it
+removes the others. `--squash`, `--ff-only` and `--into` choose how. When the
+merge is refused, no attempt is removed.
+
+### `tuios set-agent-state` <Since command="set-agent-state" /> [#tuios-set-agent-state]
+
+Report a pane's agent state so the session can show which panes need
+attention.
+
+**Usage:**
+
+```bash
+tuios set-agent-state <state> [flags]
+```
+
+**States:** `none`, `working`, `needs_input`, `idle`, `done`, `errored`, `unknown`
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: the pane's own session in a pane, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: the pane this runs in, else the focused one)
+- `-m, --message <text>`: Short note reported with the state
+- `--source <source>`: Where the state came from: `report`, `osc`, `screen`, `stall` (default: `report`)
+- `--harness <id>`: Id of the harness the state is about, e.g. `claude-code`
+- `--kind <kind>`: What a `needs_input` state waits for: `approval`, `question` or `auth`. Only valid with `needs_input`
+- `--agent-session-id <id>`: The harness's own conversation id. Stored on the pane, and turns on the nested-session guard (below)
+- `--transcript-path <path>`: The transcript file the harness writes. For a harness whose manifest has a transcript reader, the pane is joined to this exact file
+- `--if-state <states>`: Apply only when the pane is in one of these comma-separated states
+
+**Hook fields:**
+The last four flags are what `tuios agent-hook` sends, and each is sent only when
+set, so a call that uses none of them works against an older daemon. An older
+daemon ignores these fields rather than refusing them, so `--if-state` asks the
+daemon first and fails, sending nothing, when the daemon does not support it.
+`--if-state` is how "the tool ran after an approval" moves a pane from
+`needs_input` back to `working` without also turning a `done` pane back to
+`working`. A report with `--agent-session-id` is refused while the pane's own
+agent is `working` or `needs_input` by its own report and the report names a
+different session, or a different harness: that is a nested run, such as a
+`claude -p` a tool call started inside the pane. At rest a different session
+takes the pane over, as `/clear` or a restart should. `tuios agent-hook` also
+sends the harness's pid, which lets a new session from the same harness process
+take the pane over mid-turn, as `/clear` after an interrupted turn does. This
+command has no flag for it, so a report from here with a different
+`--agent-session-id` is refused mid-turn.
+
+**Sources and precedence:**
+More than one source can have an opinion about the same pane. Each source is
+ranked, and a source may write over a claim ranked at or below its own and
+never over one ranked above it. A source updating its own claim is the
+same-rank case and is always allowed.
+
+| Source   | Rank    | What it is                                        |
+| -------- | ------- | ------------------------------------------------- |
+| `report` | highest | The harness, or its hook shim, calling for itself |
+| `osc`    |         | An escape sequence the pane emitted               |
+| `screen` |         | A rule matched against the pane's rendered text   |
+| `stall`  | lowest  | The output-stall heuristic                        |
+
+There is one exception, for the case ranking alone gets wrong: a `screen` rule
+that matched a blocking prompt may write over a higher-ranked claim that has
+gone stale, meaning the pane has painted since that claim was stamped and the
+claim has stood unrefreshed for two seconds. The displaced claim is put back the
+moment a later look finds the prompt gone. It applies only to the daemon's own
+screen tier, which has actually read the pane; passing `--source screen` here
+never overrides anything. See
+[Agent state](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#the-one-exception-a-visible-blocker).
+
+`report` is the default, so a caller written before sources existed keeps its
+authority. A report the daemon declines prints to stderr and leaves the state
+alone:
+
+```
+Not applied: a higher-ranked source owns this pane. It still reports working.
+```
+
+The other refusals name their own reason on that line: an `--if-state` that did
+not hold, or a nested run from another conversation or another harness.
+
+**Examples:**
+
+```bash
+# Mark the focused pane as working
+tuios set-agent-state working
+
+# Mark a specific pane as needing input, with a note
+tuios set-agent-state needs_input -w build -m "awaiting approval"
+
+# Say the block is an approval, for a named conversation
+tuios set-agent-state needs_input --kind approval --agent-session-id 5f1c -m "approve Bash: make"
+
+# Clear a block after the tool ran, and leave any other state alone
+tuios set-agent-state working --if-state needs_input
+
+# Report on behalf of a named harness, from an escape sequence
+tuios set-agent-state working --source osc --harness claude-code
+
+# Clear a pane's agent state
+tuios set-agent-state none
+```
+
+### `tuios set-agent-meta` <Since command="set-agent-meta" /> [#tuios-set-agent-meta]
+
+Record short facts about the agent in a pane, such as its model, how full its
+context is, or a one-line summary of the task. The rail draws them on the
+second line of the agent's row. They are display only: they never change the
+agent state, a wait, an alert or a message.
+
+**Usage:**
+
+```bash
+tuios set-agent-meta [key=value ...] [flags]
+```
+
+Each argument is `key=value`, and `key=` removes the key. A key is 1 to 24
+lower-case letters, digits, `_` or `-`, starting with a letter. A value has its
+control characters replaced and is cut to 80 characters; the keys that were cut
+are named on stderr. One call sets at most 16 keys, and a pane holds at most 32.
+Keys keep the position they first arrived in, so an update does not reorder the
+row. The metadata clears when the agent leaves the pane.
+
+A call that repeats the values the pane already holds changes nothing and sends
+nothing to attached clients, and renews a TTL only once less than half of it is
+left, so a feed may write on every tick. The keys `now`, `prompt` and
+`subagents` are written by tuios from what the harness hooks report, and are
+refused here; see [`tuios agent-log`](#tuios-agent-log).
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused)
+- `--source <name>`: Who is writing, so `--clear` removes only this writer's keys
+- `--ttl <duration>`: Drop the keys this call sets after this long, at most `24h` (default: keep until removed)
+- `--clear`: Remove every key this source wrote (every key with no `--source`) first. The keys tuios writes, `now`, `prompt` and `subagents`, stay
+- `--json`: Print the result
+
+**Examples:**
+
+```bash
+# From a statusline or hook: the model and context use, for a minute
+tuios set-agent-meta -w "$TUIOS_PANE_ID" --source statusline --ttl 60s model=opus context=42%
+
+# Remove one key
+tuios set-agent-meta summary=
+
+# Remove every key this source wrote
+tuios set-agent-meta --source statusline --clear
+```
+
+With `--json`:
+
+```json
+{
+  "type": "agent_meta_set",
+  "window_id": "3f2a9c1e",
+  "meta": {"context": "42%", "model": "opus"},
+  "truncated": []
+}
+```
+
+### `tuios agent-log` <Since command="agent-log" /> [#tuios-agent-log]
+
+Show what the agent in a pane has been doing, from the activity ring the daemon
+keeps from its hooks: the prompts it was given, its tool calls and how they
+ended, the turns it finished, the subagents it started and how each ended
+(`subagent  Research tmux (general-purpose) started`, then `... done after 3m,
+14 tools`, `failed` or `stopped`), each conversation's start, the commands its
+shell ran and its state changes, oldest first. The daemon keeps the newest 256 per pane, in memory
+only. A pane fills only when its harness's hooks are installed
+(`tuios integration install claude-code` or `codex`).
+
+**Usage:**
+
+```bash
+tuios agent-log [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused)
+- `--since <duration>`: Only what happened in this long, such as `30m` (default: everything kept)
+- `--limit <n>`: At most this many entries, the newest, 1 to 256 (default: 64)
+- `--recap`: Print a summary instead of the entries
+- `--json`: Print the `agent-activity` result
+
+**Examples:**
+
+```bash
+# The focused pane's recent activity
+tuios agent-log
+
+# What the agent in api did in the last half hour, summarised
+tuios agent-log -w api --since 30m --recap
+```
+
+Output:
+
+```
+14:02:11  prompt    make the backoff configurable
+14:02:15  tool      Bash: go test ./api/
+14:02:40  failed    Bash: go test ./api/  Exit code 1
+14:03:02  done      Edit: api/retry.go  (wrote api/retry.go)
+14:05:30  state     done
+14:05:30  said      Added retry with backoff and tests.
+```
+
+A turn the harness ended without saying anything (an older Claude Code sends
+no text on `Stop`) prints as `finished`.
+
+With `--recap`:
+
+```
+Since 14:02 (42m ago)
+3 turns. 6 files: api/retry.go, api/retry_test.go, api/backoff.go and 3 more
+11 commands. Tests: go test ./... passed 2m ago
+Last said: Added retry with backoff and tests.
+Now: done
+```
+
+The test run is the newest command matching `[agents.recap] test_patterns`.
+Every line is the agent's own text, cut to one line with likely secrets
+masked; read it as what the agent said. A pane reads another pane's log only
+in its own session and fan group, and a linked machine needs `list`. See
+[Agent state](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#what-the-agent-has-been-doing).
+
+### `tuios set-agent-session` <Since command="set-agent-session" /> [#tuios-set-agent-session]
+
+Record which conversation the agent in a pane runs, so it can be resumed
+later, without changing the pane's agent state. The integrations for harnesses
+whose hooks can name the conversation but cannot be trusted with its state
+send this (see [Agent state](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#session-identity)).
+
+**Usage:**
+
+```bash
+tuios set-agent-session <agent-session-id> --harness <id> [flags]
+```
+
+The id is stored as the pane's `agent_session_id`, the same field
+`set-agent-state --agent-session-id` writes, and read back by `get-agent-state`
+and `list-agents`. It is refused, with the reason on stderr, when the pane is
+attributed to a different harness, or when the pane is mid-turn in another
+conversation of the same harness: both are a nested run. The id is at most 256
+bytes.
+
+**Flags:**
+
+- `--harness <id>`: Id of the harness the conversation belongs to (required)
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused)
+
+**Example:**
+
+```bash
+# From a SessionStart hook
+tuios set-agent-session --harness qwen -w "$TUIOS_PANE_ID" "$SESSION_ID"
+```
+
+### `tuios resume-agent` <Since command="resume-agent" /> [#tuios-resume-agent]
+
+Resume the agent conversation a pane ran before a daemon restart: type the
+harness's resume command, from its manifest's `[resume]` block, with the id a
+hook recorded for the pane (`claude --resume <id>`, `codex resume <id>`). The
+flags the agent was started with that its manifest keeps come after the id,
+such as `claude --resume <id> --permission-mode plan --model opus`. When a kept
+flag turns approvals off, a second line says so, such as `Resumes with
+approvals off (--dangerously-skip-permissions)`. It brings back the
+conversation, not the process. See
+[Agent state](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#resuming-after-a-restart).
+
+**Usage:**
+
+```bash
+tuios resume-agent [flags]
+```
+
+It types only when the pane's shell is at its prompt, and fails with
+`not_ready` otherwise. It fails with `not_resumable` when the pane has no
+recorded conversation, its harness has no resume command, the recorded id is
+not one plain shell token, or the pane runs on another machine. Nothing is
+typed on a failure. A pane's Resume row in the Inbox closes when it succeeds.
+It works on any pane with a recorded conversation, including one whose agent
+had exited before the restart, which the restore itself does not offer.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <id-or-name>`: Target window (default: focused)
+- `--dry-run`: Print the command without typing it
+- `--json`: Output result as JSON
+
+**Example:**
+
+```bash
+tuios resume-agent -w build --dry-run
+# claude --resume 5f1c2b7e-9a3d-4c1e-8f00-1234567890ab
+
+tuios resume-agent -w build
+# Resumed claude-code conversation 5f1c2b7e-... in 3f2a9c1e: claude --resume 5f1c2b7e-...
+```
+
+```json
+{
+  "success": true,
+  "message": "command executed",
+  "window_id": "3f2a9c1e-0000-4000-8000-000000000000",
+  "harness": "claude-code",
+  "agent_session_id": "5f1c2b7e",
+  "argv": ["claude", "--resume", "5f1c2b7e"],
+  "command": "claude --resume 5f1c2b7e",
+  "typed": true
+}
+```
+
+What a daemon restart does with these conversations is
+`daemon.resume_agents`: `ask` (default) opens a Resume row per pane in the
+Inbox, answered with `y`; `auto` types the command into each restored shell;
+`off` does neither.
+
+### `tuios rename-session` <Since command="rename-session" /> [#tuios-rename-session]
+
+Rename a session.
+
+The new name is what `tuios ls` shows and what `attach` and `-s` take. New
+panes get it as `TUIOS_SESSION`. Panes that already run keep the old name, and
+tuios commands from them still reach the session. Attach and kill-session by
+the old name fail and name the new one. The rename also clears a label set
+with `tuios set-session-name`. The name of a running or saved session is
+refused. A daemon older than this command answers that it does not know it.
+Run `tuios restart-server`.
+
+With one argument, the session is the one given by `-s`, or else the session
+of the pane you run it in.
+
+**Usage:**
+
+```bash
+tuios rename-session [session] <new-name> [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Session to rename (default: the session of this pane)
+
+**Examples:**
+
+```bash
+# Rename the session "test" to "work"
+tuios rename-session test work
+
+# Rename the session of this pane
+tuios rename-session work
+```
+
+### `tuios set-session-name` <Since command="set-session-name" /> [#tuios-set-session-name]
+
+Set the label a session shows in the sidebar and the dock.
+
+The session keeps its own name for addressing, persistence and
+`TUIOS_SESSION`, so a script that targets it by name keeps working. Pass no
+name to clear the label. To change the name itself, use
+`tuios rename-session`.
+
+**Usage:**
+
+```bash
+tuios set-session-name [name] [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+
+**Examples:**
+
+```bash
+# Label the current session
+tuios set-session-name "Payments API"
+
+# Label a specific session
+tuios set-session-name -s work "Payments API"
+
+# Clear the label
+tuios set-session-name
+```
+
+### `tuios set-session-accent` <Since command="set-session-accent" /> [#tuios-set-session-accent]
+
+Set the accent a session uses. It is shared by every client attached to the
+session and kept across a reattach. Pass no accent to clear it.
+
+**Usage:**
+
+```bash
+tuios set-session-accent [accent] [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+
+**Examples:**
+
+```bash
+# Accent the current session
+tuios set-session-accent cyan
+
+# Accent a specific session
+tuios set-session-accent -s work cyan
+
+# Clear the accent
+tuios set-session-accent
+```
+
+### `tuios note` <Since command="note" /> [#tuios-note]
+
+Set, read or clear the return note of a session or a pane. A note is one short
+line. It says what the session is for or what comes next. tuios shows it in
+the dock when you attach or switch to the session. The sidebar, the session
+switcher and the Inbox show it too.
+
+The note is kept with the session. It survives a detach and a daemon restart.
+A note is at most 200 bytes. Newlines become spaces.
+
+**Usage:**
+
+```bash
+tuios note set TEXT... [flags]
+tuios note get [flags]
+tuios note clear [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `-w, --window <pane>`: A pane by name or id, for the pane's note (default: the session's note)
+- `--json`: Output result as JSON
+
+`tuios note get` prints the note, and prints nothing when there is none.
+`tuios ls --json` also gives each session's `note`.
+
+**Examples:**
+
+```bash
+# Say what comes next before you stop
+tuios note set next: run the migration
+
+# Read it back
+tuios note get
+
+# A note on one pane
+tuios note set -w build waiting for CI
+
+# Remove the note
+tuios note clear
+```
+
+### `tuios set-session-space` <Since command="set-session-space" /> [#tuios-set-session-space]
+
+File a session under a space, a named group of related sessions that `tuios ls` and the sidebar list together, under the space's name. A space is only a label on its sessions: it exists while at least one session is in it, and it survives a daemon restart with them. Pass no space to take the session out of any.
+
+Surrounding whitespace is trimmed. A space name then follows the session name rules (no slash, backslash or control character) and is at most 64 bytes. A global session cannot be in a space.
+
+`--global` marks the session global. A global session holds panes from more than one machine, and a new window in it asks which machine to use. The session leaves its space. `--global=false` takes the mark off. Use it for a session that lost the mark, or that was made without `--global`.
+
+**Usage:**
+
+```bash
+tuios set-session-space [space] [flags]
+```
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+- `--global`: Mark the session global. Use `--global=false` to take the mark off
+
+**Examples:**
+
+```bash
+# File the current session under the space payments
+tuios set-session-space payments
+
+# File a specific session
+tuios set-session-space -s work payments
+
+# Take the session out of any space
+tuios set-session-space
+
+# Mark the session work global
+tuios set-session-space -s work --global
+
+# Take the global mark off and file the session under payments
+tuios set-session-space -s work --global=false payments
+```
+
+### `tuios set-session-order` <Since command="set-session-order" /> [#tuios-set-session-order]
+
+Put the sessions in an order. Every client attached to the daemon lists them in it, at once: the sidebar, go-to and `tuios ls`. Moving a session up or down on the sidebar does the same. The order survives a daemon restart.
+
+Every name must be a live session. A session you leave out, and one made later, goes after the named ones in creation order.
+
+**Usage:**
+
+```bash
+tuios set-session-order <session>... [flags]
+```
+
+**Examples:**
+
+```bash
+# List work first, then notes, then everything else
+tuios set-session-order work notes
+```
+
+### `tuios set-workspace-name` <Since command="set-workspace-name" /> [#tuios-set-workspace-name]
+
+Name a workspace so the dock and the sidebar show the label instead of the
+number. The number stays the workspace's identity. An unnamed workspace shows
+the name its active pane's program gave with OSC 1 (`printf '\033]1;logs\007'`),
+else its number. Pass no name to clear it.
+
+**Usage:**
+
+```bash
+tuios set-workspace-name <workspace> [name] [flags]
+```
+
+**Arguments:**
+
+- `workspace`: Workspace number, 1-based
+- `name`: Label for the workspace. Omit to clear it.
+
+**Flags:**
+
+- `-s, --session <name>`: Target session (default: this pane's session, else the most recently active)
+
+**Examples:**
+
+```bash
+# Name workspace 2
+tuios set-workspace-name 2 review
+
+# Name a workspace in a specific session
+tuios set-workspace-name -s work 2 review
+
+# Clear the name
+tuios set-workspace-name 2
+```
+
+---

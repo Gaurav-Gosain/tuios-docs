@@ -1,0 +1,232 @@
+---
+title: "Options, themes and the dock"
+description: "Options, themes and the dock: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `apply-config` <Since verb="apply-config" /> [#apply-config]
+
+Apply config.toml now, including the changes that give panes or linked machines more: \[agents.permissions], \[hosts] and their link policies. A change to the file applies only what narrows those; the rest waits for this verb or a daemon restart. Only the person may call it: it is refused from inside a pane and over a link.
+
+| Param  | Type   | Required | Default | Description                                                                                           |
+| ------ | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `host` | string |          |         | Apply only this host's entry, or its removal, and nothing else in the file. tuios hosts add sends it. |
+
+| Result field     | Type      | Description                                                                                                          |
+| ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
+| `mode`           | string    | \[agents.permissions] mode now in force.                                                                             |
+| `default_grants` | \[]string | What a pane started with no grants of its own holds now.                                                             |
+| `changes`        | \[]string | What changed, one sentence each: the default grants, hosts added, removed or dialled another way, and link policies. |
+| `still_waiting`  | bool      | True when config.toml still holds a change that waits, which happens when only one host was applied.                 |
+
+```json
+{"id":1,"verb":"apply-config"}
+```
+
+```json
+{"id":1,"verb":"apply-config","params":{"host":"build"}}
+```
+
+## `get-option` <Since verb="get-option" /> [#get-option]
+
+Read an option. Reports the session's override when one is set, then the value config.toml sets, otherwise the default.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `key`     | string |          |         | Option path to read.                                                                                                     |
+
+| Result field  | Type   | Description                                                                                                                                                                                                  |
+| ------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `key`         | string | The option that was read.                                                                                                                                                                                    |
+| `value`       | string | The value in effect.                                                                                                                                                                                         |
+| `source`      | string | Where the value came from: "session" for an override set on this session, "config" for a value config.toml or a file it brings in sets, "default" for the built-in. One of `session`, `config` or `default`. |
+| `default`     | string | The built-in default, so a caller can tell an override from a default that happens to match.                                                                                                                 |
+| `option_type` | string | bool, int or string.                                                                                                                                                                                         |
+
+```json
+{"id":1,"verb":"get-option","params":{"session":"work","key":"appearance.dockbar_position"}}
+```
+
+## `list-dock-components` <Since verb="list-dock-components" /> [#list-dock-components]
+
+List the dock's components: what the bar is made of, what each cell reads, and what each component's command last did.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+
+| Result field | Type      | Description                                                                                                                                               |
+| ------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components` | \[]string | One entry per placed component, in draw order, carrying its name, side, source, refresh mode, current text, last exit code, last run time and last error. |
+
+```json
+{"id":1,"verb":"list-dock-components"}
+```
+
+```json
+{"id":1,"verb":"list-dock-components","params":{"session":"work"}}
+```
+
+## `list-glyphs` <Since verb="list-glyphs" /> [#list-glyphs]
+
+List the glyph sets and describe one: the roles it names, and the characters that would actually be drawn if it were selected. A glyph set is the shape half of a rice, the way a theme is the colour half, and like a theme its value is a name from an open set standing for a document kept elsewhere.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `glyphs`  | string |          |         | Describe this set as well as listing. Omit to list only.                                                                 |
+
+| Result field | Type      | Description                                                                                                                                                                           |
+| ------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sets`       | \[]string | Every set id, built-ins first and then the user's.                                                                                                                                    |
+| `roles`      | \[]string | Every role a set can name, which is what to write in a set file.                                                                                                                      |
+| `total`      | int       | How many sets there are.                                                                                                                                                              |
+| `glyphs_dir` | string    | Directory user sets are read from; write \<id>.json there.                                                                                                                            |
+| `active`     | string    | The set in effect, with active\_source saying whether it came from the session, config.toml or the default.                                                                           |
+| `problems`   | \[]string | One line per set file that could not be read and per role dropped for being the wrong width. Present only when there are any.                                                         |
+| `set`        | object    | Present when glyphs was given: id, display\_name, inherits, ascii, names (the roles the set states) and drawn (the character each role would actually render as, defaults folded in). |
+
+```json
+{"id":1,"verb":"list-glyphs","params":{}}
+```
+
+```json
+{"id":1,"verb":"list-glyphs","params":{"session":"work","glyphs":"heavy"}}
+```
+
+## `list-hooks` <Since verb="list-hooks" /> [#list-hooks]
+
+List the hook table and what each hook command last did: how many times it ran, its last exit code, when it last ran and its last error.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `event`   | string |          |         | Only the hooks on this event. Omit for every event.                                                                      |
+
+| Result field      | Type      | Description                                                                                                                                                                                                 |
+| ----------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hooks`           | \[]object | One row per registered command: event, side, command, runs, last\_exit, last\_run, last\_error and last\_ms. Side is session for the hooks the daemon runs and client for the ones an attached client runs. |
+| `total`           | int       | How many rows the filter matched.                                                                                                                                                                           |
+| `events`          | \[]string | Every event a hook can be written on. An event outside this list is ignored when the config loads.                                                                                                          |
+| `client_attached` | bool      | Whether a client answered for its half of the table. False means the client rows are missing because nobody is attached, not that no client hooks exist.                                                    |
+
+```json
+{"id":1,"verb":"list-hooks"}
+```
+
+```json
+{"id":1,"verb":"list-hooks","params":{"event":"after-new-window"}}
+```
+
+## `list-options` <Since verb="list-options" /> [#list-options]
+
+List every settable configuration path with its type, default, accepted values and description. Use it to find an option path instead of guessing one.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `section` | string |          |         | Only options in this group, e.g. sidebar or dock. The full set of section names is reported on every call.               |
+| `prefix`  | string |          |         | Only options whose path starts with this, e.g. "appearance.sidebar.".                                                    |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                  |
+| ------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `options`    | \[]object | One row per option: path, type, section, description, default, and accepted/min/max/unit/deprecated where they apply (unit is what a number counts: ms, s, cells, %). session\_value is present only where this session carries an override. |
+| `sections`   | \[]string | Every section name, whatever the filter matched.                                                                                                                                                                                             |
+| `total`      | int       | How many options the filter matched.                                                                                                                                                                                                         |
+
+```json
+{"id":1,"verb":"list-options"}
+```
+
+```json
+{"id":1,"verb":"list-options","params":{"section":"sidebar"}}
+```
+
+## `list-themes` <Since verb="list-themes" /> [#list-themes]
+
+List the registered themes. Name one to also get its colours as hex and the contrast of each against its own background.
+
+| Param     | Type   | Required | Default | Description                                                                                                              |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `theme`   | string |          |         | Describe this theme as well as listing. Omit to list only.                                                               |
+| `filter`  | string |          |         | Only ids containing this, case-insensitively, e.g. catppuccin.                                                           |
+
+| Result field    | Type      | Description                                                                                                                                                                                             |
+| --------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `themes`        | \[]string | Matching theme ids, capped at 100. truncated reports when the cap applied.                                                                                                                              |
+| `total`         | int       | How many themes are registered in all.                                                                                                                                                                  |
+| `matched`       | int       | How many the filter matched, before the cap.                                                                                                                                                            |
+| `active`        | string    | The theme this session is set to. With no theme set, it is omarchy where Omarchy is installed, because the client follows Omarchy there. Elsewhere it is empty, which means the terminal's own colours. |
+| `active_source` | string    | "session" for a theme set on this session, "config" for one config.toml sets, "default" for the built-in. One of `session`, `config` or `default`.                                                      |
+| `themes_dir`    | string    | Where a custom theme file goes. Writing \<id>.json here registers it. No restart is needed.                                                                                                             |
+| `problems`      | \[]string | One line per theme file that could not be read, with the reason. Present only when a file is malformed.                                                                                                 |
+| `palette`       | object    | Present when theme was given: id, display\_name, dark, bg, fg, cursor, swatches (each with hex, ratio, floor, passes) and illegible, the names of the swatches that did not clear their floor.          |
+
+```json
+{"id":1,"verb":"list-themes","params":{"filter":"catppuccin"}}
+```
+
+```json
+{"id":1,"verb":"list-themes","params":{"session":"work","theme":"catppuccin_mocha"}}
+```
+
+## `refresh-dock` <Since verb="refresh-dock" /> [#refresh-dock]
+
+Re-run a dock component now, whatever its refresh mode says.
+
+| Param       | Type   | Required | Default | Description                                                                                                              |
+| ----------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `session`   | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one. |
+| `component` | string |          |         | Component to re-run, named as in the config file. Omit to re-run every one.                                              |
+
+| Result field | Type   | Description                                 |
+| ------------ | ------ | ------------------------------------------- |
+| `component`  | string | The component that was refreshed, or "all". |
+
+```json
+{"id":1,"verb":"refresh-dock","params":{"component":"agents"}}
+```
+
+```json
+{"id":1,"verb":"refresh-dock"}
+```
+
+## `set-option` <Since verb="set-option" /> [#set-option]
+
+Set a configuration option. An attached client applies it live. The path and value are checked against the option registry, so a bad call fails instead of reporting success.
+
+| Param     | Type   | Required | Default | Description                                                                                                                                                                                   |
+| --------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | Session name. Omit from a pane for the pane's own session, and from outside every pane for the most recently active one.                                                                      |
+| `key`     | string |          |         | Option path, e.g. "appearance.sidebar.enabled". Call list-options for the full set.                                                                                                           |
+| `value`   | string |          |         | New value, as a string. Booleans take true/false/on/off/1/0/yes/no.                                                                                                                           |
+| `no_save` | bool   |          |         | Apply the value without saving it. Later saves of other settings leave the key in the config files alone. The value stays until the client exits or the option is set again without no\_save. |
+
+| Result field | Type   | Description                                                                           |
+| ------------ | ------ | ------------------------------------------------------------------------------------- |
+| `key`        | string | The option that was set.                                                              |
+| `value`      | string | The value recorded.                                                                   |
+| `applied`    | bool   | Whether an attached client applied it to the live display.                            |
+| `no_save`    | bool   | The no\_save the daemon used. A daemon that does not return it saves the value.       |
+| `reason`     | string | Why applied is false, when it is. Present only then.                                  |
+| `deprecated` | string | Why this path is deprecated and what replaced it. Present only for a deprecated path. |
+
+```json
+{"id":1,"verb":"set-option","params":{"session":"work","key":"appearance.sidebar.enabled","value":"true"}}
+```
+
+```json
+{"id":1,"verb":"set-option","params":{"session":"work","key":"appearance.dockbar_position","value":"top"}}
+```
+
+```json
+{"id":1,"verb":"set-option","params":{"session":"work","key":"appearance.sidebar.enabled","value":"false","no_save":true}}
+```

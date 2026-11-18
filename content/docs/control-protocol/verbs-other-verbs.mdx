@@ -1,0 +1,1005 @@
+---
+title: "Verbs: Other verbs"
+description: "Verbs: Other verbs: part of the Control Protocol of TUIOS."
+icon: Terminal
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol.md). The [Control Protocol](/docs/control-protocol) page lists every part.
+
+## daemon-upgrade [#daemon-upgrade]
+
+Upgrade the daemon live to another tuios binary. Every pane's process keeps running with the same pid, terminal and screen, and the daemon keeps its pid. `tuios daemon upgrade` is the CLI over this verb; see [CLI\_REFERENCE.md](/docs/cli-reference/daemon-mode#tuios-daemon-upgrade).
+
+Params:
+
+- `binary` (required): the absolute path of the tuios binary to run the daemon as.
+
+The daemon first runs `<binary> daemon handoff-accepts`, which prints the handoff manifest versions the binary reads, and refuses a binary that does not run or reads another version. It then stops every pane and writes down what each holds. The call answers once that is done:
+
+```json
+{"id": 1, "result": {"type": "daemon_upgrading", "pid": 8615, "instance": "5b0e9c1f2a7d4e83",
+ "from": "v0.10.0", "to": "v0.10.1", "binary": "/usr/local/bin/tuios", "handoff": 1,
+ "panes": 4, "manifest_bytes": 35123, "clients": 2, "preflight_ms": 41}}
+```
+
+`handoff` is the manifest version, and `clients` the attached TUI clients that will be dropped. After the answer, every TUI client is sent `MsgDaemonUpgrading` (the binary message after `MsgPluginApprovals`, payload `{Version}`, the build the daemon is becoming; a client that does not know it ignores it) and dropped; a client then dials again and attaches to its session on the new image, and a client whose wire protocol the new image does not serve is refused at its hello as on any connection, every other call still running or waiting ends with `daemon_upgrading`, and the daemon execs the binary. The socket stays open: a call made during the swap waits in its backlog and the new image answers it. Call `hello` until `instance` changes; its `upgrade` field says what the handoff measured, `fallback` is set when the new binary could not take the panes over and the binary that was running took them back, and `recovered` too when the new image died first and the handoff's keeper started that binary under a new pid. The keeper is a process the daemon starts before it pauses the panes, holding a copy of their descriptors until the new image is up.
+
+Refused with `upgrade_refused`, and nothing changed, on Windows, in a daemon embedded in another program (`tuios-web`, the SSH server), while a pane runs here for another machine or a window's process runs on another machine, and while a `fan verify` check or a popup with `capture_stdout` runs. A second call while an upgrade runs answers `busy`. Refused with `forbidden` over a link, on a restricted connection, and to a plugin, whatever its grants: the binary named runs as the daemon, which holds every pane's terminal and the key that signs every pane's token. A caller inside a pane of this daemon waits for the person instead. With no attached client that could answer, or the agent features off, it is refused at once and the binary is never run. Otherwise the file is pinned, and after the preflight, which must have run that same file, the daemon opens an ask with the answers `No` and `Yes`, whose attention item carries `upgrade` (`binary`, the full path, and `version`), and every attached client shows it as a dialog. Only `answer-ask` with a live attach nonce and `upgrade_dialog: true`, from outside every pane and not over a link, answers it: a client sends `upgrade_dialog` only from its dialog, and `gui-bridge` drops it. `Yes` goes on with the upgrade of that very file: one replaced or written to since, by its device, inode, size, modification time and, on Linux and macOS, change time, is refused; anything else, 60 seconds without an answer, no attached client that could answer, or the agent features off refuses with `forbidden`, with a message that says which and what to do next, and nothing changes. The call blocks while it waits.
+
+## get-keep-awake [#get-keep-awake]
+
+Report whether the daemon holds the machine awake. `[daemon] keep_awake` is
+`off` (the default), `on`, which holds the machine awake while the daemon
+runs, or `agents`, which holds it while an agent pane of this machine has
+the state `working`. A pane whose program runs on another machine
+(`host` set) does not count, and with the agent features off no pane works.
+
+Params: none.
+
+Request:
+
+```json
+{"verb": "get-keep-awake"}
+```
+
+Response:
+
+```json
+{"result": {"type": "keep_awake", "mode": "agents", "held": true, "working": 2, "method": "systemd-inhibit"}}
+```
+
+`method` is how the daemon holds the machine: `systemd-inhibit` (an inhibitor
+lock on idle and sleep) on Linux, `caffeinate` on macOS,
+`SetThreadExecutionState` on Windows, and `none` elsewhere. `error` says why
+the machine could not be held awake, when it could not: for example, logind
+refused the lock. The daemon does not try again until the mode changes.
+`working` counts the working agent panes in every mode. The verb reads no
+session and is allowed under `read_only`. Over a link it needs `list`.
+
+## set-keep-awake [#set-keep-awake]
+
+Set `[daemon] keep_awake` and apply it at once. The daemon also writes the
+key to config.toml, so the settings page, the file and every client show one
+value. A client that offers a keep awake switch, such as the desktop app,
+calls this verb and listens for the `keep-awake` event.
+
+Params: `mode` (required): `off`, `on` or `agents`.
+
+Request:
+
+```json
+{"verb": "set-keep-awake", "params": {"mode": "agents"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "keep_awake", "mode": "agents", "held": false, "working": 0, "method": "systemd-inhibit", "saved": true}}
+```
+
+The response says the hold after the change. `saved` is false, with
+`save_error`, when config.toml could not be written. The mode then applies
+until the daemon stops. The verb is refused on a restricted connection. Over
+a link it needs `write`.
+
+## tml-open [#tml-open]
+
+Show a TML document as a popup or a pane. TML is a markup for terminal
+surfaces: a tree of known components with a JSON state. The daemon keeps the
+surface: its tree, its state and a version. Every attached client draws it in
+the window with its own theme colours, and keeps its own view state (focus,
+the cursor row, the open tab, sort and scroll). The surface stays while nobody
+is attached, and ends with the daemon.
+
+Params: `doc` (required: TML text or TML JSON as a string, or a TML JSON
+object), `target` (`popup`, the default, or `pane`), `session`, `name`
+(default: the document's title), `width` and `height` (popup only, as for
+`popup`), `workspace`, `wait` and `timeout`.
+
+The document is checked as `tuios tml validate` checks it. A document with
+errors fails with `invalid_tml`, and the error carries `problems`, each with a
+JSON Pointer to the node and the fix. A caller in no pane may send up to 1 MiB,
+and a caller in a pane up to 256 KiB. One caller (see who may change a
+surface, below) may hold 8 open surfaces, and the person 32 per session; one
+more fails with `too_many_surfaces`. A popup needs an attached client and fails with
+`needs_client` without one. Control characters are dropped from `name`.
+
+The window is of kind `tml`, and `list-windows` reports it with `kind`, `uri`
+(`tuios://tml/<surface>`) and `surface`. Like a `view` window it has a PTY,
+whose program prints one line for a client that does not draw TML. A popup
+closes on an esc the document does not use. Focus, close-window and the
+layout treat it as any window, but it cannot move to another session.
+
+A client attached through a host draws the far daemon's surfaces too. The far
+daemon holds them and pushes them over the link, as to any client, and the
+client sends `tml-input`, `tml-get` and `tml-place` back over the link. The
+far daemon's welcome sets `tml_link` when it takes them. Over a link,
+`tml-get` and `tml-list` need the `list` capability, and `tml-input` and
+`tml-place` need `write` and the attach nonce of a client on the link-human
+socket. A `pane()` action in a `tml-input` also needs what its verb needs over
+the link, so `new-window` needs `open`. `tml-open`, `tml-patch`,
+`tml-replace` and `tml-close` still need every relay capability. A client of a
+far daemon without `tml_link` says in the window that the daemon is too old.
+After a dropped link the client attaches again and takes each surface whole
+from the far daemon.
+
+The surface's local actions run in the client: tabs, sorting, the cursor,
+folding, scrolling, `set` and `toggle`. A change to the state goes back to the
+daemon, so another client and a later attach see it. `close(value)` closes the
+surface with that value. `copy(value)` copies through the client.
+`emit('name', value)` sends a `tml-event` to the owner.
+`pane('send-text', params)`, `pane('focus', params)` and
+`pane('new-window', params)` run that verb (`send-text`, `focus-window`,
+`new-window`) with the grants of the pane that opened the surface, never the
+person's: a surface an agent opened cannot type into a pane that holds more
+than the agent's pane. The first `send-text` into a pane, and each
+`new-window` command, asks the person under the surface, and nothing happens
+until they press `y`. A send-text yes covers one pane, which the client
+resolves to its id in the surface's session before it asks; a number or a
+pane of another session is refused. A new-window yes covers one exact
+command, folder, window name and session, and the question shows each of
+them, quoted with any control or invisible character escaped; a command too
+long to show in the window is not run. The question is drawn whole or not at
+all: when the window is too small for it, it asks for room, and y and n do
+nothing until it fits. The client sends the session by name. A `new-window` from a surface takes only `session`, `name`, `workspace`,
+`cwd`, `focus` and `command`. A refusal shows as a message. Only a surface
+a pane of this machine opened runs a pane action.
+`open` and links do nothing yet.
+
+Who may change a surface: the person's own commands, and the client's hooks
+and dock components, may act on any surface. Every other caller may patch,
+replace and close only the surfaces it opened: a pane, a plugin, a linked
+machine, the daemon's hooks together, each herdr plugin, and the other
+processes tuios starts outside every pane together. Any other caller fails
+with `forbidden`. A caller in a pane needs the `write` grant for `tml-open`,
+`tml-patch`, `tml-replace` and `tml-close`. A surface takes at most 100 patches and replaces a second, and
+one more fails with `rate_limited`. The window's name is the owner, then the
+title, such as `from api · Deploy`, which the document cannot change. The
+owner is the opening pane's name when no other window has that name and it
+does not read like `pane 3f2a91c0`. Otherwise it is the window id with the
+name in brackets, `pane 3f2a91c0 (api)`, or the id alone when the pane has no
+name. It is never the pane's title or the program's name. The title drops the
+separator dot and brackets and is cut to 48 runes. A client cuts the title,
+never the owner: a popup's frame and the rail read the owner first, and a
+pane's title bar shows the title, then the owner. A surface a pane opened does not take the focus: the person clicks
+it or focuses it, and the first click on a TML window only focuses it. One
+`tml-input` carries at most 4 pane actions. A surface the person
+opened takes the focus. The pane that opened a surface reads it with
+`tml-get` with the `write` grant alone. A
+binding that calls `ago()` is evaluated again once a minute while its surface
+is shown; no other surface arms a timer. A paste into a surface is dropped, with a message: no
+component takes text yet.
+
+With `wait` the call stays open until the surface closes, and answers
+`{"type": "tml_result", "surface", "window_id", "value", "reason"}`. `reason`
+says who gave the value. `closed` is a `close()` action the person ran, so the
+value is the person's answer. `program` is a `tml-close`: a program gave the
+value, not the person. `dismissed` is the window closing without a value
+(esc, close-window, the session ending); `value` is then null.
+`timeout` bounds the wait in milliseconds and leaves the surface open when it
+runs out.
+
+With `events` the connection becomes the surface's owner stream: the answer
+carries `seq` and `boot_id` as a `subscribe` ack does, and each `tml-event` of
+this surface follows on the same connection, one JSON line each. The close is
+the last one. A `tml-event` value is at most 64 KiB, and the events are not
+kept for a later `subscribe` to replay. `events` cannot be used with `wait`,
+and a connection that has
+an event stream already is refused. The owner answers on another connection
+with `tml-patch` or `tml-replace`. Anyone may also `subscribe` with
+`types: ["tml-event"]`.
+
+A client that draws surfaces from verbs, with no attach, subscribes with
+`types: ["tml-surface"]`. Each change of a surface of the session is one
+event with the surface's `version` and `doc_version`, the state patch that
+made the version when it is small, and the close. It applies the patch to the
+version it holds, and otherwise reads the surface with `tml-get`.
+
+Request:
+
+```json
+{"verb": "tml-open", "params": {"doc": "<tml version=\"1\" title=\"Hi\"><text>Hello</text></tml>", "wait": true}}
+```
+
+Response:
+
+```json
+{"result": {"type": "tml_opened", "surface": "tml-4f1a9c02", "window_id": "9a3c...",
+            "target": "popup", "workspace": 1}}
+```
+
+## tml-close [#tml-close]
+
+Close a TML surface and its window. Params: `surface` (required) and `value`
+(any JSON, optional). A `tml-open` that waits on the surface answers with the
+value and reason `program`. An unknown or closed surface fails with
+`no_surface`.
+
+## tml-input [#tml-input]
+
+What the person did on a TML surface, sent by the attached client that drew
+it: `ops`, a JSON Patch on the state from its local actions, `events`, the
+`emit` actions it ran (`[{"name", "value"}]`, each published as a
+`tml-event`), and `close` with an optional `value`. It needs `human_nonce`,
+the client's attach nonce, and fails with `not_human` without one. A program
+uses `tml-patch`, `tml-replace` and `tml-close` instead.
+
+A client also sends `view`, its loom view state (open tabs, cursor rows,
+scroll places, sorts, filters and folds, without typed text), when it
+changed, at most once every 250 ms. The daemon keeps the last one, up to
+16 KiB, and `capture-pane` on the surface's window draws the surface with it.
+A `capture-pane` on a TML window draws the surface with loom at the window's
+size, whatever `source` asks for, and adds `surface` and `surface_version`
+to the result.
+
+## tml-patch [#tml-patch]
+
+Change a surface's state with a JSON Patch (RFC 6902). Params: `surface` and
+`ops`. A patch is at most 64 KiB, and the state stays within the document's
+limits. It applies whole or not at all: a `test` that does not match refuses
+it with `invalid_params`, and the hint says to read the state again with
+`tml-get`. Answers `{"type": "tml_patched", "version", "changed"}`. Each
+client then draws again only what reads the changed paths.
+
+## tml-replace [#tml-replace]
+
+Swap a surface's tree. Params: `surface`, `doc` (as `tml-open` takes it) and
+`keep_state` (keep the state the surface has now). Each client keeps its view
+state for the nodes whose ids stay. Answers `{"type": "tml_replaced",
+"version"}`.
+
+## tml-get [#tml-get]
+
+Read a surface. Params: `surface`. Answers `doc` (the tree as TML JSON),
+`state`, `version`, `doc_version`, `window_id`, `title` and `owner`.
+
+`tml-get`, `tml-patch`, `tml-replace` and `tml-close` check the surface's
+session against the caller: a pane reaches its own session and its fan group,
+a read needs the `read` grant, and a connection restricted to its own session
+reaches only that session. Each refusal is `forbidden`.
+
+## tml-list [#tml-list]
+
+List the open surfaces of a session. Params: `session`. Answers `surfaces`,
+each with `surface`, `window_id`, `title`, `owner` and `version`.
+
+## tml-place [#tml-place]
+
+Move a surface between a popup and a tiled pane, as the person chose.
+Params: `surface`, `target` (`popup` or `pane`) and `human_nonce`, the
+client's attach nonce. The window and its surface stay, so the state does
+too. A `tml-patch` or `tml-replace` from the owner does not move it back.
+Answers `{"type": "tml_placed", "surface", "window_id", "target"}`.
+
+## tml-validate [#tml-validate]
+
+Check a document as `tml-open` would, with no session. Params: `doc`. Answers
+`{"type": "tml_valid", "warnings": [...]}`, or fails with `invalid_tml`.
+
+The daemon sends each surface to a TUI client whose hello sets
+`tml_surfaces`, as a `MsgTMLSurface` frame: when it opens, when it changes,
+when it closes, and for every open surface right after the attach reply.
+`Caller` in the frame is the window id of the pane that opened the surface,
+empty for the person's own. The agents view lists the surface under that
+pane's agent. A
+push carries the tree only when the client may not have it: on open, on attach
+and after a replace. A push that a patch made carries the patch and no state:
+a client one version behind applies it, and a client further behind reads the
+surface with `tml-get`. Each client has at most one push waiting per surface:
+a newer one folds into it, and the folded push goes out as the whole surface.
+A client that reads slowly costs the daemon one push per surface.
+
+## rail-pane [#rail-pane]
+
+Start, keep or close the session's rail pane: the pane a client draws in its
+rail's pane section. The attached client calls it from its
+`[appearance.sidebar.pane]` table. A session has one rail pane. It sits on a
+workspace no client shows, so it is in no layout. `list-windows` leaves it
+out unless you pass `rail: true`, and then it carries `rail`, its command
+line. The daemon closes it when its program exits.
+
+Params: `session` (optional), `key` (the command line, as configured),
+`command` (the argv), `cwd`, `width` and `height` (the size it starts at),
+`off` (bool; close it, and take no key or command). A pane with the same key
+is kept. A pane with another key is closed and replaced.
+
+Request:
+
+```json
+{"verb": "rail-pane", "params": {"session": "work", "key": "htop", "command": ["sh", "-c", "htop"], "width": 27, "height": 12}}
+```
+
+Response:
+
+```json
+{"result": {"type": "rail_pane", "window_id": "6a7ad980-...", "created": true}}
+```
+
+## list-buffers, show-buffer, set-buffer, delete-buffer, paste-buffer [#list-buffers-show-buffer-set-buffer-delete-buffer-paste-buffer]
+
+The paste buffers, after tmux's. The daemon keeps one list of buffers, newest
+first, that every client and session shares. A client adds a buffer for each
+yank in copy mode. The rules are tmux's: a buffer the daemon names
+(`bufferN`) is automatic, `[paste_buffers]` `limit` counts and removes only
+automatic buffers, and a call with no `name` means the newest automatic
+buffer. `max_kb` bounds all buffers together; past it the oldest automatic
+buffer goes first. Nothing is written to disk.
+
+A buffer holds bytes, not only text. `data` carries the content as text, where
+a byte that is not UTF-8 reads as U+FFFD. `data_b64` carries every byte as
+base64: send it, and read it, to keep a binary buffer whole. Each set gives a
+buffer a new `version`, a random number under 2^53; pass it back to act only
+on the content read.
+
+A buffer is the person's or one pane's. A set from outside every pane, or from
+a pane that holds `admin`, makes the person's buffer. A set from a pane
+without `admin` makes that pane's own. A pane without `admin` sees, reads,
+changes, appends to, deletes and pastes only its own buffers; every other
+buffer, the person's or another pane's, in its session or not, is as if it
+were not there, and every total it gets counts only its own. It may not make
+a named buffer, and `set-buffer` with a name it may not change answers
+`no_buffer`, the same as a missing name. With no `name`, the person's calls
+take the newest of the person's own buffers, so a buffer a pane set never
+becomes the person's newest. With a `name`, the person reaches any buffer.
+Names are unique across all owners. Automatic names come from one counter that
+only goes up, and a name of the form `bufferN` may not be made by hand.
+
+- `list-buffers`: `sample_width` (optional). Returns `buffers` (each with
+  `name`, `bytes`, `created` in Unix nanoseconds, `version`, `automatic`,
+  `sample`, and `pane`, the window name of the owner, on a pane's buffer),
+  `total`, `bytes`, `limit` and `max_bytes`. `sample` is escaped already, the
+  way tmux escapes it: `\n`, `\t`, `\r` and `\\`, and any other byte that is
+  not part of a printable character in octal, such as `\001` and `\377`. It
+  never cuts a character. `sample_width` is at most 200, and 60 when left out.
+- `show-buffer`: `name`, `version`, `encoding` (all optional). Returns the
+  row, `data` and `data_b64`. With `encoding` set to `base64`, `data` is left
+  out, so the reply is not doubled.
+- `set-buffer`: `data` or `data_b64`, `name`, `append`, `upload` and `more`
+  (all optional but the content). With no name a new automatic buffer is
+  made, with `append` or without, as in tmux. The buffer goes on top. A
+  request line is capped at 12 MiB, so a larger content goes as an upload:
+  every part carries the same `upload` id on one connection, every part but
+  the last has `more`, and the buffer is set once, from all parts, when the
+  last arrives. Cut the parts from the bytes before they are encoded; the
+  CLI and the shim send 768 KiB a part. A connection has one unfinished upload
+  at a time, of at most `max_bytes`. The person's unfinished uploads together
+  hold at most `max_bytes`, and every other caller's together at most
+  `max_bytes` more, so no pane can use up the person's share. An upload goes
+  when its connection closes, and a refusal does not say what other uploads
+  hold. Empty content stores nothing and is
+  no error, and the result then has `stored` false. A name makes the buffer a
+  named one, also a name that was automatic.
+- `delete-buffer`: `name`, `version` (both optional). With `version`, the
+  buffer is deleted only while it holds that content.
+- `paste-buffer`: `session`, `window`, `name`, `delete`, `raw` and `version`
+  (all optional). Each line feed becomes a carriage return unless `raw`, as in
+  tmux. Then the text goes as `send-text` with `paste` does: sanitized, and
+  bracketed when the pane's program turned bracketed paste on. Returns
+  `bracketed`.
+
+A pane's automatic buffers take their numbers from the one counter that
+every buffer uses, so a gap between a pane's own buffer numbers tells it that
+other buffers were made meanwhile, such as the person's yanks. It tells how
+often, never what, and tuios accepts that as low.
+
+A name that no buffer has, or the newest when there is none, answers
+`no_buffer`. From a pane, `list-buffers` and `show-buffer` need the `read`
+grant, `set-buffer` and `delete-buffer` need `write`, and `paste-buffer` needs
+both and is held to the same target rules as `send-text`. A connection over a
+link is held as a pane of its own: reading needs the `list` capability and
+the rest need `write`.
+
+```json
+{"verb": "set-buffer", "params": {"name": "deploy", "data": "make deploy"}}
+{"verb": "paste-buffer", "params": {"session": "work", "window": "ops", "name": "deploy"}}
+```
+
+## list-routes [#list-routes]
+
+List the addresses this machine has now. A phone asks after it connects and
+keeps them as more routes to the same machine, so it can reach the machine from
+another network. The phone still checks the ssh host key on every route.
+
+Takes no params. Over a link it needs `list`.
+
+```json
+{"id": 1, "result": {"type": "route_list", "routes": [{"host": "studio.example.ts.net", "kind": "tailnet"}, {"host": "192.168.1.20", "kind": "lan"}]}}
+```
+
+`kind` is `tailnet`, `lan` or `public`. The list has at most three LAN
+addresses and leaves out loopback and the interfaces of containers and VPNs.
+`host` has no port: the ssh port is the one the phone already uses. An older
+daemon answers `unknown_verb`.
+
+## list-push [#list-push]
+
+List the phones that [register-push](/docs/control-protocol/verbs-other-machines#register-push) registered, and the
+daemon's VAPID public key. Params: `human_nonce` (required). The rules are
+those of `register-push`.
+
+Response:
+
+```json
+{"id": 1, "result": {"type": "push_devices", "devices": [{"device": "pixel", "kinds": ["approval", "plan", "ask", "question"], "service": "https://push.example.net", "created": 1791543122, "last_ok": 1791543130}], "vapid_public_key": "BCM4cML1lw6X1BHn3-nOS6-QtjYUql5FDx-etpdO8RHCTTipUMWpGY46YBB4bLwbc31yGx_O9LQVABj-B0Dqvp0", "machine": "studio"}}
+```
+
+`service` is the endpoint's origin only. The full endpoint lets anyone send
+to the phone, so no verb shows it. `last_error` says why the last push
+failed.
+
+Link capability: `respond`.
+
+## remove-push [#remove-push]
+
+Remove a phone. Params: `device` (required), `human_nonce` (required). The
+rules are those of `register-push`. A name that is not registered fails with
+`invalid_params`, and the hint lists the names.
+
+Response:
+
+```json
+{"id": 1, "result": {"type": "push_removed", "device": "pixel", "removed": true}}
+```
+
+Link capability: `respond`.
+
+## set-session-order [#set-session-order]
+
+Put the sessions in an order. The daemon keeps one order for all its clients: `list-sessions` is sorted by it, so the sidebar, go-to and `tuios ls` list the sessions the same way on every client, and it is saved and restored with the sessions. Moving a session on the sidebar sends this verb. The daemon tells every listing client at once, without waiting for the listing's next look. `list-sessions` carries `rank` (1 first) on every session the order places.
+
+Params: `order` (required), the session names in their new order. Every name must be a live session, or nothing changes and the call is refused with `session_not_found`. Repeats are dropped. A session the list leaves out, and one made later, goes after the named ones in creation order. `skip_missing` leaves out a name that is no live session instead, and the result lists it under `missing`. The sidebar sets it, since another client may have ended a session it drew.
+
+Request:
+
+```json
+{"verb": "set-session-order", "params": {"order": ["work", "notes"]}}
+```
+
+Response:
+
+```json
+{"result": {"type": "session_order_set", "order": ["work", "notes", "scratch"]}}
+```
+
+`order` in the result is every session, in the order the daemon lists them now. Only this verb writes a session's rank: a client's state sync never moves it. A pane needs the `admin` grant, and over a link the verb needs `write`.
+
+## set-fan-verdict [#set-fan-verdict]
+
+Record a judge's pick among the attempts of a fan. Name any session of the
+fan, the attempt picked as `pick`, and the verdict as `summary` (required, at
+most 400 bytes). `reasons` holds at most 6 sentences, and `notes` maps an
+attempt's session to at most 4 sentences about it. The verdict is written on
+every attempt's worktree record, each with its own notes, and reaches clients
+with the ordinary state push. A later call replaces it. Nothing is kept or
+removed.
+
+Only two callers record a verdict: the judge pane that `judge-fan` started for
+the fan, and a call from outside every pane. Any other pane, a pane of an
+attempt included, is `forbidden`, whatever its grants. The daemon records
+which of the two it was as `by` (`judge` or `you`), and for the judge its
+pane's harness as `judge`. No parameter names the judge. The judge's pane
+needs no grant beyond `read`. Any other pane needs `fan`, and is then refused
+by the rule above. Over a link it is refused: a verdict is recorded on the fan's
+own machine.
+
+A pick or a note that names a session outside the fan is `invalid_params`,
+with the attempts in the hint.
+
+```json
+{"verb": "set-fan-verdict", "params": {"session": "api-fan-retry", "pick": "api-fan-retry-2",
+ "summary": "Keep B. It is the smallest change and passes the tests.",
+ "reasons": ["A reads hits without the lock."], "notes": {"api-fan-retry": ["Adds a test for eviction."]}}}
+```
+
+```json
+{"result": {"type": "fan_verdict", "group": "fan/retry", "pick": "api-fan-retry-2", "by": "judge",
+ "attempts": ["api-fan-retry", "api-fan-retry-2"]}}
+```
+
+## judge-fan [#judge-fan]
+
+Start an agent that judges the attempts of a fan. It runs in a new session
+named after the fan with `-judge` (with `-2` to `-9` when that name is taken),
+in the repository's main checkout, as a window named `judge`, with the grant
+`read` alone: it cannot start a fan, an agent or a command anywhere. Only the
+person or a pane with `admin` starts a judge.
+
+Once start-agent made the session and the pane, every attempt's record names
+them by the session's ID and the pane's window ID (`judge_session`,
+`judge_window`), never by a name. That pane alone reaches the attempts, and
+only with these verbs: `compare-fan`, `review-diff`, `list-checkpoints`,
+`checkpoint-diff`, `capture-pane`, `list-windows`, `get-agent-state` and
+`set-fan-verdict`. So the judge reads the attempts' screens and scrollback
+as well as their diffs. It cannot type into their panes, run a command in
+their sessions or start an agent there, and it does not read their command
+history, mail, environment, stash or approvals. Another pane
+of the judge's session reaches nothing of the attempts. The record is cleared
+when the judge's session ends. A session of that name that another caller
+made first is refused: nothing is recorded, and the agent started in it is
+closed.
+
+The first prompt is typed after the record is written. It names the attempts
+by letter, asks the judge to change no file, and tells it to read them with
+`tuios fan compare`, whose rows give each attempt's folder, and `git diff` in
+each folder, and report with `tuios fan verdict`. The judge runs as a program in the main checkout with
+the person's rights to files: tuios holds what it does through tuios, not
+what it does to files.
+
+`agent` is the judge's agent, as `start-agent` takes it; omitted, it is the
+agent the first attempt ran. `env` and `ready_timeout` are `start-agent`'s.
+The call answers as `start-agent` does, with `judge_session` and `group`.
+Over a link it needs `open` and `write`.
+
+```json
+{"verb": "judge-fan", "params": {"session": "api-fan-retry"}}
+```
+
+## report-program-status [#report-program-status]
+
+Apply one OSC 7501 report, the Program Status Protocol, to a pane. The daemon
+handles it as if the pane's emulator read it from the pane's output. It uses
+the same parser, the same records and the same lifetime rules. See
+[PROGRAM\_STATUS.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/PROGRAM_STATUS.md).
+
+`tuios status` sends this verb when the process has no controlling terminal,
+such as the shell tool of an agent. That tool captures standard output, so a
+sequence written there does not reach the pane.
+
+Params: `session` (optional), `window` (optional, default the caller's pane,
+or the focused pane outside every pane), `report` (required). `report` is the
+body of the sequence: the text between `ESC ] 7501;` and the string
+terminator. A report that a terminal must discard is `invalid_params`, and
+nothing is recorded.
+
+The record gets the process group that holds the pane's terminal when the call
+arrives, as a report the pane writes does. So a `working` record from a program
+in the foreground ends when that program exits. A pane may report only for
+itself, as with `set-agent-state`.
+
+Request:
+
+```json
+{"verb": "report-program-status", "params": {"session": "work", "window": "build", "report": "state=working:app=build:msg=Q29tcGlsaW5n"}}
+```
+
+Response:
+
+```json
+{"result": {"type": "program_status_reported", "window_id": "3f2a9c1e", "program_status": [{"state": "working", "progress": -1, "app": "build", "msg": "Compiling", "at": 1767225600000000000}]}}
+```
+
+Keys tuios writes itself, each only when the harness states it: `model`,
+`context` (`42%`), `cost` (`$1.20`, or the amount and an ISO 4217 code for
+another currency) and `plan` (`3/7`). The source says which feed wrote them:
+`statusline` for `tuios agent-statusline` (Claude Code's status line and the
+opencode plugin), `protocol` for a protocol pane. Both write only their own
+pane, and a caller may overwrite or clear them like any other key; they are
+display only (see [Agent metadata](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/AGENT_STATE.md#what-feeds-it)).
+
+Wire compatibility: the metadata rides the window state as an additive field
+(`agent_meta`). An older client drops it and draws nothing, and an older daemon
+answers the verb with `unknown_verb`.
+
+## close-pane [#close-pane]
+
+```json
+{"id": 1, "verb": "close-pane", "params": {"pane": "f2c1..."}}
+```
+
+Ends a hosted pane at once: its process is killed and its connection closed.
+The asking daemon sends it when a window is closed on purpose. Result: `pane`,
+`closed`. An unknown pane is `unknown_pane`. Over a link it needs `open`.
+
+## paste-pane-image [#paste-pane-image]
+
+```json
+{"id": 1, "verb": "paste-pane-image", "params": {"pane": "f2c1...", "token": "...", "content": "iVBORw0KGgo..."}}
+```
+
+Writes an image for a hosted pane, with the rules of `paste-image`, and
+returns `pane`, `path` and `bytes`. `token` is the `calls_token` of the
+`open-pane` reply. Only the daemon that owns the window has it, and that daemon
+sends this call only for a `paste-image` of the person. A wrong or missing
+token is `forbidden`. An unknown pane is `unknown_pane`. Over a link it needs
+`open` and `files`.
+
+## Files and transfers [#files-and-transfers]
+
+The file verbs act on the files of the machine whose daemon answers them. A
+client reaches another machine's files by sending the same verbs there, on a
+connection from `open-host-connection`, so that machine's link policy decides
+what may be done (see [What a linked machine may do here](#what-a-linked-machine-may-do-here)).
+Every path is absolute or starts with `~`, which means the home folder of the
+machine that answers. `list-verbs` carries every parameter and return field;
+this section is the contract around them.
+
+| Verb               | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file-stat`        | Describes one path: `exists`, `size`, and `info` (name, path, kind `file`, `dir`, `symlink` or `other`, `link_kind` and `link` for a link, size, `mtime` in Unix ms, `mode` as `ls` prints it, `perm` as a number, `hidden`). With `part`, it describes the part file of a copy to the path instead. With `relation_to`, another path on the same machine, it adds `relation`: `same` when the two paths are one file (through a link, or another case on a case-insensitive disk), `inside` when the path is in the folder `relation_to`, `apart` otherwise. A copy between two paths of one host asks this before it starts, and a move asks it again before it removes the source.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `file-list`        | Lists a folder a page at a time (`offset`, `limit` up to 5000, `hidden`): folders first, then names in natural order (`file2` before `file10`). It reads at most 50000 names (`capped`). Part files are not listed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `file-read`        | Up to 4 MiB of a regular file, base64, from `offset`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `file-preview`     | What Quick Look in the GUI shows of one file, made on the machine the file is on. An image comes back scaled to `max_px` (default 1600, at most 4096) on its long side, a PDF page (`page`, with `pages_known` to skip the count) and a film frame as an image when that machine has `pdftoppm` and `ffmpeg`, the words of a PDF page from `pdftotext` when `words` is set, the film frame at `at_ms` (with `duration_known` to skip `ffprobe`, and `no_frame` for only the facts), a JSON file laid out when `format` is set, the listing of a tar, tar.gz or zip file (`kind` `archive`), one GIF frame by `page`, permissions, git state, diff and PDF words when `details` is set, text as its first 256 KiB, and anything else as its type and size (`kind` `binary`). Without `pdftoppm` a PDF up to 8 MiB is sent as it is. A WebP or a BMP, and a picture whose decode would take more than 256 MB here (a large progressive JPEG), is sent as it is, up to 16 MiB, with its own `mime`, for the client to decode. The file is opened once, with the read rules of `file-read`, and the tools read that open file, not the path. ffmpeg and ffprobe open only the file and only the MP4, QuickTime, Matroska, WebM and AVI containers. A pipe or a device is described, not read. Names in an archive listing are cut at 4096 bytes with "...", a JSON layout over 16 MiB comes back unformatted, and a GIF whose frames with the canvas would pass the decode cap comes back with its first frame only. |
+| `file-hash`        | The sha256 of a file, of a range of it (`offset`, `length`), or of a copy's part (`part`, `part_id`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `file-walk`        | Every file and folder under a folder, for a folder copy, at most 20000 entries. With `stream`, up to 1000000 entries, one JSON line each after the reply, then a last line `{end, bytes, skipped, skipped_count, denied}`, or `{end, code, error}`. Each entry has `rel` (slash separated), `size`, `dir`, `perm` and `mtime`. Links are not followed. A link, a named pipe, a socket and a device are not copied: `skipped` names the first 200 with `rel` and `kind`, and `skipped_count` counts all of them. Over a link, an entry in the read deny list is left out and not named. `denied` counts those entries, and a denied folder counts once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `file-mkdir`       | Makes a folder and its parents. With `receive`, it ignores `path` and makes the receive folder: where a copy from the caller lands when it names no folder. For a linked machine that is the first folder of its `files_roots`, else `~/Downloads/tuios`. The reply's `path` names it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `file-rename`      | Moves a path on one disk. It does not replace what is at `to` unless `replace` is set. Another disk answers `cross_device`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `file-remove`      | Deletes a path. A folder that holds files needs `recursive`. The home folder and `/` are refused.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `open-file-stream` | Turns the connection into the bytes of one file; see below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `file-commit`      | Checks a written part against the sender's `sha256` and renames it into place, with `conflict` (`replace`, `keep-both`, `skip`, `fail`), `perm` and `mtime`. `label` names a keep-both copy `name (LABEL).ext`, and without it the copy is `name 2.ext`. `skip` finds the file there, removes the part and answers `skipped`. A part that does not match is removed (`hash_mismatch`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `file-abort`       | Removes the part a copy left.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `file-check`       | Describes many files under a `root` at once, for a copy that leaves out what is there already: for each of `rels`, `exists`, `kind`, `size`, `mtime`, and with `hash` its `sha256`. At most 2000 files, and 512 MiB hashed, in one call.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `open-tree-stream` | Turns the connection into a tree stream: many small files of a folder in one stream. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `speed-test`       | The far end of a link speed test. `ping` answers at once. `sink` takes `bytes` after the reply and drops them, then answers one line `{bytes, ms}`. `source` sends `bytes` of random data after the reply, then closes. At most 1 GiB.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `host-speed-test`  | Measures the link to `host` the way a copy uses it: the middle of five round trips of `speed-test` `ping` (`rtt_ms`), then `bytes` (64 MiB unless set) up and down on bulk streams (`up` and `down` in bytes a second, `up_ms`, `down_ms`). The bytes are random, so compression does not help them. `tuios hosts test --speed` calls it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `file-drop-dir`    | Makes a private folder (0700) for files dropped on a pane, under the daemon's runtime folder. Drops are kept 24 hours and 256 MiB together.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `drop-files`       | Gives a pane on a machine the paths of files on this one: this machine's paths as they are, or, for a host, the paths in a new drop folder there and the transfers that copy them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+
+Only regular files are read: a named pipe or a device answers at once with
+`invalid_params` instead of holding the call.
+
+**Byte streams.** `open-file-stream` with `mode` `read` answers `size`,
+`offset` and `mtime`, then the connection carries the file's bytes from
+`offset` to `size` and closes. With `mode` `write` it cuts the part file to
+`offset` (which may not be past the part's end), answers `part_size`, then
+takes `length` bytes into the part. When they are written and synced it
+writes one line, `{"part_size":N,"written":N}` or with `error`, and closes.
+With `progress` true it also writes `{"written":N}` lines while the bytes
+land, at most every 250 ms, before that last line; the line with `part_size`
+is always the last. A sender takes its copy's rate from these lines, since
+the bytes it has sent run ahead of what the far side has written by every
+buffer on the link. A daemon from before `progress` ignores the key and
+writes only the last line. Either side ending early leaves the part as it is, which is where the next
+attempt resumes. Over a link these streams ride bulk lanes that wait behind
+every pane and keep to a credit window (see
+[ARCHITECTURE.md](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/ARCHITECTURE.md)).
+
+**Part files.** A write lands in a hidden part file beside the destination,
+owner only: `.NAME.tuios-part-ID`, where `ID` is the `part_id` the caller
+gives (up to 32 hex digits). A caller with no `part_id` writes
+`.NAME.tuios-part`. A part is opened without following a link, and the file
+opened must be the regular file at the part's name, so a link put there turns
+the copy into a failure, not a write to the link's target. `file-commit` sets
+the original's permission bits and modification time on the part, renames it
+into place, and syncs the folder. Over a link, the bits are masked by the
+daemon's umask and lose group and world write. The execute bits stay.
+
+**Tree streams.** A folder copy sends each file of 8 MiB or less in one tree
+stream each way, with no round trip between files. A file sent by itself
+costs several round trips, so a folder of 20,000 small files on a link of
+50 ms would spend over an hour waiting. A larger file goes by itself, which
+resumes from the middle after a dropped link. A file in a tree stream is sent
+again whole.
+
+`open-tree-stream` takes `root` and `mode`. With `mode` `read` (and
+`compress`), the caller writes one request line per file, `{"rel","size","mtime"}`,
+and `{"end":true}` after the last. The daemon answers one record per file in
+the same order, then `{"end":true}`. A `size` and `mtime` that no longer match
+the file answer a header with `code` `source_changed`. With `mode` `write`
+(and `part_id`), the caller writes records and `{"end":true}`. The daemon
+puts each file in place and answers one ack line per file, then
+`{"end":true}`. An ack is `{"rel","path","sha256","skipped"}` for a file in
+place, or `{"rel","code","error"}`.
+
+A record is a header line, the bytes, and a trailer line:
+
+```
+{"rel":"src/a.go","kind":"file","size":1234,"perm":420,"mtime":1786611217427,"z":true}
+<size bytes, or one flate stream of them when z>
+{"sha256":"9f2c..."}
+```
+
+- A folder is a header with `kind` `dir` and nothing after it.
+- A file the reading side could not read is a header with `code` and `error`,
+  and nothing after it.
+- A file that got shorter while it was read keeps its length, padded with
+  zeros, and the trailer has `code` `source_changed`. The writing side drops
+  it.
+- On the write side, the header can carry `conflict` (as `file-commit` takes
+  it) and `label`.
+
+The trailer carries the hash that the reading side took while it read. The
+writing side hashes what it writes, and puts the file in place only when the
+two match. Each `rel` is checked on the writing side: it must be a path under
+`root`. A write that came over a link is held to the link's roots, deny list
+and write limits for each file, as an `open-file-stream` write is. The whole
+stream counts as one of the link's 8 write streams. A header, trailer,
+request or ack line is at most 64 KiB.
+
+**Transfers.** `transfer-start` makes a job in the daemon that answers it, so
+the client may quit. `src` and `dst` are `{host, path}`, with `host` empty for
+this machine, so one call copies this machine to a host, a host to this
+machine, or one host to another (through this machine). A `dst` with no
+`path` is the receive folder of its machine (see `file-mkdir` `receive`), and
+the copy goes inside it. A folder copies its whole tree. A folder into a
+folder that is there needs `conflict` `merge`.
+
+`place` says how to read `dst`. Omitted, `dst` is the full path of the copy.
+`auto` reads it as `cp` does: a folder that is there gets the copy inside it,
+and anything else is the new name. A `dst` that ends in `/` with `auto` is
+`into`. `into` needs a folder that is there. `contents` copies what a folder
+holds into `dst`, and a file as `auto` does.
+
+`conflict` says what to do when `dst` is there: `replace`, `keep-both`,
+`merge`, `skip`, `ask` or `fail`, the default, which answers `file_exists`.
+`each` says what to do with each file that is there and differs inside a
+folder copy: `replace`, `keep-both`, `skip` or `ask`. Omitted, it follows
+`conflict`, which for `merge` and `replace` is `replace`. A file that is there
+with the same sha256 is never copied again, whatever the policy: the row
+counts it in `same`. `keep-both` names a copy between two machines
+`name (from HOST).ext`, with the source machine's name. `keep_from` false, or a
+copy on one machine, names it `name 2.ext`.
+
+`perms` and `times` (both true unless set) give each file the original's
+permission bits and modification time. `compress` (true unless set) lets a
+link carry the bytes as flate when they compress well. `rate_limit` is the
+most bytes a second, 0 for no limit.
+
+**The conflict state.** Before it copies, a copy compares each file with what
+is there. With `ask`, the files that are there and differ make the copy wait
+in state `conflict`. At most 200 are listed at a time. Its row lists the files in `conflicts`, each with `rel`,
+`path`, `src_size`, `src_mtime`, `dst_size` and `dst_mtime`, and counts them in
+`conflict_count`. `transfer-answer` takes `id` and `choice` (`replace`,
+`keep-both` or `skip`) for one `rel`, several `rels`, or `all`. `all` holds
+for the files of the copy that come later too. The copy goes on when every file
+it waits on has an answer. A folder or a link where a file goes, and a file
+made at the destination during the copy, are never replaced: the row counts
+them in `conflicts_left`. Each file goes through its part, a sha256 of
+the original and of the part, and the rename, and keeps the original's
+permission bits and modification time, never its owner. A link that drops
+leaves the part: the job waits (`waiting`, with `retry_in_ms`), and when the
+machine is back it compares the last MiB of the part with the original and
+goes on from the part's end when they match. A file whose check fails is
+copied once more; a second failure fails the job. At most three jobs move
+bytes at once; the rest are `queued`.
+
+`transfer-list`, `transfer-pause`, `transfer-resume` and `transfer-cancel` take
+an `id`. A row has `id`, `name`, `src`, `dst`, `target`, `final`, `kind`,
+`move`, `state` (`queued`, `running`, `verifying`, `waiting`, `paused`,
+`conflict`, `done`, `failed`, `cancelled`), `size`, `done`, `wire` (the bytes
+that crossed a link, fewer than `done` when compressed), `rate`, `eta_ms`,
+`files`, `files_done`, `current`, `current_done`, `current_size`, `error`,
+`code`, `resumed_from`, `resumes`, `sha256`, `verified`, `created`,
+`started`, `ended`, `retry_in_ms`, `skipped`, `skipped_items`, `denied` (the
+entries of a folder copy left out because a linked machine may not read them),
+`same`, `conflicts_skipped`, `conflicts_left`, `conflicts`, `conflict_count`,
+`failed_files`, and `pane` and `pane_session` for a copy started from a
+pane. `transfer-clear` removes the jobs that ended, or only `ids`, and
+answers `cleared`. Each job it removes is a `transfer` event with action
+`removed`. `transfer-resume` goes on with a paused job, tries a waiting
+one now, or tries a failed one again from its parts. `transfer-cancel` removes
+the part of the file in flight. A finished job stays listed for 30 minutes; a
+failed one takes its parts with it when it leaves the list.
+
+A `transfer-start` to the destination of a job that has not ended answers
+`busy`. Two jobs that reach one file by two paths write two parts, and the
+one that commits last is the file in place.
+
+**The journal.** Every job that has not ended is a file in
+`$XDG_STATE_HOME/tuios/sessions/transfers/`, written on each change of state.
+A daemon that starts after a crash, `tuios kill-server` or `tuios update`
+takes back the jobs of its own socket: a paused job stays paused, a failed
+one is listed as failed, and every other goes on from its parts. At start the
+daemon also removes, in each folder it wrote a part in, the parts older than
+seven days that no job of its own holds.
+
+**Writes over a link.** A file write that arrives over a link
+(`open-file-stream` write, `file-commit`, `file-mkdir`, `file-rename`,
+`file-remove`, `file-abort`) lands only under the write roots: the folders
+`files_roots` names for that machine, or one receive folder
+(`~/Downloads/tuios`, or `$XDG_DOWNLOAD_DIR/tuios` on Linux) when it names
+none, plus the drop folder. The check is on the real path, with links
+resolved, and the write itself goes through an `os.Root` at the root, so a
+link inside it cannot carry the write out. A write outside the roots is
+`forbidden`, and the refusal says where writes may land and which setting to
+change.
+
+Inside every root, a write into these places is refused whatever
+`files_roots` says, with case and Unicode width folded on every system (a
+Linux disk can ignore case too), with the dots and spaces that Windows drops
+at the end of a name dropped, and a write to a folder that _holds_ one of them (a rename of
+`~/.config`, say) is refused too, so a link cannot carry a denied folder out
+and back: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.kube`, `~/.docker`,
+`~/.netrc`, `~/.git-credentials`, `~/.config/git`, `~/.config/gh`,
+`~/.config/gcloud`, `~/.password-store`, `~/.claude`, `~/.claude.json`,
+`~/.codex`, the config folders of the agent harnesses tuios installs hooks,
+plugins or extensions into, which name commands the tool runs (Gemini CLI and
+Antigravity's `~/.gemini`, `~/.config/opencode`, `~/.config/amp`,
+`~/.copilot`, `~/.config/crush`, `~/.cursor`, Devin's `~/.config/devin` and
+on Windows `AppData/Roaming/devin`, `~/.factory`, `~/.grok`, Hermes's
+`~/.hermes` and on Windows `AppData/Local/hermes`, `~/.config/kilo`,
+`~/.kimi-code`, `~/.pi/agent`, `~/.omp/agent`, `~/.qoder`, `~/.qwen`), the
+sops age keys (`~/.config/sops/age` and its macOS and Windows forms), atuin's
+key, session, history and config (`~/.local/share/atuin`, `~/.config/atuin`),
+Ollama's key (`~/.ollama/id_ed25519`), the API keys in Gemini CLI's
+`~/.gemini/.env`, Qwen Code's `~/.qwen/.env` and Hermes's `~/.hermes/.env` (on
+Windows `AppData/Local/hermes/.env`), the shell
+start files (`.profile`, `.bashrc`, `.bashrc.d`, `.bash_profile`,
+`.bash_login`, `.bash_logout`, `.zshenv`, `.zprofile`, `.zshrc`, `.zlogin`,
+`.zlogout`, `.cshrc`, `.tcshrc`, `.kshrc`, `.mkshrc`, `.xprofile`, `.xsession`,
+`.xinitrc`, `~/.config/fish`, `~/.config/zsh`, `.gitconfig`, `.inputrc`), the
+login items (`~/.config/systemd`, `~/.config/autostart`,
+`~/.config/environment.d`, `~/Library/LaunchAgents`, `~/Library/LaunchDaemons`,
+`.pam_environment`, and on Windows the Startup folder and the PowerShell
+profiles), the crontab spools, `/proc`, tuios's own config, state
+and data folders, and the daemon's socket folder (the mail stash) apart from
+its drop folder.
+
+**Reads over a link.** A read (`file-read`, `file-preview`, `file-hash`, `file-walk`,
+`open-file-stream` read), and a look at a path's name and size (`file-stat`,
+`file-list`), from one of these is `forbidden` too, so a linked
+machine cannot read keys or credentials out: every place in the write deny
+list above that can hold a secret (`~/.ssh` except a `*.pub` key, `~/.gnupg`,
+`~/.aws`, `~/.azure`, `~/.config/gcloud`, `~/.kube`, `~/.netrc`,
+`~/.git-credentials`, `~/.gitconfig`, `~/.config/git`, `~/.password-store`,
+the shell start files, `~/.config/systemd`, `~/.config/environment.d`,
+`.pam_environment`, the PowerShell profiles, `~/.claude.json`, the sops age
+keys, atuin's folders, Ollama's key, the Gemini CLI, Qwen Code and Hermes
+`.env` files, and tuios's own config,
+state and data), and also `~/.docker/config.json`,
+`~/.config/gh/hosts.yml`, `~/Library/Keychains`, the
+Claude and Codex credential files, the logins of other agent tools (Gemini
+CLI's `oauth_creds.json` and `mcp-oauth-tokens.json`, opencode's `auth.json`
+and `mcp-auth.json`, Qwen Code's `oauth_creds.json`, Kilo's `auth.json` and
+`mcp-auth.json`, Pi's `auth.json`, oh-my-pi's `~/.omp/agent/agent.db` and its
+`agent.db-wal`, Amp's `secrets.json`, the Copilot CLI's `~/.copilot/config.json`),
+Cursor's MCP servers (`~/.cursor/mcp.json`, whose env often holds API keys),
+the cloud and tunnel CLI credentials (`~/.oci`, doctl's and ngrok's config
+folders on Linux, macOS and Windows, and `~/.ngrok2`), the package and database
+credentials (`.npmrc`, `.pypirc`, `.gem/credentials`, `.cargo/credentials`,
+`.vault-token`, `.pgpass`, `.my.cnf`, the Terraform credentials,
+`~/.config/rclone`, `~/.config/hub`, `~/.config/op`), `~/.local/share/keyrings`,
+shell and program histories, browser profiles (also the snap Firefox and
+Chromium profiles and every flatpak's `~/.var/app`), mail and chat state
+(Thunderbird, Signal, Discord, Slack, Telegram), the VS Code and Cursor state
+folders, crypto wallets (Bitcoin, Electrum, Ethereum, Monero, Litecoin, Solana,
+Exodus), password managers,
+the Windows credential stores and DPAPI keys,
+`/proc` (every process's environment and memory), and the daemon's socket
+folder apart from its drop folder. On
+Windows a linked machine must name a path with a drive letter and no other
+colon: a `\\?\` path, a UNC share and a stream name are refused. A read
+elsewhere is allowed, so a copy out works, unless the machine's
+`files_read_roots` is set: then a read must be under one of those folders or
+under a write root, and the refusal names the setting. The read deny list
+also holds the shell and program histories (`.bash_history`, `.zsh_history`,
+zsh's history under `~/.local/share` and `~/.local/state`, fish's history and
+others) and the browser and password manager profiles.
+
+A read over a link opens the file, then checks the path the system has for
+the open file against the same rules. A rename between the check and the open
+cannot swap a denied file in. On macOS a path through
+`/System/Volumes/Data` is judged by its short name, such as `/Users/...`, for
+reads and writes. A regular file with more than one name (a hard
+link) is `forbidden` to read, hash, stream or copy over a link, because no
+check of its path shows what else it is. To share such a file, copy it to a
+new file first. `read-dir`, `wait-dir` and the binary `MsgReadDir` and
+`MsgWatchDir` keep to the read rules too, so a machine with only `list` cannot
+list or watch `~/.ssh` or `/proc`. `file-walk` over a link leaves out every
+entry in the read deny list, so a walk of the home folder, and the file list of
+a folder copy, does not name the files in `~/.ssh`. The copy still ends `done`,
+and its `denied` field counts what was left out. `tuios cp` prints the count and
+exits as a partial copy.
+
+**Copies a link starts.** `transfer-start` and `drop-files` called over a link
+read and write this machine's disk for that machine, so they keep to the same
+rules. A source here must pass the read rules, a destination here must pass
+the write rules, and a move must also be allowed to remove its source. The
+call is `forbidden` before a job exists when an end fails, and the job checks
+each file again as it goes, through an `os.Root` at the write root. The job
+keeps the name of the machine in the journal (`link`), so after a restart it
+is held to that machine's policy as it is then. Before each try and each file,
+the job checks that the machine may still start a copy here: `files` and the
+five capabilities a relay needs. A reload that takes one away ends the job as
+`forbidden`, also when the job is paused or waits. A restart does the same.
+
+**How much a link may write.** An `open-file-stream` write over a link is
+checked before a byte moves:
+
+- In the drop folder, only inside a drop that `file-drop-dir` made. A file or
+  folder at the top of the drop folder is `forbidden`. The drops together
+  hold at most 256 MiB, counting what other open writes into the folder have
+  claimed, and a write past that is `disk_full`.
+- Anywhere else, the write must leave the machine's `files_min_free` (1 GiB
+  unless set) free on its disk, counting what other open writes to that disk
+  have claimed, or it is `disk_full`.
+- A part file with more than one name (a hard link) is not written, and the
+  write is `forbidden`. A linked machine cannot rename a file onto a part name
+  or off one.
+- One machine may have at most 8 write streams and 64 unfinished part files
+  open. Past that the write is `busy`, which a copy retries.
+- One machine may make at most `files_max_entries` (20,000 unless set) new
+  files and folders in ten minutes. A write that starts a new part counts as
+  one. `file-mkdir`, `file-drop-dir` and a tree stream's `dir` record count
+  each folder they make. Past that the call is `busy`, which a copy retries.
+  The count goes down evenly over the ten minutes.
+
+A job is logged in the daemon log when it starts and ends, with both ends
+and the byte count.
+
+## What a linked machine may do here [#what-a-linked-machine-may-do-here]
+
+A connection that arrives over a link is accepted on a link socket
+(`<socket>.link` or `<socket>.link-human`), which only `tuios stdio-proxy` on
+this machine dials. The daemon marks it before a byte is read, and holds every
+verb and every binary message on it to the policy for the machine it came from.
+The policy is read from the `[hosts]` table on this machine: the built-in
+default, then `[hosts."*"]`, then `[hosts.NAME]`, each field inheriting from
+the one before. The configuration is in
+[CONFIGURATION.md](/docs/configuration#what-another-machine-may-do-here).
+
+| Capability                                      | Verbs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| none                                            | `hello`, `list-verbs`, `link-peer`, `restrict-connection`, `pane-grants` (which says no pane grants apply over a link)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `list`                                          | `list-*`, `session-info`, `ssh-agent-path`, `display-env`, `get-keep-awake`, `get-window`, `capture-pane`, `screenshot`, `get-option`, `get-agent-state`, `resolve-pane`, `explain-agent-*`, `wait-for`, `subscribe`, `unsubscribe`, `peek-prompt`, `read-dir`, `wait-dir`, `compare-fan`, `agent-activity`, `get-approval`, `file-stat`, `file-list`, `list-tasks`, `get-task`, `get-task-attachment`                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `mail`                                          | `send-agent-message`, `read-agent-messages`, `agent-mail-notice`, `stash-put`, `stash-list`, `stash-get`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `open`                                          | `new-session`, `new-window`, `split-window`, `popup`, `new-worktree`, `fan`, `start-agent`, `open-pane`, `resize-pane`, `close-pane`, `pane-cwd`, `pane-agent`, `pane-calls`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `write`                                         | `send-keys`, `send-text`, `ask-agent`, `run-command`, `switch-session`, `detach-client`, `close-window`, `close-workspace`, `kill-session`, `focus-window`, `move-window`, `set-window`, `select-workspace`, `set-layout`, `zoom-window`, `swap-window`, `resize-window`, `resize`, `set-option`, `set-keep-awake`, `set-session-*`, `set-workspace-*`, `set-agent-*`, `resume-agent`, `request-approval`, `refresh-dock`, `pip`, `remove-worktree`, `bundle-worktree`, `run`, `ask-human` (whose handler refuses a link caller anyway), `review-diff` (it returns file contents), `review-note`, `review-stage`, `send-review`, `queue-prompt`, `cancel-queued`, `keep-fan`, `add-task`, `claim-task`, `finish-task`, `set-task-stage`, `block-task`, `release-task`, `remove-task`, `attach-task`, `detach-task` |
+| `open` and `write`                              | `verify-fan`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `open` and `files`                              | `paste-pane-image`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `write` and `files`                             | `paste-image`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `respond`                                       | `respond`, `reply-approval`, `dismiss-attention`, `release-agent-message`, `answer-ask`, `mark-attention`, `register-push`, `list-push`, `remove-push`, `reply-history`, `add-reply-history`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `transcripts` (or `respond`, which includes it) | `agent-transcript`. The call also needs the nonce of a person's attach.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `files`                                         | `file-read`, `file-preview`, `file-hash`, `file-walk`, `open-file-stream`, `file-mkdir`, `file-rename`, `file-remove`, `file-commit`, `file-abort`, `file-drop-dir`, `file-check`, `open-tree-stream`, `speed-test`. Writes are also held to `files_roots` and the deny list in [Files and transfers](#files-and-transfers), and reads to the read deny list.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| every one                                       | `open-host-connection`, `retry-host`, `set-pane-grants` (whose handler refuses a link caller anyway), `transfer-start`, `transfer-list`, `transfer-pause`, `transfer-resume`, `transfer-cancel`, `transfer-answer`, `transfer-clear`, `host-speed-test`, `drop-files` (they make this daemon use its own links)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+Binary messages: `MsgList`, the PTY subscribe messages, `MsgGetTerminalState`,
+`MsgReadDir` and `MsgGetLogs` need `list`; `MsgAttach` needs `list` and
+`write`; `MsgInput`, `MsgResize`, `MsgClosePTY`, `MsgUpdateState`,
+`MsgExecuteCommand`, `MsgCommandResult` and `MsgKill` need `write`;
+`MsgCreatePTY` and `MsgResurrect` need `open`; `MsgNew` needs `open`, `list`
+and `write`. A refused message is answered with `MsgError` code 10.
+
+The default grants `list`, `mail`, `open`, `write`, `files` and `transcripts`. A `[hosts]` table written before `files` existed that sets `allow` does not have it: add `"files"` to let that machine use the file verbs. A table that sets `allow` without `transcripts` or `respond` keeps the person's client on that machine from reading agent conversations here.
+
+A verb or message with no entry in the table is refused over a link. A test
+holds the table to the verb registry, so a new verb cannot ship without one.
+
+**Naming the machine.** `tuios stdio-proxy` sends `link-peer` as the first
+line of every connection it opens:
+
+```json
+{"id": 0, "verb": "link-peer", "params": {"peer": "laptop", "pinned": false}}
+```
+
+The name is the one the hub gave for itself in the stream's open frame (its
+host name up to the first dot, lowered), or the one the proxy was started with
+by `--as`, which wins and sets `pinned`. The daemon takes `link-peer` only on a
+link socket, once, and before anything else on the connection; after its reply
+the connection is read from scratch, so an attach can follow it. A link from a
+proxy too old to send it has no name and gets `[hosts."*"]`. A daemon too old
+to know `link-peer` answers `unknown_verb`, and the proxy dials again without
+it. If the link sockets cannot be reached, the proxy asks `hello` on the main
+socket and refuses the stream when the daemon reports `link_policy`, so a
+daemon that failed to open its link sockets is not reached on a socket with no
+policy.
+
+When the link's ssh forwards an agent, the proxy also sends the
+`SSH_AUTH_SOCK` it runs with as `ssh_auth_sock`. With `[daemon] ssh_agent =
+"follow"`, a client attached through the link moves the session's agent link
+to that socket, under the same checks as a local client's socket. A daemon
+too old to know the parameter refuses it with `invalid_params`, and the proxy
+sends `link-peer` again without it.
+
+The reply holds a `close_token` for the connection. When the far side closes
+a stream on purpose, the proxy opens one more connection and sends `link-peer`
+with that token as `closes` before it ends the stream's connection. The daemon
+then ends the stream's size lease at once. A stream that ends without it
+ended because the link dropped, and its lease stays for 15 seconds. A daemon
+too old to give a token gets no `closes`.
+
+Only a pinned name is a boundary. A hub whose ssh key may run any command can
+run a shell, and can claim any name. Pin it in `authorized_keys` on this
+machine:
+
+```
+command="tuios stdio-proxy --as laptop",restrict ssh-ed25519 AAAA...
+```
+
+**Holding mail.** With `hold_mail`, `send-agent-message` over the link to
+anyone but `human` is stored for `human` instead, with `held`, `held_for` and
+`held_for_label`, and opens a mail item in the Inbox with `held_id` and
+`held_for`. The person passes it on:

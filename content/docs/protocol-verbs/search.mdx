@@ -1,0 +1,82 @@
+---
+title: "Search"
+description: "Search: part of the Protocol Verbs of TUIOS."
+icon: Braces
+---
+
+import { Since } from "@/components/mdx/since";
+
+{/* Written by scripts/reference-docs.mjs from tuios docs/protocol-verbs.md at 716fe1939aa7dfe130fb31ececffc5f6f6ed5016. Do not edit: change the doc in tuios and move reference/TUIOS_REF. */}
+
+This page is one part of `docs/protocol-verbs.md` of the [tuios repository](https://github.com/Gaurav-Gosain/tuios/blob/716fe1939aa7dfe130fb31ececffc5f6f6ed5016/docs/protocol-verbs.md). The [Protocol Verbs](/docs/protocol-verbs) page lists every part.
+
+## `command-history` <Since verb="command-history" /> [#command-history]
+
+List the commands that shells in panes on this machine ran, newest first. Only a shell that sends OSC 133 marks reports its commands. A pane keeps its last 200 commands. A command that ran again in the same pane is listed once, at its newest run.
+
+| Param     | Type   | Required | Default | Description                                                                                              |
+| --------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `session` | string |          |         | List only this session's panes. Omit to list every session.                                              |
+| `window`  | string |          |         | List only this pane. Without session, the window is looked for in the most recently active session.      |
+| `limit`   | int    |          | `200`   | The most commands to return, at most 2000.                                                               |
+| `query`   | string |          |         | List only the commands whose text holds this. Case does not count unless the query has a capital letter. |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `commands`   | \[]object | One entry per command: session, window (the window id), name, seq (the pane's command\_seq when it finished), cmdline (at most 512 bytes, with likely secrets masked), exit (null when the shell sent no status), at (when it started, Unix ms), duration\_ms, cwd (the folder the shell last reported over OSC 7 when it started, empty when it never reported one) and row (the history row of its prompt, -1 when the prompt has left the history). |
+
+```json
+{"id":1,"verb":"command-history"}
+```
+
+```json
+{"id":1,"verb":"command-history","params":{"session":"work","window":"build","limit":20,"query":"go test"}}
+```
+
+## `list-ports` <Since verb="list-ports" /> [#list-ports]
+
+List the TCP ports that processes in panes on this machine listen on. A pane's processes are its program and every process under it. A process that left the pane's process tree is not listed. Linux and macOS only. The answer can be up to 1 second old.
+
+| Param     | Type   | Required | Default | Description                                                 |
+| --------- | ------ | -------- | ------- | ----------------------------------------------------------- |
+| `session` | string |          |         | List only this session's panes. Omit to list every session. |
+
+| Result field | Type      | Description                                                                                                                                                                                                                                                                      |
+| ------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `supported`  | bool      | False on a system where tuios cannot read listening ports. ports is then empty.                                                                                                                                                                                                  |
+| `ports`      | \[]object | One entry per listening socket: session, window (the window id), port, addr (the address it listens on, such as 127.0.0.1, 0.0.0.0 or ::), pid, comm (the process name) and worktree (the folder of the session's worktree, empty for a session that is not a worktree session). |
+
+```json
+{"id":1,"verb":"list-ports"}
+```
+
+```json
+{"id":1,"verb":"list-ports","params":{"session":"work"}}
+```
+
+## `search-panes` <Since verb="search-panes" /> [#search-panes]
+
+Find text in the history and the screen of panes on this machine. The newest match in a pane comes first, and the pane with the newest output comes first. Each pane gets 50 ms. A pane that takes longer is cut off, and truncated is then true.
+
+| Param      | Type      | Required | Default | Description                                                                                                                     |
+| ---------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `query`    | string    | yes      |         | The text to find, at most 512 bytes. It is literal text unless regex is true.                                                   |
+| `regex`    | bool      |          | `false` | Read query as a Go regular expression. A pattern that matches an empty line is refused.                                         |
+| `case`     | string    |          | `smart` | How letter case counts. smart ignores case unless the query has a capital letter. One of `smart`, `sensitive` or `insensitive`. |
+| `sessions` | \[]string |          |         | The sessions to search. Omit to search every session.                                                                           |
+| `max`      | int       |          | `200`   | The most matches to return, at most 1000.                                                                                       |
+| `per_pane` | int       |          | `20`    | The most matches to return from one pane, at most 200.                                                                          |
+
+| Result field     | Type      | Description                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `matches`        | \[]object | One entry per matched row: session, window (the window id), name, workspace, row, text, start, end and age\_rows. row counts history rows from the top, then screen rows. text is the row, cut to 400 characters around the match. start and end are the first match's character offsets in text. age\_rows is how many rows the row is above the bottom of the screen. |
+| `panes_searched` | int       | How many panes were read.                                                                                                                                                                                                                                                                                                                                               |
+| `truncated`      | bool      | True when more matches exist than came back: max or per\_pane was reached, or a pane took longer than 50 ms.                                                                                                                                                                                                                                                            |
+
+```json
+{"id":1,"verb":"search-panes","params":{"query":"error"}}
+```
+
+```json
+{"id":1,"verb":"search-panes","params":{"query":"panic: .*nil","regex":true,"sessions":["work"],"max":50}}
+```
