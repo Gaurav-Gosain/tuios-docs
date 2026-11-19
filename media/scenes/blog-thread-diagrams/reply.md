@@ -6,8 +6,6 @@ flowchart LR
   B --> C{Over the cap?}
   C -->|yes| D[Wait the cap]
   C -->|no| E[Wait]
-  D --> A
-  E --> A
 ```
 
 ```tml
