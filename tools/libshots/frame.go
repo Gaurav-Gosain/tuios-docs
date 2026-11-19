@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"tuios.dev/shot"
 	"tuios.dev/vt"
@@ -29,6 +30,7 @@ func runFrame(args []string) error {
 	title := fs.String("title", "tuios", "the title of the card")
 	regular := fs.String("font", "", "the regular face, a TTF or OTF file")
 	bold := fs.String("bold", "", "the bold face of the same family")
+	fallback := fs.String("fallback", "", "more font files for glyphs the main face lacks, split by the path list separator")
 	_ = fs.Parse(args)
 	if *in == "" || *out == "" || *cols <= 0 || *rows <= 0 || *regular == "" || *bold == "" {
 		return fmt.Errorf("usage: libshots frame -in A.ans -out A.png -cols N -rows N -font REGULAR -bold BOLD [-light]")
@@ -55,7 +57,21 @@ func runFrame(args []string) error {
 	grid := shot.FromScreen(term, t.term)
 	_ = term.Close()
 	f := &shot.Frame{Font: shot.Font{Data: reg}, BoldFont: shot.Font{Data: bld}, Scale: 2}
+	for _, path := range filepath.SplitList(*fallback) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		f.Fallback = append(f.Fallback, shot.Font{Data: data})
+	}
 	dressWindow(f, t, *title)
+	// A glyph no face has would be drawn as a box. Stop instead, so the
+	// scene gets a fallback font or loses the character.
+	if missing, err := shot.MissingGlyphs(grid, f); err != nil {
+		return err
+	} else if len(missing) > 0 {
+		return fmt.Errorf("%s: no font has a glyph for %q", *in, string(missing))
+	}
 	png, err := shot.Render(shot.FormatPNG, grid, f)
 	if err != nil {
 		return err

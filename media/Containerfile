@@ -30,12 +30,23 @@ RUN printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSui
       > /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
-      bash ca-certificates curl unzip xz-utils git jq procps util-linux \
+      bash ca-certificates curl unzip xz-utils git jq procps util-linux locales \
       python3 python3-fonttools python3-brotli \
       ffmpeg imagemagick chromium nodejs \
       openssh-server openssh-client \
       fontconfig fonts-noto-color-emoji fonts-noto-cjk \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+
+# The shell looks as it does on the machines the docs show: en_US.UTF-8, so
+# ls sorts as there, and Arch's /etc/bash.bashrc title hook, so a pane's
+# title (and the rail's name for it) is user@host:folder.
+RUN sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen >/dev/null \
+ && printf '%s\n' \
+      'case $TERM in' \
+      '  xterm*|tmux*|screen*|foot*|alacritty*)' \
+      '    PROMPT_COMMAND+=('"'"'printf "\033]0;%s@%s:%s\007" "${USER}" "${HOSTNAME%%.*}" "${PWD/#$HOME/\~}"'"'"')' \
+      '    ;;' \
+      'esac' >> /etc/bash.bashrc
 
 # Go builds tools/libshots. Bun installs media/ and runs the scripts.
 RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xz -C /usr/local \
@@ -64,6 +75,6 @@ RUN magick -version >/dev/null && chromium --version >/dev/null \
  && ssh=$(/usr/sbin/sshd -V 2>&1 || true) && [[ $ssh == *OpenSSH* ]] \
  && python3 -c 'import fontTools'
 
-ENV PATH=/usr/local/go/bin:$PATH CHROMIUM=/usr/bin/chromium GOFLAGS=-modcacherw
+ENV PATH=/usr/local/go/bin:$PATH CHROMIUM=/usr/bin/chromium GOFLAGS=-modcacherw LANG=en_US.UTF-8
 USER gaurav
 WORKDIR /work

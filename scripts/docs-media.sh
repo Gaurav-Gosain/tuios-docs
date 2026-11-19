@@ -64,6 +64,9 @@ geist=$HOME/.local/share/fonts/GeistMonoNerdFont
 jb=/usr/share/fonts/TTF
 export DOCS_MEDIA_FONT=${DOCS_MEDIA_FONT:-$(pick "$jb/JetBrainsMonoNerdFontMono-Regular.ttf" "$geist/GeistMonoNerdFontMono-Regular.otf")}
 export DOCS_MEDIA_FONT_BOLD=${DOCS_MEDIA_FONT_BOLD:-$(pick "$jb/JetBrainsMonoNerdFontMono-Bold.ttf" "$geist/GeistMonoNerdFontMono-Bold.otf")}
+# Faces for the glyphs JetBrains Mono lacks, such as emoji and CJK, for the
+# window card (libshots frame). A colon separates the files.
+export DOCS_MEDIA_FALLBACK=${DOCS_MEDIA_FALLBACK:-$(pick /usr/share/fonts/noto/NotoColorEmoji.ttf /usr/share/fonts/truetype/noto/NotoColorEmoji.ttf):$(pick /usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc)}
 [[ -f $DOCS_MEDIA_FONT ]] || { echo "docs-media: no font file; set DOCS_MEDIA_FONT" >&2; exit 1; }
 echo "docs-media: font $DOCS_MEDIA_FONT"
 
@@ -180,7 +183,8 @@ shot_scene() { # NAME
           exit 1
         fi
         libshots frame -in "$build/$name$suffix/$shot.ans" -out "$build/$name$suffix/$shot.png" \
-          -cols "$cols" -rows "$rows" -font "$DOCS_MEDIA_FONT" -bold "$DOCS_MEDIA_FONT_BOLD" "${light[@]}"
+          -cols "$cols" -rows "$rows" -font "$DOCS_MEDIA_FONT" -bold "$DOCS_MEDIA_FONT_BOLD" \
+          -fallback "$DOCS_MEDIA_FALLBACK" "${light[@]}"
       fi
       shot_files "$build/$name$suffix/$shot.png" "$root/public/shots/$shot$suffix" "${display[@]}"
       echo "shot: public/shots/$shot$suffix.webp"

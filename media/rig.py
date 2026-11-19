@@ -137,7 +137,7 @@ def capture_format(scene):
     "format" in scene.json wins: png, or html and svg for a page that lays
     out the cells itself. A shot scene with no format is captured as ANSI:
     scripts/docs-media.sh draws it in the window card of the docs with
-    tools/libshots (libshots frame). "frame": "none" keeps the plain PNG.
+    tools/libshots (libshots frame). "frame": "plain" or "none" keeps a PNG.
     """
     if "format" in scene:
         return scene["format"]
@@ -260,7 +260,13 @@ def main():
         "screenshot": {
             # "format" in scene.json: png unless the page wants the cells, as
             # html or svg, to lay out itself.
-            "directory": shots_dir, "format": capture_format(scene), "frame": "none", "copy": False,
+            "directory": shots_dir, "format": capture_format(scene), "copy": False,
+            # A window card is drawn by scripts/docs-media.sh from the ANSI
+            # capture. "frame": "plain" is tuios's own card, for a scene whose
+            # kitty images an ANSI capture cannot hold: the same corners,
+            # shadow and wash, with no title bar. "none" is the bare screen.
+            "frame": "plain" if scene.get("frame") == "plain" else "none",
+            "padding": 28, "radius": 10, "shadow": True, "background": "auto",
             "preview": False, "scale": 2,
             # scripts/docs-media.sh sets the font. The renderer has one file
             # for every weight, so a shot draws bold in the regular face.
