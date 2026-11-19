@@ -96,3 +96,21 @@ describe("sshd.sh", () => {
     }
   });
 });
+
+// The script itself is never run here: if the guard broke, a run on the host
+// would start the takes. The order check and the guard tests above cover it.
+describe("docs-media.sh", () => {
+  const code = readFileSync(
+    path.join(lib, "../../scripts/docs-media.sh"),
+    "utf8",
+  )
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "" && !l.startsWith("#"));
+
+  test("checks the container before any other command", () => {
+    expect(code[0]).toBe("set -euo pipefail");
+    expect(code[1]).toContain("media/lib/guard.sh");
+    expect(code[2]).toStartWith("docs_media_guard ");
+  });
+});

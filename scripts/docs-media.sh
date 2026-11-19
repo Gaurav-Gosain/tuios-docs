@@ -30,9 +30,17 @@
 #                   scripts/hero-cells.mjs into lib/hero/NAME.json, which a
 #                   page draws as text. The landing page's exploded view.
 #
-# Every take runs against its own daemon in a throwaway HOME, never yours.
+# Every take runs against its own daemon in a throwaway HOME. Some fixtures
+# also write the account's own home, so the script runs only in the docs
+# media container.
 # Encodes run one at a time at nice 19 on cores 0 to 3.
 set -euo pipefail
+
+# Every take starts tuios, ssh fixtures and shell setups that treat the home
+# folder as a throwaway. Run this script only inside the docs media
+# container. See media/lib/guard.sh.
+source "$(dirname "$0")/../media/lib/guard.sh"
+docs_media_guard scripts/docs-media.sh
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 media=$root/media
