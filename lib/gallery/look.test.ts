@@ -279,3 +279,38 @@ describe("look-keys.json", () => {
     }
   });
 });
+
+describe("requires", () => {
+  test("a version stays in the look file and on the look", () => {
+    const l = must(look('requires = "0.14.0"\n[appearance]\ngap = 1\n'));
+    expect(l.requires).toBe("0.14.0");
+    expect(l.leftCount).toBe(0);
+    const doc = parse(l.text) as Record<string, unknown>;
+    expect(doc.requires).toBe("0.14.0");
+    expect(setKeys(l.text)).toEqual([
+      "look",
+      "name",
+      "author",
+      "requires",
+      "appearance.gap",
+    ]);
+  });
+
+  test("a bad value is left out, and the look stays a look", () => {
+    for (const bad of [
+      'requires = "soon"',
+      "requires = 14",
+      'requires = "0.14.0+abc"',
+      'requires = "0.14.0-\\u001b[31m"',
+      'requires = "<b>0.14</b>"',
+    ]) {
+      const l = must(look(`${bad}\n[appearance]\ngap = 1\n`));
+      expect(l.requires).toBeUndefined();
+      expect(l.left).toContain("requires");
+      expect(parse(l.text)).not.toHaveProperty("requires");
+    }
+  });
+
+  test("requires alone does not make a look", () =>
+    expect(look('requires = "0.14.0"\n')).toBeNull());
+});

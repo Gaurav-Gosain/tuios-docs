@@ -66,3 +66,24 @@ describe("parseFeed", () => {
       expect(parseFeed(v)).toEqual([]);
   });
 });
+
+describe("look requires", () => {
+  const look = (over: Record<string, unknown> = {}) => ({
+    id: "123",
+    left: [],
+    leftCount: 0,
+    hash: HASH,
+    ...over,
+  });
+  test("a version is kept", () =>
+    expect(
+      parseEntry(entry({ look: look({ requires: "0.14.0" }) }))?.look?.requires,
+    ).toBe("0.14.0"));
+  test("a bad value costs the note, not the look", () => {
+    for (const requires of ["soon", 14, "<b>1</b>", "0.14.0 or later", ""]) {
+      const parsed = parseEntry(entry({ look: look({ requires }) }));
+      expect(parsed?.look).toBeDefined();
+      expect(parsed?.look?.requires).toBeUndefined();
+    }
+  });
+});

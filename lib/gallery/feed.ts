@@ -137,16 +137,27 @@ export type GalleryLook = {
   leftCount: number;
   /** The first 32 hex digits of the SHA-256 of the look file. */
   hash: string;
+  /** The lowest tuios version the look works on, when it names one. */
+  requires?: string;
 };
 
 /** A look id: a comment ID. */
 export const LOOK_ID = /^\d{1,12}$/;
+/**
+ * A tuios version a look may require, such as 0.14.0, v0.14 or 0.14.0-rc1:
+ * the form tuios itself takes (internal/config/look.go in tuios).
+ */
+export const LOOK_REQUIRES =
+  /^v?[0-9]{1,9}(?:\.[0-9]{1,9}){0,2}(?:-[0-9A-Za-z.]{1,32})?$/;
 /** A left-out name: a key, or a key and an item (see look.ts). */
 const LEFT_NAME = /^(?=.{1,60}$)[A-Za-z0-9_.-]+(?:: [A-Za-z0-9_.:/-]+)?$/;
 
 function parseLook(value: unknown): GalleryLook | undefined {
   if (!value || typeof value !== "object") return undefined;
-  const { id, left, leftCount, hash } = value as Record<string, unknown>;
+  const { id, left, leftCount, hash, requires } = value as Record<
+    string,
+    unknown
+  >;
   if (typeof id !== "string" || !LOOK_ID.test(id)) return undefined;
   if (typeof hash !== "string" || !HEX32.test(hash)) return undefined;
   if (!Array.isArray(left) || left.length > 12) return undefined;
@@ -159,7 +170,11 @@ function parseLook(value: unknown): GalleryLook | undefined {
     leftCount > 10_000
   )
     return undefined;
-  return { id, left: left as string[], leftCount, hash };
+  const look: GalleryLook = { id, left: left as string[], leftCount, hash };
+  // A value that is not a version costs the note, not the look.
+  if (typeof requires === "string" && LOOK_REQUIRES.test(requires))
+    look.requires = requires;
+  return look;
 }
 
 export type GalleryFeed = {

@@ -59,6 +59,17 @@ export default function GalleryPage() {
             in your comment.
           </p>
           <p className="mt-3 text-fd-muted-foreground text-sm leading-relaxed">
+            Does your look need a tuios release that is newer than the last one?
+            Add a line such as{" "}
+            <code className="rounded bg-fd-muted px-1 py-0.5 font-mono text-fd-foreground text-xs">
+              requires = "0.14.0"
+            </code>{" "}
+            at the top of your config. The entry then shows "Needs tuios 0.14.0
+            or later". A tuios that is older than that version does not apply
+            the look, and tells the person to update. tuios 0.13.3 and earlier
+            do not read the line.
+          </p>
+          <p className="mt-3 text-fd-muted-foreground text-sm leading-relaxed">
             Use Neovim?{" "}
             <Link
               href="/docs/themes#neovim-look-sync"

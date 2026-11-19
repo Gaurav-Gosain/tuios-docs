@@ -168,6 +168,7 @@ export async function buildFeed(
         id: comment.id,
         left: look.left,
         leftCount: look.leftCount,
+        ...(look.requires ? { requires: look.requires } : {}),
         hash,
       };
       if (previousLooks.get(comment.id) !== hash) {

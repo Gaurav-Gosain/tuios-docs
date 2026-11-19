@@ -65,6 +65,11 @@ export function ApplyCommand({
         <code className="font-mono">tuios look remove</code> to undo it.
         {badge}
       </p>
+      {look.requires ? (
+        <p className="text-[12px] text-fd-muted-foreground leading-snug">
+          {requiresText(look.requires)}
+        </p>
+      ) : null}
       {look.leftCount > 0 ? (
         <p className="text-[12px] text-fd-muted-foreground leading-snug">
           {leftText(look)}
@@ -72,6 +77,11 @@ export function ApplyCommand({
       ) : null}
     </div>
   );
+}
+
+/** "Needs tuios 0.14.0 or later." for a look that names a version. */
+export function requiresText(requires: string) {
+  return `Needs tuios ${requires.replace(/^v/, "")} or later.`;
 }
 
 /** "2 keys left out: hooks, shell", naming at most the names the feed has. */

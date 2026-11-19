@@ -18,7 +18,7 @@
  */
 
 import { parse, stringify } from "smol-toml";
-import { isTitle } from "./feed";
+import { isTitle, LOOK_REQUIRES } from "./feed";
 import {
   CONTROL,
   checkLookValue,
@@ -44,7 +44,7 @@ for (const path of KEYS.keys()) {
 }
 
 /** The top-level keys a look file has besides its options. */
-const META = new Set(["look", "name", "author", "description"]);
+const META = new Set(["look", "name", "author", "description", "requires"]);
 
 /** A theme or glyph set id that tuios can install as look-<id>. */
 const ASSET_ID = /^[a-z0-9][a-z0-9_.-]{0,58}$/;
@@ -64,6 +64,12 @@ export type Look = {
   left: string[];
   /** How many keys were left out in all. */
   leftCount: number;
+  /**
+   * The lowest tuios version the look works on, as the config gives it.
+   * Undefined when the config sets none, or sets a value that is not a
+   * version. Such a value is left out, and the look stays a look.
+   */
+  requires?: string;
 };
 
 function isTable(value: unknown): value is Record<string, unknown> {
@@ -207,7 +213,13 @@ export function buildLook(source: LookSource): Look | null {
   const options: Record<string, unknown> = {};
   let theme: Record<string, unknown> | undefined;
   let glyphs: Record<string, unknown> | undefined;
+  let requires: string | undefined;
   for (const [k, v] of Object.entries(parsed)) {
+    if (k === "requires") {
+      if (typeof v === "string" && LOOK_REQUIRES.test(v)) requires = v;
+      else left.push("requires");
+      continue;
+    }
     if (META.has(k)) continue;
     if (k === "theme") theme = checkAsset(v, "theme", left);
     else if (k === "glyphs") glyphs = checkAsset(v, "glyphs", left);
@@ -227,6 +239,7 @@ export function buildLook(source: LookSource): Look | null {
     look: LOOK_VERSION,
     name: source.name,
     author: source.author,
+    ...(requires ? { requires } : {}),
     ...kept,
   };
   if (theme) doc.theme = theme;
@@ -245,6 +258,7 @@ export function buildLook(source: LookSource): Look | null {
     keys: count,
     left: [...new Set(safe)].slice(0, MAX_LEFT),
     leftCount: new Set(left).size,
+    ...(requires ? { requires } : {}),
   };
 }
 
