@@ -13,7 +13,14 @@
 # The login lands in the container user's own home, /home/gaurav, where no
 # tuios is installed, so a setup has something to install. Its prompt names
 # the machine, and its ssh config reaches this machine back as laptop.
+#
+# This script replaces the ssh keys, the ssh config and the shell files of
+# that home, and removes tuios from it. guard.sh stops it everywhere but the
+# container, where that home is a throwaway. On 2026-11-19 a run on a
+# person's machine replaced their real ssh key.
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/guard.sh"
+docs_media_guard media/lib/sshd.sh
 
 fx=$TMPDIR/sshd
 # ssh reads ~/.ssh from the passwd entry's home, not from HOME, so the keys,
@@ -21,6 +28,7 @@ fx=$TMPDIR/sshd
 # user, so the one config names the machines and this one too. tuios reads
 # the config from HOME for the ssh config tab, so a copy goes there.
 remote=$(getent passwd "$(id -u)" | cut -d: -f6)
+docs_media_guard_home "$remote"
 ssh_dir=$remote/.ssh
 mkdir -p "$fx" "$ssh_dir" ~/.ssh bin
 chmod 700 "$ssh_dir" ~/.ssh
