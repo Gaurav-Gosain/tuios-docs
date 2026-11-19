@@ -52,6 +52,9 @@ grep -qa 'tape.show_status' "$tuios" || {
   exit 1
 }
 export TUIOS_BIN=$tuios
+# A docs rig: the tapes act for the person (tuios TUIOS_RIG, needs throwaway XDG folders,
+# which every take has). Without it the agents view shows no conversation.
+export TUIOS_RIG=1
 [[ -d $media/node_modules ]] || (cd "$media" && bun install)
 
 run() { nice -n 19 taskset -c 0-3 "$@"; }
