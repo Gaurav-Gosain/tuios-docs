@@ -302,6 +302,9 @@ def main():
             [os.path.join(work, "bin"), shared_bin, os.path.dirname(tuios), "/usr/bin", "/bin"]
         ),
         "TERM": "xterm-256color",
+        # A docs rig: the takes act for the person (tuios TUIOS_RIG). Every take
+        # has throwaway XDG folders, which a rig needs.
+        "TUIOS_RIG": "1",
         "COLORTERM": "truecolor",
         "LANG": "en_US.UTF-8",
         "SHELL": "/bin/bash",
