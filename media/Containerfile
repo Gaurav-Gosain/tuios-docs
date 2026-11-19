@@ -1,0 +1,69 @@
+# The docs media container. scripts/docs-media.sh runs only here.
+#
+# Some scene fixtures treat the home folder as a throwaway: media/lib/sshd.sh
+# makes ssh keys, writes the ssh config and the shell files, and removes
+# tuios from the home of the passwd entry. In this image that home is
+# /home/gaurav, made here and marked with .docs-media-throwaway, so
+# media/lib/guard.sh lets the fixtures run. On a person's machine the guard
+# stops them.
+#
+# Build and run it with media/run-in-container.sh, which mounts only the docs
+# checkout and a copy of the tuios binary:
+#
+#   media/run-in-container.sh build
+#   media/run-in-container.sh first-steps bsp-tiling
+#
+# Versions are pinned: the base image by digest, the Debian packages by a
+# snapshot.debian.org date, and Go, Bun and the font by release.
+
+FROM docker.io/library/debian@sha256:7378260c0a098d27ac206225db5e7d92b8c7c84ea7afccc86eeb513756bbd392
+
+ARG SNAPSHOT=20261118T000000Z
+ARG GO_VERSION=1.27.4
+ARG BUN_VERSION=1.4.3
+ARG NERD_FONTS_VERSION=3.4.0
+
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+# The Debian packages as they were on SNAPSHOT.
+RUN printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSuites: trixie trixie-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n' "$SNAPSHOT" \
+      > /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      bash ca-certificates curl unzip xz-utils git jq procps util-linux \
+      python3 python3-fonttools python3-brotli \
+      ffmpeg imagemagick chromium nodejs \
+      openssh-server openssh-client \
+      fontconfig fonts-noto-color-emoji fonts-noto-cjk \
+ && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+
+# Go builds tools/libshots. Bun installs media/ and runs the scripts.
+RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xz -C /usr/local \
+ && curl -fsSL -o /tmp/bun.zip "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip" \
+ && unzip -q /tmp/bun.zip -d /tmp \
+ && install -m 755 /tmp/bun-linux-x64/bun /usr/local/bin/bun \
+ && rm -rf /tmp/bun.zip /tmp/bun-linux-x64
+
+# JetBrains Mono Nerd Font Mono, where scripts/docs-media.sh looks for it.
+RUN mkdir -p /usr/share/fonts/TTF \
+ && curl -fsSL -o /tmp/jb.zip "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/JetBrainsMono.zip" \
+ && unzip -q -j /tmp/jb.zip 'JetBrainsMonoNerdFontMono-Regular.ttf' 'JetBrainsMonoNerdFontMono-Bold.ttf' -d /usr/share/fonts/TTF \
+ && rm /tmp/jb.zip \
+ && fc-cache -f >/dev/null
+
+# The user and its throwaway home. UID 1000 matches the person who runs
+# podman with --userns=keep-id, so files written to the checkout are theirs.
+# /home/demo is the empty home of a short_home take (see media/rig.py).
+RUN useradd -m -u 1000 -s /bin/bash gaurav \
+ && touch /home/gaurav/.docs-media-throwaway \
+ && mkdir -m 755 /home/demo && chown gaurav: /home/demo
+
+# Checks that fail the build, not a render.
+RUN magick -version >/dev/null && chromium --version >/dev/null \
+ && enc=$(ffmpeg -hide_banner -encoders) && [[ $enc == *libsvtav1* && $enc == *libx264* ]] \
+ && ssh=$(/usr/sbin/sshd -V 2>&1 || true) && [[ $ssh == *OpenSSH* ]] \
+ && python3 -c 'import fontTools'
+
+ENV PATH=/usr/local/go/bin:$PATH CHROMIUM=/usr/bin/chromium GOFLAGS=-modcacherw
+USER gaurav
+WORKDIR /work

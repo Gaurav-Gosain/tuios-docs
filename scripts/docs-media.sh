@@ -85,6 +85,19 @@ rig() {
   local host short
   host=$(jq -r '.hostname // empty' "$1/scene.json")
   short=$(jq -r '.short_home // false' "$1/scene.json")
+  # In the container, media/run-in-container.sh starts one container per
+  # scene with the scene's host name, and /home/demo is the empty home of a
+  # short_home take. Rootless podman allows no nested user namespace, so the
+  # unshare below is for a run outside podman only.
+  if [[ -f /run/.containerenv || -f /.dockerenv ]]; then
+    if [[ $(hostname) != "${host:-demo}" ]]; then
+      echo "docs-media: $(basename "$1") needs the host name ${host:-demo}. Run it with media/run-in-container.sh." >&2
+      exit 1
+    fi
+    find /home/demo -mindepth 1 -delete
+    RIG_HOME=/home/demo python3 "$media/rig.py" "$@"
+    return
+  fi
   if [[ -z $host && $short != true ]]; then
     python3 "$media/rig.py" "$@"
     return
