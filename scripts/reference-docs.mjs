@@ -47,7 +47,8 @@ const SITE = "https://tuios.dev";
 
 // Each page: the repo doc it renders, its frontmatter, and an optional block
 // of site MDX placed before the first section (a widget that reads the same
-// pinned data).
+// pinned data). A group of a split page can have a lead of its own, such as a
+// screenshot of what the page is about.
 export const pages = [
   {
     slug: "cli-reference",
@@ -161,7 +162,11 @@ export const pages = [
     description:
       "Every default key in TUIOS for window mode, terminal mode, prefix commands, copy mode and the mouse, and how to change them.",
     icon: "Keyboard",
-    lead: "**Try it live:** [Learn tuios](/learn) has you press these keys in the real app, in your browser. [Default keys](/docs/default-keys) lists every default key, with a search.",
+    lead: [
+      "**Try it live:** [Learn tuios](/learn) has you press these keys in the real app, in your browser. [Default keys](/docs/default-keys) lists every default key, with a search.",
+      "",
+      '<Shot\n  name="keybinds-cheatsheet"\n  light\n  framed\n  width={2038}\n  height={1710}\n  alt="tuios keybinds cheatsheet tmux lists the tmux keys that work the same after Ctrl+B, such as Ctrl+B % to split left and right and Ctrl+B z to zoom."\n/>',
+    ].join("\n"),
     split: {
       index: [
         "keys-of-another-multiplexer",
@@ -177,23 +182,32 @@ export const pages = [
           start: "editing-sidebar-files",
           slug: "panes-panels-and-workspaces",
           title: "Panes, panels and workspaces",
+          lead: '<Shot\n  name="scratch-terminal"\n  light\n  framed\n  width={2208}\n  height={1488}\n  alt="The scratch terminal: a box of one pane over the layout, with git status in it. The panes of the layout stay behind the box."\n/>',
         },
         {
           start: "copy-mode",
           slug: "copy-mode",
           title: "Copy mode and screenshots",
+          lead: '<Shot\n  name="copy-mode-search"\n  light\n  framed\n  width={2038}\n  height={1340}\n  alt="Copy mode in a pane with git log --stat, searched for store. Each match is marked, the current match stands out, and the dock shows the match count."\n/>',
         },
         {
           start: "the-agents-view",
           slug: "agents-view",
           title: "The agents view",
+          lead: '<Shot\n  name="agents-view-keys"\n  light\n  framed\n  width={2208}\n  height={1710}\n  alt="The help over the agents view, at its Agents section. It lists the keys that open the agents view, jump to the oldest item that needs you, review a pane\'s changes, and act on an agent row of the rail."\n/>',
         },
         {
           start: "other-keyboard-layouts",
           slug: "layouts-and-macos",
           title: "Keyboard layouts and macOS",
+          lead: '<Shot\n  name="keys-layout"\n  light\n  framed\n  width={2038}\n  height={1192}\n  alt="tuios keybinds explain reads opt+shift+7 as alt+shift+7, move to workspace 7. It reads opt+& the same way on a US layout, and names the setting for other layouts."\n/>',
         },
-        { start: "modes", slug: "keys-by-mode", title: "Keys by mode" },
+        {
+          start: "modes",
+          slug: "keys-by-mode",
+          title: "Keys by mode",
+          lead: '<Shot\n  name="keys-explain"\n  light\n  framed\n  width={2038}\n  height={1340}\n  alt="tuios keybinds explain q lists what q does in each mode: quit in window mode, close in the agents view and the mailbox, and in terminal mode the pane gets it. tuios keybinds explain ctrl+b says the pane never gets the leader key, and which programs want it."\n/>',
+        },
       ],
       budget: 90_000,
     },
@@ -460,6 +474,8 @@ function chunk(part, budget, depth) {
     // so on, so a page named URL-2 would collide with one of them.
     slug: i ? `${part.slug}-part-${i + 1}` : part.slug,
     title: `${part.title} (part ${i + 1} of ${chunks.length})`,
+    // The lead goes on the first page of the group only.
+    lead: i ? undefined : part.lead,
     nodes,
   }));
 }
@@ -480,7 +496,13 @@ function split(page, tree, topicInfo) {
     const byTopic = conf.byTopic?.[id];
     const start = conf.groups?.find((g) => g.start === id);
     if (start) {
-      group = { slug: start.slug, title: start.title, nodes: [], depth: 2 };
+      group = {
+        slug: start.slug,
+        title: start.title,
+        lead: start.lead,
+        nodes: [],
+        depth: 2,
+      };
       parts.push(group);
     }
     if (conf.index.includes(id)) {
@@ -645,6 +667,7 @@ function renderPart(page, part, parts, ref, known, ctx) {
     );
   }
   if (isIndex && page.lead) front.push(page.lead, "");
+  if (!isIndex && part.lead) front.push(part.lead, "");
   if (isIndex && parts.length > 1) {
     front.push(
       "**The pages of this reference:**",
