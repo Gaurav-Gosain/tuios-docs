@@ -9,7 +9,10 @@
 #   /work       this docs checkout, read and write: the scenes, and the
 #               shots and clips the render writes to public/
 #   /opt/tuios  a copy of the tuios binary, read only (TUIOS_BIN, else the
-#               tuios on PATH), in a temporary folder outside the home
+#               tuios on PATH), in a temporary folder outside the home. A
+#               copy of tuios-web goes beside it when there is one
+#               (TUIOS_WEB_BIN, else the tuios-web on PATH), for the scenes
+#               with "client": "web".
 #
 # It sees no home folder, no ~/.ssh and no ~/.config of this machine, and no
 # environment variable of this shell.
@@ -35,6 +38,12 @@ tuios=${TUIOS_BIN:-$(command -v tuios || true)}
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 cp "$tuios" "$stage/tuios"
+web=${TUIOS_WEB_BIN:-$(command -v tuios-web || true)}
+webenv=()
+if [[ -x $web ]]; then
+  cp "$web" "$stage/tuios-web"
+  webenv=(-e TUIOS_WEB_BIN=/opt/tuios/tuios-web)
+fi
 
 scenes=("$@")
 if ((${#scenes[@]} == 0)); then
@@ -53,5 +62,6 @@ for scene in "${scenes[@]}"; do
     -v "$root:/work" \
     -v "$stage:/opt/tuios:ro" \
     -e TUIOS_BIN=/opt/tuios/tuios \
+    "${webenv[@]}" \
     "$image" bash scripts/docs-media.sh "$scene"
 done

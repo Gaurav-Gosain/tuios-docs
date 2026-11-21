@@ -26,6 +26,14 @@ A scene is a folder under media/scenes/ with:
   scene.json may also say "host": "kitty", to answer tuios's graphics probe
   as a kitty terminal does. See KITTY_RESPONDERS.
 
+  scene.json may also say "client": "web", for a screen of tuios-web. The
+  rig then starts tuios-web (TUIOS_WEB_BIN, else the one on PATH) on a
+  loopback port in place of `tuios new`, and opens the page in headless
+  Chromium (media/web-client.mjs) at "viewport": [width, height] CSS
+  pixels. The browser is the client the tapes play in. A step
+  {"page": "shot"} saves the page as the next name in "shots", and
+  {"page": "click SELECTOR"} clicks an element of the page.
+
 What it does:
 
   1. Builds a throwaway HOME and XDG tree under BUILD_DIR/env, and a short
@@ -53,6 +61,7 @@ import re
 import select
 import shutil
 import signal
+import socket as net
 import struct
 import subprocess
 import sys
@@ -141,6 +150,8 @@ def capture_format(scene):
     """
     if "format" in scene:
         return scene["format"]
+    if scene.get("client") == "web":
+        return "png"
     if scene.get("kind") == "shot" and scene.get("frame", "window") == "window":
         return "ansi"
     return "png"
@@ -204,6 +215,13 @@ def main():
     if not tuios:
         sys.exit("rig: set TUIOS_BIN or put tuios on PATH")
     tuios = os.path.abspath(tuios)
+    web = scene.get("client") == "web"
+    tuios_web = None
+    if web:
+        tuios_web = os.environ.get("TUIOS_WEB_BIN") or shutil.which("tuios-web")
+        if not tuios_web:
+            sys.exit("rig: a web scene needs tuios-web. Set TUIOS_WEB_BIN or put tuios-web on PATH")
+        tuios_web = os.path.abspath(tuios_web)
 
     shutil.rmtree(build, ignore_errors=True)
     env_root = os.path.join(build, "env")
@@ -241,6 +259,8 @@ def main():
         local_bin = os.path.join(dirs["HOME"], ".local", "bin")
         os.makedirs(local_bin)
         tuios = shutil.copy2(tuios, os.path.join(local_bin, "tuios"))
+        if tuios_web:
+            tuios_web = shutil.copy2(tuios_web, os.path.join(local_bin, "tuios-web"))
     runtime = tempfile.mkdtemp(prefix="tdm-", dir="/tmp")
     dirs["XDG_RUNTIME_DIR"] = runtime
     socket = os.path.realpath(os.path.join(runtime, "tuios", "tuios.sock"))
@@ -328,12 +348,50 @@ def main():
             env=env, cwd=work, check=True, stdin=subprocess.DEVNULL, timeout=120,
         )
 
-    pid, fd = pty.fork()
-    if pid == 0:
-        os.chdir(work)
-        os.execve(tuios, [tuios, "new", scene.get("session", "demo")], env)
-    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, cols * CELL[0], rows * CELL[1]))
-    os.kill(pid, signal.SIGWINCH)
+    pid = fd = None
+    web_proc = browser = None
+    if web:
+        # tuios-web on a free loopback port, and the browser as its client.
+        # A loopback bind needs no password and no TLS.
+        with net.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        web_log = open(os.path.join(build, "tuios-web.log"), "w")
+        web_proc = subprocess.Popen(
+            [tuios_web, "--host", "127.0.0.1", "--port", str(port)],
+            env=env, cwd=work, stdin=subprocess.DEVNULL, stdout=web_log, stderr=subprocess.STDOUT,
+        )
+        deadline = time.monotonic() + 20
+        while True:
+            try:
+                net.create_connection(("127.0.0.1", port), timeout=1).close()
+                break
+            except OSError:
+                if web_proc.poll() is not None or time.monotonic() > deadline:
+                    sys.exit(f"rig: tuios-web did not start. See {web_log.name}")
+                time.sleep(0.2)
+        width, height = scene.get("viewport", [1280, 800])
+        browser = subprocess.Popen(
+            ["node", os.path.join(HERE, "web-client.mjs"), f"http://127.0.0.1:{port}/", shots_dir, str(width), str(height)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+        )
+        if browser.stdout.readline().strip() != "ready":
+            sys.exit("rig: the browser did not open the tuios-web page")
+    else:
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(work)
+            os.execve(tuios, [tuios, "new", scene.get("session", "demo")], env)
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, cols * CELL[0], rows * CELL[1]))
+        os.kill(pid, signal.SIGWINCH)
+
+    def page(command):
+        """Send one command to the browser of a web scene and wait for it."""
+        browser.stdin.write(command + "\n")
+        browser.stdin.flush()
+        answer = browser.stdout.readline().strip()
+        if answer != "ok":
+            raise SystemExit(f"rig: page {command} failed: {answer or 'the browser closed'}")
 
     t0 = time.monotonic()
     events = []
@@ -344,6 +402,13 @@ def main():
 
     def pump(until, proc=None):
         nonlocal tail
+        if fd is None:
+            # A web scene has no PTY to read: the browser is the client.
+            while now() < until:
+                if proc is not None and proc.poll() is not None:
+                    return
+                time.sleep(0.05)
+            return
         while now() < until:
             if proc is not None and proc.poll() is not None:
                 return
@@ -401,6 +466,14 @@ def main():
             if isinstance(step, str):
                 run_tape(step, scene.get("limit", 120))
                 continue
+            if "page" in step:
+                if not web:
+                    raise SystemExit('rig: a page step needs "client": "web"')
+                page(step["page"])
+                pump(now() + step.get("settle", 0.8))
+                continue
+            if web:
+                raise SystemExit("rig: a web scene takes tapes and page steps only")
             if "keys" in step:
                 # Keys as the person types them, not a paste: some prompts
                 # answer only keys from the terminal, never a tape's.
@@ -437,16 +510,30 @@ def main():
             text = dec.decode(b"", final=True)
             if text and events:
                 f.write(json.dumps([events[-1][0], "o", text]) + "\n")
+        if browser is not None:
+            try:
+                browser.stdin.write("quit\n")
+                browser.stdin.flush()
+                browser.wait(timeout=20)
+            except (OSError, subprocess.TimeoutExpired):
+                browser.kill()
+        if web_proc is not None:
+            web_proc.terminate()
+            try:
+                web_proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                web_proc.kill()
         subprocess.run([tuios, "kill-server"], env=env, stdin=subprocess.DEVNULL,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            os.waitpid(pid, 0)
-        except ChildProcessError:
-            pass
+        if pid is not None:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                os.waitpid(pid, 0)
+            except ChildProcessError:
+                pass
         shutil.rmtree(runtime, ignore_errors=True)
         if short_home:
             shutil.rmtree(env_root, ignore_errors=True)

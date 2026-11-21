@@ -9,6 +9,9 @@
 # and Chromium (CHROMIUM, else /usr/bin/chromium). Run `bun install` in media/
 # once for the renderer.
 #
+# A scene with "client": "web" shoots tuios-web in headless Chromium. It
+# needs tuios-web (TUIOS_WEB_BIN, else the tuios-web on PATH).
+#
 # Each scene is a folder under media/scenes with a scene.json, a scene.tape
 # and, if it needs them, setup.tape, setup.sh and config.toml. media/rig.py
 # says what each file does. The tapes are the source: change the UI, run this

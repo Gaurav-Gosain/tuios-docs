@@ -35,6 +35,7 @@ RUN printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSui
       ffmpeg imagemagick chromium nodejs \
       openssh-server openssh-client \
       fontconfig fonts-noto-color-emoji fonts-noto-cjk \
+      neovim \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
 # The shell looks as it does on the machines the docs show: en_US.UTF-8, so
@@ -62,6 +63,20 @@ RUN mkdir -p /usr/share/fonts/TTF \
  && rm /tmp/jb.zip \
  && fc-cache -f >/dev/null
 
+# The two community Neovim plugins the Neovim page names, and mini.base16,
+# which tuios-look-sync.nvim needs. Pinned by commit. A scene's init.lua adds
+# them to the runtimepath.
+ARG NVIM_NAVIGATOR_REV=e52540c34f638f56d0bb31dec0d9556af48250d4
+ARG NVIM_LOOK_SYNC_REV=09b24e677428e3115a502cd1e99c17099da89c55
+ARG NVIM_MINI_BASE16_REV=1a3f3ccd1a6b9b924093df442b806cbe95f9666b
+RUN for plugin in "Tim4c/tuios-nvim-navigator $NVIM_NAVIGATOR_REV" \
+      "nkapila6/tuios-look-sync.nvim $NVIM_LOOK_SYNC_REV" \
+      "nvim-mini/mini.base16 $NVIM_MINI_BASE16_REV"; do \
+      set -- $plugin; dir=/opt/nvim-plugins/${1#*/}; \
+      git init -q "$dir" && git -C "$dir" fetch -q --depth 1 "https://github.com/$1" "$2" \
+      && git -C "$dir" checkout -q FETCH_HEAD && rm -rf "$dir/.git"; \
+    done
+
 # The user and its throwaway home. UID 1000 matches the person who runs
 # podman with --userns=keep-id, so files written to the checkout are theirs.
 # /home/demo is the empty home of a short_home take (see media/rig.py).
@@ -73,7 +88,8 @@ RUN useradd -m -u 1000 -s /bin/bash gaurav \
 RUN magick -version >/dev/null && chromium --version >/dev/null \
  && enc=$(ffmpeg -hide_banner -encoders) && [[ $enc == *libsvtav1* && $enc == *libx264* ]] \
  && ssh=$(/usr/sbin/sshd -V 2>&1 || true) && [[ $ssh == *OpenSSH* ]] \
- && python3 -c 'import fontTools'
+ && python3 -c 'import fontTools' \
+ && nvim --version | head -1 | grep -q 'NVIM v0\.1[0-9]'
 
 ENV PATH=/usr/local/go/bin:$PATH CHROMIUM=/usr/bin/chromium GOFLAGS=-modcacherw LANG=en_US.UTF-8
 USER gaurav
