@@ -1,0 +1,62 @@
+---
+title: progresume
+description: A Go package for the Program Resume Protocol, OSC 7577. A program tells its terminal how to start it again after a restart.
+icon: RotateCcw
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+`tuios.dev/progresume` is a Go package for the Program Resume Protocol, OSC 7577. A program tells its terminal how to start it again after the terminal restarts: the command, its arguments and its folder. tuios uses this package in its daemon and in its client.
+
+```bash
+go get tuios.dev/progresume
+```
+
+The package uses only the standard library. It follows revision 0.5 of the [specification](https://www.superlogical.com/rex/docs/build/program-resume). The API reference is on [pkg.go.dev](https://pkg.go.dev/tuios.dev/progresume).
+
+## Bring back any program with resume-wrap
+
+Most programs do not send OSC 7577 yet. `resume-wrap` reports a command for them, and then becomes that command.
+
+```bash
+go install tuios.dev/progresume/cmd/resume-wrap@latest
+alias vim='resume-wrap nvim'
+resume-wrap lazygit
+```
+
+After tuios restarts, it offers to start each wrapped program again, with the same arguments in the same folder. The command never gets the token.
+
+<Callout>
+resume-wrap starts the command again. It does not bring back state that the program did not save. For nvim, use a session file: `resume-wrap nvim -S Session.vim`.
+</Callout>
+
+## Report from a program
+
+```go
+package main
+
+import "tuios.dev/progresume"
+
+func main() {
+	// Start me again with this session file. ErrNoToken means that the
+	// terminal does not support the protocol.
+	_ = progresume.Report([]string{"nvim", "-S", "/home/user/.local/state/nvim/sessions/8f2c1d.vim"}, "")
+	run()
+	// The person quit on purpose: there is nothing to resume.
+	_ = progresume.Clear()
+}
+```
+
+`Report` and `Clear` read the token from `OSC7577_TOKEN`, take it out of the environment, sign the report and write it to the controlling terminal. The first element of the command is a bare name, which the terminal looks up on PATH, or an absolute path. The second argument is the folder, or "" for none. A report that breaks a rule of the specification is not sent, and the error names the rule.
+
+## Read reports in a terminal
+
+`Parse` checks a report in the order of the specification: the mac, then the time, then the grammar. It says if the terminal must ignore the report, reject it or accept it. `NewToken` makes a token for a new pane.
+
+## Where it fits
+
+tuios gives each pane its own token. After a daemon restart, a restored pane offers the command its program reported. The tuios client also reports `tuios attach` to the terminal it runs in, so a terminal that supports OSC 7577 can bring tuios back after the terminal restarts.
+
+## Versions
+
+v0.1.0 is the first release.
