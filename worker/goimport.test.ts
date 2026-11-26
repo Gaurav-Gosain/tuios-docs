@@ -31,6 +31,8 @@ describe("libraryFor", () => {
     ["/sketch/raster", "sketch"],
     ["/nitpick", "nitpick"],
     ["/nitpick/cmd/nitpick", "nitpick"],
+    ["/progresume", "progresume"],
+    ["/progresume/cmd/resume-wrap", "progresume"],
     ["/nitpickx", null],
     ["/docs/progstatus", null],
     ["/", null],
